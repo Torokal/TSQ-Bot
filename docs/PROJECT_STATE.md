@@ -3,8 +3,8 @@
 > Tek doğruluk kaynağı: gerçek durum, kararlar, çalıştırılan testler, blocker'lar ve tek NEXT ACTION.
 > Yeni oturumda önce bu dosyayı, sonra `git status` / `git log --oneline -10` çıktısını doğrula.
 
-Son güncelleme: **2026-09-24** — Aşama A–E yerel olarak tamamlandı; ürün adı **TSQ Bot** oldu; GitHub yayını ve Aşama F
-(canlı) BLOCKED.
+Son güncelleme: **2026-09-24** — Aşama A–E yerel olarak tamamlandı; ürün adı **TSQ Bot** oldu; GitHub'da yayımlandı, PR #1
+incelemede (merge edilmedi); Aşama F (canlı) BLOCKED.
 
 ## Ürün kimliği ve depo
 
@@ -13,8 +13,9 @@ Son güncelleme: **2026-09-24** — Aşama A–E yerel olarak tamamlandı; ürü
 | Ürün adı | **TSQ Bot** (eski adı ToroSquad Bot — 2026-09-24'te değiştirildi) |
 | Kanonik depo | `Torokal/TSQ-Bot` → https://github.com/Torokal/TSQ-Bot (**public**, oluşturuldu) |
 | Rename | **Tamamlandı** (yerel) — commit `671e7cc` `refactor(branding): rename product to TSQ Bot` |
-| GitHub push | Depo **oluşturuldu** (public, Torokal hesabı, 2026-09-24). `main` (`177b5f7`) **push edildi**. `feature/foundation` **reddedildi**: GitHub push protection, `6c4b696` ve `5570842` commit'lerindeki `tests/ToroSquad.Tests/Integration/OperationsTests.cs:86` sahte (test amaçlı) Discord token biçimli dizeyi "Discord Bot Token" olarak işaretledi. Geçmiş yeniden yazılmadı (talimat); `671e7cc` dizeyi çalışma anında birleştiriyor |
-| GitHub'daki dallar | `main` |
+| GitHub push | Depo **oluşturuldu** (public, Torokal hesabı, 2026-09-24). `main` (`177b5f7`) ve `feature/foundation` (`4912596`) **push edildi**, force/squash yok. İlk `feature/foundation` push'u GitHub push protection'a takıldı: `6c4b696`/`5570842` içindeki `tests/ToroSquad.Tests/Integration/OperationsTests.cs:86` **sahte** test dizesi "Discord Bot Token" sanıldı; sahip GitHub'da "used in tests" izni verdi. Geçmiş yeniden yazılmadı; `671e7cc` dizeyi çalışma anında birleştiriyor |
+| GitHub'daki dallar | `main`, `feature/foundation` (git ls-remote ile doğrulandı) |
+| Pull request | https://github.com/Torokal/TSQ-Bot/pull/1 — `feature/foundation → main`, "Foundation: modular TSQ Bot core and esports module"; **açık, merge edilmedi**. GitHub farkı: 8 commit, 159 dosya; binary/veritabanı/secret dosyası yok. CI yok — yalnızca yerel test sonuçları |
 | Discord uygulama adı | "TSQ Bot" olarak varsayılır — **BLOCKED**: Developer Portal'da uygulama henüz oluşturulmadı/yapılandırılmadı |
 
 Adlandırma kuralı: kullanıcıya görünen ad yalnızca `ProductInfo.ProductName` sabitinden gelir (localization'da `{product}`
@@ -53,7 +54,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | Güvenli rol eşleştirme + self-service + panel | TESTED_OFFLINE (servis katmanı); gerçek rol verme **BLOCKED** |
 | Spoiler, allowed_mentions, mention enjeksiyonu, URL allow-list | TESTED_OFFLINE |
 | /privacy export/delete, saklama süresi, ayrılan guild temizliği | TESTED_OFFLINE |
-| Kaynak/lisans (/bot about, /bot source, Export-Source.ps1, commit gömme) | TESTED_OFFLINE; `Bot:SourceUrl` varsayılanı https://github.com/Torokal/TSQ-Bot, ancak depo **henüz yayımlanmadı** (BLOCKED) |
+| Kaynak/lisans (/bot about, /bot source, Export-Source.ps1, commit gömme) | TESTED_OFFLINE; `Bot:SourceUrl` varsayılanı https://github.com/Torokal/TSQ-Bot (depo public; foundation kodu şimdilik `feature/foundation` dalında / PR #1) |
 | Türkçe varsayılan / İngilizce fallback, Europe/Istanbul (Windows'ta test edildi) | TESTED_OFFLINE |
 | PowerShell scriptleri: Doctor, Start-Dev (+Simulate), Test, Sync-Commands, Export-Source | Hepsi **çalıştırıldı** (PS 5.1); Sync yalnızca BLOCKED (token yok) yolunda |
 | Gateway bağlantısı (Discord.Net), gerçek interaction işleme | IMPLEMENTED, **BLOCKED** (token yok) |
@@ -117,14 +118,13 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | B1 | Discord uygulaması / bot token yok | Developer Portal'da uygulama oluştur, token'ı user-secrets'a koy (docs/WINDOWS_SETUP.md §3–4) | Hesap/yetkilendirme — sahip |
 | B2 | Test guild ve davet | Botu test sunucusuna davet et (izin 84992 / 268520448), `Discord:TestGuildIds` + `CommandSyncGuildIds` | Bot daveti — sahip |
 | B3 | Liquipedia API erişimi | Başvuru/plan seçimi (ücretli olabilir; ücretsiz yalnızca açık kaynak + ticari olmayan, onaylı) | Ücret/abonelik — sahip |
-| B4 | GitHub yayını (AGPL kaynak) | Depo + `main` hazır. `feature/foundation` push protection'a takıldı (sahte test token'ı); sahip GitHub'da "used in tests" izni vermeli, sonra ajan push + PR | Güvenlik istisnası — sahip |
+| B4 | PR #1'in main'e merge edilmesi | https://github.com/Torokal/TSQ-Bot/pull/1 incelenip merge edilmeli (merge = sahip kararı) | main değişikliği — sahip |
 | B5 | Upstream geliştiriciye mesaj | docs/drafts/upstream-contact.md taslağı gönderilmedi | Dış iletişim — sahip |
 
 ## NEXT ACTION
 
-**Sahip:** GitHub'ın verdiği bağlantıda (https://github.com/Torokal/TSQ-Bot/security/secret-scanning/unblock-secret/3Jn0d8eXwe2FWjnKGCFTYcNzyHb)
-bu **sahte** test dizesi için "It's used in tests" seçeneğiyle izin vermek (gerçek bir token değil: kimlik kısmı
-`1012345678901234567`, geri kalanı alfabe). Ajan bu güvenlik kararını kendisi vermez ve geçmişi yeniden yazmaz.
-(Sonra ajan: `feature/foundation` push → PR `feature/foundation → main` aç, **merge etme** → uzak dalları doğrula → bu dosyayı güncelle.)
-
-Ardından: B1+B2 — Discord uygulaması "TSQ Bot" + token (`dotnet user-secrets`) + test sunucusu daveti ve onayı.
+**Sahip:** B1+B2 — Discord Developer Portal'da **"TSQ Bot"** uygulamasını oluşturup token'ı `dotnet user-secrets` ile kaydetmek,
+botu bir test sunucusuna eklemek ve bu oturuma test guild ID'si ile "test sunucusunda komut kaydı + test bildirimi" onayını
+vermek. (Paralelde: PR #1'i incelemek/merge etmek — sahip kararı.)
+(Onay sonrası ajan: `Sync-Commands.ps1 -GuildId <id>` dry-run → `-Apply` → komut seçicisi, autocomplete, defer, yetki
+ayrımı, rol paneli ve TEST/DEMO bildirimi doğrulaması → sonuçları VERIFIED_LIVE / başarısız olarak bu dosyaya yazmak.)
