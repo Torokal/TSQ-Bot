@@ -11,10 +11,10 @@ Son güncelleme: **2026-09-24** — Aşama A–E yerel olarak tamamlandı; ürü
 | | |
 |---|---|
 | Ürün adı | **TSQ Bot** (eski adı ToroSquad Bot — 2026-09-24'te değiştirildi) |
-| Kanonik depo | `Torokal/TSQ-Bot` → https://github.com/Torokal/TSQ-Bot (public olacak) |
+| Kanonik depo | `Torokal/TSQ-Bot` → https://github.com/Torokal/TSQ-Bot (**public**, oluşturuldu) |
 | Rename | **Tamamlandı** (yerel) — commit `671e7cc` `refactor(branding): rename product to TSQ Bot` |
-| GitHub push | **BLOCKED** — `gh` 2.101.0 kurulu (`C:\Program Files\GitHub CLI\gh.exe`, PATH'te değil) ama **oturum açılmamış**; depo henüz yok (API 404). Hiçbir şey push edilmedi |
-| GitHub'daki dallar | yok |
+| GitHub push | Depo **oluşturuldu** (public, Torokal hesabı, 2026-09-24). `main` (`177b5f7`) **push edildi**. `feature/foundation` **reddedildi**: GitHub push protection, `6c4b696` ve `5570842` commit'lerindeki `tests/ToroSquad.Tests/Integration/OperationsTests.cs:86` sahte (test amaçlı) Discord token biçimli dizeyi "Discord Bot Token" olarak işaretledi. Geçmiş yeniden yazılmadı (talimat); `671e7cc` dizeyi çalışma anında birleştiriyor |
+| GitHub'daki dallar | `main` |
 | Discord uygulama adı | "TSQ Bot" olarak varsayılır — **BLOCKED**: Developer Portal'da uygulama henüz oluşturulmadı/yapılandırılmadı |
 
 Adlandırma kuralı: kullanıcıya görünen ad yalnızca `ProductInfo.ProductName` sabitinden gelir (localization'da `{product}`
@@ -68,10 +68,10 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 - .NET SDK başlangıçta **yoktu**; kullanıcı onayıyla `winget install Microsoft.DotNet.SDK.10 --version 10.0.401`
   (runtime 10.0.12, 2026-09-08, LTS, EOL 2028-11-14). `global.json`: 10.0.401 / latestPatch.
 - `dotnet-ef` 10.0.12 repo-yerel araç (`.config/dotnet-tools.json`), global kurulum yok.
-- `gh` 2.101.0 `C:\Program Files\GitHub CLI` altında (PATH'te değil), **GitHub'a giriş yapılmamış**. Codex CLI mevcut; **kullanıcı kararıyla kullanılmadı**. Bağımsız okuma-yalnız inceleme için bir Claude
+- `gh` 2.101.0 `C:\Program Files\GitHub CLI` altında (PATH'te değil), sahip **Torokal** hesabıyla giriş yaptı (keyring); git push, kalıcı ayar değiştirmeden tek seferlik `-c credential.helper` ile yapıldı. Codex CLI mevcut; **kullanıcı kararıyla kullanılmadı**. Bağımsız okuma-yalnız inceleme için bir Claude
   alt ajanı kullanıldı (dosya yazmadı).
 - NuGet: bir kez NuGet istemcisinin indirme bağlantısı takıldı (ağ hızlıydı); süreç durdurulup restore yeniden yapıldı.
-- Git: `main` = yalnızca şartname (`177b5f7`); çalışma dalı `feature/foundation`. Remote yok, push yok.
+- Git: `main` = yalnızca şartname (`177b5f7`); çalışma dalı `feature/foundation`. Remote `origin` = https://github.com/Torokal/TSQ-Bot.git.
 
 ## Kararlar (ayrıntı: docs/adr/)
 
@@ -117,15 +117,14 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | B1 | Discord uygulaması / bot token yok | Developer Portal'da uygulama oluştur, token'ı user-secrets'a koy (docs/WINDOWS_SETUP.md §3–4) | Hesap/yetkilendirme — sahip |
 | B2 | Test guild ve davet | Botu test sunucusuna davet et (izin 84992 / 268520448), `Discord:TestGuildIds` + `CommandSyncGuildIds` | Bot daveti — sahip |
 | B3 | Liquipedia API erişimi | Başvuru/plan seçimi (ücretli olabilir; ücretsiz yalnızca açık kaynak + ticari olmayan, onaylı) | Ücret/abonelik — sahip |
-| B4 | GitHub yayını (AGPL kaynak) | `gh auth login` (Torokal hesabı) — sahip yapar; ardından ajan `Torokal/TSQ-Bot` (public) oluşturur, `main` + `feature/foundation` push eder, PR açar | Sahip görevde onayladı; **yalnızca giriş eksik** |
+| B4 | GitHub yayını (AGPL kaynak) | Depo + `main` hazır. `feature/foundation` push protection'a takıldı (sahte test token'ı); sahip GitHub'da "used in tests" izni vermeli, sonra ajan push + PR | Güvenlik istisnası — sahip |
 | B5 | Upstream geliştiriciye mesaj | docs/drafts/upstream-contact.md taslağı gönderilmedi | Dış iletişim — sahip |
 
 ## NEXT ACTION
 
-**Sahip:** kendi terminalinde `& "C:\Program Files\GitHub CLI\gh.exe" auth login` (GitHub.com → HTTPS → tarayıcı ile,
-**Torokal** hesabı) çalıştırıp bu oturuma "giriş yaptım" demek. Ajan giriş bilgisi giremez.
-(Sonra ajan: `gh auth status` = Torokal doğrula → `gh repo create Torokal/TSQ-Bot --public …` → `main` ve
-`feature/foundation` push (force yok, squash yok) → PR `feature/foundation → main` aç, **merge etme** → uzak dalları doğrula →
-bu dosyayı güncelle.)
+**Sahip:** GitHub'ın verdiği bağlantıda (https://github.com/Torokal/TSQ-Bot/security/secret-scanning/unblock-secret/3Jn0d8eXwe2FWjnKGCFTYcNzyHb)
+bu **sahte** test dizesi için "It's used in tests" seçeneğiyle izin vermek (gerçek bir token değil: kimlik kısmı
+`1012345678901234567`, geri kalanı alfabe). Ajan bu güvenlik kararını kendisi vermez ve geçmişi yeniden yazmaz.
+(Sonra ajan: `feature/foundation` push → PR `feature/foundation → main` aç, **merge etme** → uzak dalları doğrula → bu dosyayı güncelle.)
 
 Ardından: B1+B2 — Discord uygulaması "TSQ Bot" + token (`dotnet user-secrets`) + test sunucusu daveti ve onayı.
