@@ -25,8 +25,8 @@ try {
     $sha = (& git rev-parse HEAD).Trim()
     $out = Join-Path $script:RepoRoot 'artifacts'
     New-Item -ItemType Directory -Force $out | Out-Null
-    $file = Join-Path $out "torosquad-bot-source-$($sha.Substring(0, 12)).zip"
-    & git archive --format=zip --prefix "torosquad-bot-$($sha.Substring(0, 12))/" -o $file HEAD
+    $file = Join-Path $out "tsq-bot-source-$($sha.Substring(0, 12)).zip"
+    & git archive --format=zip --prefix "tsq-bot-$($sha.Substring(0, 12))/" -o $file HEAD
     if ($LASTEXITCODE -ne 0) { throw "git archive failed." }
     Write-Host "Corresponding Source: $file (commit $sha)" -ForegroundColor Green
     Write-Host "Publish it and set Bot:SourceUrl accordingly."

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Instructions for any coding agent (Claude Code, Codex, others) working on ToroSquad Bot.
+Instructions for any coding agent (Claude Code, Codex, others) working on TSQ Bot.
 
 1. Start by reading `docs/PROJECT_STATE.md` and `CLAUDE.md`; they are authoritative for state and rules.
 2. Only one agent writes to the working tree at a time. A reviewer agent (e.g. Codex, only if the owner authorizes it)

@@ -35,7 +35,7 @@
   "setup.timezone_placeholder": "Server time zone",
   "setup.configure_module": "Set up {0}",
   "setup.finish": "Finish setup",
-  "setup.title": "ToroSquad Bot setup",
+  "setup.title": "{product} setup",
   "setup.intro": "1️⃣ Language: **{0}**\n2️⃣ Server time zone: **{1}** (now {2})\n3️⃣ Pick a module below to configure it. Modules are enabled separately after a preview.\n\nThe time zone is only for server display; Discord timestamps show in each member's own time.",
 
   "privacy.confirmation_invalid": "Confirmation invalid or expired. Start again with /privacy delete.",
@@ -49,11 +49,11 @@
   "privacy.delete_warnings": "Warnings:\n{0}",
   "privacy.cancelled": "Cancelled; nothing was deleted.",
 
-  "help.title": "ToroSquad Bot commands",
+  "help.title": "{product} commands",
   "help.footer_admin": "🔒 commands are only for members with Manage Server.",
   "help.footer_user": "Only commands of modules enabled in this server are listed.",
 
-  "status.title": "ToroSquad Bot status",
+  "status.title": "{product} status",
   "status.connection": "Connection",
   "status.connected": "Connected ({0} ms)",
   "status.fake_mode": "Local/test mode (no Discord connection)",
@@ -63,7 +63,7 @@
   "about.version": "Version",
   "about.license": "License",
   "about.operator": "Operator contact",
-  "about.description": "ToroSquad Bot is a modular Discord bot. Its first module is Counter-Strike 2 esports tracking and notifications.",
+  "about.description": "{product} is a modular Discord bot. Its first module is Counter-Strike 2 esports tracking and notifications.",
   "about.not_official": "Not an official continuation of BOT Greg and not endorsed by its developer.",
 
   "source.title": "Source code and license",
@@ -73,18 +73,18 @@
   "source.license_note": "License: {0}. The source bundle includes build instructions; no secrets or user data.",
 
   "cmd.help": "Show the commands available to you in this server",
-  "cmd.bot": "About ToroSquad Bot: status, version, source code",
+  "cmd.bot": "About {product}: status, version, source code",
   "cmd.bot.status": "Safe, public health overview of the bot",
-  "cmd.bot.about": "What ToroSquad Bot is, its version and attributions",
+  "cmd.bot.about": "What {product} is, its version and attributions",
   "cmd.bot.source": "Where to get the source code of the exact version running here",
-  "cmd.privacy": "Export or delete the data ToroSquad Bot stores about you",
+  "cmd.privacy": "Export or delete the data {product} stores about you",
   "cmd.privacy.export": "Download your own stored data from this server as JSON",
   "cmd.privacy.delete": "Delete your own stored data from this server (preview first)",
-  "cmd.modules": "Manage which ToroSquad modules are active in this server",
+  "cmd.modules": "Manage which {product} modules are active in this server",
   "cmd.modules.list": "Show modules and whether they are enabled here",
   "cmd.modules.enable": "Enable a module in this server",
   "cmd.modules.enable.module": "Module id",
   "cmd.modules.disable": "Stop a module in this server (its data is kept)",
   "cmd.modules.disable.module": "Module id",
-  "cmd.setup": "Step-by-step server setup for ToroSquad Bot"
+  "cmd.setup": "Step-by-step server setup for {product}"
 }

@@ -1,10 +1,10 @@
 [
   {
-    "_comment": "SYNTHETIC DEMO DATA for ToroSquad Bot fixture mode. Fictional teams/events. Shape follows LPDB v3 match2.",
+    "_comment": "SYNTHETIC DEMO DATA for TSQ Bot fixture mode. Fictional teams/events. Shape follows LPDB v3 match2.",
     "pageid": 900001, "pagename": "Demo_Masters/2026", "match2id": "DemoMst26_R01-M001",
     "status": "", "winner": "", "walkover": "", "resulttype": "", "finished": 0,
     "type": "Online", "section": "Group Stage", "game": "cs2", "date": "{{T+00:20}}", "dateexact": 1,
-    "stream": { "twitch": "torosquad_demo", "twitch_en_1": "torosquad_demo" }, "links": [], "bestof": 3,
+    "stream": { "twitch": "tsqbot_demo", "twitch_en_1": "tsqbot_demo" }, "links": [], "bestof": 3,
     "tournament": "Demo Masters 2026", "parent": "Demo_Masters/2026", "liquipediatier": "1", "liquipediatiertype": "", "publishertier": "",
     "match2opponents": [
       { "id": 1, "type": "team", "name": "Toro Wolves", "template": "toro wolves", "score": -1, "status": "", "placement": null, "match2players": [],
@@ -29,7 +29,7 @@
   {
     "pageid": 900002, "pagename": "Demo_Cup/2026", "match2id": "DemoCup26_R02-M001",
     "status": "", "winner": "", "finished": 0, "type": "Online", "section": "Playoffs", "game": "cs2",
-    "date": "{{T-01:00}}", "dateexact": 1, "stream": { "youtube": "torosquad_demo" }, "links": {}, "bestof": 3,
+    "date": "{{T-01:00}}", "dateexact": 1, "stream": { "youtube": "tsqbot_demo" }, "links": {}, "bestof": 3,
     "tournament": "Demo Cup 2026", "parent": "Demo_Cup/2026", "liquipediatier": "3", "publishertier": "",
     "match2opponents": [
       { "id": 1, "type": "team", "name": "Iron Bulls", "score": 1, "status": "S", "match2players": [],

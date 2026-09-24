@@ -47,7 +47,7 @@ public sealed class TestHost : IAsyncDisposable
             ["Discord:Transport"] = "Fake",
             ["Delivery:Mode"] = "Send",
             ["Esports:Provider:Mode"] = "Fixture",
-            ["Esports:Liquipedia:UserAgent"] = "ToroSquadBot-tests/0 (https://localhost; tests)",
+            ["Esports:Liquipedia:UserAgent"] = "TSQBot-tests/0 (https://localhost; tests)",
             ["Esports:MatchPollMinutes"] = "10",
         };
         foreach (var (k, v) in overrides ?? [])

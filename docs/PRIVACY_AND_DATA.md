@@ -1,6 +1,6 @@
 # Gizlilik ve veri saklama (teknik kayıt)
 
-ToroSquad Bot mesaj içeriği okumaz (Message Content intent kapalı), üye listesi indirmez (Guild Members intent kapalı),
+TSQ Bot mesaj içeriği okumaz (Message Content intent kapalı), üye listesi indirmez (Guild Members intent kapalı),
 presence izlemez. Profil, avatar, kullanıcı adı **saklanmaz**.
 
 ## Tutulan kayıtlar

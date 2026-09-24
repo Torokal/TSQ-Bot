@@ -4,7 +4,7 @@ namespace ToroSquad.Discord.Commands.Manifest;
 
 /// <summary>
 /// Validates the manifest against Discord's documented limits (application-commands docs, verified 2026-09-24)
-/// plus ToroSquad policy (guild-only, Turkish descriptions, admin commands hidden by default permissions).
+/// plus TSQ Bot policy (guild-only, Turkish descriptions, admin commands hidden by default permissions).
 /// </summary>
 public static partial class CommandManifestValidator
 {
@@ -122,7 +122,7 @@ public static partial class CommandManifestValidator
 
     private static void CheckName(List<string> errors, string path, string name)
     {
-        // Discord allows more (unicode letters), ToroSquad policy keeps command/option names short, stable ASCII.
+        // Discord allows more (unicode letters), TSQ Bot policy keeps command/option names short, stable ASCII.
         if (!NamePattern().IsMatch(name))
             errors.Add($"{path}: invalid name '{name}' (policy: ^[a-z0-9_-]{{1,32}}$)");
     }

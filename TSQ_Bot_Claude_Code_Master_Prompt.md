@@ -1,8 +1,12 @@
-# TOROSQUAD BOT — CLAUDE CODE MASTER PROMPT
+# TSQ BOT — CLAUDE CODE MASTER PROMPT
+
+> **Ad değişikliği (2026-09-24):** Ürünün resmî adı **TSQ Bot** oldu (eski adı: ToroSquad Bot). Bu şartnamedeki ürün
+> adı buna göre güncellendi; gereksinimler değişmedi. Teknik kimlikler (`ToroSquad.*` proje/namespace adları,
+> `TOROSQUAD_` ortam değişkeni öneki, veri dosyası adları) bilerek korunmuştur — bkz. `docs/PROJECT_STATE.md`.
 
 ## 1. Görev ve ürün kimliği
 
-Sen bu projenin ana geliştiricisi ve teknik sorumlususun. Ürün adı kesin olarak **ToroSquad Bot**.
+Sen bu projenin ana geliştiricisi ve teknik sorumlususun. Ürün adı kesin olarak **TSQ Bot**.
 
 Kendi Discord sunucumda kullanabileceğim, ileride başka sunuculara da kurulabilecek, bakımı yapılabilir bir Discord botu geliştir. İlk gerçek özellik modülü, BOT Greg'den esinlenen Counter-Strike 2 esports takibi ve bildirimleri olacak. Ancak ürün yalnızca bir esports botu olmayacak: sonradan moderasyon, karşılama, yayın bildirimleri, anket, hatırlatıcı ve başka oyun modülleri ekleyebilmeliyiz.
 
@@ -48,7 +52,7 @@ Bu SHA bir referans noktasıdır; güncel HEAD olduğunu varsayma. Önceki bulgu
 
 V2 API için önceki incelemede AGPL-3.0 görülmüştü. Mevcut lisansı doğrula; yeniden kullanılan kodun telif/lisans bildirimlerini, kaynak bağlantısını ve değişiklik kaydını koru. Türetilen uygulama için uyumlu lisanslama ve gerekli Corresponding Source sunumunu planla. `/bot source` ve `/bot about` içinde çalışan sürümün kaynak erişimini sağlayacak yapı kur. Kaynak sunma yükümlülüğünü yalnızca bir upstream linkiyle yerine getirilmiş sayma. Çalışan değişikliklerin kaynakları ve gerekli build talimatları da kapsanmalı; secret ve kullanıcı verileri paylaşılmamalı.
 
-Politika deposunun metinlerini, logosunu ve varlıklarını otomatik olarak aynı lisans kapsamındaymış gibi kopyalama. ToroSquad Bot için özgün kimlik ve gerçek veri işleyişine uygun politika taslağı yaz. Resmî BOT Greg devamı olduğumuzu veya geliştiricinin onay verdiğini iddia etme.
+Politika deposunun metinlerini, logosunu ve varlıklarını otomatik olarak aynı lisans kapsamındaymış gibi kopyalama. TSQ Bot için özgün kimlik ve gerçek veri işleyişine uygun politika taslağı yaz. Resmî BOT Greg devamı olduğumuzu veya geliştiricinin onay verdiğini iddia etme.
 
 Yeni bot uygulaması ve kimlik bilgileri bana ait olacak. Eski Greg'in token/API anahtarını, özel verilerini veya uygulama kimliğini devraldığımızı varsayma. Ayar aktarımını ancak yetkili, kullanıcı tarafından sağlanmış export varsa değerlendir. Upstream User-Agent içindeki geliştiricinin iletişim bilgisini kendi işletmecimizmiş gibi kullanma; uygun kimlik/iletişim yapılandırmasını canlı erişim öncesinde tamamla.
 
@@ -98,7 +102,7 @@ Komutlar aşağıdaki kullanıcı deneyimini sağlamalı. Küçük birleştirmel
 GENEL:
 /help                         Yetkiye ve aktif modüllere göre yardım
 /bot status                   Güvenli genel sağlık ve kullanılabilirlik
-/bot about                    ToroSquad Bot, sürüm ve atıflar
+/bot about                    TSQ Bot, sürüm ve atıflar
 /bot source                   Çalışan sürümün kaynak/lisans erişimi
 /privacy export               Kullanıcının kendi kayıtlarını dışa aktarma
 /privacy delete               Kendi verisini silme: önizleme + onay

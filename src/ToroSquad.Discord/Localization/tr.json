@@ -35,7 +35,7 @@
   "setup.timezone_placeholder": "Sunucu zaman dilimi",
   "setup.configure_module": "{0} kurulumu",
   "setup.finish": "Kurulumu bitir",
-  "setup.title": "ToroSquad Bot kurulumu",
+  "setup.title": "{product} kurulumu",
   "setup.intro": "1️⃣ Dil: **{0}**\n2️⃣ Sunucu zaman dilimi: **{1}** (şu an {2})\n3️⃣ Aşağıdan yapılandırmak istediğiniz modülü seçin. Modüller, önizleme sonrası ayrıca açılır.\n\nZaman dilimi yalnızca sunucu gösterimi içindir; Discord zaman damgaları her kullanıcıya kendi saatinde görünür.",
 
   "privacy.confirmation_invalid": "Onay geçersiz veya süresi dolmuş. /privacy delete ile yeniden başlatın.",
@@ -49,11 +49,11 @@
   "privacy.delete_warnings": "Uyarılar:\n{0}",
   "privacy.cancelled": "İptal edildi; hiçbir şey silinmedi.",
 
-  "help.title": "ToroSquad Bot komutları",
+  "help.title": "{product} komutları",
   "help.footer_admin": "🔒 işaretli komutlar yalnızca Sunucuyu Yönet yetkisi olanlar içindir.",
   "help.footer_user": "Yalnızca bu sunucuda açık modüllerin komutları listelenir.",
 
-  "status.title": "ToroSquad Bot durumu",
+  "status.title": "{product} durumu",
   "status.connection": "Bağlantı",
   "status.connected": "Bağlı ({0} ms)",
   "status.fake_mode": "Yerel/test modu (Discord bağlantısı yok)",
@@ -63,7 +63,7 @@
   "about.version": "Sürüm",
   "about.license": "Lisans",
   "about.operator": "İşletmeci iletişimi",
-  "about.description": "ToroSquad Bot; modüler bir Discord botudur. İlk modül Counter-Strike 2 esports takibi ve bildirimleridir.",
+  "about.description": "{product}; modüler bir Discord botudur. İlk modül Counter-Strike 2 esports takibi ve bildirimleridir.",
   "about.not_official": "BOT Greg'in resmî devamı değildir ve geliştiricisi tarafından onaylanmamıştır.",
 
   "source.title": "Kaynak kod ve lisans",
@@ -73,9 +73,9 @@
   "source.license_note": "Lisans: {0}. Kaynak paketi derleme talimatlarını içerir; gizli anahtarlar ve kullanıcı verileri dahil değildir.",
 
   "cmd.help": "Bu sunucuda kullanabileceğiniz komutları gösterir",
-  "cmd.bot": "ToroSquad Bot hakkında: durum, sürüm, kaynak kod",
+  "cmd.bot": "{product} hakkında: durum, sürüm, kaynak kod",
   "cmd.bot.status": "Botun güvenli, genel sağlık özeti",
-  "cmd.bot.about": "ToroSquad Bot nedir, sürümü ve atıflar",
+  "cmd.bot.about": "{product} nedir, sürümü ve atıflar",
   "cmd.bot.source": "Burada çalışan sürümün kaynak koduna erişim",
   "cmd.privacy": "Hakkınızda tutulan verileri dışa aktarın veya silin",
   "cmd.privacy.export": "Bu sunucudaki kendi kayıtlarınızı JSON olarak indirin",
@@ -86,5 +86,5 @@
   "cmd.modules.enable.module": "Modül kimliği",
   "cmd.modules.disable": "Bir modülü durdurur (veriler korunur)",
   "cmd.modules.disable.module": "Modül kimliği",
-  "cmd.setup": "ToroSquad Bot için adım adım sunucu kurulumu"
+  "cmd.setup": "{product} için adım adım sunucu kurulumu"
 }

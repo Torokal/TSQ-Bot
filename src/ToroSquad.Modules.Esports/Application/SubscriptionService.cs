@@ -173,7 +173,7 @@ public sealed class SubscriptionService(ToroDbContext db, IGuildGateway guilds, 
             grant.UpdatedAt = clock.GetUtcNow();
             await db.SaveChangesAsync(ct); // persisted BEFORE the Discord call → reconcilable after a crash
 
-            var outcome = await guilds.AddRoleAsync(guild, user, new RoleId(roleId), "ToroSquad: esports follow (self-service)", ct);
+            var outcome = await guilds.AddRoleAsync(guild, user, new RoleId(roleId), $"{ProductInfo.ProductName}: esports follow (self-service)", ct);
             if (outcome == RoleOperationOutcome.Success)
             {
                 grant.State = RoleGrantState.Active;
@@ -205,7 +205,7 @@ public sealed class SubscriptionService(ToroDbContext db, IGuildGateway guilds, 
             grant.UpdatedAt = clock.GetUtcNow();
             await db.SaveChangesAsync(ct);
 
-            var outcome = await guilds.RemoveRoleAsync(guild, user, new RoleId(grant.RoleId), "ToroSquad: esports unfollow", ct);
+            var outcome = await guilds.RemoveRoleAsync(guild, user, new RoleId(grant.RoleId), $"{ProductInfo.ProductName}: esports unfollow", ct);
             if (outcome is RoleOperationOutcome.Success or RoleOperationOutcome.UnknownRole or RoleOperationOutcome.UnknownMember)
             {
                 db.Remove(grant);

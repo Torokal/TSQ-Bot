@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Runs ToroSquad Bot locally.
+    Runs TSQ Bot locally.
 .DESCRIPTION
     Default: Development environment with the SAFE defaults from appsettings.json - Fake Discord transport (no
     connection), fixture esports data, dry-run delivery. Nothing is sent anywhere.
@@ -30,7 +30,7 @@ try {
     if ($Simulate) {
         exit (Invoke-Bot simulate)
     }
-    Write-Host "Starting ToroSquad Bot ($env:DOTNET_ENVIRONMENT). Data: $env:TOROSQUAD_Bot__DataDirectory. Ctrl+C to stop." -ForegroundColor Cyan
+    Write-Host "Starting TSQ Bot ($env:DOTNET_ENVIRONMENT). Data: $env:TOROSQUAD_Bot__DataDirectory. Ctrl+C to stop." -ForegroundColor Cyan
     exit (Invoke-Bot run)
 }
 finally {

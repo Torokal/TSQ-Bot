@@ -1,6 +1,6 @@
 using ToroSquad.Bot;
 
-// ToroSquad Bot — single executable. Verbs (see README.md / scripts/*.ps1):
+// TSQ Bot — single executable. Verbs (see README.md / scripts/*.ps1):
 //   run (default)                       start the bot
 //   commands export [--out FILE]        build + validate the slash-command manifest offline
 //   commands sync --guild ID|--global [--apply] [--prune]   dry-run by default

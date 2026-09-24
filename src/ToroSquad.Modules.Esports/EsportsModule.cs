@@ -19,7 +19,7 @@ using ToroSquad.Modules.Esports.Providers.Valve;
 
 namespace ToroSquad.Modules.Esports;
 
-/// <summary>Counter-Strike 2 esports tracking and notifications — the first ToroSquad feature module.</summary>
+/// <summary>Counter-Strike 2 esports tracking and notifications — the first TSQ Bot feature module.</summary>
 public sealed class EsportsModule : IToroModule
 {
     public const string ModuleIdValue = "esports";

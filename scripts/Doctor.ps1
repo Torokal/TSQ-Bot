@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Checks the local ToroSquad Bot environment and configuration. Never prints secret values.
+    Checks the local TSQ Bot environment and configuration. Never prints secret values.
 .DESCRIPTION
     Verifies the .NET SDK, git, restores/builds the solution, then runs `ToroSquad.Bot doctor`, which reports
     token/API-key presence (set / not set), modes, database migrations, the slash-command manifest and provider
@@ -14,7 +14,7 @@ param()
 . (Join-Path $PSScriptRoot '_Common.ps1')
 Initialize-ToroEnvironment
 
-Write-Host "== ToroSquad Bot doctor ==" -ForegroundColor Cyan
+Write-Host "== TSQ Bot doctor ==" -ForegroundColor Cyan
 $sdk = Assert-DotNetSdk
 Write-Host "[OK     ] .NET SDK $sdk family installed"
 $git = Get-Command git -ErrorAction SilentlyContinue

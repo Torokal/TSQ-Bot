@@ -1,6 +1,6 @@
 # Mimari
 
-ToroSquad Bot bir **modüler monolittir**: tek çalıştırılabilir (`ToroSquad.Bot`), tek süreç, tek instance, SQLite.
+TSQ Bot bir **modüler monolittir**: tek çalıştırılabilir (`ToroSquad.Bot`), tek süreç, tek instance, SQLite.
 Mikroservis, message broker, Redis, ayrı web paneli veya çalışma anında DLL yükleyen plugin sistemi **yoktur**
 (bkz. [ADR-0001](adr/0001-modular-monolith.md)).
 
@@ -23,7 +23,7 @@ ToroSquad.Modules.Esports   ToroSquad.Modules.Example  (her modül yalnızca pla
 
 | Proje | Sorumluluk | Bağımlı olamaz |
 |---|---|---|
-| `ToroSquad.Core` | `IToroModule`, `ModuleRegistry`, `IModuleGate`, `ActorContext`/`Authorize`, `OutgoingMessage`+`MentionPolicy`, `INotificationOutbox`, `IDeliveryPolicy`, gizlilik sözleşmesi, self-service rol politikası, localization | Discord.Net, EF Core, diğer tüm ToroSquad projeleri |
+| `ToroSquad.Core` | `IToroModule`, `ModuleRegistry`, `IModuleGate`, `ActorContext`/`Authorize`, `OutgoingMessage`+`MentionPolicy`, `INotificationOutbox`, `IDeliveryPolicy`, gizlilik sözleşmesi, self-service rol politikası, localization | Discord.Net, EF Core, diğer tüm TSQ Bot projeleri |
 | `ToroSquad.Infrastructure` | `ToroDbContext` (modüllerin model katkılarıyla), depolar, outbox + dispatcher, tek-instance kilidi, secret redaction, yedek/geri yükleme, saklama süresi | Discord, modüller |
 | `ToroSquad.Discord` | Interaction altyapısı, çekirdek komutlar, komut manifesti/doğrulama/senkron, gerçek ve sahte transport, guild geçidi | Infrastructure, modüller, EF |
 | `ToroSquad.Modules.Esports` | CS2 alan modeli, sağlayıcılar, planlayıcı, servisler, komutlar | Example modülü; `Domain/Providers/Application/Persistence` ad alanları Discord SDK kullanamaz |

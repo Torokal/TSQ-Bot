@@ -1,6 +1,7 @@
 using System.Text;
 using Discord;
 using Discord.Interactions;
+using ToroSquad.Core;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Discord.Interactions;
@@ -13,7 +14,7 @@ namespace ToroSquad.Discord.Commands.Core;
 /// preview + explicit confirmation button bound to the same user and guild (expires after 5 minutes, single use).
 /// </summary>
 [ToroModule("core")]
-[Group("privacy", "Export or delete the data ToroSquad Bot stores about you")]
+[Group("privacy", $"Export or delete the data {ProductInfo.ProductName} stores about you")]
 [CommandContextType(InteractionContextType.Guild)]
 [IntegrationType(ApplicationIntegrationType.GuildInstall)]
 public sealed class PrivacyCommands(InteractionServices services, PrivacyService privacy) : ToroInteractionModule(services)
@@ -27,7 +28,7 @@ public sealed class PrivacyCommands(InteractionServices services, PrivacyService
         await DeferEphemeralAsync();
         var json = await privacy.ExportAsync(Actor, CancellationToken.None);
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
-        await FollowupWithFileAsync(stream, $"torosquad-export-{Actor.GuildId}-{Actor.UserId}.json",
+        await FollowupWithFileAsync(stream, $"tsq-bot-export-{Actor.GuildId}-{Actor.UserId}.json",
             text: await T("privacy.export_ready"), ephemeral: true,
             allowedMentions: DiscordConversions.ToAllowedMentions(MentionPolicy.None));
     }

@@ -1,7 +1,9 @@
+using ToroSquad.Core;
+
 namespace ToroSquad.Infrastructure.Hosting;
 
 /// <summary>
-/// ToroSquad Bot supports exactly one running instance per data directory (SQLite, in-process scheduler).
+/// TSQ Bot supports exactly one running instance per data directory (SQLite, in-process scheduler).
 /// A second instance would send the same notifications in parallel, so it refuses to start instead.
 /// Uses an OS-level exclusive file handle (released automatically if the process dies).
 /// </summary>
@@ -36,7 +38,7 @@ public sealed class SingleInstanceLock : IDisposable
         catch (IOException ex)
         {
             throw new InvalidOperationException(
-                $"Another ToroSquad Bot instance is already using '{dataDirectory}'. Horizontal scaling is not supported (single SQLite instance).", ex);
+                $"Another {ProductInfo.ProductName} instance is already using '{dataDirectory}'. Horizontal scaling is not supported (single SQLite instance).", ex);
         }
     }
 

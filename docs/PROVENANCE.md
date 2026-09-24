@@ -15,7 +15,7 @@ not a replacement bot, and nothing indicates the old bot's credentials, data or 
 
 ## Findings in upstream code (why it was not copied as-is)
 
-| Area | Upstream behaviour | Risk | ToroSquad handling |
+| Area | Upstream behaviour | Risk | TSQ Bot handling |
 |---|---|---|---|
 | Error handling | Non-2xx → logs and returns an **empty list** | API error indistinguishable from "no matches" | `ProviderResult` with Success / Partial / NotConfigured / AuthFailed / QuotaExceeded / Timeout / TransportError / SchemaError |
 | Pagination | `limit=100`, single request | Silent truncation | Offset pagination, `MaxPages` bound, "did not advance" guard, Partial result |
@@ -29,7 +29,7 @@ not a replacement bot, and nothing indicates the old bot's credentials, data or 
 
 ## What was reused
 
-ToroSquad Bot reuses **ideas and adapted portions** of `Services/LiquipediaService.cs` and `Services/VrsService.cs`
+TSQ Bot reuses **ideas and adapted portions** of `Services/LiquipediaService.cs` and `Services/VrsService.cs`
 (LPDB query shape `[[game::cs2]]` + date conditions, the PHP `[]`-vs-`{}` stream/links handling, stream de-duplication,
 reading Valve's standings markdown). Those files carry a header naming the source, commit and license and stating
 that they were modified:
@@ -37,18 +37,19 @@ that they were modified:
 - `src/ToroSquad.Modules.Esports/Providers/Liquipedia/LiquipediaParser.cs`
 - `src/ToroSquad.Modules.Esports/Providers/Valve/ValveStandings.cs`
 
-`CountryMapper.cs`, controllers, Swagger and the web host were **not** reused (ToroSquad runs the data code in-process;
+`CountryMapper.cs`, controllers, Swagger and the web host were **not** reused (TSQ Bot runs the data code in-process;
 no public HTTP endpoint is needed — see docs/ARCHITECTURE.md).
 
-Nothing from BOT-Greg-Policies (texts, logo, icon, CSS) was copied. ToroSquad's policy texts are original drafts
+Nothing from BOT-Greg-Policies (texts, logo, icon, CSS) was copied. TSQ Bot's policy texts are original drafts
 (`docs/policies/`).
 
 ## License decision
 
-Because adapted AGPL-3.0 code is included, **ToroSquad Bot as a whole is licensed AGPL-3.0-only** (`LICENSE`, verbatim
+Because adapted AGPL-3.0 code is included, **TSQ Bot as a whole is licensed AGPL-3.0-only** (`LICENSE`, verbatim
 GNU AGPL v3 text, identical to upstream `LICENSE.txt`, SHA-256 prefix `6f1e622c82a38007`). Consequences, implemented:
 
 - `/bot about` lists attributions (upstream repo, Liquipedia CC BY-SA 3.0, Valve VRS, Discord.Net MIT).
+- Canonical public source repository: **https://github.com/Torokal/TSQ-Bot** — the shipped default of `Bot:SourceUrl`.
 - `/bot source` points users of the running instance to its **Corresponding Source** via `Bot:SourceUrl`; startup in
   Gateway mode is refused without it unless `Bot:AllowMissingSourceUrlForPrivateTesting=true`.
 - `scripts/Export-Source.ps1` produces the source archive of the exact committed version (with build instructions,
@@ -60,7 +61,7 @@ technical record, not legal advice.
 
 ## Third-party data
 
-| Source | Terms (see docs/PROVIDERS.md) | How ToroSquad complies |
+| Source | Terms (see docs/PROVIDERS.md) | How TSQ Bot complies |
 |---|---|---|
 | Liquipedia (LiquipediaDB API) | CC BY-SA 3.0; attribution + link required; API key by approval; 60 req/h baseline | Footer "Kaynak: Liquipedia (CC BY-SA 3.0)" + source link on every message; per-table request budget |
 | Valve regional standings | Public GitHub repo, **no license file**; data credits HLTV.org | Displayed with source, date and attribution only; no bulk redistribution; synthetic fixtures in tests |

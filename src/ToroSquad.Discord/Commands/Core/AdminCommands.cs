@@ -27,7 +27,7 @@ public sealed class ModuleAutocomplete(ModuleRegistry registry) : AutocompleteHa
 
 /// <summary>/modules list|enable|disable — Manage Server required (hidden via default_member_permissions AND re-checked).</summary>
 [ToroModule("core")]
-[Group("modules", "Manage which ToroSquad modules are active in this server")]
+[Group("modules", $"Manage which {ProductInfo.ProductName} modules are active in this server")]
 [DefaultMemberPermissions(DiscordPermission.ManageGuild)]
 [CommandContextType(InteractionContextType.Guild)]
 [IntegrationType(ApplicationIntegrationType.GuildInstall)]
@@ -107,7 +107,7 @@ public sealed class SetupCommands(
         "Asia/Dubai", "Asia/Tokyo", "America/New_York", "America/Sao_Paulo", "Australia/Sydney",
     ];
 
-    [SlashCommand("setup", "Step-by-step server setup for ToroSquad Bot")]
+    [SlashCommand("setup", $"Step-by-step server setup for {ProductInfo.ProductName}")]
     public async Task SetupAsync()
     {
         var auth = Authorize.Require(Actor, Actor.GuildId, Authorize.ServerSettings);

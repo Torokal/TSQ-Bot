@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Registers ToroSquad Bot slash commands - DRY-RUN by default.
+    Registers TSQ Bot slash commands - DRY-RUN by default.
 .DESCRIPTION
     1. Builds the command manifest offline and validates it (refuses to continue if invalid/empty/partially loaded).
     2. Logs in with the bot token (user-secrets / TOROSQUAD_Discord__Token) and verifies the token belongs to

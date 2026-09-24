@@ -34,7 +34,7 @@ public static class Simulation
         Environment.SetEnvironmentVariable("TOROSQUAD_Discord__Transport", "Fake");
         Environment.SetEnvironmentVariable("TOROSQUAD_Esports__Provider__Mode", "Fixture");
         Environment.SetEnvironmentVariable("TOROSQUAD_Delivery__Mode", "Send");
-        Environment.SetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__UserAgent", "ToroSquadBot-simulation/0 (https://localhost; local)");
+        Environment.SetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__UserAgent", ProductInfo.UserAgentProduct + "-simulation/0 (https://localhost; local)");
 
         var builder = ToroHost.CreateBuilder(args, longRunning: false);
         using var host = builder.Build();
@@ -42,7 +42,7 @@ public static class Simulation
         await using (var scope = services.CreateAsyncScope())
             await DatabaseMaintenance.MigrateAsync(scope.ServiceProvider.GetRequiredService<ToroDbContext>(), CancellationToken.None);
 
-        Console.WriteLine("=== ToroSquad Bot — OFFLINE SIMULATION (fixture data, fake Discord, temp DB) ===");
+        Console.WriteLine($"=== {ProductInfo.ProductName} — OFFLINE SIMULATION (fixture data, fake Discord, temp DB) ===");
         Console.WriteLine("Database: " + temp);
 
         var guilds = services.GetRequiredService<FakeGuildGateway>();

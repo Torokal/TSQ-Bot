@@ -1,15 +1,15 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "63a5f52b0827b19a73261189ce208fe743d089557568c70e0075e9052d3ce87c",
+  "hash": "965cae891cfcc86b2bb6a344697145046de78e3fb4c333ed5bf0a8e8437b9c95",
   "commands": [
     {
       "module": "core",
       "payload": {
         "type": 1,
         "name": "bot",
-        "description": "About ToroSquad Bot: status, version, source code",
+        "description": "About TSQ Bot: status, version, source code",
         "description_localizations": {
-          "tr": "ToroSquad Bot hakkında: durum, sürüm, kaynak kod"
+          "tr": "TSQ Bot hakkında: durum, sürüm, kaynak kod"
         },
         "default_member_permissions": null,
         "nsfw": false,
@@ -31,9 +31,9 @@
           {
             "type": 1,
             "name": "about",
-            "description": "What ToroSquad Bot is, its version and attributions",
+            "description": "What TSQ Bot is, its version and attributions",
             "description_localizations": {
-              "tr": "ToroSquad Bot nedir, sürümü ve atıflar"
+              "tr": "TSQ Bot nedir, sürümü ve atıflar"
             }
           },
           {
@@ -762,7 +762,7 @@
       "payload": {
         "type": 1,
         "name": "modules",
-        "description": "Manage which ToroSquad modules are active in this server",
+        "description": "Manage which TSQ Bot modules are active in this server",
         "description_localizations": {
           "tr": "Bu sunucuda hangi modüllerin açık olduğunu yönetin"
         },
@@ -835,7 +835,7 @@
       "payload": {
         "type": 1,
         "name": "privacy",
-        "description": "Export or delete the data ToroSquad Bot stores about you",
+        "description": "Export or delete the data TSQ Bot stores about you",
         "description_localizations": {
           "tr": "Hakkınızda tutulan verileri dışa aktarın veya silin"
         },
@@ -872,9 +872,9 @@
       "payload": {
         "type": 1,
         "name": "setup",
-        "description": "Step-by-step server setup for ToroSquad Bot",
+        "description": "Step-by-step server setup for TSQ Bot",
         "description_localizations": {
-          "tr": "ToroSquad Bot için adım adım sunucu kurulumu"
+          "tr": "TSQ Bot için adım adım sunucu kurulumu"
         },
         "default_member_permissions": "32",
         "nsfw": false,

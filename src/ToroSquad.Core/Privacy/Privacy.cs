@@ -50,7 +50,8 @@ public sealed class PrivacyService(IEnumerable<IUserDataContributor> contributor
     {
         var root = new JsonObject
         {
-            ["format"] = "torosquad-user-export/v1",
+            ["format"] = "tsq-bot-user-export/v1",
+            ["product"] = ProductInfo.ProductName,
             ["generatedAtUtc"] = clock.GetUtcNow().ToString("O", System.Globalization.CultureInfo.InvariantCulture),
             ["guildId"] = actor.GuildId.ToString(),
             ["userId"] = actor.UserId.ToString(),

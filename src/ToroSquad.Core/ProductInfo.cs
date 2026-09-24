@@ -16,7 +16,11 @@ public sealed record ProductInfo(
     string? OperatorContact,
     IReadOnlyList<Attribution> Attributions)
 {
-    public const string ProductName = "ToroSquad Bot";
+    /// <summary>The single source of the user-facing product name. Localization strings use the {product} token.</summary>
+    public const string ProductName = "TSQ Bot";
+
+    /// <summary>Product token for outgoing HTTP User-Agent headers (no spaces allowed there).</summary>
+    public const string UserAgentProduct = "TSQBot";
     public const string LicenseId = "AGPL-3.0-only";
 
     public bool SourceConfigured => !string.IsNullOrWhiteSpace(SourceUrl);

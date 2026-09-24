@@ -7,7 +7,7 @@ using ToroSquad.Core.Modules;
 namespace ToroSquad.Discord.Interactions;
 
 /// <summary>
-/// Marks which ToroSquad module owns an interaction class AND acts as a precondition for every slash command,
+/// Marks which TSQ Bot module owns an interaction class AND acts as a precondition for every slash command,
 /// button, select menu and modal in it: guild context is required, and a non-core module must be enabled in that
 /// guild. Stale components from a disabled module therefore stop working too.
 /// </summary>

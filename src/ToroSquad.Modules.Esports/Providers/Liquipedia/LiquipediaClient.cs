@@ -22,7 +22,7 @@ public sealed class LiquipediaOptions
     public string? ApiKey { get; set; }
 
     /// <summary>
-    /// REQUIRED for live access: "ToroSquadBot/&lt;version&gt; (&lt;your contact URL or e-mail&gt;)". Liquipedia's terms
+    /// REQUIRED for live access: "TSQBot/&lt;version&gt; (&lt;your contact URL or e-mail&gt;)". Liquipedia's terms
     /// require contact information. Never reuse another operator's contact.
     /// </summary>
     public string? UserAgent { get; set; }
@@ -85,7 +85,7 @@ public sealed class LiquipediaClient(HttpClient http, IOptions<LiquipediaOptions
         if (string.IsNullOrWhiteSpace(o.UserAgent))
             return "Esports:Liquipedia:UserAgent is not set (must include operator contact)";
         if (!o.UserAgent.Contains('(', StringComparison.Ordinal) || !(o.UserAgent.Contains('@', StringComparison.Ordinal) || o.UserAgent.Contains("http", StringComparison.OrdinalIgnoreCase)))
-            return "Esports:Liquipedia:UserAgent must contain contact info, e.g. 'ToroSquadBot/0.1 (https://example.org; ops@example.org)'";
+            return "Esports:Liquipedia:UserAgent must contain contact info, e.g. 'TSQBot/0.1 (https://example.org; ops@example.org)'";
         if (o.UserAgent.Contains("gmeinder", StringComparison.OrdinalIgnoreCase) || o.UserAgent.Contains("BOT-Greg", StringComparison.OrdinalIgnoreCase))
             return "Esports:Liquipedia:UserAgent must identify YOUR bot and contact, not the upstream developer's";
         return null;

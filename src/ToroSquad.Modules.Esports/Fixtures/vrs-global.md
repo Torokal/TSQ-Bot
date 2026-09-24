@@ -1,7 +1,7 @@
 ### Standings as of DEMO<br />
 <br />
 
-SYNTHETIC DEMO DATA for ToroSquad Bot fixture mode — fictional teams, same table layout as Valve's published files.
+SYNTHETIC DEMO DATA for TSQ Bot fixture mode — fictional teams, same table layout as Valve's published files.
 
 | Standing | Points | Team Name            | Roster                                  |      |
 | :- | -: | :- | :- | :- |

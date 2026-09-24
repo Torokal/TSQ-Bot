@@ -1,6 +1,6 @@
 // The idea of reading Valve's published standings markdown comes from BOT-Greg-v2_API by Julius Gmeinder
 // (https://github.com/julius-gmeinder/BOT-Greg-v2_API, commit 3898b4ebfd4ed26ec077f4167a780f1684d91331,
-// Services/VrsService.cs), licensed under the GNU AGPL v3. Modified for ToroSquad Bot: header-based column mapping,
+// Services/VrsService.cs), licensed under the GNU AGPL v3. Modified for TSQ Bot (formerly ToroSquad Bot): header-based column mapping,
 // publication date taken from the file name, host allow-list, failure types instead of empty lists, bounded listing.
 // See docs/PROVENANCE.md.
 using System.Globalization;
@@ -8,6 +8,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
+using ToroSquad.Core;
 using ToroSquad.Modules.Esports.Domain;
 
 namespace ToroSquad.Modules.Esports.Providers.Valve;
@@ -16,7 +17,7 @@ public sealed class ValveStandingsOptions
 {
     public string ListingBaseUrl { get; set; } = "https://api.github.com/repos/ValveSoftware/counter-strike_regional_standings/contents/live/";
     public string RepositoryUrl { get; set; } = "https://github.com/ValveSoftware/counter-strike_regional_standings";
-    public string UserAgent { get; set; } = "ToroSquadBot";
+    public string UserAgent { get; set; } = ProductInfo.UserAgentProduct;
     public int TimeoutSeconds { get; set; } = 20;
 }
 

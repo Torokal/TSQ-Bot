@@ -37,16 +37,16 @@ result"; there is no "match is live" notification.
   Whether a Discord bot qualifies: **NOT_VERIFIED** (Liquipedia decides). A search snippet claiming only Enterprise is
   currently served: NOT_VERIFIED. → Requesting access or paying is the owner's decision (approval gate).
 - **Rate limit**: "no more than 60 requests per 1 hour" baseline (VERIFIED, terms). Applies per key/wiki/table
-  (VERIFIED (3rd-party) via 429 message format). ToroSquad enforces a local token bucket per table at
+  (VERIFIED (3rd-party) via 429 message format). TSQ Bot enforces a local token bucket per table at
   `RequestsPerHourPerTable × BudgetShare` (default 60 × 0.8 = 48/h; every HTTP attempt including retries spends a token) and validates the polling config against it at
   startup (default: matches every 10 min, ≤5 pages → ≤30 req/h worst case; tournaments every 6 h).
 - **Headers**: `Authorization: Apikey <key>` (VERIFIED (3rd-party) OpenAPI copy); custom User-Agent **with contact
-  info** and gzip (VERIFIED for the wiki API; applied to LPDB as well). ToroSquad refuses live mode without an operator
+  info** and gzip (VERIFIED for the wiki API; applied to LPDB as well). TSQ Bot refuses live mode without an operator
   UA containing contact info and rejects the upstream developer's identity.
-- **Errors**: 403 invalid key, 404 no data, 429 over limit, body `{"error":[...]}` (VERIFIED (3rd-party)). ToroSquad
+- **Errors**: 403 invalid key, 404 no data, 429 over limit, body `{"error":[...]}` (VERIFIED (3rd-party)). TSQ Bot
   maps 401/403→AuthFailed, 429→QuotaExceeded(+Retry-After), 404→SchemaError (never "empty"), 5xx→bounded retry then
   TransportError, malformed JSON / missing `result`→SchemaError.
-- **Pagination**: `limit`/`offset`; max limit NOT_VERIFIED (3rd-party clients cap at 1000). ToroSquad uses 200 and at
+- **Pagination**: `limit`/`offset`; max limit NOT_VERIFIED (3rd-party clients cap at 1000). TSQ Bot uses 200 and at
   most 5 pages; a full last page yields `Partial`.
 - **Dates**: `date` is UTC `YYYY-MM-DD HH:MM:SS` (INFERRED, strong: official Lua `Date/Ext` + real record timestamp).
 - **Fields used**: match2id, date, dateexact, finished, winner ("0" = draw), status (`notplayed`), resulttype/walkover
@@ -62,12 +62,12 @@ result"; there is no "match is live" notification.
 
 - Repo https://github.com/ValveSoftware/counter-strike_regional_standings, HEAD `84ccfa4d751f…` (2026-09-09,
   "Updating Regional Standings for 9/7/2026") — VERIFIED.
-- **No LICENSE file** (VERIFIED). Files credit HLTV.org event data. ToroSquad displays standings with source, publication
+- **No LICENSE file** (VERIFIED). Files credit HLTV.org event data. TSQ Bot displays standings with source, publication
   date and attribution; test fixtures are synthetic (no copied rows).
 - Layout: `live/<YYYY>/standings_global_<YYYY>_<MM>_<DD>.md`; table `| Standing | Points | Team Name | Roster | |`,
   heading repeated; 2024 files used hyphenated dates (VERIFIED). Parser is header-based and date comes from the file name.
-- Cadence: monthly (first Monday) since 2025-03 (INFERRED from tree); ToroSquad polls every 12 h. GitHub unauthenticated
-  API: 60 req/h — ToroSquad uses 1–2 per refresh.
+- Cadence: monthly (first Monday) since 2025-03 (INFERRED from tree); TSQ Bot polls every 12 h. GitHub unauthenticated
+  API: 60 req/h — TSQ Bot uses 1–2 per refresh.
 - **Team matching** (docs/NOTIFICATIONS.md#vrs): exact → configured alias (`Esports:TeamAliases`) → normalized
   (strip "team/esports/gaming/clan/club/gg") only if unique; otherwise Ambiguous/NotFound and **never** used by filters.
 

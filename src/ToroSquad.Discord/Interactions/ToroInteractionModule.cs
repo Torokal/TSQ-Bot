@@ -14,7 +14,7 @@ namespace ToroSquad.Discord.Interactions;
 public sealed record InteractionServices(ILocalizer Localizer, IGuildSettingsStore GuildSettings, TimeProvider Clock);
 
 /// <summary>
-/// Base class for all ToroSquad slash/component handlers: localized, ephemeral-by-default replies that never ping,
+/// Base class for all TSQ Bot slash/component handlers: localized, ephemeral-by-default replies that never ping,
 /// and a server-side <see cref="ActorContext"/>.
 /// </summary>
 public abstract class ToroInteractionModule(InteractionServices services) : InteractionModuleBase<SocketInteractionContext>

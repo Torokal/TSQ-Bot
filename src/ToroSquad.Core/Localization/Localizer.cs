@@ -35,6 +35,9 @@ public interface ILocalizer
 /// <summary>Merged, immutable catalog of all modules' strings. Turkish default, English fallback, key as last resort.</summary>
 public sealed class LocalizationCatalog : ILocalizer
 {
+    /// <summary>Replaced by <see cref="ProductInfo.ProductName"/> when the tables load, so the name lives in one place.</summary>
+    public const string ProductToken = "{product}";
+
     private readonly FrozenDictionary<string, FrozenDictionary<string, string>> _tables;
 
     public LocalizationCatalog(IEnumerable<LocalizationSource> sources)
@@ -51,7 +54,7 @@ public sealed class LocalizationCatalog : ILocalizer
                     ?? throw new InvalidOperationException($"Empty localization resource '{resourceName}'.");
                 foreach (var (key, value) in table)
                 {
-                    if (!merged[language].TryAdd(key, value))
+                    if (!merged[language].TryAdd(key, value.Replace(ProductToken, ProductInfo.ProductName, StringComparison.Ordinal)))
                         throw new InvalidOperationException($"Duplicate localization key '{key}' ({language}) from {resourceName}.");
                 }
             }

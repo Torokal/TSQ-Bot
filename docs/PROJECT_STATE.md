@@ -1,4 +1,4 @@
-# ToroSquad Bot — PROJECT_STATE
+# TSQ Bot — PROJECT_STATE
 
 > Tek doğruluk kaynağı: gerçek durum, kararlar, çalıştırılan testler, blocker'lar ve tek NEXT ACTION.
 > Yeni oturumda önce bu dosyayı, sonra `git status` / `git log --oneline -10` çıktısını doğrula.

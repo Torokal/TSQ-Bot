@@ -249,6 +249,8 @@ public sealed class RolesAndPrivacyTests : IAsyncLifetime
         follows.GetArrayLength().Should().Be(1);
         follows[0].GetProperty("teamKey").GetString().Should().Be("counterstrike/Alpha");
         doc.RootElement.GetProperty("userId").GetString().Should().Be("60");
+        doc.RootElement.GetProperty("product").GetString().Should().Be("TSQ Bot");
+        doc.RootElement.GetProperty("format").GetString().Should().Be("tsq-bot-user-export/v1");
         json.Should().NotContain("\"61\"").And.NotContain("Bravo");
     }
 

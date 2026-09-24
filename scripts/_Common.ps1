@@ -1,4 +1,4 @@
-# Shared helpers for ToroSquad Bot scripts. Compatible with Windows PowerShell 5.1 and PowerShell 7+.
+# Shared helpers for TSQ Bot scripts. Compatible with Windows PowerShell 5.1 and PowerShell 7+.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 

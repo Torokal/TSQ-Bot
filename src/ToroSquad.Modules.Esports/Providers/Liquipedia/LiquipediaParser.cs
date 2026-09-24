@@ -1,6 +1,6 @@
 // Portions of this file are derived from BOT-Greg-v2_API by Julius Gmeinder
 // (https://github.com/julius-gmeinder/BOT-Greg-v2_API, commit 3898b4ebfd4ed26ec077f4167a780f1684d91331,
-// Services/LiquipediaService.cs), licensed under the GNU AGPL v3. Modified for ToroSquad Bot: rewritten as a
+// Services/LiquipediaService.cs), licensed under the GNU AGPL v3. Modified for TSQ Bot (formerly ToroSquad Bot): rewritten as a
 // defensive, provider-independent parser (no fixed opponent indexes, null/[]/{} tolerant, explicit UTC dates,
 // no invented scores, forfeit/draw/not-played handling). See docs/PROVENANCE.md.
 using System.Globalization;

@@ -7,7 +7,7 @@
   çevrimdışı üretilir (Discord.Net'in kendi dönüştürücüsü `internal`); `docs/commands.manifest.json` olarak commit'lenir ve
   test kodla eşitliğini doğrular.
 - Doğrulayıcı: Discord limitleri (ad regex, açıklama 1–100, ≤25 seçenek/choice, iç içe grup kuralı, 8000 karakter,
-  ≤100 komut) + ToroSquad politikası (yalnızca guild bağlamı/kurulumu, her açıklamada `tr` yerelleştirmesi, yönetici
+  ≤100 komut) + TSQ Bot politikası (yalnızca guild bağlamı/kurulumu, her açıklamada `tr` yerelleştirmesi, yönetici
   komutlarında `default_member_permissions`, kullanıcı komutlarında yok).
 - Kayıt yalnızca `commands sync` CLI'si ile yapılır; **Ready/reconnect'te otomatik kayıt yok**. Varsayılan dry-run.
   Engelleyen koşullar: geçersiz/boş/eksik yüklenmiş manifest, token başka uygulamaya ait, guild allow-list'te değil,

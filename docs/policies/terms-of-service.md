@@ -1,9 +1,9 @@
-# ToroSquad Bot — Kullanım Koşulları (TASLAK)
+# TSQ Bot — Kullanım Koşulları (TASLAK)
 
 > Taslaktır; yayımlamadan önce işletmeci bilgileriyle doldurulmalı ve hukuken gözden geçirilmelidir.
 > Son güncelleme: 2026-09-24. İşletmeci: `<ad / iletişim>`.
 
-1. **Hizmet**: ToroSquad Bot, Discord sunucularına Counter-Strike 2 maç, sonuç, turnuva ve sıralama bilgileri ile
+1. **Hizmet**: TSQ Bot, Discord sunucularına Counter-Strike 2 maç, sonuç, turnuva ve sıralama bilgileri ile
    bildirimler sunan bağımsız bir bottur. BOT Greg, Valve, Liquipedia veya Discord ile bağlantılı değildir ve onlar
    tarafından onaylanmamıştır.
 2. **Veri doğruluğu**: Bilgiler üçüncü taraf kaynaklardan (Liquipedia CC BY-SA 3.0, Valve Regional Standings) gelir ve

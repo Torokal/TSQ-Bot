@@ -37,7 +37,7 @@ public sealed record ModuleDescriptor(
     IReadOnlyList<string> AdminCommands);
 
 /// <summary>
-/// Contract every ToroSquad feature module implements. Modules are compiled in and registered explicitly in the
+/// Contract every TSQ Bot feature module implements. Modules are compiled in and registered explicitly in the
 /// composition root (ToroSquad.Bot) — there is deliberately no runtime DLL plugin loading.
 /// </summary>
 public interface IToroModule

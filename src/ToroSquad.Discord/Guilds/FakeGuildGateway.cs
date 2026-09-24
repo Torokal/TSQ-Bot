@@ -57,7 +57,7 @@ public sealed class FakeGuildGateway : IGuildGateway
         var everyone = new RoleInfo(new RoleId(guild.Value), "@everyone", 0,
             GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.ReadMessageHistory | GuildPermission.UseApplicationCommands,
             false, true, false);
-        var bot = new RoleInfo(new RoleId(guild.Value + 1), "ToroSquad", 10,
+        var bot = new RoleInfo(new RoleId(guild.Value + 1), ProductInfo.ProductName, 10,
             GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks | GuildPermission.ReadMessageHistory | GuildPermission.ManageRoles,
             true, false, false);
         return new GuildRoleSnapshot(guild, [everyone, bot, .. extraRoles], 10,

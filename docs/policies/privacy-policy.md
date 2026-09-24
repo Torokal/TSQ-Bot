@@ -1,9 +1,9 @@
-# ToroSquad Bot — Gizlilik Politikası (TASLAK)
+# TSQ Bot — Gizlilik Politikası (TASLAK)
 
 > Taslaktır; yayımlamadan önce işletmeci bilgileriyle doldurulmalı ve hukuken gözden geçirilmelidir.
 > Son güncelleme: 2026-09-24. İşletmeci: `<ad / iletişim>`.
 
-**ToroSquad Bot** bağımsız bir Discord botudur; BOT Greg'in resmî devamı değildir.
+**TSQ Bot** bağımsız bir Discord botudur; BOT Greg'in resmî devamı değildir.
 
 ## Hangi verileri işliyoruz
 - **Sunucu ayarları**: sunucu, kanal ve rol kimlikleri; dil ve zaman dilimi tercihi; hangi modüllerin açık olduğu;

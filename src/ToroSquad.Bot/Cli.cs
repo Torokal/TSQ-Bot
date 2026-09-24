@@ -55,8 +55,8 @@ public static partial class Cli
 
     private static int PrintUsage()
     {
+        Console.WriteLine(ProductInfo.ProductName);
         Console.WriteLine("""
-            ToroSquad Bot
               run                                     start the bot (default)
               commands export [--out FILE]            build + validate slash-command manifest (offline)
               commands sync --guild ID [--apply] [--prune]

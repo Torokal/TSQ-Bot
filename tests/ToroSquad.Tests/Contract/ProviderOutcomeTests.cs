@@ -30,7 +30,7 @@ public sealed class ProviderOutcomeTests
         var options = new LiquipediaOptions
         {
             ApiKey = "test-key-not-real",
-            UserAgent = "ToroSquadBot-tests/0 (https://localhost; tests)",
+            UserAgent = "TSQBot-tests/0 (https://localhost; tests)",
             PageSize = 2,
             MaxPages = 5,
             MaxRetries = 1,
@@ -219,7 +219,7 @@ public sealed class ProviderOutcomeTests
     [InlineData("key", null, true)]
     [InlineData("key", "NoContactUA/1.0", true)]
     [InlineData("key", "BOT-Greg-v2/1.0 (julius.gmeinder@proton.me)", true)]
-    [InlineData("key", "ToroSquadBot/0.1 (https://example.org; ops@example.org)", false)]
+    [InlineData("key", "TSQBot/0.1 (https://example.org; ops@example.org)", false)]
     public void Live_mode_requires_key_and_own_contact_user_agent(string? key, string? ua, bool problem)
     {
         LiquipediaClient.ConfigurationProblem(new LiquipediaOptions { ApiKey = key, UserAgent = ua }, requireKey: true)
@@ -246,7 +246,7 @@ public sealed class ProviderOutcomeTests
         });
         await provider.GetMatchesAsync(Window, CancellationToken.None);
         seen!.Headers.Authorization!.Scheme.Should().Be("Apikey");
-        seen.Headers.UserAgent.ToString().Should().Contain("ToroSquadBot-tests");
+        seen.Headers.UserAgent.ToString().Should().Contain("TSQBot-tests");
         seen.Headers.AcceptEncoding.ToString().Should().Contain("gzip");
         var conditions = HttpUtility.ParseQueryString(seen.RequestUri!.Query)["conditions"]!;
         conditions.Should().Contain("[[game::cs2]]").And.Contain("[[date::>2026-09-24 00:00:00]]").And.Contain("[[date::<2026-09-26 12:00:00]]");

@@ -1,6 +1,6 @@
 [
   {
-    "_comment": "SYNTHETIC DEMO DATA for ToroSquad Bot fixture mode. Fictional events.",
+    "_comment": "SYNTHETIC DEMO DATA for TSQ Bot fixture mode. Fictional events.",
     "pageid": 900001, "pagename": "Demo_Masters/2026", "name": "Demo Masters 2026", "type": "Online",
     "startdate": "{{D-2}}", "enddate": "{{D+5}}", "liquipediatier": "1", "liquipediatiertype": "", "publishertier": "",
     "prizepool": 250000, "participantsnumber": 16,

@@ -75,7 +75,7 @@ public sealed class HelpCommands(InteractionServices services, InteractionHost h
 }
 
 [ToroModule("core")]
-[Group("bot", "About ToroSquad Bot: status, version, source code")]
+[Group("bot", $"About {ProductInfo.ProductName}: status, version, source code")]
 [CommandContextType(InteractionContextType.Guild)]
 [IntegrationType(ApplicationIntegrationType.GuildInstall)]
 public sealed class BotCommands(
@@ -117,7 +117,7 @@ public sealed class BotCommands(
         await ReplyEmbedAsync(new MessageEmbed(await T("status.title"), null, null, fields.Take(25).ToList(), product.Version, null, NeutralColor));
     }
 
-    [SlashCommand("about", "What ToroSquad Bot is, its version and attributions")]
+    [SlashCommand("about", $"What {ProductInfo.ProductName} is, its version and attributions")]
     public async Task AboutAsync()
     {
         var fields = new List<EmbedField>

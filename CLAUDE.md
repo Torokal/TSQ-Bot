@@ -1,10 +1,14 @@
-# CLAUDE.md — ToroSquad Bot
+# CLAUDE.md — TSQ Bot
 
 Read first, every session: `docs/PROJECT_STATE.md` (state, decisions, tests run, blockers, the single NEXT ACTION), then
 verify with `git status` / `git log --oneline -10`. Do not restart work that the state file marks done.
 
-## Ground rules (from the master spec `ToroSquad_Bot_Claude_Code_Master_Prompt.md`)
-- Product name: **ToroSquad Bot**. Modular monolith; esports is the first module. Real Discord slash commands only.
+## Ground rules (from the master spec `TSQ_Bot_Claude_Code_Master_Prompt.md`)
+- Product name: **TSQ Bot** (formerly ToroSquad Bot). Modular monolith; esports is the first module. Real Discord
+  slash commands only. User-facing text takes the name from `ProductInfo.ProductName` (localization: `{product}`
+  token); never hard-code it. Internal identifiers (`ToroSquad.*` projects/namespaces, `TOROSQUAD_` env prefix,
+  `torosquad.db`, user-secrets id) intentionally keep the old name — do not mass-rename them.
+- Canonical source repository: https://github.com/Torokal/TSQ-Bot (`Bot:SourceUrl` default in appsettings.json).
 - Never report unexecuted tests as passing or mock/fixture success as live success. Use the status words
   `IMPLEMENTED`, `TESTED_OFFLINE`, `VERIFIED_LIVE`, `BLOCKED`, `DEFERRED`.
 - Explicit owner approval is required for: paid APIs/subscriptions, account creation/authorization, bot invites,
