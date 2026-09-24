@@ -65,9 +65,25 @@ yalnızca `TestGuildIds` içindeki sunuculara gider. Gerçek bildirim göndermek
 
 ## 6. Canlı esports verisi (ayrı onay kapısı)
 
-Liquipedia API erişimi başvuru ile ve çoğu planda ücretlidir (docs/PROVIDERS.md). Onaylı anahtar geldiğinde:
-`Esports:Provider:Mode=Live`, `Esports:Liquipedia:ApiKey` (secret), `Esports:Liquipedia:UserAgent`
-= `TSQBot/0.1 (<sizin URL'niz>; <iletişim e-postanız>)`. Doctor ve başlangıç doğrulaması eksikleri söyler.
+**PandaScore (varsayılan sağlayıcı).** https://app.pandascore.co adresinde hesap açıp panodan token alın (ücretsiz plan:
+saatte 1.000 istek; ücretli plan otomatik açılmaz, karar sizin). Token'ı **sohbete yazmadan** yerel olarak kaydedin:
+```powershell
+dotnet user-secrets set "PandaScore:Token" "<TOKEN>" --project src\ToroSquad.Bot
+dotnet user-secrets set "Esports:Provider:Mode" "Live" --project src\ToroSquad.Bot
+```
+Önce yalnızca okuma doğrulaması yapılır (gerçek bildirim göndermeden): `.\scripts\Doctor.ps1` → "PandaScore token: set".
+Token yoksa canlı PandaScore **BLOCKED** olur; fixture modu ve testler token gerektirmez.
+
+**Liquipedia (eski/isteğe bağlı).** `Esports:Provider:Name=Liquipedia` seçilirse onaylı anahtar gerekir (başvuru, çoğu
+planda ücretli): `Esports:Liquipedia:ApiKey` (secret) ve `Esports:Liquipedia:UserAgent`
+= `TSQBot/0.1 (<sizin URL'niz>; <iletişim e-postanız>)`; `Esports:MatchPollMinutes` ≥ 10.
+
+**Doğrulanmış maç sayfaları (isteğe bağlı).** HLTV kazınmaz; bir maç için doğrulanmış HLTV/resmî bağlantıyı elle
+ekleyebilirsiniz (`Esports:VerifiedMatchLinks`, docs/NOTIFICATIONS.md). Doctor ve başlangıç doğrulaması eksikleri söyler.
+
+**TEST/DEMO kartları (Discord görünüm testi).** Bot çalışırken:
+`dotnet run --project src\ToroSquad.Bot -- esports demo-cards --guild <TEST_GUILD_ID>` (önizleme) → `--apply`.
+Yalnızca `Discord:TestGuildIds` içindeki sunucuya, TEST/DEMO etiketli ve ping'siz gider; tekrar çalıştırmak kopya üretmez.
 
 ## 7. Herkese açık kullanım (production)
 

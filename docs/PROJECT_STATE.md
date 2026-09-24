@@ -3,9 +3,23 @@
 > Tek doğruluk kaynağı: gerçek durum, kararlar, çalıştırılan testler, blocker'lar ve tek NEXT ACTION.
 > Yeni oturumda önce bu dosyayı, sonra `git status` / `git log --oneline -10` çıktısını doğrula.
 
-Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). **Test guild canlı doğrulaması sürüyor** (dal
-`feature/live-validation`, push edilmedi): gateway, guild komut kaydı, temel komutlar, kurulum, TEST/DEMO bildirimi ve
-yeniden başlatma kalıcılığı VERIFIED_LIVE. Canlıda bulunan 6 hata düzeltildi. Liquipedia canlı: BLOCKED.
+Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama PR #2'de (açık, merge edilmedi).
+**PandaScore + yaşam döngüsü + sade kartlar** `feature/pandascore-notifications` dalında (PR #2 üzerine yığılı);
+çevrimdışı 290/290 ×3. PandaScore canlı: BLOCKED (token yok).
+
+## PandaScore / bildirim aşaması (2026-09-25)
+
+| Konu | Durum |
+|---|---|
+| Varsayılan maç sağlayıcısı | **PandaScore** (`Esports:Provider:Name`), Liquipedia eski/isteğe bağlı; normal çalışma Liquipedia gerektirmez |
+| PandaScore resmî doküman doğrulaması | Yapıldı (2026-09-25): uçlar, Bearer auth, 1.000 istek/saat (ücretsiz), sayfalama ≤100, durumlar, rescheduled/forfeit, "Source: PandaScore" atfı (docs/PROVIDERS.md) |
+| PandaScore ayrıştırma, yaşam döngüsü, sayfalama, hata türleri, bütçe | TESTED_OFFLINE (sentetik) |
+| PandaScore gerçek API (yaklaşan/oynanan/biten/ertelenen/yeniden planlanan/iptal) | **BLOCKED** — token yok; ücretsiz planda sonuç alanları dolu mu: NOT_VERIFIED (resmî sayfalar çelişkili) |
+| Başladı / bitti / ertelendi / saat değişti / iptal / hükmen kartları | TESTED_OFFLINE; Discord'da görünüm: demo kartlarıyla doğrulanacak |
+| Sade kart tasarımı (Greg referansı) | Uygulandı; Greg ekran görüntüsü bu turda paylaşılmadı → metin şablonuna göre |
+| HLTV | Veri sağlayıcısı değil, **kazıma yok**; doğrulanmış maç sayfası bağlantısı (küratörlü liste) TESTED_OFFLINE |
+| Yıldız (BOT Greg puanı) | DEFERRED — güvenilir kaynak yok, gösterilmez |
+| Test guild'deki rol eşleme #2 (tüm maçlar, hatırlatma ping'i açık) | Sahibin yapılandırması, dokunulmadı; demo hatırlatması test rolünü etiketleyebilir → `/esports-admin roles unmap mapping:2` |
 
 ## Ürün kimliği ve depo
 
@@ -201,7 +215,15 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 | İzlenen dosya + kaynak arşivi denetimi, lisans/provenance, README kamu incelemesi | PRE-RELEASE REQUIREMENT |
 | Global komut kaydı, herkese açık bot | DEFERRED (yayın aşaması) |
 
-## NEXT ACTION
+## NEXT ACTION (güncel)
+
+1. **Sahip:** PR #2'yi (canlı doğrulama) incelemek/merge etmek; ardından PR #3 (PandaScore) `main`'e yönelir.
+2. **Sahip (isteğe bağlı):** test sunucusunda `/esports-admin roles unmap mapping:2` (ping'li test eşlemesi).
+3. **Ajan + sahip:** bot çalışırken `esports demo-cards --guild 618763184815472651 --apply` → sahip kartların ekran
+   görüntüsünü paylaşır → "Discord kart görünümü" VERIFIED_LIVE (sağlayıcı değil).
+4. **Sahip:** PandaScore token'ı (`dotnet user-secrets set "PandaScore:Token" …`) → ajan önce yalnızca okuma doğrulaması.
+
+## NEXT ACTION (önceki kayıt)
 
 **Sahip (isteğe bağlı, tek adım):** `/esports-admin roles unmap` yazıp `mapping` alanına tıklamak → ajan log'daki
 "Autocomplete failed [TS-…]" satırından kök nedeni düzeltir. Aynı komutla `mapping:2` girilerek ping'li test eşlemesi kaldırılabilir.

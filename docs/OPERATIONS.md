@@ -22,6 +22,15 @@ tutulurken (bot çalışıyorsa) reddeder. Yedekler kullanıcı verisi içerir: 
 - Test `Migrations_cover_the_model…` migration unutulursa kırılır.
 - Yıkıcı migration (kolon/tablo silme, veri dönüştürme) **açık onay** gerektirir; önce yedek alın.
 
+## Sağlayıcı ve tarama
+
+- Varsayılan maç sağlayıcısı **PandaScore**: maçlar 5 dakikada bir (≤5 sayfa), etkinlikler 6 saatte bir; yerel bütçe planın
+  %50'si (500 istek/saat), yeniden denemeler dahil. Başlangıçta bütçe doğrulanır. 429'da Retry-After'a uyulur.
+- Sağlayıcı değiştirmek (`Esports:Provider:Name`) geçmişi duyurmaz (ilk açılış sağlayıcı bazındadır); eski sağlayıcının
+  takım anahtarlarıyla yapılmış takipler/rol eşlemeleri yeni sağlayıcının takımlarıyla eşleşmez (yeniden eşlenmeli).
+- Canlı bildirim kontrol edilmeden önce: token ile yalnızca okuma doğrulaması, sonra test sunucusunda TEST/DEMO kartları
+  (`esports demo-cards`).
+
 ## Gözlem
 - Loglar konsola, secret maskelemeli özel formatla. Önemli satırlar: `Esports poll: …`, `Outbox recovery`,
   `delivery unknown`, `Command manifest OK/problem`.
@@ -43,7 +52,7 @@ tutulurken (bot çalışıyorsa) reddeder. Yedekler kullanıcı verisi içerir: 
 Depo `Torokal/TSQ-Bot` geliştirme/test süresince **private**tir. Bot herkese açılmadan **hemen önce** ve yalnızca sahip
 açıkça "public release" aşamasına geçtiğinde yapılır. Durum: **henüz başlamadı / gerekli değil**.
 
-1. **Tüm git geçmişinde secret taraması** (tüm dallar, tüm commit'ler): Discord token, Liquipedia anahtarı, GitHub
+1. **Tüm git geçmişinde secret taraması** (tüm dallar, tüm commit'ler): Discord token, PandaScore token, Liquipedia anahtarı, GitHub
    kimlik bilgisi, webhook, bağlantı dizesi, parola, kimlik bilgisi içeren URL, yerel ortam değerleri. Bilinen tek
    istisna: `6c4b696`/`5570842` içindeki `OperationsTests.cs:86` **sahte** test token'ı (GitHub'da "used in tests"
    olarak izinli; gerçek değil). Gerçeğe benzeyen herhangi bir şey yayından önce çözülür.
@@ -57,6 +66,6 @@ açıkça "public release" aşamasına geçtiğinde yapılır. Durum: **henüz b
    sağlayıcı gereksinimleri, ertelenen özellikler; VERIFIED_LIVE olmayan hiçbir şey canlı test edilmiş gibi sunulmaz.
 6. Kod/Discord/sağlayıcı kontrolleri: dağıtılacak commit = güncel `main`, temiz build ve tam testler, sabit test guild
    ID'si veya makine yolu yok, izinler asgari, ayrıcalıklı intent yok (ya da gerekçeli), davet URL'si doğru, global komut
-   geçiş planı gözden geçirildi, Liquipedia erişim/lisans modeli teyitli, VRS canlı doğrulandı.
+   geçiş planı gözden geçirildi, PandaScore planı/koşulları (atıf, ücretsiz planda sonuç alanları) ve gerekiyorsa Liquipedia erişimi teyitli, VRS canlı doğrulandı.
 7. **Yalnızca açık yayın onayıyla**: `gh repo edit Torokal/TSQ-Bot --visibility public --accept-visibility-change-consequences`
    → anonim erişimi doğrula → ancak ondan sonra herkese açık bot/global komut kaydı.

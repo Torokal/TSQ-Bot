@@ -11,7 +11,7 @@
 - **Kişisel tercihleriniz** (yalnızca siz kullanırsanız): takip ettiğiniz takımlar, sonuçları spoiler olarak görme
   tercihiniz ve botun size verdiği bildirim rollerinin kaydı.
 - **Okumadığımız veriler**: mesaj içerikleri, üye listeleri, çevrimiçi durum, profil bilgileri.
-- **Herkese açık esports verisi**: Liquipedia (CC BY-SA 3.0) ve Valve Regional Standings kaynaklarından maç, turnuva ve
+- **Herkese açık esports verisi**: PandaScore (varsayılan), isteğe bağlı olarak Liquipedia (CC BY-SA 3.0) ve Valve Regional Standings kaynaklarından maç, turnuva ve
   sıralama bilgileri. Bunlar kişisel veri değildir.
 
 ## Amaç
