@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Reference/test module: shows that a new module needs no changes to Core or Esports. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Example.Localization.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ToroSquad.Core/ToroSquad.Core.csproj" />
+    <Project Path="src/ToroSquad.Infrastructure/ToroSquad.Infrastructure.csproj" />
+    <Project Path="src/ToroSquad.Discord/ToroSquad.Discord.csproj" />
+    <Project Path="src/ToroSquad.Modules.Esports/ToroSquad.Modules.Esports.csproj" />
+    <Project Path="src/ToroSquad.Modules.Example/ToroSquad.Modules.Example.csproj" />
+    <Project Path="src/ToroSquad.Bot/ToroSquad.Bot.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ToroSquad.Tests/ToroSquad.Tests.csproj" />
+  </Folder>
+</Solution>
