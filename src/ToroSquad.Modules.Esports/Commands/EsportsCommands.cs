@@ -231,8 +231,7 @@ public sealed class EsportsCommands(
         var text = await T(outcome.Result.MessageKey, outcome.Result.Args.ToArray());
         foreach (var note in outcome.NoteKeys)
             text += "\n" + await T(note);
-        if (!outcome.Result.Succeeded && outcome.Result.TraceCode is not null)
-            text += "\n" + await T("error.trace_code", outcome.Result.TraceCode);
+        text += await TraceLineAsync(outcome.Result);
         await SendEphemeralAsync(text, null, null);
     }
 

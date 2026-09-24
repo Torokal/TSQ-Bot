@@ -1,6 +1,7 @@
 using System.Globalization;
 using Discord;
 using Discord.Interactions;
+using Microsoft.Extensions.Logging;
 using ToroSquad.Core;
 using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Localization;
@@ -11,7 +12,7 @@ using ToroSquad.Discord.Transport;
 namespace ToroSquad.Discord.Interactions;
 
 /// <summary>Services every interaction module needs (constructor-injected as one bundle).</summary>
-public sealed record InteractionServices(ILocalizer Localizer, IGuildSettingsStore GuildSettings, TimeProvider Clock);
+public sealed record InteractionServices(ILocalizer Localizer, IGuildSettingsStore GuildSettings, TimeProvider Clock, ILoggerFactory LoggerFactory);
 
 /// <summary>
 /// Base class for all TSQ Bot slash/component handlers: localized, ephemeral-by-default replies that never ping,
@@ -53,9 +54,23 @@ public abstract class ToroInteractionModule(InteractionServices services) : Inte
     protected async Task ReplyResultAsync(OperationResult result)
     {
         var text = await T(result.MessageKey, result.Args.ToArray());
-        if (!result.Succeeded && result.TraceCode is not null)
-            text += "\n" + await T("error.trace_code", result.TraceCode);
+        text += await TraceLineAsync(result);
         await SendEphemeralAsync(text, null, null);
+    }
+
+    /// <summary>
+    /// For a failed result: logs it under its trace code (so the code shown to the user can be found in the logs — found
+    /// missing in live testing) and returns the localized "trace code" line. Logs only the error kind, message key and
+    /// ids; never user input.
+    /// </summary>
+    protected async Task<string> TraceLineAsync(OperationResult result)
+    {
+        if (result.Succeeded || result.TraceCode is null)
+            return "";
+        services.LoggerFactory.CreateLogger("ToroSquad.Discord.Interactions.Operation").LogInformation(
+            "Operation not completed [{TraceCode}] {Error} {MessageKey} interaction={Type} guild={Guild} user={User}",
+            result.TraceCode, result.Error, result.MessageKey, Context.Interaction.Type, Context.Interaction.GuildId, Context.User.Id);
+        return "\n" + await T("error.trace_code", result.TraceCode);
     }
 
     protected async Task ReplyTextAsync(string key, params object?[] args) =>
