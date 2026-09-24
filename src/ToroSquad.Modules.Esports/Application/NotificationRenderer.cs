@@ -164,6 +164,8 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
     public string Footer(string language) =>
         mode.IsDemo ? L(language, "esports.demo_footer") + " • " + L(language, "esports.footer_source_demo") : L(language, "esports.footer_source");
 
+    public bool IsDemo => mode.IsDemo;
+
     /// <summary>Safe outgoing link, or none at all for demo data.</summary>
     public string? Link(string? url) => mode.IsDemo ? null : DiscordText.SafeUrl(url, AllowedLinkHosts);
 
