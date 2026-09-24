@@ -49,7 +49,9 @@ Because adapted AGPL-3.0 code is included, **TSQ Bot as a whole is licensed AGPL
 GNU AGPL v3 text, identical to upstream `LICENSE.txt`, SHA-256 prefix `6f1e622c82a38007`). Consequences, implemented:
 
 - `/bot about` lists attributions (upstream repo, Liquipedia CC BY-SA 3.0, Valve VRS, Discord.Net MIT).
-- Canonical public source repository: **https://github.com/Torokal/TSQ-Bot** — the shipped default of `Bot:SourceUrl`.
+- Canonical source repository: **https://github.com/Torokal/TSQ-Bot** — the shipped default of `Bot:SourceUrl`. It is
+  currently **private**; before the bot is offered to anyone else it must be public again, or the running commit's
+  `Export-Source.ps1` archive must be published and `Bot:SourceUrl` pointed at it.
 - `/bot source` points users of the running instance to its **Corresponding Source** via `Bot:SourceUrl`; startup in
   Gateway mode is refused without it unless `Bot:AllowMissingSourceUrlForPrivateTesting=true`.
 - `scripts/Export-Source.ps1` produces the source archive of the exact committed version (with build instructions,

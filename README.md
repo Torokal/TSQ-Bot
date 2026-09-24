@@ -154,7 +154,7 @@ data-access code are adapted from BOT-Greg-v2_API (AGPL-3.0); provenance and att
 
 ## Source Code
 
-Canonical repository: **https://github.com/Torokal/TSQ-Bot**. `/bot source` shows this URL together with the running
+Canonical repository: **https://github.com/Torokal/TSQ-Bot** (currently private). `/bot source` shows this URL together with the running
 version and commit. If you run a **modified** version for other users, AGPL-3.0 §13 requires you to offer *your*
 modified source: set `Bot:SourceUrl` to your own repository (or use `Export-Source.ps1`).
 

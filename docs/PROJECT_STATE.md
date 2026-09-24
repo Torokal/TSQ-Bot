@@ -11,9 +11,9 @@ incelemede (merge edilmedi); Aşama F (canlı) BLOCKED.
 | | |
 |---|---|
 | Ürün adı | **TSQ Bot** (eski adı ToroSquad Bot — 2026-09-24'te değiştirildi) |
-| Kanonik depo | `Torokal/TSQ-Bot` → https://github.com/Torokal/TSQ-Bot (**public**, oluşturuldu) |
+| Kanonik depo | `Torokal/TSQ-Bot` → https://github.com/Torokal/TSQ-Bot (**PRIVATE** — sahip isteğiyle 2026-09-24'te public → private yapıldı) |
 | Rename | **Tamamlandı** (yerel) — commit `671e7cc` `refactor(branding): rename product to TSQ Bot` |
-| GitHub push | Depo **oluşturuldu** (public, Torokal hesabı, 2026-09-24). `main` (`177b5f7`) ve `feature/foundation` (`4912596`) **push edildi**, force/squash yok. İlk `feature/foundation` push'u GitHub push protection'a takıldı: `6c4b696`/`5570842` içindeki `tests/ToroSquad.Tests/Integration/OperationsTests.cs:86` **sahte** test dizesi "Discord Bot Token" sanıldı; sahip GitHub'da "used in tests" izni verdi. Geçmiş yeniden yazılmadı; `671e7cc` dizeyi çalışma anında birleştiriyor |
+| GitHub push | Depo **oluşturuldu** (Torokal hesabı, 2026-09-24; önce public, ardından sahip isteğiyle **private**). `main` (`177b5f7`) ve `feature/foundation` (`4912596`) **push edildi**, force/squash yok. İlk `feature/foundation` push'u GitHub push protection'a takıldı: `6c4b696`/`5570842` içindeki `tests/ToroSquad.Tests/Integration/OperationsTests.cs:86` **sahte** test dizesi "Discord Bot Token" sanıldı; sahip GitHub'da "used in tests" izni verdi. Geçmiş yeniden yazılmadı; `671e7cc` dizeyi çalışma anında birleştiriyor |
 | GitHub'daki dallar | `main`, `feature/foundation` (git ls-remote ile doğrulandı) |
 | Pull request | https://github.com/Torokal/TSQ-Bot/pull/1 — `feature/foundation → main`, "Foundation: modular TSQ Bot core and esports module"; **açık, merge edilmedi**. GitHub farkı: 8 commit, 159 dosya; binary/veritabanı/secret dosyası yok. CI yok — yalnızca yerel test sonuçları |
 | Discord uygulama adı | "TSQ Bot" olarak varsayılır — **BLOCKED**: Developer Portal'da uygulama henüz oluşturulmadı/yapılandırılmadı |
@@ -54,7 +54,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | Güvenli rol eşleştirme + self-service + panel | TESTED_OFFLINE (servis katmanı); gerçek rol verme **BLOCKED** |
 | Spoiler, allowed_mentions, mention enjeksiyonu, URL allow-list | TESTED_OFFLINE |
 | /privacy export/delete, saklama süresi, ayrılan guild temizliği | TESTED_OFFLINE |
-| Kaynak/lisans (/bot about, /bot source, Export-Source.ps1, commit gömme) | TESTED_OFFLINE; `Bot:SourceUrl` varsayılanı https://github.com/Torokal/TSQ-Bot (depo public; foundation kodu şimdilik `feature/foundation` dalında / PR #1) |
+| Kaynak/lisans (/bot about, /bot source, Export-Source.ps1, commit gömme) | TESTED_OFFLINE; `Bot:SourceUrl` varsayılanı https://github.com/Torokal/TSQ-Bot (depo şu an **private** → başkalarına açık kaynak bağlantısı sağlamıyor; foundation kodu `feature/foundation` / PR #1) |
 | Türkçe varsayılan / İngilizce fallback, Europe/Istanbul (Windows'ta test edildi) | TESTED_OFFLINE |
 | PowerShell scriptleri: Doctor, Start-Dev (+Simulate), Test, Sync-Commands, Export-Source | Hepsi **çalıştırıldı** (PS 5.1); Sync yalnızca BLOCKED (token yok) yolunda |
 | Gateway bağlantısı (Discord.Net), gerçek interaction işleme | IMPLEMENTED, **BLOCKED** (token yok) |
@@ -119,6 +119,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | B2 | Test guild ve davet | Botu test sunucusuna davet et (izin 84992 / 268520448), `Discord:TestGuildIds` + `CommandSyncGuildIds` | Bot daveti — sahip |
 | B3 | Liquipedia API erişimi | Başvuru/plan seçimi (ücretli olabilir; ücretsiz yalnızca açık kaynak + ticari olmayan, onaylı) | Ücret/abonelik — sahip |
 | B4 | PR #1'in main'e merge edilmesi | https://github.com/Torokal/TSQ-Bot/pull/1 incelenip merge edilmeli (merge = sahip kararı) | main değişikliği — sahip |
+| B6 | AGPL kaynak erişimi (depo private) | Bot yalnızca sahibin kendisi/özel test için çalışırken sorun yok. Bot **başkalarına** sunulmadan önce: depoyu yeniden public yap **veya** çalışan commit'in `Export-Source.ps1` arşivini erişilebilir bir yerde yayımlayıp `Bot:SourceUrl`'i ona çevir. Not: Liquipedia'nın ücretsiz erişimi açık kaynak şartı arar (B3) | Görünürlük/yayın — sahip |
 | B5 | Upstream geliştiriciye mesaj | docs/drafts/upstream-contact.md taslağı gönderilmedi | Dış iletişim — sahip |
 
 ## NEXT ACTION
