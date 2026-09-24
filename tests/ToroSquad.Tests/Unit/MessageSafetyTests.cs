@@ -99,7 +99,8 @@ public sealed partial class MessageSafetyTests
         demo.Footer.Should().Contain("sentetik").And.NotContain("Kaynak: Liquipedia");
 
         var live = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Live)).Reminder(match, "tr", MentionPolicy.None, DateTimeOffset.UnixEpoch, null).Embed!;
-        live.Description.Should().Contain("[Maç Sayfası](https://liquipedia.net/counterstrike/X)");
+        live.Fields.Should().Contain(f => f.Value == "[Maç Sayfası](https://liquipedia.net/counterstrike/X)");
+        live.Url.Should().Be("https://liquipedia.net/counterstrike/X");
         live.Fields.Should().NotContain(f => f.Value.Contains("twitch", StringComparison.Ordinal), "compact cards carry no stream list");
         live.Footer.Should().Contain("Liquipedia (CC BY-SA 3.0)");
     }

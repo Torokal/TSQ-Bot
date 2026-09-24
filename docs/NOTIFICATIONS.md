@@ -16,15 +16,18 @@ hem planlamada hem gönderimden hemen önce. Bu kartlar yalnızca geçiş **iki 
 ve `LifecycleFreshMinutes` (vars. 90) içinde gönderilir. `Unknown` durum son bilinen durumu silmez, geçiş üretmez.
 Ayrıntı: [adr/0006-pandascore-lifecycle-and-match-links.md](adr/0006-pandascore-lifecycle-and-match-links.md).
 
-## Kart düzeni (sade, BOT Greg benzeri)
+## Kart düzeni (sahibin BOT Greg ekran görüntüsüne göre)
 
 ```
-Natus Vincere [0] - [2] Aurora          ← sonuçta skor başlıkta; diğer kartlarda "A vs B"
-🏆 Aurora maçı kazandı                  ← tek durum satırı (▶️ / ⏸️ / 🕒 / ❌ / 🏳️ / ⏰)
-[Maç Sayfası](https://www.hltv.org/…)   ← yalnızca güvenli bir bağlantı varsa
-Etkinlik: StarLadder StarSeries Fall 2026   Format: bo3   (Yeni Saat: 25/09/2026 22:00)
-Kaynak: PandaScore · <zaman damgası>
+Natus Vincere [0] - [2] Aurora          ← başlık; doğrulanmış maç sayfası varsa başlık ona bağlanır
+🏆 Aurora maçı kazandı                  ← TEK durum satırı (▶️ Maç başladı · 3 dakika önce / ⏸️ / 🕒 / ❌ / 🏳️ / ⏰)
+Etkinlik                     Format      (Yeni Saat)   ← satır içi alanlar
+StarLadder StarSeries Fall 2026   bo3
+Maç Sayfası                             ← alanların altında, yalnızca güvenli bağlantı varsa
+Kaynak: PandaScore · 17/09/2026 20:46   ← zorunlu atıf + zaman damgası
 ```
+
+Bilinçli farklar: "hltv.org" başlık satırı yok (veri HLTV'den gelmiyor), "Stars" yok (güvenilir kaynak yok → DEFERRED).
 
 Yok: harita skorları, yayın listesi, aşama, "son veri" satırı, iç kimlikler, "yıldız" (güvenilir kaynak yok → DEFERRED).
 Renkler: başladı/hatırlatma mavi, sonuç yeşil (kazanana göre değişmez), ertelendi/saat değişti amber, iptal kırmızı.

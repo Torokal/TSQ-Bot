@@ -51,12 +51,15 @@ public sealed partial class MatchCardTests
     {
         var e = Live().Result(Result(new MatchLinks(HltvMatchUrl: HltvUrl)), "tr", spoiler: false, MentionPolicy.None, End).Embed!;
         e.Title.Should().Be("Natus Vincere [0] - [2] Aurora");
-        e.Description.Should().Be("🏆 Aurora maçı kazandı\n[Maç Sayfası](" + HltvUrl + ")");
-        e.Fields.Select(f => (f.Name, f.Value, f.Inline)).Should().Equal(("Etkinlik", "StarLadder StarSeries Fall 2026", true), ("Format", "bo3", true));
+        e.Url.Should().Be(HltvUrl, "the title links to the verified match page (Greg layout)");
+        e.Description.Should().Be("🏆 Aurora maçı kazandı");
+        e.Fields.Select(f => (f.Name, f.Value, f.Inline)).Should().Equal(
+            ("Etkinlik", "StarLadder StarSeries Fall 2026", true),
+            ("Format", "bo3", true),
+            (NotificationRenderer.ZeroWidth, "[Maç Sayfası](" + HltvUrl + ")", false));
         e.Footer.Should().Be("Kaynak: PandaScore");
         e.Timestamp.Should().Be(End, "the card is dated at the match end");
         e.Color.Should().Be(NotificationRenderer.ResultColor);
-        e.Url.Should().BeNull();
     }
 
     [Fact]
@@ -64,7 +67,7 @@ public sealed partial class MatchCardTests
     {
         var e = Live().Started(Match(MatchStatus.Live, 0, 0), "tr", MentionPolicy.None, Start.AddMinutes(3)).Embed!;
         e.Title.Should().Be("Natus Vincere vs Aurora");
-        e.Description.Should().Be("▶️ Maç başladı");
+        e.Description.Should().Be("▶️ Maç başladı · <t:1789664400:R>", "status plus relative time, like Greg's 'Live 13 days ago'");
         e.Fields.Select(f => (f.Name, f.Value)).Should().Equal(("Etkinlik", "StarLadder StarSeries Fall 2026"), ("Format", "bo3"));
         e.Footer.Should().Be("Kaynak: PandaScore");
         e.Timestamp.Should().Be(Start, "the provider's actual begin time");
@@ -77,7 +80,7 @@ public sealed partial class MatchCardTests
         var observed = new DateTimeOffset(2026, 9, 25, 16, 0, 0, TimeSpan.Zero);
         var e = Live().Postponed(Match(MatchStatus.Postponed), "tr", observed).Embed!;
         e.Title.Should().Be("Natus Vincere vs Aurora");
-        e.Description.Should().Be("⏸️ Maç ertelendi\nYeni tarih henüz açıklanmadı.");
+        e.Description.Should().Be("⏸️ Maç ertelendi · yeni tarih açıklanmadı");
         e.Fields.Select(f => f.Name).Should().Equal("Etkinlik", "Format");
         e.Timestamp.Should().Be(observed);
         e.Color.Should().Be(NotificationRenderer.ChangeColor);
@@ -103,7 +106,7 @@ public sealed partial class MatchCardTests
 
         var forfeit = Live().Result(Match(MatchStatus.Finished, winner: 1, forfeit: true), "tr", false, MentionPolicy.None, End).Embed!;
         forfeit.Title.Should().Be("Natus Vincere vs Aurora", "a forfeit has no played score");
-        forfeit.Description.Should().Be("🏳️ Maç hükmen sonuçlandı\n🏆 Aurora maçı kazandı");
+        forfeit.Description.Should().Be("🏳️ Hükmen: Aurora kazandı");
 
         var noWinner = Live().Result(Match(MatchStatus.Finished, forfeit: true), "tr", false, MentionPolicy.None, End).Embed!;
         noWinner.Description.Should().Be("🏳️ Maç hükmen sonuçlandı", "no winner is stated without reliable winner data");
@@ -127,7 +130,7 @@ public sealed partial class MatchCardTests
             all.Should().NotContain("Mirage").And.NotContain("twitch").And.NotContain("Playoffs").And.NotContain("1234567")
                 .And.NotContain("ps-team").And.NotContain("Son veri").And.NotContain("⭐").And.NotContain("Yıldız");
             e.Fields.Count.Should().BeLessThanOrEqualTo(3);
-            e.Description!.Split('\n').Length.Should().BeLessThanOrEqualTo(3);
+            e.Description!.Split('\n').Length.Should().Be(1, "one status line only");
         }
     }
 
@@ -153,7 +156,7 @@ public sealed partial class MatchCardTests
         e.Description.Should().Contain("||");
         e.Color.Should().Be(NotificationRenderer.ResultColor, "colour never depends on the winner");
         if (!forfeit)
-            e.Description.Should().Contain("[" + Localizer.Get(language, "esports.card.match_page") + "](" + HltvUrl + ")", "the match page link may stay in spoiler mode");
+            e.Fields.Should().Contain(f => f.Value == "[" + Localizer.Get(language, "esports.card.match_page") + "](" + HltvUrl + ")", "the match page link may stay in spoiler mode");
     }
 
     [Fact]
@@ -265,10 +268,12 @@ public sealed partial class MatchCardTests
     public void Official_and_provider_fallbacks_are_rendered_and_never_labelled_hltv()
     {
         var official = Live().Result(Result(new MatchLinks(OfficialMatchUrl: "https://organizer.example/match/1")), "tr", false, MentionPolicy.None, End).Embed!;
-        official.Description.Should().EndWith("[Maç Sayfası](https://organizer.example/match/1)").And.NotContain("HLTV");
+        official.Fields[^1].Value.Should().Be("[Maç Sayfası](https://organizer.example/match/1)");
+        official.Url.Should().Be("https://organizer.example/match/1");
+        string.Join("\n", official.Fields.Select(f => f.Name + f.Value)).Should().NotContain("HLTV");
 
         var provider = Live().Result(Result() with { SourceUrl = "https://liquipedia.net/counterstrike/Cup" }, "tr", false, MentionPolicy.None, End).Embed!;
-        provider.Description.Should().EndWith("[Maç Sayfası](https://liquipedia.net/counterstrike/Cup)");
+        provider.Fields[^1].Value.Should().Be("[Maç Sayfası](https://liquipedia.net/counterstrike/Cup)");
     }
 
     [Fact]
@@ -276,7 +281,9 @@ public sealed partial class MatchCardTests
     {
         var e = Live().Result(Result(), "tr", false, MentionPolicy.None, End).Embed!;
         e.Description.Should().Be("🏆 Aurora maçı kazandı");
+        e.Url.Should().BeNull();
         e.Description.Should().NotContain("Maç Sayfası").And.NotContain("N/A");
+        e.Fields.Should().HaveCount(2, "no empty Match Page field");
         e.Fields.Should().NotContain(f => f.Name.Contains("Sayfa", StringComparison.Ordinal));
     }
 
@@ -286,7 +293,8 @@ public sealed partial class MatchCardTests
         var demo = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture));
         var e = demo.Result(Result(new MatchLinks(HltvMatchUrl: HltvUrl)), "tr", false, MentionPolicy.None, End).Embed!;
         e.Title.Should().StartWith("[TEST/DEMO] ");
-        e.Description.Should().NotContain("hltv").And.NotContain("](");
+        e.Url.Should().BeNull();
+        string.Join("\n", e.Fields.Select(f => f.Value).Append(e.Description)).Should().NotContain("hltv").And.NotContain("](");
         e.Footer.Should().Contain("TEST/DEMO").And.NotContain("PandaScore");
     }
 
@@ -322,7 +330,8 @@ public sealed partial class MatchCardTests
         {
             message.Embed!.Title.Should().StartWith("[TEST/DEMO] ");
             message.Embed.Footer.Should().Contain("TEST/DEMO");
-            message.Embed.Description.Should().NotContain("](");
+            message.Embed.Url.Should().BeNull();
+            message.Embed.Fields.Should().NotContain(f => f.Value.Contains("](", StringComparison.Ordinal));
             message.Content.Should().BeNull();
             DiscordLimits.Validate(message).Should().BeEmpty();
         }

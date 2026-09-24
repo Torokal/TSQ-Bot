@@ -135,7 +135,7 @@ public sealed class LifecycleNotificationTests : IAsyncLifetime
 
         var cards = await OutboxAsync(NotificationPlanner.KindPostponed);
         cards.Should().ContainSingle();
-        Text(cards[0]).Should().Contain("Maç ertelendi").And.Contain("Yeni tarih henüz açıklanmadı").And.NotContain("<@&");
+        Text(cards[0]).Should().Contain("Maç ertelendi").And.Contain("yeni tarih açıklanmadı").And.NotContain("<@&");
     }
 
     [Fact]
