@@ -319,7 +319,8 @@ public sealed class LifecycleNotificationTests : IAsyncLifetime
         });
 
         (await StageAsync()).Should().AllBeEquivalentTo(StageOutcome.Created);
-        (await StageAsync()).Should().NotContain(StageOutcome.Created);
+        Advance(7); // a later re-run within the same hour
+        (await StageAsync()).Should().AllBeEquivalentTo(StageOutcome.Unchanged, "re-running neither sends nor edits");
         (await OutboxAsync()).Count(o => o.SourceKey == EsportsDemoCards.SourceKey).Should().Be(7);
     }
 

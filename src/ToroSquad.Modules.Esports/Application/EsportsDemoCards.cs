@@ -20,6 +20,8 @@ public static class EsportsDemoCards
         if (!renderer.IsDemo)
             throw new InvalidOperationException("Demo cards require the demo (fixture) renderer so they are labelled TEST/DEMO.");
 
+        // Every timestamp derives from the current hour, so re-running within the hour renders identical cards (idempotent:
+        // the outbox sees no change and neither sends nor edits). Found live: "now" made re-runs edit three messages.
         var start = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, 0, 0, TimeSpan.Zero);
         var tournament = new TournamentRef("demo", "demo:event", "Demo Masters 2026", "1", null, null, null);
         EsportsMatch Match(string id, MatchStatus status, int? a = null, int? b = null, int? winner = null, bool forfeit = false) => new(
@@ -35,9 +37,9 @@ public static class EsportsDemoCards
             ("demo-started", renderer.Started(Match("1", MatchStatus.Live), language, MentionPolicy.None, start)),
             ("demo-result", renderer.Result(Match("2", MatchStatus.Finished, 0, 2, 1), language, spoiler: false, MentionPolicy.None, start)),
             ("demo-result-spoiler", renderer.Result(Match("3", MatchStatus.Finished, 2, 1, 0), language, spoiler: true, MentionPolicy.None, start)),
-            ("demo-postponed", renderer.Postponed(Match("4", MatchStatus.Postponed), language, now)),
-            ("demo-rescheduled", renderer.Rescheduled(Match("5", MatchStatus.Scheduled), language, start.AddHours(2), zone, now)),
-            ("demo-cancelled", renderer.Cancelled(Match("6", MatchStatus.Cancelled), language, now)),
+            ("demo-postponed", renderer.Postponed(Match("4", MatchStatus.Postponed), language, start)),
+            ("demo-rescheduled", renderer.Rescheduled(Match("5", MatchStatus.Scheduled), language, start.AddHours(2), zone, start)),
+            ("demo-cancelled", renderer.Cancelled(Match("6", MatchStatus.Cancelled), language, start)),
             ("demo-forfeit", renderer.Result(Match("7", MatchStatus.Finished, winner: 0, forfeit: true), language, spoiler: false, MentionPolicy.None, start)),
         ];
     }
