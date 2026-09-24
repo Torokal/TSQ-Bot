@@ -95,10 +95,30 @@ public sealed class GatewayBotService(
 
     private async Task ReportFailureAsync(SocketInteraction interaction, IResult result, IServiceProvider scoped)
     {
-        if (interaction is SocketAutocompleteInteraction)
-            return; // autocomplete cannot show messages; an empty list is the safe fallback
-
         var traceCode = TraceCodes.New();
+        if (interaction is SocketAutocompleteInteraction autocomplete)
+        {
+            // Autocomplete cannot show messages. Log the failure (found live: failures were invisible) and answer with an
+            // empty list so Discord does not show 'Loading options failed'.
+            var command = autocomplete.Data.CommandName + (autocomplete.Data.Options.FirstOrDefault()?.Name is { } sub ? " " + sub : "");
+            var option = autocomplete.Data.Current.Name;
+            if (result is ExecuteResult { Exception: { } acFailure })
+                logger.LogWarning(acFailure, "Autocomplete failed [{TraceCode}] /{Command} option={Option} guild={Guild}", traceCode, command, option, interaction.GuildId);
+            else
+                logger.LogWarning("Autocomplete failed [{TraceCode}] /{Command} option={Option} guild={Guild}: {Error} {Reason}", traceCode, command, option, interaction.GuildId, result.Error, result.ErrorReason);
+            try
+            {
+                if (!interaction.HasResponded)
+                    await autocomplete.RespondAsync([]);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not send empty autocomplete result [{TraceCode}]", traceCode);
+            }
+
+            return;
+        }
+
         var key = result.Error switch
         {
             InteractionCommandError.UnmetPrecondition when result.ErrorReason?.StartsWith("error.", StringComparison.Ordinal) == true => result.ErrorReason,
