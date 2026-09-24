@@ -81,8 +81,12 @@ planda ücretli): `Esports:Liquipedia:ApiKey` (secret) ve `Esports:Liquipedia:Us
 **Doğrulanmış maç sayfaları (isteğe bağlı).** HLTV kazınmaz; bir maç için doğrulanmış HLTV/resmî bağlantıyı elle
 ekleyebilirsiniz (`Esports:VerifiedMatchLinks`, docs/NOTIFICATIONS.md). Doctor ve başlangıç doğrulaması eksikleri söyler.
 
-**TEST/DEMO kartları (Discord görünüm testi).** Bot çalışırken:
-`dotnet run --project src\ToroSquad.Bot -- esports demo-cards --guild <TEST_GUILD_ID>` (önizleme) → `--apply`.
+**TEST/DEMO kartları (Discord görünüm testi).** Bot `Start-Dev.ps1` ile çalışırken, **aynı veri klasörüyle**:
+```powershell
+$env:TOROSQUAD_Bot__DataDirectory = "$PWD\data"   # Start-Dev.ps1 ile aynı veritabanı
+dotnet run --project src\ToroSquad.Bot -- esports demo-cards --guild <TEST_GUILD_ID>          # önizleme
+dotnet run --project src\ToroSquad.Bot -- esports demo-cards --guild <TEST_GUILD_ID> --apply  # kuyruğa al
+```
 Yalnızca `Discord:TestGuildIds` içindeki sunucuya, TEST/DEMO etiketli ve ping'siz gider; tekrar çalıştırmak kopya üretmez.
 
 ## 7. Herkese açık kullanım (production)
