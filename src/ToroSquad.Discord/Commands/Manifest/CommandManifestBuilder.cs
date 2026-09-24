@@ -153,7 +153,9 @@ public static class CommandManifestBuilder
 
     private static string OwnerOf(ModuleInfo module, ModuleRegistry registry)
     {
-        var attr = module.Attributes.OfType<ToroModuleAttribute>().FirstOrDefault();
+        // ToroModuleAttribute is a precondition, which Discord.Net lists under Preconditions (not Attributes).
+        var attr = module.Preconditions.OfType<ToroModuleAttribute>().FirstOrDefault()
+                   ?? module.Attributes.OfType<ToroModuleAttribute>().FirstOrDefault();
         if (attr is not null)
             return attr.ModuleId;
         return module.Parent is null ? "unknown" : OwnerOf(module.Parent, registry);

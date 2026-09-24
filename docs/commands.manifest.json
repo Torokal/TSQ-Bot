@@ -1,0 +1,891 @@
+{
+  "format": "torosquad-command-manifest/v1",
+  "hash": "63a5f52b0827b19a73261189ce208fe743d089557568c70e0075e9052d3ce87c",
+  "commands": [
+    {
+      "module": "core",
+      "payload": {
+        "type": 1,
+        "name": "bot",
+        "description": "About ToroSquad Bot: status, version, source code",
+        "description_localizations": {
+          "tr": "ToroSquad Bot hakkında: durum, sürüm, kaynak kod"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "status",
+            "description": "Safe, public health overview of the bot",
+            "description_localizations": {
+              "tr": "Botun güvenli, genel sağlık özeti"
+            }
+          },
+          {
+            "type": 1,
+            "name": "about",
+            "description": "What ToroSquad Bot is, its version and attributions",
+            "description_localizations": {
+              "tr": "ToroSquad Bot nedir, sürümü ve atıflar"
+            }
+          },
+          {
+            "type": 1,
+            "name": "source",
+            "description": "Where to get the source code of the exact version running here",
+            "description_localizations": {
+              "tr": "Burada çalışan sürümün kaynak koduna erişim"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "module": "esports",
+      "payload": {
+        "type": 1,
+        "name": "esports",
+        "description": "Counter-Strike 2 matches, results, events and rankings",
+        "description_localizations": {
+          "tr": "Counter-Strike 2 maçları, sonuçları, turnuvaları ve sıralaması"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "matches",
+            "description": "Upcoming CS2 matches",
+            "description_localizations": {
+              "tr": "Yaklaşan CS2 maçları"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "team",
+                "description": "Only matches of this team",
+                "description_localizations": {
+                  "tr": "Yalnızca bu takımın maçları"
+                },
+                "required": false,
+                "autocomplete": true,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              },
+              {
+                "type": 3,
+                "name": "tournament",
+                "description": "Only matches of this tournament",
+                "description_localizations": {
+                  "tr": "Yalnızca bu turnuvanın maçları"
+                },
+                "required": false,
+                "autocomplete": true,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              },
+              {
+                "type": 5,
+                "name": "mine",
+                "description": "Only teams you follow",
+                "description_localizations": {
+                  "tr": "Yalnızca takip ettiğiniz takımlar"
+                },
+                "required": false,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "results",
+            "description": "Recent CS2 results (spoiler-aware)",
+            "description_localizations": {
+              "tr": "Son CS2 sonuçları (spoiler tercihine uyar)"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "team",
+                "description": "Only results of this team",
+                "description_localizations": {
+                  "tr": "Yalnızca bu takımın sonuçları"
+                },
+                "required": false,
+                "autocomplete": true,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              },
+              {
+                "type": 5,
+                "name": "spoiler",
+                "description": "Hide scores behind spoiler tags (default: your preference)",
+                "description_localizations": {
+                  "tr": "Skorları spoiler ile gizle (varsayılan: tercihiniz)"
+                },
+                "required": false,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "events",
+            "description": "Ongoing and upcoming CS2 tournaments",
+            "description_localizations": {
+              "tr": "Devam eden ve yaklaşan CS2 turnuvaları"
+            }
+          },
+          {
+            "type": 1,
+            "name": "rankings",
+            "description": "Valve Regional Standings (VRS) with source and date",
+            "description_localizations": {
+              "tr": "Kaynağı ve tarihiyle Valve VRS sıralaması"
+            },
+            "options": [
+              {
+                "type": 4,
+                "name": "top",
+                "description": "How many teams (1-50)",
+                "description_localizations": {
+                  "tr": "Kaç takım (1-50)"
+                },
+                "required": false,
+                "min_value": 1,
+                "max_value": 50
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "team",
+            "description": "Team info, VRS match and upcoming/recent matches",
+            "description_localizations": {
+              "tr": "Takım bilgisi, VRS eşleşmesi ve maçlar"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "team",
+                "description": "Team",
+                "description_localizations": {
+                  "tr": "Takım"
+                },
+                "required": true,
+                "autocomplete": true,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "follow",
+            "description": "Follow a team (you may receive the server's notification role)",
+            "description_localizations": {
+              "tr": "Bir takımı takip edin (sunucu bildirim rolünü alabilirsiniz)"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "team",
+                "description": "Team to follow",
+                "description_localizations": {
+                  "tr": "Takip edilecek takım"
+                },
+                "required": true,
+                "autocomplete": true,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "unfollow",
+            "description": "Stop following a team",
+            "description_localizations": {
+              "tr": "Bir takımın takibini bırakın"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "team",
+                "description": "Team to unfollow",
+                "description_localizations": {
+                  "tr": "Takibi bırakılacak takım"
+                },
+                "required": true,
+                "autocomplete": true,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "subscriptions",
+            "description": "Your followed teams and personal notification preferences",
+            "description_localizations": {
+              "tr": "Takip ettiğiniz takımlar ve kişisel tercihleriniz"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "module": "esports",
+      "payload": {
+        "type": 1,
+        "name": "esports-admin",
+        "description": "Esports settings for this server (admins)",
+        "description_localizations": {
+          "tr": "Bu sunucunun esports ayarları (yöneticiler)"
+        },
+        "default_member_permissions": "32",
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "configure",
+            "description": "Notification channel and notification types",
+            "description_localizations": {
+              "tr": "Bildirim kanalı ve bildirim türleri"
+            },
+            "options": [
+              {
+                "type": 7,
+                "name": "channel",
+                "description": "Channel for automatic notifications",
+                "description_localizations": {
+                  "tr": "Otomatik bildirim kanalı"
+                },
+                "required": false,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991,
+                "channel_types": [
+                  0,
+                  5
+                ]
+              },
+              {
+                "type": 5,
+                "name": "reminders",
+                "description": "Send planned-start reminders",
+                "description_localizations": {
+                  "tr": "Planlanan başlangıç hatırlatmaları gönder"
+                },
+                "required": false,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              },
+              {
+                "type": 4,
+                "name": "reminder_minutes",
+                "description": "Minutes before the planned start (1-120)",
+                "description_localizations": {
+                  "tr": "Planlanan başlangıçtan kaç dakika önce (1-120)"
+                },
+                "required": false,
+                "min_value": 1,
+                "max_value": 120
+              },
+              {
+                "type": 5,
+                "name": "results",
+                "description": "Send result notifications",
+                "description_localizations": {
+                  "tr": "Sonuç bildirimleri gönder"
+                },
+                "required": false,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              },
+              {
+                "type": 5,
+                "name": "spoilers",
+                "description": "Hide scores in result notifications",
+                "description_localizations": {
+                  "tr": "Sonuç bildirimlerinde skorları gizle"
+                },
+                "required": false,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "panel",
+            "description": "Post a public panel where members can follow teams / get notification roles",
+            "description_localizations": {
+              "tr": "Üyelerin takım takip edebileceği herkese açık panel gönder"
+            }
+          },
+          {
+            "type": 1,
+            "name": "preview",
+            "description": "Ping-free preview of a notification for this server",
+            "description_localizations": {
+              "tr": "Bu sunucu için pingsiz bildirim önizlemesi"
+            }
+          },
+          {
+            "type": 1,
+            "name": "pause",
+            "description": "Pause esports notifications in this server",
+            "description_localizations": {
+              "tr": "Bu sunucunun esports bildirimlerini duraklat"
+            }
+          },
+          {
+            "type": 1,
+            "name": "resume",
+            "description": "Resume notifications (nothing missed while paused is sent)",
+            "description_localizations": {
+              "tr": "Bildirimleri yeniden başlat (kaçanlar gönderilmez)"
+            }
+          },
+          {
+            "type": 1,
+            "name": "doctor",
+            "description": "Diagnose permissions, data provider and delivery",
+            "description_localizations": {
+              "tr": "İzin, veri sağlayıcı ve gönderim tanısı"
+            }
+          },
+          {
+            "type": 2,
+            "name": "filters",
+            "description": "Which matches are announced in this server",
+            "description_localizations": {
+              "tr": "Bu sunucuda hangi maçların duyurulacağı"
+            },
+            "options": [
+              {
+                "type": 1,
+                "name": "show",
+                "description": "Show active filters and how they combine",
+                "description_localizations": {
+                  "tr": "Etkin filtreleri ve birleşme kuralını göster"
+                }
+              },
+              {
+                "type": 1,
+                "name": "team",
+                "description": "Add or remove a team filter",
+                "description_localizations": {
+                  "tr": "Takım filtresi ekle veya kaldır"
+                },
+                "options": [
+                  {
+                    "type": 3,
+                    "name": "action",
+                    "description": "add or remove",
+                    "description_localizations": {
+                      "tr": "ekle veya kaldır"
+                    },
+                    "required": true,
+                    "choices": [
+                      {
+                        "name": "add",
+                        "name_localizations": {
+                          "tr": "ekle"
+                        },
+                        "value": "add"
+                      },
+                      {
+                        "name": "remove",
+                        "name_localizations": {
+                          "tr": "kaldır"
+                        },
+                        "value": "remove"
+                      }
+                    ],
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  },
+                  {
+                    "type": 3,
+                    "name": "team",
+                    "description": "Team",
+                    "description_localizations": {
+                      "tr": "Takım"
+                    },
+                    "required": true,
+                    "autocomplete": true,
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "tournament",
+                "description": "Add or remove a tournament filter",
+                "description_localizations": {
+                  "tr": "Turnuva filtresi ekle veya kaldır"
+                },
+                "options": [
+                  {
+                    "type": 3,
+                    "name": "action",
+                    "description": "add or remove",
+                    "description_localizations": {
+                      "tr": "ekle veya kaldır"
+                    },
+                    "required": true,
+                    "choices": [
+                      {
+                        "name": "add",
+                        "name_localizations": {
+                          "tr": "ekle"
+                        },
+                        "value": "add"
+                      },
+                      {
+                        "name": "remove",
+                        "name_localizations": {
+                          "tr": "kaldır"
+                        },
+                        "value": "remove"
+                      }
+                    ],
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  },
+                  {
+                    "type": 3,
+                    "name": "tournament",
+                    "description": "Tournament",
+                    "description_localizations": {
+                      "tr": "Turnuva"
+                    },
+                    "required": true,
+                    "autocomplete": true,
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "tier",
+                "description": "Add or remove a Liquipedia tier filter",
+                "description_localizations": {
+                  "tr": "Liquipedia seviye filtresi ekle veya kaldır"
+                },
+                "options": [
+                  {
+                    "type": 3,
+                    "name": "action",
+                    "description": "add or remove",
+                    "description_localizations": {
+                      "tr": "ekle veya kaldır"
+                    },
+                    "required": true,
+                    "choices": [
+                      {
+                        "name": "add",
+                        "name_localizations": {
+                          "tr": "ekle"
+                        },
+                        "value": "add"
+                      },
+                      {
+                        "name": "remove",
+                        "name_localizations": {
+                          "tr": "kaldır"
+                        },
+                        "value": "remove"
+                      }
+                    ],
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  },
+                  {
+                    "type": 3,
+                    "name": "tier",
+                    "description": "Liquipedia tier",
+                    "description_localizations": {
+                      "tr": "Liquipedia seviyesi"
+                    },
+                    "required": true,
+                    "choices": [
+                      {
+                        "name": "S-Tier",
+                        "name_localizations": {
+                          "tr": "S-Tier"
+                        },
+                        "value": "1"
+                      },
+                      {
+                        "name": "A-Tier",
+                        "name_localizations": {
+                          "tr": "A-Tier"
+                        },
+                        "value": "2"
+                      },
+                      {
+                        "name": "B-Tier",
+                        "name_localizations": {
+                          "tr": "B-Tier"
+                        },
+                        "value": "3"
+                      },
+                      {
+                        "name": "C-Tier",
+                        "name_localizations": {
+                          "tr": "C-Tier"
+                        },
+                        "value": "4"
+                      },
+                      {
+                        "name": "D-Tier",
+                        "name_localizations": {
+                          "tr": "D-Tier"
+                        },
+                        "value": "5"
+                      }
+                    ],
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "vrs",
+                "description": "Only matches with at least one VRS Top-N team (0 = off)",
+                "description_localizations": {
+                  "tr": "Yalnızca en az bir takımı VRS ilk N içinde olan maçlar (0 = kapalı)"
+                },
+                "options": [
+                  {
+                    "type": 4,
+                    "name": "top",
+                    "description": "Top N (0 disables)",
+                    "description_localizations": {
+                      "tr": "İlk N (0 kapatır)"
+                    },
+                    "required": true,
+                    "min_value": 0,
+                    "max_value": 400
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "clear",
+                "description": "Remove all filters (announce every CS2 match)",
+                "description_localizations": {
+                  "tr": "Tüm filtreleri kaldır (her CS2 maçı duyurulur)"
+                }
+              }
+            ]
+          },
+          {
+            "type": 2,
+            "name": "roles",
+            "description": "Notification role mappings (safe, explicit)",
+            "description_localizations": {
+              "tr": "Bildirim rolü eşleştirmeleri (güvenli, açık)"
+            },
+            "options": [
+              {
+                "type": 1,
+                "name": "list",
+                "description": "Show notification role mappings",
+                "description_localizations": {
+                  "tr": "Bildirim rolü eşleştirmelerini göster"
+                }
+              },
+              {
+                "type": 1,
+                "name": "map",
+                "description": "Use an existing role as a notification ping target",
+                "description_localizations": {
+                  "tr": "Mevcut bir rolü bildirim ping hedefi yap"
+                },
+                "options": [
+                  {
+                    "type": 8,
+                    "name": "role",
+                    "description": "Existing role",
+                    "description_localizations": {
+                      "tr": "Mevcut rol"
+                    },
+                    "required": true,
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  },
+                  {
+                    "type": 3,
+                    "name": "team",
+                    "description": "Only this team's matches (empty = all announced matches)",
+                    "description_localizations": {
+                      "tr": "Yalnızca bu takımın maçları (boş = tüm duyurulan maçlar)"
+                    },
+                    "required": false,
+                    "autocomplete": true,
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  },
+                  {
+                    "type": 5,
+                    "name": "ping_reminder",
+                    "description": "Ping on planned-start reminders",
+                    "description_localizations": {
+                      "tr": "Planlanan başlangıç hatırlatmalarında ping at"
+                    },
+                    "required": false,
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  },
+                  {
+                    "type": 5,
+                    "name": "ping_result",
+                    "description": "Ping on results",
+                    "description_localizations": {
+                      "tr": "Sonuçlarda ping at"
+                    },
+                    "required": false,
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "unmap",
+                "description": "Remove a role mapping",
+                "description_localizations": {
+                  "tr": "Bir rol eşleştirmesini kaldır"
+                },
+                "options": [
+                  {
+                    "type": 4,
+                    "name": "mapping",
+                    "description": "Mapping",
+                    "description_localizations": {
+                      "tr": "Eşleştirme"
+                    },
+                    "required": true,
+                    "autocomplete": true,
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "selfservice",
+                "description": "Allow/disallow members to self-assign a mapped role (safety-checked)",
+                "description_localizations": {
+                  "tr": "Üyelerin eşleştirilmiş rolü kendine almasına izin ver/verme (güvenlik denetimli)"
+                },
+                "options": [
+                  {
+                    "type": 4,
+                    "name": "mapping",
+                    "description": "Mapping",
+                    "description_localizations": {
+                      "tr": "Eşleştirme"
+                    },
+                    "required": true,
+                    "autocomplete": true,
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  },
+                  {
+                    "type": 5,
+                    "name": "enabled",
+                    "description": "Allow self-service",
+                    "description_localizations": {
+                      "tr": "Self-servise izin ver"
+                    },
+                    "required": true,
+                    "min_value": -9007199254740991,
+                    "max_value": 9007199254740991
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "module": "core",
+      "payload": {
+        "type": 1,
+        "name": "help",
+        "description": "Show the commands available to you in this server",
+        "description_localizations": {
+          "tr": "Bu sunucuda kullanabileceğiniz komutları gösterir"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": []
+      }
+    },
+    {
+      "module": "core",
+      "payload": {
+        "type": 1,
+        "name": "modules",
+        "description": "Manage which ToroSquad modules are active in this server",
+        "description_localizations": {
+          "tr": "Bu sunucuda hangi modüllerin açık olduğunu yönetin"
+        },
+        "default_member_permissions": "32",
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "list",
+            "description": "Show modules and whether they are enabled here",
+            "description_localizations": {
+              "tr": "Modülleri ve durumlarını gösterir"
+            }
+          },
+          {
+            "type": 1,
+            "name": "enable",
+            "description": "Enable a module in this server",
+            "description_localizations": {
+              "tr": "Bir modülü bu sunucuda açar"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "module",
+                "description": "Module id",
+                "description_localizations": {
+                  "tr": "Modül kimliği"
+                },
+                "required": true,
+                "autocomplete": true,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "disable",
+            "description": "Stop a module in this server (its data is kept)",
+            "description_localizations": {
+              "tr": "Bir modülü durdurur (veriler korunur)"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "module",
+                "description": "Module id",
+                "description_localizations": {
+                  "tr": "Modül kimliği"
+                },
+                "required": true,
+                "autocomplete": true,
+                "min_value": -9007199254740991,
+                "max_value": 9007199254740991
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "module": "core",
+      "payload": {
+        "type": 1,
+        "name": "privacy",
+        "description": "Export or delete the data ToroSquad Bot stores about you",
+        "description_localizations": {
+          "tr": "Hakkınızda tutulan verileri dışa aktarın veya silin"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "export",
+            "description": "Download your own stored data from this server as JSON",
+            "description_localizations": {
+              "tr": "Bu sunucudaki kendi kayıtlarınızı JSON olarak indirin"
+            }
+          },
+          {
+            "type": 1,
+            "name": "delete",
+            "description": "Delete your own stored data from this server (preview first)",
+            "description_localizations": {
+              "tr": "Bu sunucudaki kendi kayıtlarınızı silin (önce önizleme)"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "module": "core",
+      "payload": {
+        "type": 1,
+        "name": "setup",
+        "description": "Step-by-step server setup for ToroSquad Bot",
+        "description_localizations": {
+          "tr": "ToroSquad Bot için adım adım sunucu kurulumu"
+        },
+        "default_member_permissions": "32",
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": []
+      }
+    }
+  ]
+}

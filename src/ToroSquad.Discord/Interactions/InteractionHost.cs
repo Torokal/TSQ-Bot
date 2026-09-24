@@ -1,5 +1,6 @@
 using Discord;
 using Discord.Interactions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
@@ -43,13 +44,15 @@ public sealed class InteractionHost(InteractionService service, ModuleRegistry r
                 return Manifest;
 
             var errors = new List<string>();
+            // Module construction may touch scoped services; never resolve them from the root provider.
+            await using var scope = services.CreateAsyncScope();
             foreach (var module in registry.All)
             {
                 foreach (var type in module.InteractionModuleTypes)
                 {
                     try
                     {
-                        await service.AddModuleAsync(type, services);
+                        await service.AddModuleAsync(type, scope.ServiceProvider);
                     }
                     catch (Exception ex)
                     {

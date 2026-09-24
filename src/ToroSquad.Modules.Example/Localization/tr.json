@@ -1,0 +1,7 @@
+{
+  "module.example.name": "Örnek",
+  "module.example.description": "Geliştirme için örnek modül (üretimde kayıtlı değil).",
+  "example.pong": "🏓 Pong — örnek modül çalışıyor.",
+  "cmd.example": "Örnek modül (yalnızca geliştirme)",
+  "cmd.example.ping": "Örnek modülün yanıt verdiğini kontrol eder"
+}

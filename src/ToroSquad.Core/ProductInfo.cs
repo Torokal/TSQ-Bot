@@ -22,6 +22,17 @@ public sealed record ProductInfo(
     public bool SourceConfigured => !string.IsNullOrWhiteSpace(SourceUrl);
 }
 
+/// <summary>
+/// Facts about where this instance runs. Demo/fixture data may only reach a REAL Discord guild if that guild is an
+/// explicitly authorized test guild (and it is then labelled TEST/DEMO).
+/// </summary>
+public sealed record DeploymentPolicy(bool RealDiscordConnection, IReadOnlySet<ulong> TestGuildIds)
+{
+    public bool IsTestGuild(GuildId guild) => TestGuildIds.Contains(guild.Value);
+
+    public bool MayShowDemoData(GuildId guild) => !RealDiscordConnection || IsTestGuild(guild);
+}
+
 /// <summary>Records guild join/leave for the retention policy.</summary>
 public interface IGuildPresenceTracker
 {

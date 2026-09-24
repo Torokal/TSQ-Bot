@@ -1,0 +1,19 @@
+[
+  {
+    "_comment": "SYNTHETIC DEMO DATA for ToroSquad Bot fixture mode. Fictional events.",
+    "pageid": 900001, "pagename": "Demo_Masters/2026", "name": "Demo Masters 2026", "type": "Online",
+    "startdate": "{{D-2}}", "enddate": "{{D+5}}", "liquipediatier": "1", "liquipediatiertype": "", "publishertier": "",
+    "prizepool": 250000, "participantsnumber": 16,
+    "locations": { "region1": "Europe" }
+  },
+  {
+    "pageid": 900002, "pagename": "Demo_Cup/2026", "name": "Demo Cup 2026", "type": "Online",
+    "startdate": "{{D-1}}", "enddate": "{{D+1}}", "liquipediatier": "3", "publishertier": "",
+    "prizepool": "", "participantsnumber": 8, "locations": []
+  },
+  {
+    "pageid": 900003, "pagename": "Demo_Open/2026", "name": "Demo Open 2026", "type": "Offline",
+    "startdate": "{{D+10}}", "enddate": "{{D+14}}", "liquipediatier": "2",
+    "locations": { "city1": "Istanbul", "country1": "Turkey" }
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "module.example.name": "Example",
+  "module.example.description": "Example module for development (not registered in production).",
+  "example.pong": "🏓 Pong — the example module works.",
+  "cmd.example": "Example module (development only)",
+  "cmd.example.ping": "Check that the example module answers"
+}

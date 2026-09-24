@@ -60,6 +60,7 @@ public sealed class ToroDbContext(DbContextOptions<ToroDbContext> options, IEnum
         {
             e.ToTable("guild_settings");
             e.HasKey(x => x.GuildId);
+            e.Property(x => x.GuildId).ValueGeneratedNever(); // Discord ids are never generated
             e.Property(x => x.Language).HasMaxLength(8);
             e.Property(x => x.TimeZoneId).HasMaxLength(64);
         });
@@ -75,6 +76,7 @@ public sealed class ToroDbContext(DbContextOptions<ToroDbContext> options, IEnum
         {
             e.ToTable("guild_presence");
             e.HasKey(x => x.GuildId);
+            e.Property(x => x.GuildId).ValueGeneratedNever();
         });
 
         modelBuilder.Entity<OutboxMessageEntity>(e =>

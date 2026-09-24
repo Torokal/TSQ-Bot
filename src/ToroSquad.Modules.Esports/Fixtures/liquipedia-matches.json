@@ -1,0 +1,122 @@
+[
+  {
+    "_comment": "SYNTHETIC DEMO DATA for ToroSquad Bot fixture mode. Fictional teams/events. Shape follows LPDB v3 match2.",
+    "pageid": 900001, "pagename": "Demo_Masters/2026", "match2id": "DemoMst26_R01-M001",
+    "status": "", "winner": "", "walkover": "", "resulttype": "", "finished": 0,
+    "type": "Online", "section": "Group Stage", "game": "cs2", "date": "{{T+00:20}}", "dateexact": 1,
+    "stream": { "twitch": "torosquad_demo", "twitch_en_1": "torosquad_demo" }, "links": [], "bestof": 3,
+    "tournament": "Demo Masters 2026", "parent": "Demo_Masters/2026", "liquipediatier": "1", "liquipediatiertype": "", "publishertier": "",
+    "match2opponents": [
+      { "id": 1, "type": "team", "name": "Toro Wolves", "template": "toro wolves", "score": -1, "status": "", "placement": null, "match2players": [],
+        "teamtemplate": { "template": "toro wolves", "page": "Toro Wolves", "name": "Toro Wolves", "shortname": "TW" } },
+      { "id": 2, "type": "team", "name": "Nordic Owls", "template": "nordic owls", "score": -1, "status": "", "placement": null, "match2players": [],
+        "teamtemplate": { "template": "nordic owls", "page": "Nordic Owls", "name": "Nordic Owls", "shortname": "NO" } }
+    ],
+    "match2games": []
+  },
+  {
+    "pageid": 900001, "pagename": "Demo_Masters/2026", "match2id": "DemoMst26_R01-M002",
+    "status": "", "winner": "", "finished": 0, "type": "Online", "section": "Group Stage", "game": "cs2",
+    "date": "{{T+03:00}}", "dateexact": 1, "stream": [], "links": [], "bestof": 1,
+    "tournament": "Demo Masters 2026", "parent": "Demo_Masters/2026", "liquipediatier": "1", "publishertier": "",
+    "match2opponents": [
+      { "id": 1, "type": "team", "name": "Crimson Esports", "score": -1, "status": "", "match2players": [],
+        "teamtemplate": { "page": "Crimson Esports", "name": "Crimson Esports", "shortname": "CRM" } },
+      { "id": 2, "type": "team", "name": "TBD", "score": -1, "status": "", "match2players": [], "teamtemplate": [] }
+    ],
+    "match2games": []
+  },
+  {
+    "pageid": 900002, "pagename": "Demo_Cup/2026", "match2id": "DemoCup26_R02-M001",
+    "status": "", "winner": "", "finished": 0, "type": "Online", "section": "Playoffs", "game": "cs2",
+    "date": "{{T-01:00}}", "dateexact": 1, "stream": { "youtube": "torosquad_demo" }, "links": {}, "bestof": 3,
+    "tournament": "Demo Cup 2026", "parent": "Demo_Cup/2026", "liquipediatier": "3", "publishertier": "",
+    "match2opponents": [
+      { "id": 1, "type": "team", "name": "Iron Bulls", "score": 1, "status": "S", "match2players": [],
+        "teamtemplate": { "page": "Iron Bulls", "name": "Iron Bulls", "shortname": "IB" } },
+      { "id": 2, "type": "team", "name": "Blue Foxes", "score": 0, "status": "S", "match2players": [],
+        "teamtemplate": { "page": "Blue Foxes", "name": "Blue Foxes", "shortname": "BF" } }
+    ],
+    "match2games": [
+      { "map": "Mirage", "scores": [13, 9], "winner": "1", "status": "" },
+      { "map": "Inferno", "scores": [], "winner": "", "status": "" },
+      { "map": "", "scores": [], "winner": "", "status": "" }
+    ]
+  },
+  {
+    "pageid": 900001, "pagename": "Demo_Masters/2026", "match2id": "DemoMst26_R00-M010",
+    "status": "", "winner": "1", "finished": 1, "type": "Online", "section": "Group Stage", "game": "cs2",
+    "date": "{{T-02:30}}", "dateexact": 1, "stream": [], "links": [], "bestof": 3,
+    "tournament": "Demo Masters 2026", "parent": "Demo_Masters/2026", "liquipediatier": "1", "publishertier": "",
+    "match2opponents": [
+      { "id": 1, "type": "team", "name": "Toro Wolves", "score": 2, "status": "S", "placement": 1, "match2players": [],
+        "teamtemplate": { "page": "Toro Wolves", "name": "Toro Wolves", "shortname": "TW" } },
+      { "id": 2, "type": "team", "name": "Iron Bulls", "score": 1, "status": "S", "placement": 2, "match2players": [],
+        "teamtemplate": { "page": "Iron Bulls", "name": "Iron Bulls", "shortname": "IB" } }
+    ],
+    "match2games": [
+      { "map": "Nuke", "scores": [13, 7], "winner": "1", "status": "" },
+      { "map": "Ancient", "scores": ["10", "13"], "winner": "2", "status": "" },
+      { "map": "Dust2", "scores": [16, 14], "winner": "1", "status": "" }
+    ]
+  },
+  {
+    "pageid": 900002, "pagename": "Demo_Cup/2026", "match2id": "DemoCup26_R01-M004",
+    "status": "", "winner": "1", "finished": 1, "type": "Online", "section": "Playoffs", "game": "cs2",
+    "date": "{{T-03:00}}", "dateexact": 1, "stream": [], "links": [], "bestof": 3,
+    "tournament": "Demo Cup 2026", "parent": "Demo_Cup/2026", "liquipediatier": "3",
+    "match2opponents": [
+      { "id": 1, "type": "team", "name": "Blue Foxes", "score": -1, "status": "W", "match2players": [],
+        "teamtemplate": { "page": "Blue Foxes", "name": "Blue Foxes", "shortname": "BF" } },
+      { "id": 2, "type": "team", "name": "Nordic Owls", "score": -1, "status": "FF", "match2players": [],
+        "teamtemplate": { "page": "Nordic Owls", "name": "Nordic Owls", "shortname": "NO" } }
+    ],
+    "match2games": [
+      { "map": "", "scores": [], "winner": "", "status": "notplayed" }
+    ]
+  },
+  {
+    "pageid": 900002, "pagename": "Demo_Cup/2026", "match2id": "DemoCup26_R01-M005",
+    "status": "", "winner": "2", "finished": 1, "type": "Online", "section": "Playoffs", "game": "cs2",
+    "date": "{{T-04:00}}", "dateexact": 1, "bestof": 3,
+    "tournament": "Demo Cup 2026", "parent": "Demo_Cup/2026", "liquipediatier": "3",
+    "match2opponents": [
+      { "id": 1, "type": "team", "name": "Crimson Esports", "score": 0, "status": "S", "match2players": [],
+        "teamtemplate": { "page": "Crimson Esports", "name": "Crimson Esports", "shortname": "CRM" } },
+      { "id": 2, "type": "team", "name": "Iron Bulls", "score": 2, "status": "S", "match2players": [],
+        "teamtemplate": { "page": "Iron Bulls", "name": "Iron Bulls", "shortname": "IB" } }
+    ],
+    "match2games": [
+      { "map": "Overpass", "scores": [5, 13], "winner": "2", "status": "" }
+    ]
+  },
+  {
+    "pageid": 900002, "pagename": "Demo_Cup/2026", "match2id": "DemoCup26_R01-M006",
+    "status": "notplayed", "winner": "", "finished": 1, "type": "Online", "section": "Playoffs", "game": "cs2",
+    "date": "{{T-05:00}}", "dateexact": 1, "bestof": 1,
+    "tournament": "Demo Cup 2026", "parent": "Demo_Cup/2026", "liquipediatier": "3",
+    "match2opponents": [
+      { "id": 1, "type": "team", "name": "Toro Wolves", "score": -1, "status": "", "match2players": [],
+        "teamtemplate": { "page": "Toro Wolves", "name": "Toro Wolves", "shortname": "TW" } },
+      { "id": 2, "type": "team", "name": "Blue Foxes", "score": -1, "status": "", "match2players": [],
+        "teamtemplate": { "page": "Blue Foxes", "name": "Blue Foxes", "shortname": "BF" } }
+    ],
+    "match2games": []
+  },
+  {
+    "pageid": 900001, "pagename": "Demo_Masters/2026", "match2id": "DemoMst26_R00-M011",
+    "status": "", "winner": "0", "finished": 1, "type": "Online", "section": "Group Stage", "game": "cs2",
+    "date": "{{T-06:00}}", "dateexact": 1, "bestof": 2,
+    "tournament": "Demo Masters 2026", "parent": "Demo_Masters/2026", "liquipediatier": "1",
+    "match2opponents": [
+      { "id": 1, "type": "team", "name": "Nordic Owls", "score": 1, "status": "S", "match2players": [],
+        "teamtemplate": { "page": "Nordic Owls", "name": "Nordic Owls", "shortname": "NO" } },
+      { "id": 2, "type": "team", "name": "Crimson Esports", "score": 1, "status": "S", "match2players": [],
+        "teamtemplate": { "page": "Crimson Esports", "name": "Crimson Esports", "shortname": "CRM" } }
+    ],
+    "match2games": [
+      { "map": "Train", "scores": [13, 11], "winner": "1", "status": "" },
+      { "map": "Anubis", "scores": [8, 13], "winner": "2", "status": "" }
+    ]
+  }
+]

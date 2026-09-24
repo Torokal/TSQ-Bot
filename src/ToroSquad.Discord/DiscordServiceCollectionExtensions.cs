@@ -24,7 +24,7 @@ public static class DiscordServiceCollectionExtensions
 
         services.AddScoped<InteractionServices>();
         services.AddSingleton<InteractionHost>();
-        services.AddSingleton<CommandSyncService>();
+        services.AddScoped<CommandSyncService>();
 
         if (options.Transport == DiscordTransportMode.Gateway)
         {

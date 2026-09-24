@@ -45,6 +45,8 @@ dotnet_diagnostic.CA1812.severity = none
 dotnet_diagnostic.CA1515.severity = none
 # CA1859: return-type micro-optimisation suggestions conflict with intentionally abstract APIs.
 dotnet_diagnostic.CA1859.severity = none
+# CA1000: static factory methods on generic result types (ProviderResult<T>.Ok) are the intended API.
+dotnet_diagnostic.CA1000.severity = none
 # IDE0005 requires GenerateDocumentationFile to run in build.
 dotnet_diagnostic.IDE0005.severity = none
 
@@ -69,3 +71,8 @@ indent_size = 2
 [*.ps1]
 indent_size = 4
 end_of_line = crlf
+
+# EF Core migrations are generated code (dotnet ef migrations add ...).
+[src/ToroSquad.Bot/Migrations/**.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none
