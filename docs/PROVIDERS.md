@@ -68,6 +68,18 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
   the page is never fetched.
 - Direct HLTV data integration requires authorized access → **DEFERRED**.
 
+### Where legitimate HLTV match links come from (research 2026-09-25)
+
+| Source | HLTV match link? | Access | Status |
+|---|---|---|---|
+| HLTV itself | — | **No official public API** found; every "HLTV API" found is an unofficial scraper | Not usable (scraping prohibited) |
+| **Liquipedia (LPDB match2 )** | **Yes** — editors enter the HLTV match id; Liquipedia builds  (VERIFIED: Liquipedia/Lua-Modules  + , commit 23835da, 2026-09-09) and stores it with the match; upstream BOT-Greg-v2 reads  (VERIFIED) — this is how BOT Greg's "Matchpage" worked | Approved LPDB API key (free for approved open-source non-commercial projects, else paid) | Parser support **TESTED_OFFLINE**; live **BLOCKED** (no key) |
+| PandaScore | No HLTV id/URL in the match object (VERIFIED, OpenAPI) | — | Not available |
+| GRID | NOT_VERIFIED | All listed plans commercial, custom-priced (grid.gg, 2026-09-25) | Not evaluated further |
+
+With  the cards link to HLTV automatically. With PandaScore as match provider, HLTV links
+would need a second source (Liquipedia) and a cross-provider match mapping — not implemented (owner decision pending).
+
 ## Capabilities (as implemented)
 
 | Capability | PandaScore adapter | Liquipedia adapter | Valve adapter |

@@ -35,8 +35,8 @@ Renkler: başladı/hatırlatma mavi, sonuç yeşil (kazanana göre değişmez), 
 ## Maç Sayfası bağlantısı
 
 Öncelik: **doğrulanmış HLTV** → resmî organizatör sayfası → sağlayıcı sayfası (izinli host) → **hiç** (yer tutucu yok).
-HLTV bağlantısı yalnızca `https://www.hltv.org/matches/<sayı>/<ad>` biçiminde ve güvenilir bir kaynaktan
-(`Esports:VerifiedMatchLinks`) gelir; sayfa indirilmez, kimlik tahmin edilmez, HLTV olmayan bağlantı "HLTV" diye
+HLTV bağlantısı yalnızca `https://www.hltv.org/matches/<sayı>/<ad>` biçiminde ve güvenilir bir kaynaktan gelir:
+Liquipedia maç verisindeki `links.hltv` (Liquipedia sağlayıcısı seçiliyken otomatik) veya `Esports:VerifiedMatchLinks`; sayfa indirilmez, kimlik tahmin edilmez, HLTV olmayan bağlantı "HLTV" diye
 etiketlenmez. PandaScore herkese açık maç sayfası vermediği için PandaScore maçlarında bağlantı ancak bu listeden gelir.
 Demo kartları hiçbir yere bağlantı vermez.
 

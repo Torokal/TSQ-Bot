@@ -4,7 +4,7 @@
     {
       "match2id": "C-BO3-FIN", "pagename": "Contract_Cup/2026", "parent": "Contract_Cup/2026", "tournament": "Contract Cup 2026",
       "date": "2026-09-24 09:00:00", "dateexact": 1, "finished": 1, "winner": "1", "bestof": 3, "status": "",
-      "liquipediatier": "1", "publishertier": "", "section": "Final", "stream": { "twitch": "contract_tv", "twitch_en_1": "contract_tv", "bogus": "x y" }, "links": {},
+      "liquipediatier": "1", "publishertier": "", "section": "Final", "stream": { "twitch": "contract_tv", "twitch_en_1": "contract_tv", "bogus": "x y" }, "links": { "hltv": { "1": { "1": "https://www.hltv.org/matches/2399001/match", "2": 0 } } },
       "match2opponents": [
         { "id": 1, "type": "team", "name": "Alpha", "score": 2, "status": "S", "teamtemplate": { "page": "Alpha Team", "name": "Alpha", "shortname": "ALP" } },
         { "id": 2, "type": "team", "name": "Bravo", "score": 1, "status": "S", "teamtemplate": { "page": "Bravo", "name": "Bravo", "shortname": "BRV" } }
