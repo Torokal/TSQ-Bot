@@ -184,8 +184,66 @@ public sealed class PlannerTests : IAsyncLifetime
         await PlanAsync(matches, afterGap: true);
 
         var rows = await OutboxAsync();
-        rows.Should().HaveCount(5, "MaxCatchUpPerGuildPerPoll");
+        rows.Count(r => r.ExpiresAt > now).Should().Be(5, "MaxCatchUpPerGuildPerPoll");
         rows.Should().NotContain(r => r.SourceKey.EndsWith("TOO_OLD", StringComparison.Ordinal));
+
+        // The overflow is recorded as never-to-be-sent, so the next normal poll does not deliver the rest of the backlog.
+        await _host.Services.GetRequiredService<OutboxProcessor>().ProcessOnceAsync(CancellationToken.None);
+        _host.Clock.Advance(TimeSpan.FromMinutes(10));
+        await PlanAsync(matches, afterGap: false);
+        await _host.Services.GetRequiredService<OutboxProcessor>().ProcessOnceAsync(CancellationToken.None);
+        _host.Transport.SendCalls.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task Changing_the_channel_or_re_enabling_results_does_not_re_announce_recent_results()
+    {
+        await BootstrapAsync();
+        _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        var match = Finished("CH1", _host.Clock.GetUtcNow().AddHours(-1));
+        await PlanAsync([match]);
+        await _host.Services.GetRequiredService<OutboxProcessor>().ProcessOnceAsync(CancellationToken.None);
+        _host.Transport.SendCalls.Should().Be(1);
+
+        var newChannel = new ChannelId(3339);
+        _host.Guilds.SetChannel(Guild, newChannel, new BotChannelAccess(true, true,
+            GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks));
+        _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await _host.InScopeAsync(sp => sp.GetRequiredService<EsportsConfigService>().ConfigureAsync(TestHost.Admin(Guild), newChannel.Value, null, null, null, null, CancellationToken.None));
+        await PlanAsync([match]);
+        await _host.InScopeAsync(async sp =>
+        {
+            var config = sp.GetRequiredService<EsportsConfigService>();
+            await config.ConfigureAsync(TestHost.Admin(Guild), null, null, null, false, null, CancellationToken.None);
+            _host.Clock.Advance(TimeSpan.FromMinutes(1));
+            await config.ConfigureAsync(TestHost.Admin(Guild), null, null, null, true, null, CancellationToken.None);
+        });
+        await PlanAsync([match]);
+        await _host.Services.GetRequiredService<OutboxProcessor>().ProcessOnceAsync(CancellationToken.None);
+        _host.Transport.SendCalls.Should().Be(1, "no re-announcement in the new channel or after toggling results");
+    }
+
+    [Fact]
+    public async Task Correction_dropped_while_paused_is_applied_after_resume()
+    {
+        await BootstrapAsync();
+        _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await PlanAsync([Finished("PZ", _host.Clock.GetUtcNow().AddHours(-1), 2, 1)]);
+        var processor = _host.Services.GetRequiredService<OutboxProcessor>();
+        await processor.ProcessOnceAsync(CancellationToken.None);
+
+        _host.Clock.Advance(TimeSpan.FromMinutes(5));
+        await PlanAsync([Finished("PZ", _host.Clock.GetUtcNow().AddHours(-1), 2, 0)]); // correction staged
+        await _host.InScopeAsync(sp => sp.GetRequiredService<EsportsConfigService>().PauseAsync(TestHost.Admin(Guild), true, CancellationToken.None));
+        await processor.ProcessOnceAsync(CancellationToken.None); // edit dropped while paused
+        _host.Transport.EditCalls.Should().Be(0);
+
+        await _host.InScopeAsync(sp => sp.GetRequiredService<EsportsConfigService>().PauseAsync(TestHost.Admin(Guild), false, CancellationToken.None));
+        _host.Clock.Advance(TimeSpan.FromMinutes(10));
+        await PlanAsync([Finished("PZ", _host.Clock.GetUtcNow().AddHours(-1), 2, 0)]);
+        await processor.ProcessOnceAsync(CancellationToken.None);
+        _host.Transport.EditCalls.Should().Be(1, "the visible message still shows the old score, so the correction is re-staged");
+        _host.Transport.SendCalls.Should().Be(1);
     }
 
     [Fact]

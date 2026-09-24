@@ -68,8 +68,31 @@ public sealed class NotificationOutbox(ToroDbContext db, TimeProvider clock) : I
             return StageOutcome.Created;
         }
 
-        if (row.PayloadHash == hash)
+        if (row.Status == OutboxStatus.Sent)
+        {
+            // Compare against what is visible in Discord (DeliveredPayloadHash), not the last staged payload: an edit
+            // that was dropped (pause/module off) is re-staged once the data is planned again.
+            if (hash == row.DeliveredPayloadHash)
+            {
+                if (row.EditPending)
+                {
+                    row.PayloadJson = json;
+                    row.PayloadHash = hash;
+                    row.EditPending = false;
+                    row.NextAttemptAt = null;
+                    row.UpdatedAt = now;
+                }
+
+                return StageOutcome.Unchanged;
+            }
+
+            if (row.EditPending && hash == row.PayloadHash)
+                return StageOutcome.Unchanged;
+        }
+        else if (row.PayloadHash == hash)
+        {
             return StageOutcome.Unchanged;
+        }
 
         switch (row.Status)
         {

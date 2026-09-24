@@ -11,10 +11,10 @@
 ## Yeniden başlatma / ilk bağlantı / geri dönüş politikası
 
 - **İlk çalıştırma (bootstrap)**: snapshot tablosu boşken görülen bitmiş maçlar `IsBaseline` olur → hiç duyurulmaz.
-- **Watermark**: modül etkinleştirildiğinde veya `resume` edildiğinde ayarlanır. Watermark'tan önce başlamış maçın hatırlatması,
+- **Watermark**: modül etkinleştirildiğinde, `resume` edildiğinde, bildirim **kanalı değiştirildiğinde** veya hatırlatma/sonuç bildirimleri **yeniden açıldığında** ayarlanır (aksi hâlde son sonuçlar yeni kanala pinglerle tekrar gönderilirdi). Watermark'tan önce başlamış maçın hatırlatması,
   watermark'tan önce bitmiş maçın sonucu gönderilmez.
 - **Kesinti sonrası (gap)**: son başarılı fetch 3 poll aralığından eskiyse sonuçlar yalnızca son 6 saatte başlamış maçlar
-  için ve sunucu başına poll başına en fazla 5 adet gönderilir.
+  için ve sunucu başına en fazla 5 adet gönderilir; limiti aşanlar outbox'a **süresi dolmuş** olarak kaydedilir ve sonraki normal poll'larda da gönderilmez.
 - **Bayat veri** (vars. 30 dk) yeni bildirim üretmez.
 
 ## Sunucu filtreleri
@@ -37,7 +37,8 @@ adı) → 3) "team/esports/gaming/clan/club/gg" ayıklanmış ad **tek adaya** d
 
 ## Roller
 
-- **Ping hedefi** (`roles map`): mevcut bir rol; @everyone ve managed/entegrasyon rolleri reddedilir. Kapsam: tüm duyurulan
+- **Ping hedefi** (`roles map`): mevcut bir rol; @everyone ve managed/entegrasyon rolleri reddedilir. Rol bahsedilebilir
+  değilse eşleştiren yöneticinin kendisinin de **Herkesten Bahset** izni olmalıdır (bot, yöneticinin pingleyemeyeceği rolü pinglemez). Kapsam: tüm duyurulan
   maçlar veya belirli takım; hatırlatma ve sonuç ping'i ayrı ayrı seçilir.
 - **Self-service** (`roles selfservice`): ayrı onay. Rol **@everyone'ın sahip olmadığı hiçbir sunucu izni vermemeli**,
   **hiçbir kanalda "izin ver" üzerine yazması olmamalı** (özel kanal açamaz), managed/@everyone olmamalı, botun en yüksek
@@ -45,7 +46,9 @@ adı) → 3) "team/esports/gaming/clan/club/gg" ayıklanmış ad **tek adaya** d
   değerlendirilir.**
 - Takip → rol: istenen durum modeli. Üye rolü zaten taşıyorsa bot "önceden vardı" diye kaydeder ve **asla kaldırmaz**.
   Paylaşılan rol, ilgili son takip bitene kadar kaldırılmaz. Discord çağrısı öncesi `PendingAdd/PendingRemove` yazılır;
-  başarısızlık `Failed` olarak kalır ve arka planda sınırlı sayıda yeniden denenir. Bot rol oluşturmaz ve "bahsedilebilir"
+  başarısız ekleme `Failed` kalır ve üyenin bir sonraki etkileşiminde (mevcut rolleri bilinirken) yeniden denenir; arka
+  planda yalnızca bot tarafından verildiği kesin rollerin kaldırılması yeniden denenir. Başarısız/belirsiz eklemeler hiçbir
+  zaman Discord çağrısıyla geri alınmaz (rol bu arada elle verilmiş olabilir). Bot rol oluşturmaz ve "bahsedilebilir"
   ayarını değiştirmez.
 - **Panel**: `tsq:esp:panel:<mappingId>` durumsuz düğmeler; tıklayanın sunucusuna bağlı arama (başka sunucunun eşleştirme
   kimliği işe yaramaz), yalnızca tıklayanın kendi takibi değişir.
@@ -55,9 +58,10 @@ adı) → 3) "team/esports/gaming/clan/club/gg" ayıklanmış ad **tek adaya** d
 - `allowed_mentions = { parse: [], roles: [izinli roller] }`; kullanıcı ve @everyone/@here ping'i asla. Önizleme,
   düzenleme ve tekrar denemeler ping atmaz.
 - Sağlayıcı metinleri güvenilmez kabul edilir: mention sözdizimi etkisizleştirilir, markdown kaçışlanır, spoiler sınırları
-  kırılamaz; bağlantılar yalnızca izinli https host'larına (liquipedia.net, twitch.tv, youtube.com, kick.com, github.com).
-- **Spoiler modu**: skor, kazanan ve harita sonuçları yalnızca `||…||` içinde; başlık iki takımı kaynak sırasıyla yazar;
-  renk kazanana göre değişmez; mesaj içeriği yalnızca rol ping'lerinden oluşur.
+  kırılamaz, metindeki `scheme://` tıklanabilir bağlantıya dönüşemez; bağlantılar yalnızca izinli **https** host'larına (liquipedia.net, twitch.tv, youtube.com, kick.com, github.com).
+- **Spoiler modu**: spoiler içinde yalnızca **tek, sabit düzenli satır** (iki takım kaynak sırasıyla + skor, hükmende W/FF);
+  kazananın adı ayrıca yazılmaz ve harita satırları gösterilmez (bulanık genişlik/yükseklik sonucu ele verirdi); başlık iki
+  takımı kaynak sırasıyla yazar; renk kazanana göre değişmez; mesaj içeriği yalnızca rol ping'lerinden oluşur.
 - Her mesajda kaynak bağlantısı, "Kaynak: Liquipedia (CC BY-SA 3.0)" ve "Son veri değişikliği" zamanı; demo veride
   `[TEST/DEMO]` başlık ve footer etiketi.
 

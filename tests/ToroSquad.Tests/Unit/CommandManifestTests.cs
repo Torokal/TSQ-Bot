@@ -123,7 +123,7 @@ public sealed class CommandManifestTests
     [Fact]
     public void Empty_manifest_blocks_sync_and_deletes_nothing()
     {
-        var plan = CommandSyncPlanner.Plan(new CommandManifest([], []), [new RemoteCommand(1, "help", "{}")], new HashSet<string> { "help" }, Request(prune: true));
+        var plan = CommandSyncPlanner.Plan(new CommandManifest([], []), [new RemoteCommand(1, "help", "{}")], new Dictionary<string, ulong> { ["help"] = 1 }, Request(prune: true));
         plan.IsBlocked.Should().BeTrue();
         plan.Items.Should().BeEmpty();
     }
@@ -131,7 +131,7 @@ public sealed class CommandManifestTests
     [Fact]
     public void Module_load_error_blocks_sync()
     {
-        var plan = CommandSyncPlanner.Plan(new CommandManifest([Cmd("help")], ["esports/EsportsCommands: boom"]), [], new HashSet<string>(), Request());
+        var plan = CommandSyncPlanner.Plan(new CommandManifest([Cmd("help")], ["esports/EsportsCommands: boom"]), [], new Dictionary<string, ulong>(), Request());
         plan.IsBlocked.Should().BeTrue();
     }
 
@@ -139,10 +139,10 @@ public sealed class CommandManifestTests
     public void Wrong_application_unlisted_guild_and_unapproved_global_are_blocked()
     {
         var manifest = new CommandManifest([Cmd("help")], []);
-        CommandSyncPlanner.Plan(manifest, [], new HashSet<string>(), Request(actualApp: 999)).IsBlocked.Should().BeTrue();
-        CommandSyncPlanner.Plan(manifest, [], new HashSet<string>(), Request(new SyncScope.Guild(43))).IsBlocked.Should().BeTrue();
-        CommandSyncPlanner.Plan(manifest, [], new HashSet<string>(), Request(new SyncScope.Global())).IsBlocked.Should().BeTrue();
-        CommandSyncPlanner.Plan(manifest, [], new HashSet<string>(), Request(new SyncScope.Global(), allowGlobal: true)).IsBlocked.Should().BeFalse();
+        CommandSyncPlanner.Plan(manifest, [], new Dictionary<string, ulong>(), Request(actualApp: 999)).IsBlocked.Should().BeTrue();
+        CommandSyncPlanner.Plan(manifest, [], new Dictionary<string, ulong>(), Request(new SyncScope.Guild(43))).IsBlocked.Should().BeTrue();
+        CommandSyncPlanner.Plan(manifest, [], new Dictionary<string, ulong>(), Request(new SyncScope.Global())).IsBlocked.Should().BeTrue();
+        CommandSyncPlanner.Plan(manifest, [], new Dictionary<string, ulong>(), Request(new SyncScope.Global(), allowGlobal: true)).IsBlocked.Should().BeFalse();
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class CommandManifestTests
             new(3, "legacy", "{}"),
             new(4, "someone-elses", "{}"),
         };
-        var managed = new HashSet<string> { "help", "bot", "legacy" };
+        var managed = new Dictionary<string, ulong> { ["help"] = 1, ["bot"] = 2, ["legacy"] = 3 };
 
         var dry = CommandSyncPlanner.Plan(manifest, remote, managed, Request());
         dry.Items.Should().BeEquivalentTo(new[]
@@ -171,6 +171,16 @@ public sealed class CommandManifestTests
         var prune = CommandSyncPlanner.Plan(manifest, remote, managed, Request(prune: true));
         prune.Items.Should().Contain(new SyncPlanItem(SyncAction.DeleteManaged, "legacy", 3));
         prune.Items.Should().Contain(new SyncPlanItem(SyncAction.KeepUnmanaged, "someone-elses", 4));
+    }
+
+    [Fact]
+    public void Prune_never_deletes_a_same_named_command_with_a_different_id()
+    {
+        var manifest = new CommandManifest([Cmd("help")], []);
+        var remote = new List<RemoteCommand> { new(99, "legacy", "{}") };
+        var plan = CommandSyncPlanner.Plan(manifest, remote, new Dictionary<string, ulong> { ["legacy"] = 3 }, Request(prune: true));
+        plan.Items.Should().Contain(new SyncPlanItem(SyncAction.KeepUnmanaged, "legacy", 99));
+        plan.Items.Should().NotContain(i => i.Action == SyncAction.DeleteManaged);
     }
 
     [Fact]

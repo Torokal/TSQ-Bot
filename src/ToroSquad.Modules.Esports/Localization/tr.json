@@ -1,10 +1,8 @@
 {
   "module.esports.name": "Esports (CS2)",
   "module.esports.description": "Counter-Strike 2 maçları, sonuçlar, turnuvalar, VRS sıralaması ve bildirimler.",
-
   "common.yes": "evet",
   "common.no": "hayır",
-
   "esports.demo_label": "[TEST/DEMO]",
   "esports.demo_footer": "TEST/DEMO verisi — gerçek maç değil",
   "esports.footer_source": "Kaynak: Liquipedia (CC BY-SA 3.0)",
@@ -12,13 +10,11 @@
   "esports.tbd": "Belli değil (TBD)",
   "esports.unknown_opponent": "Bilinmiyor",
   "esports.all_matches": "Tüm duyurulan maçlar",
-
   "esports.reminder.title": "⏰ {0} vs {1}",
   "esports.reminder.starts": "Planlanan başlangıç: {0} ({1})",
   "esports.reminder.estimated": "Saat tahminidir; kaynakta kesinleşmemiş.",
   "esports.reminder.time_updated": "🕒 Başlangıç saati güncellendi (önceki: {0}).",
   "esports.reminder.planned_note": "Bu bir planlanan saat hatırlatmasıdır; maçın başladığı doğrulanmamıştır.",
-
   "esports.result.title": "🏁 Maç sonucu: {0} vs {1}",
   "esports.result.spoiler_hint": "Sonucu görmek için üzerine tıklayın:",
   "esports.result.score": "{0} **{1}** – **{2}** {3}",
@@ -30,29 +26,24 @@
   "esports.result.maps_incomplete": "Harita ayrıntıları kaynakta eksik; yalnızca seri skoru gösteriliyor.",
   "esports.map_line": "{0}. {1}: {2}–{3}",
   "esports.map_tba": "Harita belirtilmemiş",
-
   "esports.status.finished": "bitti (skor yok)",
   "esports.status.not_played": "oynanmadı",
   "esports.status.awaiting_result": "planlanan saat geçti — sonuç bekleniyor",
   "esports.status.live": "canlı (kaynak doğruladı)",
-
   "esports.field.tournament": "Turnuva",
   "esports.field.stage": "Aşama",
   "esports.field.format": "Format",
   "esports.field.streams": "Yayınlar",
   "esports.field.maps": "Haritalar",
-
   "esports.tier.1": "S-Tier",
   "esports.tier.2": "A-Tier",
   "esports.tier.3": "B-Tier",
   "esports.tier.4": "C-Tier",
   "esports.tier.5": "D-Tier",
-
   "esports.config.lead_invalid": "Hatırlatma süresi 1-120 dakika olmalı.",
   "esports.config.channel_invalid": "Kanal bu sunucuda bulunamadı veya metin kanalı değil.",
   "esports.config.saved": "Esports ayarları kaydedildi.",
   "esports.config.saved_with_warning": "Kaydedildi, ancak botun bu kanalda eksik izinleri var: {0}. /esports-admin doctor ile kontrol edin.",
-
   "esports.filters.title": "Sunucu bildirim filtreleri",
   "esports.filters.rules": "Aynı türdeki değerler **VEYA**, farklı türler **VE** ile birleşir. Takım filtresi için iki takımdan birinin seçili olması yeterlidir. VRS Top-N: en az bir takım güvenilir biçimde eşleşip ilk N içindeyse geçer; VRS verisi yoksa filtre **bildirimi durdurur**. Kişisel takipler bu filtreleri genişletmez.",
   "esports.filters.team": "Takımlar",
@@ -70,12 +61,10 @@
   "esports.filters.vrs_cleared": "VRS filtresi kapatıldı.",
   "esports.filters.vrs_set": "VRS filtresi: en az bir takım ilk {0} içinde.",
   "esports.filters.cleared": "Tüm filtreler temizlendi; tüm CS2 maçları duyurulur.",
-
   "esports.pause.already": "Bildirimler zaten duraklatılmış.",
   "esports.resume.already": "Bildirimler zaten açık.",
   "esports.pause.done": "Bu sunucunun esports bildirimleri duraklatıldı. Bekleyen bildirimler gönderilmeyecek.",
   "esports.resume.done": "Bildirimler yeniden başladı. Duraklatma sırasında kaçanlar topluca gönderilmez.",
-
   "esports.team.unknown": "Bu takım bilinmiyor. Lütfen listeden seçin.",
   "esports.follow.already": "{0} zaten takip ediliyor.",
   "esports.follow.too_many": "En fazla {0} takım takip edebilirsiniz.",
@@ -85,7 +74,6 @@
   "esports.unfollow.done": "{0} takibi bırakıldı.",
   "esports.pref.hide_on": "Sonuçlar artık size spoiler olarak gösterilecek.",
   "esports.pref.hide_off": "Sonuçlar artık size açık gösterilecek.",
-
   "esports.roles.title": "Bildirim rolleri",
   "esports.roles.none": "Henüz eşleştirilmiş rol yok.",
   "esports.roles.line": "`#{0}` {1} → {2} · hatırlatma ping: {3} · sonuç ping: {4} · self-servis: {5}",
@@ -104,18 +92,15 @@
   "esports.roles.unsafe_skipped": "⚠️ Bildirim rolü artık güvenlik denetimini geçmiyor; rol verilmedi. Yöneticiler /esports-admin doctor ile görebilir.",
   "esports.roles.add_failed": "⚠️ Bildirim rolü verilemedi (izin/hiyerarşi). Takibiniz kaydedildi; rol daha sonra yeniden denenecek.",
   "esports.roles.remove_failed": "⚠️ Bildirim rolü kaldırılamadı; daha sonra yeniden denenecek.",
-
   "esports.panel.title": "Esports bildirimleri",
   "esports.panel.description": "Aşağıdaki düğmelerle takımları takip edebilir veya bırakabilirsiniz. Düğme yalnızca sizin kaydınızı değiştirir.",
   "esports.panel.no_selfservice": "Self-servis açılmış bildirim rolü yok. Önce /esports-admin roles map ve /esports-admin roles selfservice kullanın.",
   "esports.panel.stale": "Bu seçenek artık mevcut değil.",
-
   "esports.preview.ready": "Önizleme hazır.",
   "esports.preview.sample_note": "👀 Örnek önizleme (filtrelerinize uyan yaklaşan maç yok). Bu önizleme kimseyi pinglemez.",
   "esports.preview.real_note": "👀 Filtrelerinize uyan bir sonraki maçla önizleme. Bu önizleme kimseyi pinglemez.",
   "esports.preview.no_pings": "Gerçek bildirimde ping atılacak rol yok.",
   "esports.preview.would_ping": "Gerçek bildirimde pinglenecek roller: {0}",
-
   "esports.matches.title": "Yaklaşan CS2 maçları",
   "esports.matches.none": "Bu kriterlere uyan yaklaşan maç yok (veri başarıyla alındı).",
   "esports.results.title": "Son CS2 sonuçları",
@@ -133,7 +118,6 @@
   "esports.team.vrs_not_found": "VRS tablosunda güvenilir eşleşme bulunamadı.",
   "esports.team.upcoming": "Yaklaşan",
   "esports.team.recent": "Son sonuçlar",
-
   "esports.subs.title": "Abonelikleriniz",
   "esports.subs.none": "Henüz takip ettiğiniz takım yok. /esports follow ile ekleyin.",
   "esports.subs.hide_on": "Sonuç tercihi: **spoiler olarak gizle**",
@@ -141,14 +125,12 @@
   "esports.subs.note": "Bildirimler yalnızca sunucunun yapılandırdığı kanala gider; özel mesaj gönderilmez.",
   "esports.subs.hide_button": "Sonuçları gizle",
   "esports.subs.show_button": "Sonuçları göster",
-
   "esports.demo_only_test_guild": "Bu bot şu an TEST/DEMO verisiyle çalışıyor; demo veri yalnızca yetkilendirilmiş test sunucularında gösterilir.",
   "esports.provider_not_configured": "Esports veri sağlayıcısı yapılandırılmamış (NOT_CONFIGURED). İşletmecinin onaylı Liquipedia API erişimi gerekiyor.",
   "esports.no_data_yet": "Henüz veri alınmadı. Biraz sonra tekrar deneyin.",
   "esports.data_unavailable": "Veri şu an alınamıyor ({0}). Bu 'maç yok' anlamına gelmez.",
   "esports.stale_warning": "⚠️ Veri güncel değil (son deneme: {0}). Gösterilen bilgiler eski olabilir.",
   "esports.partial_warning": "⚠️ Kaynak kısmi veri döndürdü; liste eksik olabilir.",
-
   "esports.setup.title": "Esports kurulumu",
   "esports.setup.intro": "Bildirim kanalı: {0}\nHatırlatmalar: {1} · Sonuçlar: {2}\nModül durumu: {3}\n\n1) Kanal seçin 2) Pingsiz önizlemeyi görün 3) Etkinleştirin.",
   "esports.setup.no_channel": "seçilmedi",
@@ -157,7 +139,6 @@
   "esports.setup.enable": "Esports'u etkinleştir",
   "esports.setup.more": "Filtreler ve roller: /esports-admin filters, /esports-admin roles",
   "esports.setup.channel_required": "Etkinleştirmeden önce bir bildirim kanalı seçin.",
-
   "doctor.title": "Esports tanı raporu",
   "doctor.done": "Tanı tamamlandı.",
   "doctor.module": "Modül",
@@ -189,18 +170,15 @@
   "doctor.vrs_state": "son VRS tarihi {0}",
   "doctor.delivery": "Gönderim (24 saat)",
   "doctor.delivery_stats": "gönderildi {0} · bekliyor {1} · başarısız {2} · belirsiz {3}",
-
   "health.provider_not_configured": "yapılandırılmamış (NOT_CONFIGURED)",
   "health.no_data_yet": "henüz veri yok",
   "health.data_age": "son veri {0}",
   "health.vrs_missing": "VRS verisi yok",
   "health.vrs_date": "VRS tarihi {0}",
-
   "privacy.item.follows": "{0} takım takibi",
   "privacy.item.prefs": "{0} kişisel tercih",
   "privacy.item.bot_roles": "{0} botun verdiği bildirim rolü (kaldırılacak)",
   "privacy.roles_pending": "Bazı roller kaldırılamadı; tekrar denenecek.",
-
   "cmd.esports": "Counter-Strike 2 maçları, sonuçları, turnuvaları ve sıralaması",
   "cmd.esports.matches": "Yaklaşan CS2 maçları",
   "cmd.esports.matches.team": "Yalnızca bu takımın maçları",
@@ -219,7 +197,6 @@
   "cmd.esports.unfollow": "Bir takımın takibini bırakın",
   "cmd.esports.unfollow.team": "Takibi bırakılacak takım",
   "cmd.esports.subscriptions": "Takip ettiğiniz takımlar ve kişisel tercihleriniz",
-
   "cmd.esports-admin": "Bu sunucunun esports ayarları (yöneticiler)",
   "cmd.esports-admin.configure": "Bildirim kanalı ve bildirim türleri",
   "cmd.esports-admin.configure.channel": "Otomatik bildirim kanalı",
@@ -268,5 +245,7 @@
   "cmd.esports-admin.roles.unmap.mapping": "Eşleştirme",
   "cmd.esports-admin.roles.selfservice": "Üyelerin eşleştirilmiş rolü kendine almasına izin ver/verme (güvenlik denetimli)",
   "cmd.esports-admin.roles.selfservice.mapping": "Eşleştirme",
-  "cmd.esports-admin.roles.selfservice.enabled": "Self-servise izin ver"
+  "cmd.esports-admin.roles.selfservice.enabled": "Self-servise izin ver",
+  "esports.result.spoiler_maps_hidden": "Spoiler modunda harita ayrıntıları gösterilmez; kaynak bağlantısına bakın.",
+  "esports.roles.mention_not_allowed": "Bu rol bahsedilebilir değil; ping hedefi yapmak için sizin de 'Herkesten Bahset' izniniz olmalı."
 }

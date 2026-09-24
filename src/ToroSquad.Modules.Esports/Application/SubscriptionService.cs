@@ -37,7 +37,11 @@ public sealed class SubscriptionService(ToroDbContext db, IGuildGateway guilds, 
 
         var follows = db.Set<TeamFollowEntity>();
         if (await follows.AnyAsync(f => f.GuildId == actor.GuildId.Value && f.UserId == actor.UserId.Value && f.TeamKey == team.Value.Key, ct))
-            return new(OperationResult.Ok("esports.follow.already", team.Value.Name), []);
+        {
+            // Following again is also how a member retries a notification role that could not be granted earlier.
+            var retryNotes = await ReconcileRolesAsync(actor.GuildId, actor.UserId, actor.RoleIds, ct);
+            return new(OperationResult.Ok("esports.follow.already", team.Value.Name), retryNotes);
+        }
         if (await follows.CountAsync(f => f.GuildId == actor.GuildId.Value && f.UserId == actor.UserId.Value, ct) >= MaxFollowsPerUser)
             return new(OperationResult.Fail(OperationError.InvalidInput, "esports.follow.too_many", MaxFollowsPerUser), []);
 
@@ -127,10 +131,25 @@ public sealed class SubscriptionService(ToroDbContext db, IGuildGateway guilds, 
         foreach (var roleId in desired.Where(r => grants.All(g => g.RoleId != r || g.State != RoleGrantState.Active)))
         {
             var grant = grants.FirstOrDefault(g => g.RoleId == roleId);
-            if (memberRoles is not null && memberRoles.Contains(new RoleId(roleId)) && grant is null)
+            if (memberRoles is null)
+                continue; // background path: without the member's current roles we cannot tell pre-existing roles apart
+
+            if (memberRoles.Contains(new RoleId(roleId)))
             {
-                // Member already had it for another reason: record, never touch it.
-                db.Add(new RoleGrantEntity { GuildId = guild.Value, UserId = user.Value, RoleId = roleId, State = RoleGrantState.Active, GrantedByBot = false, HadRoleBefore = true, UpdatedAt = clock.GetUtcNow() });
+                // Member already has it (for another reason, or an earlier unconfirmed add): record as NOT bot-granted,
+                // so the bot will never remove it.
+                if (grant is null)
+                {
+                    db.Add(new RoleGrantEntity { GuildId = guild.Value, UserId = user.Value, RoleId = roleId, State = RoleGrantState.Active, GrantedByBot = false, HadRoleBefore = true, UpdatedAt = clock.GetUtcNow() });
+                }
+                else
+                {
+                    grant.State = RoleGrantState.Active;
+                    grant.GrantedByBot = false;
+                    grant.HadRoleBefore = true;
+                    grant.UpdatedAt = clock.GetUtcNow();
+                }
+
                 continue;
             }
 
@@ -173,9 +192,11 @@ public sealed class SubscriptionService(ToroDbContext db, IGuildGateway guilds, 
 
         foreach (var grant in grants.Where(g => !desired.Contains(g.RoleId)))
         {
-            if (!grant.GrantedByBot)
+            if (!grant.GrantedByBot || grant.State is RoleGrantState.Failed or RoleGrantState.PendingAdd)
             {
-                db.Remove(grant); // pre-existing membership: forget the record, keep the role
+                // Pre-existing membership, or an add that never succeeded as far as we know (an admin may have given the
+                // role manually since): forget the record, keep the role.
+                db.Remove(grant);
                 continue;
             }
 
@@ -202,12 +223,15 @@ public sealed class SubscriptionService(ToroDbContext db, IGuildGateway guilds, 
         return notes.Distinct().ToList();
     }
 
-    /// <summary>Background retry for grants left Pending/Failed (bounded attempts).</summary>
+    /// <summary>
+    /// Background retry, bounded, and only for removals of roles the bot provably granted. Failed adds are retried the
+    /// next time the member interacts (when their current roles are known).
+    /// </summary>
     public async Task<int> RetryPendingAsync(int maxAttempts, CancellationToken ct)
     {
         var cutoff = clock.GetUtcNow() - TimeSpan.FromMinutes(2);
         var stuck = await db.Set<RoleGrantEntity>().AsNoTracking()
-            .Where(g => g.State != RoleGrantState.Active && g.Attempts < maxAttempts && g.UpdatedAt < cutoff)
+            .Where(g => g.State == RoleGrantState.PendingRemove && g.Attempts < maxAttempts && g.UpdatedAt < cutoff)
             .Select(g => new { g.GuildId, g.UserId })
             .Distinct()
             .OrderBy(x => x.GuildId).ThenBy(x => x.UserId)

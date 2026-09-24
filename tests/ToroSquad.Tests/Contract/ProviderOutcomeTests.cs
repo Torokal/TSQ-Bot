@@ -141,6 +141,24 @@ public sealed class ProviderOutcomeTests
     }
 
     [Fact]
+    public async Task Retries_spend_request_budget_too()
+    {
+        var clock = new FakeTimeProvider(TestHost.T0);
+        var (provider, handler) = Create((_, _) => Task.FromResult(StubHttpHandler.Json("{}", HttpStatusCode.BadGateway)),
+            o => { o.RequestsPerHourPerTable = 2; o.BudgetShare = 1; o.MaxRetries = 5; }, clock: clock);
+        var task = provider.GetMatchesAsync(Window, CancellationToken.None);
+        for (var i = 0; i < 20 && !task.IsCompleted; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(10)); // release retry back-off delays
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+
+        var result = await task;
+        handler.Requests.Should().HaveCount(2, "the budget (2/h) caps attempts, retries included");
+        result.Outcome.Should().Be(ProviderOutcome.QuotaExceeded);
+    }
+
+    [Fact]
     public async Task Pagination_fetches_all_pages_beyond_the_first_page_limit()
     {
         var (provider, handler) = Create(Paged(5));

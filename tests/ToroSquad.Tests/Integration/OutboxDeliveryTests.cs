@@ -116,6 +116,23 @@ public sealed class OutboxDeliveryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Verified_absence_allows_only_a_single_resend()
+    {
+        await StageAsync(Request(GuildA, ChannelA));
+        _host.Transport.ScriptSend(() => new SendOutcome.Ambiguous("timeout 1"));
+        _host.Transport.ScriptSend(() => new SendOutcome.Ambiguous("timeout 2"));
+        _host.Transport.ScriptedReconcile = new ReconcileOutcome.NotFound();
+        for (var i = 0; i < 8; i++)
+        {
+            await Processor.ProcessOnceAsync(CancellationToken.None);
+            _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        _host.Transport.SendCalls.Should().Be(2, "original + one resend, never a loop");
+        (await RowsAsync()).Single().Status.Should().Be(OutboxStatus.Failed);
+    }
+
+    [Fact]
     public async Task Crash_while_in_flight_becomes_delivery_unknown_on_restart_never_blind_resend()
     {
         await StageAsync(Request(GuildA, ChannelA));

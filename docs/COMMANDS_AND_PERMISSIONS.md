@@ -39,7 +39,7 @@ bağlamında (`contexts=[0]`, `integration_types=[0]`); DM komutu ve DM bildirim
 |---|---|
 | `/esports-admin configure` | `channel` (kanal seçici), `reminders`, `reminder_minutes` 1–120, `results`, `spoilers`. Kanal bu sunucuda ve metin kanalı olmalı; eksik bot izinleri uyarılır |
 | `/esports-admin filters show \| team \| tournament \| tier \| vrs \| clear` | Kural: aynı tür VEYA, farklı türler VE; VRS verisi yoksa filtre durdurur |
-| `/esports-admin roles list \| map \| unmap \| selfservice` | `map`: mevcut rolü ping hedefi yapar (managed/@everyone reddedilir). `selfservice`: ayrı onay, güvenlik denetimi, onaylayan rolden yukarıda olmalı |
+| `/esports-admin roles list \| map \| unmap \| selfservice` | `map`: mevcut rolü ping hedefi yapar (managed/@everyone reddedilir; bahsedilemez rol için yöneticinin de Herkesten Bahset izni olmalı). `selfservice`: ayrı onay, güvenlik denetimi, onaylayan rolden yukarıda olmalı |
 | `/esports-admin panel` | Herkese açık takip düğmeleri (durumsuz custom id → yeniden başlatmada çalışır; modül kapalıysa reddedilir) |
 | `/esports-admin preview` | Ping atmayan önizleme; pinglenecek rolleri metin olarak listeler |
 | `/esports-admin pause` / `resume` | Resume, watermark'ı ileri alır: kaçanlar topluca gönderilmez |

@@ -69,9 +69,14 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 
 - `.\scripts\Test.ps1 -Repeat 3` (PS 5.1): Release build **0 uyarı / 0 hata**, `dotnet format --verify-no-changes` temiz,
   manifest geçerli (7 komut, hash `63a5f52b0827…`), testler **181/181 ×3 geçti**.
-- Ek tekrarlar: 14 tam koşu daha 181/181. İlk koşulardan birinde tek seferlik `DbUpdateException` (kök neden
-  bilinmiyor, bkz. docs/TESTING.md "Bilinen gözlem"); daha sonra yeniden üretilemedi.
-- Son ek test (scriptlerin ASCII olması) sonrası güncel sayı için bu dosyanın sonundaki "Son doğrulama" satırına bakın.
+- İlk koşulardan birinde tek seferlik `DbUpdateException` (kök neden bilinmiyor, bkz. docs/TESTING.md "Bilinen gözlem");
+  daha sonra yeniden üretilemedi.
+- **Bağımsız kod incelemesi** (salt-okunur Claude alt ajanı): 1 yüksek, 8 orta, 5 düşük bulgu; **hepsi doğrulandı ve
+  düzeltildi**, 11 regresyon testi eklendi (kanal değişiminde yeniden duyuru, spoiler genişlik sızıntısı, önceden sahip olunan
+  rolün kaldırılması, bahsedilemez rol ping'i, sınırsız yeniden gönderim, retry'ların kotayı aşması, catch-up'ın bir sonraki
+  poll'da tamamlanması, sağlayıcı metninde tıklanabilir link, pause'da düşen düzeltme, aynı adlı başka komutun prune'u,
+  salt-okuma yönetici görünümlerinde yetki). Planlayıcı-dispatcher çakışmasında yeniden hesaplama **uygulandı ama doğrudan
+  testi yok** (deterministik yeniden üretimi zor).
 - Elle çalıştırılanlar: `Doctor.ps1` (canlı eksikleri BLOCKED gösterdi), `Start-Dev.ps1` 35 sn duman testi (Fake transport,
   8 komut çevrimdışı doğrulandı, ilk poll baseline), `Start-Dev.ps1 -Simulate` eşdeğeri `simulate` (1 hatırlatma sahte
   transport'a gitti, ikinci poll kopya üretmedi, 5 bitmiş maç baseline, spoiler render'ı skor sızdırmadı),

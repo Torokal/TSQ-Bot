@@ -1,10 +1,8 @@
 {
   "module.esports.name": "Esports (CS2)",
   "module.esports.description": "Counter-Strike 2 matches, results, tournaments, VRS rankings and notifications.",
-
   "common.yes": "yes",
   "common.no": "no",
-
   "esports.demo_label": "[TEST/DEMO]",
   "esports.demo_footer": "TEST/DEMO data — not a real match",
   "esports.footer_source": "Source: Liquipedia (CC BY-SA 3.0)",
@@ -12,13 +10,11 @@
   "esports.tbd": "To be decided (TBD)",
   "esports.unknown_opponent": "Unknown",
   "esports.all_matches": "All announced matches",
-
   "esports.reminder.title": "⏰ {0} vs {1}",
   "esports.reminder.starts": "Planned start: {0} ({1})",
   "esports.reminder.estimated": "The time is an estimate; not confirmed by the source.",
   "esports.reminder.time_updated": "🕒 Start time updated (previously: {0}).",
   "esports.reminder.planned_note": "This is a planned-time reminder; it does not confirm that the match has started.",
-
   "esports.result.title": "🏁 Match result: {0} vs {1}",
   "esports.result.spoiler_hint": "Click to reveal the result:",
   "esports.result.score": "{0} **{1}** – **{2}** {3}",
@@ -30,29 +26,24 @@
   "esports.result.maps_incomplete": "Map details are incomplete at the source; showing the series score only.",
   "esports.map_line": "{0}. {1}: {2}–{3}",
   "esports.map_tba": "Map not specified",
-
   "esports.status.finished": "finished (no score)",
   "esports.status.not_played": "not played",
   "esports.status.awaiting_result": "planned time passed — awaiting result",
   "esports.status.live": "live (verified by source)",
-
   "esports.field.tournament": "Tournament",
   "esports.field.stage": "Stage",
   "esports.field.format": "Format",
   "esports.field.streams": "Streams",
   "esports.field.maps": "Maps",
-
   "esports.tier.1": "S-Tier",
   "esports.tier.2": "A-Tier",
   "esports.tier.3": "B-Tier",
   "esports.tier.4": "C-Tier",
   "esports.tier.5": "D-Tier",
-
   "esports.config.lead_invalid": "Reminder lead time must be 1-120 minutes.",
   "esports.config.channel_invalid": "Channel not found in this server or not a text channel.",
   "esports.config.saved": "Esports settings saved.",
   "esports.config.saved_with_warning": "Saved, but the bot is missing permissions in that channel: {0}. Check with /esports-admin doctor.",
-
   "esports.filters.title": "Server notification filters",
   "esports.filters.rules": "Values of the same kind are combined with **OR**, different kinds with **AND**. A team filter passes if either team is selected. VRS Top-N passes if at least one team is reliably matched within the top N; if VRS data is missing the filter **stops notifications**. Personal follows never widen these filters.",
   "esports.filters.team": "Teams",
@@ -70,12 +61,10 @@
   "esports.filters.vrs_cleared": "VRS filter disabled.",
   "esports.filters.vrs_set": "VRS filter: at least one team in the top {0}.",
   "esports.filters.cleared": "All filters cleared; every CS2 match is announced.",
-
   "esports.pause.already": "Notifications are already paused.",
   "esports.resume.already": "Notifications are already active.",
   "esports.pause.done": "Esports notifications paused for this server. Pending notifications will not be sent.",
   "esports.resume.done": "Notifications resumed. Anything missed while paused is not sent in bulk.",
-
   "esports.team.unknown": "Unknown team. Please pick one from the list.",
   "esports.follow.already": "You already follow {0}.",
   "esports.follow.too_many": "You can follow at most {0} teams.",
@@ -85,7 +74,6 @@
   "esports.unfollow.done": "Stopped following {0}.",
   "esports.pref.hide_on": "Results will now be shown to you as spoilers.",
   "esports.pref.hide_off": "Results will now be shown to you openly.",
-
   "esports.roles.title": "Notification roles",
   "esports.roles.none": "No roles mapped yet.",
   "esports.roles.line": "`#{0}` {1} → {2} · reminder ping: {3} · result ping: {4} · self-service: {5}",
@@ -104,18 +92,15 @@
   "esports.roles.unsafe_skipped": "⚠️ The notification role no longer passes the safety check; it was not granted. Admins can see it in /esports-admin doctor.",
   "esports.roles.add_failed": "⚠️ Could not grant the notification role (permission/hierarchy). Your follow is saved; the role will be retried later.",
   "esports.roles.remove_failed": "⚠️ Could not remove the notification role; it will be retried later.",
-
   "esports.panel.title": "Esports notifications",
   "esports.panel.description": "Use the buttons below to follow or unfollow teams. A button only changes your own subscription.",
   "esports.panel.no_selfservice": "No self-service notification roles. Use /esports-admin roles map and /esports-admin roles selfservice first.",
   "esports.panel.stale": "This option is no longer available.",
-
   "esports.preview.ready": "Preview ready.",
   "esports.preview.sample_note": "👀 Sample preview (no upcoming match passes your filters). This preview pings nobody.",
   "esports.preview.real_note": "👀 Preview using the next match that passes your filters. This preview pings nobody.",
   "esports.preview.no_pings": "No roles would be pinged in the real notification.",
   "esports.preview.would_ping": "Roles that would be pinged in the real notification: {0}",
-
   "esports.matches.title": "Upcoming CS2 matches",
   "esports.matches.none": "No upcoming matches match these criteria (data retrieved successfully).",
   "esports.results.title": "Recent CS2 results",
@@ -133,7 +118,6 @@
   "esports.team.vrs_not_found": "No reliable match in the VRS table.",
   "esports.team.upcoming": "Upcoming",
   "esports.team.recent": "Recent results",
-
   "esports.subs.title": "Your subscriptions",
   "esports.subs.none": "You don't follow any team yet. Add one with /esports follow.",
   "esports.subs.hide_on": "Result preference: **hide as spoiler**",
@@ -141,14 +125,12 @@
   "esports.subs.note": "Notifications only go to the channel configured by the server; no direct messages are sent.",
   "esports.subs.hide_button": "Hide results",
   "esports.subs.show_button": "Show results",
-
   "esports.demo_only_test_guild": "This bot is running on TEST/DEMO data; demo data is only shown in authorized test servers.",
   "esports.provider_not_configured": "The esports data provider is not configured (NOT_CONFIGURED). The operator needs approved Liquipedia API access.",
   "esports.no_data_yet": "No data retrieved yet. Please try again shortly.",
   "esports.data_unavailable": "Data is currently unavailable ({0}). This does not mean there are no matches.",
   "esports.stale_warning": "⚠️ Data is not current (last attempt: {0}). Information shown may be outdated.",
   "esports.partial_warning": "⚠️ The source returned partial data; the list may be incomplete.",
-
   "esports.setup.title": "Esports setup",
   "esports.setup.intro": "Notification channel: {0}\nReminders: {1} · Results: {2}\nModule state: {3}\n\n1) Pick a channel 2) Check the ping-free preview 3) Enable.",
   "esports.setup.no_channel": "not selected",
@@ -157,7 +139,6 @@
   "esports.setup.enable": "Enable esports",
   "esports.setup.more": "Filters and roles: /esports-admin filters, /esports-admin roles",
   "esports.setup.channel_required": "Pick a notification channel before enabling.",
-
   "doctor.title": "Esports diagnosis",
   "doctor.done": "Diagnosis complete.",
   "doctor.module": "Module",
@@ -189,18 +170,15 @@
   "doctor.vrs_state": "latest VRS date {0}",
   "doctor.delivery": "Delivery (24h)",
   "doctor.delivery_stats": "sent {0} · pending {1} · failed {2} · unknown {3}",
-
   "health.provider_not_configured": "not configured (NOT_CONFIGURED)",
   "health.no_data_yet": "no data yet",
   "health.data_age": "last data {0}",
   "health.vrs_missing": "no VRS data",
   "health.vrs_date": "VRS date {0}",
-
   "privacy.item.follows": "{0} team follow(s)",
   "privacy.item.prefs": "{0} personal preference(s)",
   "privacy.item.bot_roles": "{0} notification role(s) granted by the bot (will be removed)",
   "privacy.roles_pending": "Some roles could not be removed; they will be retried.",
-
   "cmd.esports": "Counter-Strike 2 matches, results, events and rankings",
   "cmd.esports.matches": "Upcoming CS2 matches",
   "cmd.esports.matches.team": "Only matches of this team",
@@ -219,7 +197,6 @@
   "cmd.esports.unfollow": "Stop following a team",
   "cmd.esports.unfollow.team": "Team to unfollow",
   "cmd.esports.subscriptions": "Your followed teams and personal notification preferences",
-
   "cmd.esports-admin": "Esports settings for this server (admins)",
   "cmd.esports-admin.configure": "Notification channel and notification types",
   "cmd.esports-admin.configure.channel": "Channel for automatic notifications",
@@ -268,5 +245,7 @@
   "cmd.esports-admin.roles.unmap.mapping": "Mapping",
   "cmd.esports-admin.roles.selfservice": "Allow/disallow members to self-assign a mapped role (safety-checked)",
   "cmd.esports-admin.roles.selfservice.mapping": "Mapping",
-  "cmd.esports-admin.roles.selfservice.enabled": "Allow self-service"
+  "cmd.esports-admin.roles.selfservice.enabled": "Allow self-service",
+  "esports.result.spoiler_maps_hidden": "Map details are not shown in spoiler mode; see the source link.",
+  "esports.roles.mention_not_allowed": "This role is not mentionable; to make it a ping target you need the 'Mention Everyone' permission yourself."
 }

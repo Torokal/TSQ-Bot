@@ -38,7 +38,7 @@ result"; there is no "match is live" notification.
   currently served: NOT_VERIFIED. → Requesting access or paying is the owner's decision (approval gate).
 - **Rate limit**: "no more than 60 requests per 1 hour" baseline (VERIFIED, terms). Applies per key/wiki/table
   (VERIFIED (3rd-party) via 429 message format). ToroSquad enforces a local token bucket per table at
-  `RequestsPerHourPerTable × BudgetShare` (default 60 × 0.8 = 48/h) and validates the polling config against it at
+  `RequestsPerHourPerTable × BudgetShare` (default 60 × 0.8 = 48/h; every HTTP attempt including retries spends a token) and validates the polling config against it at
   startup (default: matches every 10 min, ≤5 pages → ≤30 req/h worst case; tournaments every 6 h).
 - **Headers**: `Authorization: Apikey <key>` (VERIFIED (3rd-party) OpenAPI copy); custom User-Agent **with contact
   info** and gzip (VERIFIED for the wiki API; applied to LPDB as well). ToroSquad refuses live mode without an operator

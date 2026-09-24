@@ -159,9 +159,57 @@ public sealed class RolesAndPrivacyTests : IAsyncLifetime
         var grant = await _host.InScopeAsync(sp => sp.GetRequiredService<ToroDbContext>().Set<RoleGrantEntity>().AsNoTracking().SingleAsync(g => g.UserId == member.UserId.Value));
         grant.State.Should().Be(RoleGrantState.Failed);
 
+        // Background retries never add roles blindly (member roles unknown there) ...
         _host.Clock.Advance(TimeSpan.FromMinutes(5));
         await _host.InScopeAsync(sp => sp.GetRequiredService<SubscriptionService>().RetryPendingAsync(5, CancellationToken.None));
+        _host.Guilds.MemberHasRole(Guild, member.UserId, SafeRole).Should().BeFalse();
+        // ... the member's next interaction (roles known) retries the grant.
+        await _host.InScopeAsync(sp => sp.GetRequiredService<SubscriptionService>().FollowAsync(member, "counterstrike/Alpha", CancellationToken.None));
         _host.Guilds.MemberHasRole(Guild, member.UserId, SafeRole).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Unfollow_after_a_failed_grant_keeps_a_role_an_admin_gave_manually()
+    {
+        await MapAsync(SafeRole, "counterstrike/Alpha", selfService: true);
+        var member = TestHost.Member(Guild, 55);
+        _host.Guilds.ScriptedRoleOutcomes.Enqueue(RoleOperationOutcome.MissingPermissions);
+        await _host.InScopeAsync(sp => sp.GetRequiredService<SubscriptionService>().FollowAsync(member, "counterstrike/Alpha", CancellationToken.None));
+        _host.Guilds.SetMemberRoles(Guild, member.UserId, SafeRole); // an admin gives the role by hand
+        await _host.InScopeAsync(sp => sp.GetRequiredService<SubscriptionService>().UnfollowAsync(member with { RoleIds = [SafeRole] }, "counterstrike/Alpha", CancellationToken.None));
+        _host.Guilds.MemberHasRole(Guild, member.UserId, SafeRole).Should().BeTrue();
+        _host.Guilds.Operations.Should().NotContain(o => o.Op == "remove" && o.User == member.UserId);
+    }
+
+    [Fact]
+    public async Task Role_approved_for_self_service_later_is_recorded_as_pre_existing_for_members_who_have_it()
+    {
+        var mapping = await MapAsync(SafeRole, "counterstrike/Alpha", selfService: false);
+        var member = TestHost.Member(Guild, 56, SafeRole);
+        _host.Guilds.SetMemberRoles(Guild, member.UserId, SafeRole);
+        await _host.InScopeAsync(sp => sp.GetRequiredService<SubscriptionService>().FollowAsync(member, "counterstrike/Alpha", CancellationToken.None));
+        await _host.InScopeAsync(sp => sp.GetRequiredService<RoleMappingService>().SetSelfServiceAsync(TestHost.Admin(Guild), mapping, true, CancellationToken.None));
+        _host.Clock.Advance(TimeSpan.FromMinutes(5));
+        await _host.InScopeAsync(sp => sp.GetRequiredService<SubscriptionService>().RetryPendingAsync(5, CancellationToken.None));
+        await _host.InScopeAsync(sp => sp.GetRequiredService<SubscriptionService>().FollowAsync(member, "counterstrike/Alpha", CancellationToken.None));
+        await _host.InScopeAsync(sp => sp.GetRequiredService<SubscriptionService>().UnfollowAsync(member, "counterstrike/Alpha", CancellationToken.None));
+        _host.Guilds.MemberHasRole(Guild, member.UserId, SafeRole).Should().BeTrue("the member had it before; the bot never granted it");
+    }
+
+    [Fact]
+    public async Task Admin_without_mention_everyone_cannot_map_a_non_mentionable_role_as_ping_target()
+    {
+        var snapshot = FakeGuildGatewaySnapshot();
+        _host.Guilds.SetSnapshot(snapshot with
+        {
+            Roles = snapshot.Roles.Select(r => r.Id == SafeRole ? r with { IsMentionable = false } : r).ToList(),
+        });
+        var result = await _host.InScopeAsync(sp => sp.GetRequiredService<RoleMappingService>()
+            .MapAsync(TestHost.Admin(Guild), SafeRole, null, true, false, CancellationToken.None));
+        result.MessageKey.Should().Be("esports.roles.mention_not_allowed");
+        var withMention = new ActorContext(Guild, new UserId(1), GuildPermission.ManageGuild | GuildPermission.ManageRoles | GuildPermission.MentionEveryone, [], false, 50);
+        (await _host.InScopeAsync(sp => sp.GetRequiredService<RoleMappingService>()
+            .MapAsync(withMention, SafeRole, null, true, false, CancellationToken.None))).Succeeded.Should().BeTrue();
     }
 
     [Fact]

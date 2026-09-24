@@ -309,7 +309,16 @@ public sealed class OutboxProcessor(
 
         var editedHash = row.PayloadHash;
         var attempts = row.EditAttempts + 1;
-        var outcome = await transport.EditAsync(channel, new MessageId(messageId), message.WithoutPings(), ct);
+        SendOutcome outcome;
+        try
+        {
+            outcome = await transport.EditAsync(channel, new MessageId(messageId), message.WithoutPings(), ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Transport threw while editing outbox {OutboxId}", row.Id);
+            outcome = new SendOutcome.Transient("transport exception: " + ex.GetType().Name);
+        }
         var now = clock.GetUtcNow();
 
         await SaveResilientAsync(db, row, r =>
@@ -363,7 +372,16 @@ public sealed class OutboxProcessor(
     private async Task ReconcileAsync(ToroDbContext db, OutboxMessageEntity row, ChannelId channel, CancellationToken ct)
     {
         var attempts = row.ReconcileAttempts + 1;
-        var outcome = await transport.FindRecentByMarkerAsync(channel, row.Marker, _options.ReconcileScanLimit, ct);
+        ReconcileOutcome outcome;
+        try
+        {
+            outcome = await transport.FindRecentByMarkerAsync(channel, row.Marker, _options.ReconcileScanLimit, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Transport threw while reconciling outbox {OutboxId}", row.Id);
+            outcome = new ReconcileOutcome.NotPossible("transport exception: " + ex.GetType().Name);
+        }
         var now = clock.GetUtcNow();
 
         await SaveResilientAsync(db, row, r =>
@@ -379,6 +397,11 @@ public sealed class OutboxProcessor(
                     r.LastError = "reconciled_found";
                     r.EditPending = r.PayloadHash != r.DeliveredPayloadHash;
                     r.NextAttemptAt = r.EditPending ? now : null;
+                    break;
+                case ReconcileOutcome.NotFound when r.Attempts >= 2:
+                    // Already resent once after a verified absence and it became ambiguous again: stop, never loop
+                    // (the earlier message may simply have scrolled out of the scanned history).
+                    Finish(r, OutboxStatus.Failed, "unconfirmed_after_single_resend", now);
                     break;
                 case ReconcileOutcome.NotFound when now <= r.ExpiresAt:
                     // Verified absent from the recent channel history: a single resend is safe.

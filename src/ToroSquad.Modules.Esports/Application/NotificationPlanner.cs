@@ -17,7 +17,7 @@ using ToroSquad.Modules.Esports.Providers.Fixtures;
 
 namespace ToroSquad.Modules.Esports.Application;
 
-public sealed record PlanReport(int Matches, int GuildsConsidered, int Created, int Updated, int FilteredOut, int BlockedMissingData, bool SkippedStale);
+public sealed record PlanReport(int Matches, int GuildsConsidered, int Created, int Updated, int FilteredOut, int BlockedMissingData, bool SkippedStale, int SuppressedCatchUp = 0);
 
 public static class MatchJson
 {
@@ -69,6 +69,24 @@ public sealed class NotificationPlanner(
 
     public async Task<PlanReport> PlanAsync(IReadOnlyList<EsportsMatch> matches, DateTimeOffset fetchedAt, bool afterGap, CancellationToken cancellationToken)
     {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await PlanOnceAsync(matches, fetchedAt, afterGap, cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException) when (attempt < 3)
+            {
+                // The dispatcher updated an outbox row we were staging into. Planning is deterministic from DB state:
+                // drop our tracked changes and recompute, so one conflict never loses the whole poll for all guilds.
+                logger.LogInformation("Planner conflict with dispatcher; recomputing (attempt {Attempt})", attempt + 1);
+                db.ChangeTracker.Clear();
+            }
+        }
+    }
+
+    private async Task<PlanReport> PlanOnceAsync(IReadOnlyList<EsportsMatch> matches, DateTimeOffset fetchedAt, bool afterGap, CancellationToken cancellationToken)
+    {
         var now = clock.GetUtcNow();
         var o = options.Value;
         if (now - fetchedAt > TimeSpan.FromMinutes(o.StaleAfterMinutes))
@@ -92,7 +110,7 @@ public sealed class NotificationPlanner(
             .Where(c => c.ChannelId != null && !c.Paused && c.ChannelProblem == null)
             .ToListAsync(cancellationToken);
 
-        int guilds = 0, created = 0, updated = 0, filtered = 0, blocked = 0;
+        int guilds = 0, created = 0, updated = 0, filtered = 0, blocked = 0, suppressed = 0;
         foreach (var config in configs)
         {
             var guild = new GuildId(config.GuildId);
@@ -145,11 +163,20 @@ public sealed class NotificationPlanner(
                     var exists = existingKeys.Contains(key);
                     var inCorrectionWindow = now - observed <= TimeSpan.FromHours(o.ResultCorrectionHours);
                     var reference = match.ScheduledStartUtc ?? observed;
-                    var due = !exists &&
-                              observed >= config.WatermarkUtc &&
-                              reference >= now - TimeSpan.FromHours(o.ResultCatchUpHours) &&
-                              (!afterGap || catchUp < o.MaxCatchUpPerGuildPerPoll);
-                    if ((exists && inCorrectionWindow) || due)
+                    var eligible = !exists &&
+                                   observed >= config.WatermarkUtc &&
+                                   reference >= now - TimeSpan.FromHours(o.ResultCatchUpHours);
+                    var due = eligible && (!afterGap || catchUp < o.MaxCatchUpPerGuildPerPoll);
+                    if (eligible && !due)
+                    {
+                        // Over the catch-up limit after downtime: record it as already expired so it is never sent
+                        // later either (otherwise the next normal poll would deliver the whole backlog).
+                        var skipped = renderer.Result(match, language, config.SpoilerMode, MentionPolicy.None, snapshot.LastChangedAt);
+                        await outbox.StageAsync(new NotificationRequest(guild, EsportsModule.ModuleIdTyped, match.Key.ToString(), channel,
+                            KindResult, skipped, now - TimeSpan.FromSeconds(1), dryRun), cancellationToken);
+                        suppressed++;
+                    }
+                    else if ((exists && inCorrectionWindow) || due)
                     {
                         var pings = Pings(mappings, match, reminder: false, guild);
                         var message = renderer.Result(match, language, config.SpoilerMode, pings, snapshot.LastChangedAt);
@@ -164,7 +191,7 @@ public sealed class NotificationPlanner(
         }
 
         await db.SaveChangesAsync(cancellationToken);
-        return new PlanReport(matches.Count, guilds, created, updated, filtered, blocked, SkippedStale: false);
+        return new PlanReport(matches.Count, guilds, created, updated, filtered, blocked, SkippedStale: false, suppressed);
     }
 
     private static void Count(StageOutcome outcome, ref int created, ref int updated)

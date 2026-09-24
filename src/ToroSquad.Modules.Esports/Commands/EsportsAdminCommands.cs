@@ -142,6 +142,13 @@ public sealed class EsportsAdminCommands(
         [SlashCommand("show", "Show active filters and how they combine")]
         public async Task ShowAsync()
         {
+            var auth = Authorize.Require(Actor, Actor.GuildId, Authorize.ServerSettings);
+            if (!auth.IsAllowed)
+            {
+                await ReplyResultAsync(OperationResult.Forbidden(auth));
+                return;
+            }
+
             await DeferEphemeralAsync();
             var view = await config.GetAsync(Actor.GuildId, CancellationToken.None);
             var language = await LangAsync();
@@ -210,6 +217,13 @@ public sealed class EsportsAdminCommands(
         [SlashCommand("list", "Show notification role mappings")]
         public async Task ListAsync()
         {
+            var auth = Authorize.Require(Actor, Actor.GuildId, Authorize.ServerSettings);
+            if (!auth.IsAllowed)
+            {
+                await ReplyResultAsync(OperationResult.Forbidden(auth));
+                return;
+            }
+
             await DeferEphemeralAsync();
             var rows = await roleMappings.ListAsync(Actor.GuildId, CancellationToken.None);
             var language = await LangAsync();

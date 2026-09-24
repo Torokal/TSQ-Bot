@@ -126,7 +126,29 @@ public sealed partial class MessageSafetyTests
         msg.Content.Should().BeNull("no configured roles → no content → nothing can ping");
     }
 
+    [Fact]
+    public void Provider_text_cannot_create_clickable_links_or_break_spoilers_with_extra_pipes()
+    {
+        DiscordText.Untrusted("Stage https://evil.example/x").Should().NotContain("://");
+        DiscordText.UntrustedPlain("see http://evil.example").Should().NotContain("://");
+        var spoiler = DiscordText.Spoiler("a|||b||||c");
+        spoiler[2..^2].Should().NotContain("||");
+    }
+
+    [Fact]
+    public void Spoiler_result_hides_winner_width_and_map_count()
+    {
+        var renderer = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Live));
+        var twoOne = renderer.Result(Finished(), "en", spoiler: true, MentionPolicy.None, DateTimeOffset.UnixEpoch).Embed!;
+        twoOne.Description.Should().NotContain("Winner");
+        twoOne.Fields.Should().NotContain(f => f.Name == "Maps");
+        var swapped = Finished() with { WinnerIndex = 1 };
+        var other = renderer.Result(swapped, "en", spoiler: true, MentionPolicy.None, DateTimeOffset.UnixEpoch).Embed!;
+        other.Description!.Length.Should().Be(twoOne.Description!.Length, "the visible layout must not depend on who won");
+    }
+
     [Theory]
+    [InlineData("http://liquipedia.net/counterstrike/Cup", false)]
     [InlineData("https://liquipedia.net/counterstrike/Cup", true)]
     [InlineData("https://www.twitch.tv/x", true)]
     [InlineData("javascript:alert(1)", false)]

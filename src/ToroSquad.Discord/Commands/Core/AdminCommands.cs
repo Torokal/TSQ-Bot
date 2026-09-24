@@ -36,6 +36,13 @@ public sealed class ModulesCommands(InteractionServices services, ModuleManageme
     [SlashCommand("list", "Show modules and whether they are enabled here")]
     public async Task ListAsync()
     {
+        var auth = Authorize.Require(Actor, Actor.GuildId, Authorize.ServerSettings);
+        if (!auth.IsAllowed)
+        {
+            await ReplyResultAsync(OperationResult.Forbidden(auth));
+            return;
+        }
+
         await DeferEphemeralAsync();
         var language = await LangAsync();
         var lines = new List<string>();

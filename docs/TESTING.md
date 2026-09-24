@@ -46,6 +46,14 @@ Güncel sayı ve sonuç her zaman `docs/PROJECT_STATE.md` → "Çalıştırılan
 | 15 | Boş/hatalı manifest komut silmez; varsayılanlar canlıya geçmez | CommandManifestTests (sync), Shipped_defaults…, Going_live_without… | TESTED_OFFLINE |
 | — | Gerçek test guild'inde: seçicide görünme, autocomplete, defer, yetki ayrımı, rol paneli, test bildirimi | — | **BLOCKED** (bot token / test guild yok) |
 
+## Bağımsız inceleme sonrası eklenen regresyon testleri
+
+`Changing_the_channel_or_re_enabling_results…`, `Correction_dropped_while_paused…`, `Catch_up_after_a_gap…` (genişletildi),
+`Verified_absence_allows_only_a_single_resend`, `Unfollow_after_a_failed_grant…`, `Role_approved_for_self_service_later…`,
+`Admin_without_mention_everyone…`, `Spoiler_result_hides_winner_width_and_map_count`,
+`Provider_text_cannot_create_clickable_links…`, `Retries_spend_request_budget_too`,
+`Prune_never_deletes_a_same_named_command_with_a_different_id`. Toplam: **193 test**.
+
 ## Bilinen gözlem
 
 - İlk tam koşulardan birinde `SetUpEsportsGuildAsync` sırasında bir kez `DbUpdateException` görüldü; iç hata mesajı

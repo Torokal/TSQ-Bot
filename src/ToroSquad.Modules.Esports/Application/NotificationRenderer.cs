@@ -60,18 +60,16 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
 
     public OutgoingMessage Result(EsportsMatch match, string language, bool spoiler, MentionPolicy pings, DateTimeOffset fetchedAt)
     {
-        var body = ResultLines(match, language);
+        // Spoiler mode: a single fixed-layout line (both teams in source order) inside the spoiler. The winner's name is
+        // NOT repeated and per-map lines are omitted, because the blurred width/height of those would reveal the result.
         var description = spoiler
-            ? L(language, "esports.result.spoiler_hint") + "\n" + DiscordText.Spoiler(string.Join("\n", body))
-            : string.Join("\n", body);
+            ? L(language, "esports.result.spoiler_hint") + "\n" + DiscordText.Spoiler(SpoilerLine(match, language)) + "\n" + L(language, "esports.result.spoiler_maps_hidden")
+            : string.Join("\n", ResultLines(match, language));
 
         var fields = CommonFields(match, language);
-        var maps = MapLines(match, language);
+        var maps = spoiler ? [] : MapLines(match, language);
         if (maps.Count > 0)
-        {
-            var mapText = string.Join("\n", maps);
-            fields.Add(new EmbedField(L(language, "esports.field.maps"), spoiler ? DiscordText.Spoiler(mapText) : mapText, false));
-        }
+            fields.Add(new EmbedField(L(language, "esports.field.maps"), string.Join("\n", maps), false));
 
         return new OutgoingMessage(
             Content(pings),
@@ -86,7 +84,17 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
             pings);
     }
 
-    /// <summary>Plain result lines (used inside spoiler tags when spoilers are hidden).</summary>
+    /// <summary>Result as one line whose visible length does not depend on who won.</summary>
+    public string SpoilerLine(EsportsMatch match, string language)
+    {
+        if (match.SeriesScoreKnown)
+            return L(language, "esports.result.score", NameMd(match.A, language), match.A.Score, match.B.Score, NameMd(match.B, language));
+        if (match.IsForfeit && match.WinnerIndex is { } w)
+            return L(language, "esports.result.score", NameMd(match.A, language), w == 0 ? "W" : "FF", w == 0 ? "FF" : "W", NameMd(match.B, language));
+        return L(language, "esports.result.series_unknown");
+    }
+
+    /// <summary>Plain (non-spoiler) result lines.</summary>
     public List<string> ResultLines(EsportsMatch match, string language)
     {
         var lines = new List<string>();

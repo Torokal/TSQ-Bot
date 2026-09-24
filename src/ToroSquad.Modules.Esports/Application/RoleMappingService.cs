@@ -38,6 +38,8 @@ public sealed class RoleMappingService(ToroDbContext db, IGuildGateway guilds, E
             return OperationResult.Fail(OperationError.InvalidInput, "esports.roles.invalid_role");
         if (info.IsManaged)
             return OperationResult.Fail(OperationError.InvalidInput, "esports.roles.managed_role");
+        if (!info.IsMentionable && (pingOnReminder || pingOnResult) && !actor.Has(GuildPermission.MentionEveryone))
+            return OperationResult.Fail(OperationError.Forbidden, "esports.roles.mention_not_allowed");
 
         string? teamName = null;
         teamKey = string.IsNullOrWhiteSpace(teamKey) ? "" : teamKey.Trim();

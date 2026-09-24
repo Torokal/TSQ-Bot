@@ -34,13 +34,13 @@ public sealed class CommandSyncService(IManagedCommandStore managedStore, ILogge
         var request = requestTemplate with { ActualApplicationId = actualAppId };
 
         // Validate before touching remote state at all.
-        var preflight = CommandSyncPlanner.Plan(manifest, [], new HashSet<string>(), request);
+        var preflight = CommandSyncPlanner.Plan(manifest, [], new Dictionary<string, ulong>(), request);
         if (preflight.IsBlocked)
             return new SyncReport(preflight, false, [], []);
 
         var remote = await registrar.GetCommandsAsync(request.Scope, cancellationToken);
         var managed = await managedStore.GetAsync(request.ExpectedApplicationId, request.Scope.Key, cancellationToken);
-        var plan = CommandSyncPlanner.Plan(manifest, remote, managed.Keys.ToHashSet(StringComparer.Ordinal), request);
+        var plan = CommandSyncPlanner.Plan(manifest, remote, managed, request);
         if (!apply || plan.IsBlocked)
             return new SyncReport(plan, false, [], []);
 

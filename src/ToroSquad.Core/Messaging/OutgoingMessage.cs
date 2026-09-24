@@ -76,7 +76,7 @@ public static class DiscordLimits
 /// <summary>Text helpers for untrusted (provider / user supplied) strings rendered into Discord messages.</summary>
 public static partial class DiscordText
 {
-    private const char ZeroWidthSpace = '​';
+    private const char ZeroWidthSpace = '\u200B';
 
     /// <summary>
     /// Neutralizes mention syntax and markdown in untrusted text. Even though allowed_mentions blocks pings,
@@ -110,9 +110,14 @@ public static partial class DiscordText
             }
         }
 
-        var result = sb.ToString();
+        var result = DefuseLinks(sb.ToString());
         return result.Length <= maxLength ? result : result[..(maxLength - 1)] + "…";
     }
+
+    /// <summary>
+    /// Discord turns any "scheme://" text into a clickable link; untrusted text must not bypass the URL allow-list.
+    /// </summary>
+    private static string DefuseLinks(string text) => text.Replace("://", ":" + ZeroWidthSpace + "//", StringComparison.Ordinal);
 
     /// <summary>
     /// For places Discord renders without markdown (embed titles, button labels, autocomplete choices):
@@ -132,7 +137,7 @@ public static partial class DiscordText
                 sb.Append(ZeroWidthSpace);
         }
 
-        var result = sb.ToString().Trim();
+        var result = DefuseLinks(sb.ToString().Trim());
         return result.Length <= maxLength ? result : result[..(maxLength - 1)] + "…";
     }
 
@@ -140,7 +145,13 @@ public static partial class DiscordText
     public static string Timestamp(DateTimeOffset instant, char style = 'F') =>
         string.Create(CultureInfo.InvariantCulture, $"<t:{instant.ToUnixTimeSeconds()}:{style}>");
 
-    public static string Spoiler(string text) => "||" + text.Replace("||", "| |", StringComparison.Ordinal) + "||";
+    public static string Spoiler(string text)
+    {
+        // Repeat until no "||" remains: a single pass turns "|||" into "| ||", which would still close the spoiler.
+        while (text.Contains("||", StringComparison.Ordinal))
+            text = text.Replace("||", "| |", StringComparison.Ordinal);
+        return "||" + text + "||";
+    }
 
     public static string RoleMention(RoleId role) => string.Create(CultureInfo.InvariantCulture, $"<@&{role.Value}>");
 
@@ -151,7 +162,7 @@ public static partial class DiscordText
             return null;
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
             return null;
-        if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
+        if (uri.Scheme != Uri.UriSchemeHttps)
             return null;
         if (!string.IsNullOrEmpty(uri.UserInfo))
             return null;

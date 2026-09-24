@@ -100,18 +100,11 @@ public sealed class LiquipediaClient(HttpClient http, IOptions<LiquipediaOptions
 
         for (var page = 0; page < _options.MaxPages; page++)
         {
-            if (!budget.TryAcquire("lpdb:" + table, perHour, out var wait))
-            {
-                return rows.Count > 0
-                    ? ProviderResult<IReadOnlyList<JsonElement>>.PartialData(rows, "local request budget exhausted mid-pagination", clock.GetUtcNow(), warnings)
-                    : ProviderResult<IReadOnlyList<JsonElement>>.Fail(ProviderOutcome.QuotaExceeded, "local request budget exhausted", clock.GetUtcNow(), wait);
-            }
-
             var offset = page * _options.PageSize;
             var url = string.Create(CultureInfo.InvariantCulture,
                 $"{table}?wiki={Uri.EscapeDataString(_options.Wiki)}&limit={_options.PageSize}&offset={offset}&order={Uri.EscapeDataString(order)}&conditions={Uri.EscapeDataString(conditions)}");
 
-            var response = await SendWithRetryAsync(url, cancellationToken);
+            var response = await SendWithRetryAsync(url, "lpdb:" + table, perHour, cancellationToken);
             if (response.Failure is { } failure)
             {
                 // Never degrade a failure into "empty": partial data is labelled as partial.
@@ -150,10 +143,14 @@ public sealed class LiquipediaClient(HttpClient http, IOptions<LiquipediaOptions
 
     private sealed record SendResult(JsonDocument? Document, ProviderResult<IReadOnlyList<JsonElement>>? Failure);
 
-    private async Task<SendResult> SendWithRetryAsync(string relativeUrl, CancellationToken cancellationToken)
+    private async Task<SendResult> SendWithRetryAsync(string relativeUrl, string bucket, int perHour, CancellationToken cancellationToken)
     {
         for (var attempt = 0; ; attempt++)
         {
+            // Each attempt, retries included, spends a token: flaky upstreams can never push us over the quota.
+            if (!budget.TryAcquire(bucket, perHour, out var wait))
+                return new SendResult(null, ProviderResult<IReadOnlyList<JsonElement>>.Fail(ProviderOutcome.QuotaExceeded, "local request budget exhausted", clock.GetUtcNow(), wait));
+
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
             try

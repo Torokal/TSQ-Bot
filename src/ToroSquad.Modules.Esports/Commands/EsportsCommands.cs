@@ -281,5 +281,19 @@ public sealed class EsportsCommands(
             null, [], renderer.Footer(Lang), state.FetchedAt, NeutralColor));
     }
 
-    private static string Clip(string text, int max = DiscordLimits.EmbedFieldValueMax) => text.Length <= max ? text : text[..(max - 1)] + "…";
+    /// <summary>Clips on line boundaries so a cut can never leave an unclosed ||spoiler|| showing a score.</summary>
+    private static string Clip(string text, int max = DiscordLimits.EmbedFieldValueMax)
+    {
+        if (text.Length <= max)
+            return text;
+        var kept = new System.Text.StringBuilder();
+        foreach (var line in text.Split('\n'))
+        {
+            if (kept.Length + line.Length + 2 > max)
+                break;
+            kept.Append(line).Append('\n');
+        }
+
+        return kept.Append('…').ToString();
+    }
 }

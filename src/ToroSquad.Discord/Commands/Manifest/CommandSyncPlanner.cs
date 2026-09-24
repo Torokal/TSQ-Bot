@@ -59,7 +59,7 @@ public static class CommandSyncPlanner
     public static SyncPlan Plan(
         CommandManifest manifest,
         IReadOnlyList<RemoteCommand> remote,
-        IReadOnlySet<string> managedNames,
+        IReadOnlyDictionary<string, ulong> managed,
         SyncRequest request)
     {
         var blocking = new List<string>();
@@ -101,7 +101,9 @@ public static class CommandSyncPlanner
 
         foreach (var extra in remote.Where(r => manifest.Find(r.Name) is null).OrderBy(r => r.Name, StringComparer.Ordinal))
         {
-            if (!managedNames.Contains(extra.Name))
+            // Managed = created by this tool AND still the same command id (a same-named command re-created by
+            // someone else is not ours).
+            if (!managed.TryGetValue(extra.Name, out var managedId) || managedId != extra.Id)
                 items.Add(new(SyncAction.KeepUnmanaged, extra.Name, extra.Id));
             else
                 items.Add(new(request.Prune ? SyncAction.DeleteManaged : SyncAction.KeepManagedNotInManifest, extra.Name, extra.Id));

@@ -72,6 +72,16 @@ public sealed class EsportsConfigService(ToroDbContext db, IGuildGateway guilds,
         }
 
         var config = await GetOrCreateAsync(actor, ct);
+        var reannounceRisk = (channelId is not null && channelId != config.ChannelId) ||
+                             (reminders == true && !config.NotifyReminders) ||
+                             (results == true && !config.NotifyResults);
+        if (reannounceRisk)
+        {
+            // Outbox keys include the channel and kind: without this, recent results/reminders would be posted again
+            // (with pings) to the new channel or after re-enabling a notification type.
+            config.WatermarkUtc = clock.GetUtcNow();
+        }
+
         if (channelId is not null)
         {
             config.ChannelId = channelId;
