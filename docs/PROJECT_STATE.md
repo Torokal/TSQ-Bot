@@ -3,7 +3,26 @@
 > Tek doğruluk kaynağı: gerçek durum, kararlar, çalıştırılan testler, blocker'lar ve tek NEXT ACTION.
 > Yeni oturumda önce bu dosyayı, sonra `git status` / `git log --oneline -10` çıktısını doğrula.
 
-Son güncelleme: **2026-09-24** — Aşama A–E yerel olarak tamamlandı; Aşama F (canlı) BLOCKED.
+Son güncelleme: **2026-09-24** — Aşama A–E yerel olarak tamamlandı; ürün adı **TSQ Bot** oldu; GitHub yayını ve Aşama F
+(canlı) BLOCKED.
+
+## Ürün kimliği ve depo
+
+| | |
+|---|---|
+| Ürün adı | **TSQ Bot** (eski adı ToroSquad Bot — 2026-09-24'te değiştirildi) |
+| Kanonik depo | `Torokal/TSQ-Bot` → https://github.com/Torokal/TSQ-Bot (public olacak) |
+| Rename | **Tamamlandı** (yerel) — commit `671e7cc` `refactor(branding): rename product to TSQ Bot` |
+| GitHub push | **BLOCKED** — `gh` 2.101.0 kurulu (`C:\Program Files\GitHub CLI\gh.exe`, PATH'te değil) ama **oturum açılmamış**; depo henüz yok (API 404). Hiçbir şey push edilmedi |
+| GitHub'daki dallar | yok |
+| Discord uygulama adı | "TSQ Bot" olarak varsayılır — **BLOCKED**: Developer Portal'da uygulama henüz oluşturulmadı/yapılandırılmadı |
+
+Adlandırma kuralı: kullanıcıya görünen ad yalnızca `ProductInfo.ProductName` sabitinden gelir (localization'da `{product}`
+belirteci). Bilerek **değiştirilmeyen** teknik kimlikler (fayda yok, kırılma riski var): `ToroSquad.*` proje/namespace/
+assembly adları ve klasörleri, `TOROSQUAD_` ortam değişkeni öneki (mevcut yapılandırmaları bozmamak için), `torosquad.db` /
+`torosquad.instance.lock` veri dosyaları (mevcut veriyi korumak için), user-secrets kimliği `torosquad-bot-local-dev`
+(kayıtlı secret'lar kaybolmasın), `torosquad-command-manifest/v1` biçim kimliği, test/trx geçici dosya adları.
+Eski adın kalan eşleşmeleri yalnızca tarihsel notlar ve provenance başlıklarıdır ("formerly ToroSquad Bot").
 
 ## Aşamalar
 
@@ -34,7 +53,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | Güvenli rol eşleştirme + self-service + panel | TESTED_OFFLINE (servis katmanı); gerçek rol verme **BLOCKED** |
 | Spoiler, allowed_mentions, mention enjeksiyonu, URL allow-list | TESTED_OFFLINE |
 | /privacy export/delete, saklama süresi, ayrılan guild temizliği | TESTED_OFFLINE |
-| Kaynak/lisans (/bot about, /bot source, Export-Source.ps1, commit gömme) | IMPLEMENTED + TESTED_OFFLINE (ürün bilgisi); yayımlanmış kaynak URL'si **yok** |
+| Kaynak/lisans (/bot about, /bot source, Export-Source.ps1, commit gömme) | TESTED_OFFLINE; `Bot:SourceUrl` varsayılanı https://github.com/Torokal/TSQ-Bot, ancak depo **henüz yayımlanmadı** (BLOCKED) |
 | Türkçe varsayılan / İngilizce fallback, Europe/Istanbul (Windows'ta test edildi) | TESTED_OFFLINE |
 | PowerShell scriptleri: Doctor, Start-Dev (+Simulate), Test, Sync-Commands, Export-Source | Hepsi **çalıştırıldı** (PS 5.1); Sync yalnızca BLOCKED (token yok) yolunda |
 | Gateway bağlantısı (Discord.Net), gerçek interaction işleme | IMPLEMENTED, **BLOCKED** (token yok) |
@@ -49,10 +68,10 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 - .NET SDK başlangıçta **yoktu**; kullanıcı onayıyla `winget install Microsoft.DotNet.SDK.10 --version 10.0.401`
   (runtime 10.0.12, 2026-09-08, LTS, EOL 2028-11-14). `global.json`: 10.0.401 / latestPatch.
 - `dotnet-ef` 10.0.12 repo-yerel araç (`.config/dotnet-tools.json`), global kurulum yok.
-- `gh` CLI yok. Codex CLI mevcut; **kullanıcı kararıyla kullanılmadı**. Bağımsız okuma-yalnız inceleme için bir Claude
+- `gh` 2.101.0 `C:\Program Files\GitHub CLI` altında (PATH'te değil), **GitHub'a giriş yapılmamış**. Codex CLI mevcut; **kullanıcı kararıyla kullanılmadı**. Bağımsız okuma-yalnız inceleme için bir Claude
   alt ajanı kullanıldı (dosya yazmadı).
 - NuGet: bir kez NuGet istemcisinin indirme bağlantısı takıldı (ağ hızlıydı); süreç durdurulup restore yeniden yapıldı.
-- Git: `main` = yalnızca şartname; çalışma dalı `feature/foundation`. Remote yok, push yok.
+- Git: `main` = yalnızca şartname (`177b5f7`); çalışma dalı `feature/foundation`. Remote yok, push yok.
 
 ## Kararlar (ayrıntı: docs/adr/)
 
@@ -67,6 +86,12 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 
 ## Çalıştırılan testler (gerçek çıktılar)
 
+- **Rename sonrası doğrulama (2026-09-24, commit `671e7cc`)** — `.\scripts\Test.ps1 -Repeat 3`: build **0 uyarı / 0 hata**,
+  format temiz, manifest geçerli (7 komut, yeni hash `965cae891cfc…` — yalnızca açıklama metinleri değişti, komut/alt
+  komut/seçenek adları aynı), testler **195/195 ×3 geçti** (+2 yeni: marka metinleri, kanonik kaynak URL'si; export testine
+  ürün alanı eklendi). `Doctor.ps1`: canlı eksikler BLOCKED, `Bot:SourceUrl` OK. `simulate`: başlık "TSQ Bot", 1 hatırlatma,
+  ikinci poll kopya yok, spoiler satırı skor sızdırmıyor. `Export-Source.ps1`: `tsq-bot-source-671e7cc343cb.zip`,
+  212 dosya, veritabanı/secret/bin/obj yok. Depo taraması: izlenen dosyalarda secret, `*.db`, `bin/obj`, `.env` yok.
 - **Son doğrulama** — `.\scripts\Test.ps1 -Repeat 3` (PS 5.1, inceleme düzeltmelerinden sonra): Release build **0 uyarı /
   0 hata**, `dotnet format --verify-no-changes` temiz, manifest geçerli (7 komut, hash `63a5f52b0827…`), testler
   **193/193 ×3 geçti**. Önceki tur (düzeltmelerden önce): 181/181 ×3 + 14 ek tam koşu.
@@ -92,12 +117,15 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | B1 | Discord uygulaması / bot token yok | Developer Portal'da uygulama oluştur, token'ı user-secrets'a koy (docs/WINDOWS_SETUP.md §3–4) | Hesap/yetkilendirme — sahip |
 | B2 | Test guild ve davet | Botu test sunucusuna davet et (izin 84992 / 268520448), `Discord:TestGuildIds` + `CommandSyncGuildIds` | Bot daveti — sahip |
 | B3 | Liquipedia API erişimi | Başvuru/plan seçimi (ücretli olabilir; ücretsiz yalnızca açık kaynak + ticari olmayan, onaylı) | Ücret/abonelik — sahip |
-| B4 | Kaynak yayımlama (AGPL) | Herkese açık kullanım öncesi repo/arşiv yayımla, `Bot:SourceUrl` | GitHub/yayın — sahip |
+| B4 | GitHub yayını (AGPL kaynak) | `gh auth login` (Torokal hesabı) — sahip yapar; ardından ajan `Torokal/TSQ-Bot` (public) oluşturur, `main` + `feature/foundation` push eder, PR açar | Sahip görevde onayladı; **yalnızca giriş eksik** |
 | B5 | Upstream geliştiriciye mesaj | docs/drafts/upstream-contact.md taslağı gönderilmedi | Dış iletişim — sahip |
 
 ## NEXT ACTION
 
-**Sahip:** B1+B2 — Discord uygulamasını oluşturup token'ı `dotnet user-secrets` ile kaydetmek ve botu bir test sunucusuna
-eklemek; ardından bu oturuma test guild ID'sini ve "test sunucusunda komut kaydı + test bildirimi" onayını vermek.
-(Onay sonrası ajan: `Sync-Commands.ps1 -GuildId <id>` dry-run → `-Apply` → komut seçicisi, autocomplete, defer, yetki
-ayrımı, rol paneli ve TEST/DEMO bildirimi doğrulaması → sonuçları VERIFIED_LIVE / başarısız olarak bu dosyaya yazmak.)
+**Sahip:** kendi terminalinde `& "C:\Program Files\GitHub CLI\gh.exe" auth login` (GitHub.com → HTTPS → tarayıcı ile,
+**Torokal** hesabı) çalıştırıp bu oturuma "giriş yaptım" demek. Ajan giriş bilgisi giremez.
+(Sonra ajan: `gh auth status` = Torokal doğrula → `gh repo create Torokal/TSQ-Bot --public …` → `main` ve
+`feature/foundation` push (force yok, squash yok) → PR `feature/foundation → main` aç, **merge etme** → uzak dalları doğrula →
+bu dosyayı güncelle.)
+
+Ardından: B1+B2 — Discord uygulaması "TSQ Bot" + token (`dotnet user-secrets`) + test sunucusu daveti ve onayı.
