@@ -3,8 +3,9 @@
 > Tek doğruluk kaynağı: gerçek durum, kararlar, çalıştırılan testler, blocker'lar ve tek NEXT ACTION.
 > Yeni oturumda önce bu dosyayı, sonra `git status` / `git log --oneline -10` çıktısını doğrula.
 
-Son güncelleme: **2026-09-24** — Foundation **main'e merge edildi** (PR #1, merge `27e7ab3`); depo PRIVATE (geliştirme);
-Discord test-guild doğrulamasına hazır, ancak Discord uygulaması/token/test guild henüz yok (BLOCKED).
+Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). **Test guild canlı doğrulaması sürüyor** (dal
+`feature/live-validation`, push edilmedi): gateway, guild komut kaydı, temel komutlar, kurulum, TEST/DEMO bildirimi ve
+yeniden başlatma kalıcılığı VERIFIED_LIVE. Canlıda bulunan 6 hata düzeltildi. Liquipedia canlı: BLOCKED.
 
 ## Ürün kimliği ve depo
 
@@ -18,7 +19,9 @@ Discord test-guild doğrulamasına hazır, ancak Discord uygulaması/token/test 
 | Pull request | https://github.com/Torokal/TSQ-Bot/pull/1 — "Foundation: modular TSQ Bot core and esports module"; **MERGED** 2026-09-24T20:42:13Z, normal merge commit (squash/force/rebase yok). Merge öncesi inceleme: 10 commit, 159 dosya (158 eklenen + 1 yeniden adlandırılan), binary/veritabanı/runtime/`bin`/`obj`/`TestResults`/arşiv yok, makine yolu yok; tüm geçmişte secret taraması: yalnızca bilinen sahte test dizesi. GitHub PR diff'i 20.000 satır sınırını aştığı için inceleme aynı SHA üzerinde yerel `git diff` ile yapıldı. CI yok |
 | Merge SHA | `27e7ab3290ca3dc739fe3d42b21a5128e209ea04` (ebeveynler `177b5f7` + `bd52f74`); `main` ağacı = `feature/foundation` ağacı |
 | Güncel `main` | merge commit + bu durum kaydı commit'i (yalnızca bu dosya, doğrudan `main`'e, fast-forward push). `feature/foundation` dalı ve geçmişi GitHub'da korunuyor |
-| Discord uygulama adı | "TSQ Bot" olarak varsayılır — **BLOCKED**: Developer Portal'da uygulama henüz oluşturulmadı/yapılandırılmadı |
+| Discord uygulaması | **"TSQ Bot"**, Application ID `1552783366963863592` (token user-secrets'ta; değer hiçbir çıktıda gösterilmedi) |
+| Test guild | `618763184815472651` (TestGuildIds + CommandSyncGuildIds; yerel user-secrets). Global kayıt **yok** |
+| Ağ | Türkiye'de Discord erişimi ISS düzeyinde engelli; SplitWire-Turkey (WireSock/WARP) `AllowedApps` listesine sahip onayıyla `dotnet.exe`, `ToroSquad.Bot.exe` eklendi (yedek: `wgcf-profile.conf.20260925-002819.bak`). Token'sız doğrulama: discord.com:443, gateway.discord.gg:443, `/api/v10/gateway` 200 |
 
 Adlandırma kuralı: kullanıcıya görünen ad yalnızca `ProductInfo.ProductName` sabitinden gelir (localization'da `{product}`
 belirteci). Bilerek **değiştirilmeyen** teknik kimlikler (fayda yok, kırılma riski var): `ToroSquad.*` proje/namespace/
@@ -124,33 +127,52 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | B1 | Discord uygulaması / bot token yok | Developer Portal'da uygulama oluştur, token'ı user-secrets'a koy (docs/WINDOWS_SETUP.md §3–4) | Hesap/yetkilendirme — sahip |
 | B2 | Test guild ve davet | Botu test sunucusuna davet et (izin 84992 / 268520448), `Discord:TestGuildIds` + `CommandSyncGuildIds` | Bot daveti — sahip |
 | B3 | Liquipedia API erişimi | Başvuru/plan seçimi (ücretli olabilir; ücretsiz yalnızca açık kaynak + ticari olmayan, onaylı) | Ücret/abonelik — sahip |
-| B7 | Bu makineden Discord'a ağ erişimi yok (2026-09-25) | `discord.com` / `gateway.discord.gg` bağlantısı zaman aşımına uğruyor veya TLS el sıkışmasında sıfırlanıyor; DNS (1.1.1.1) çözüyor, GitHub erişilebilir, etkin tek bağdaştırıcı fiziksel Ethernet (VPN yok). Token, Application ID (1552783366963863592), test guild izin listeleri yapılandırıldı; komut senkronu Discord'a hiç ulaşamadan durdu, **hiçbir şey kaydedilmedi** | Ağ/VPN yönlendirmesi — sahip |
+| B7 | Discord ağ erişimi | **Çözüldü** (2026-09-25) — SplitWire AllowedApps, sahip onayıyla | — |
 | B5 | Upstream geliştiriciye mesaj | docs/drafts/upstream-contact.md taslağı gönderilmedi | Dış iletişim — sahip |
 
-## Yetenek bazlı durum (Discord canlı doğrulama matrisi)
+## Yetenek bazlı durum (Discord canlı doğrulama matrisi — 2026-09-25, test guild)
 
-Canlı hiçbir şey gözlenmedi. Bir işlemin başarılı olması tüm alt sistemi VERIFIED_LIVE yapmaz.
+Bir işlemin başarılı olması tüm alt sistemi VERIFIED_LIVE yapmaz. Ortam: Development, Discord transport Gateway, gönderim
+Send, sağlayıcı Fixture (TEST/DEMO), Example modülü kapalı (7 komut grubu).
 
 | Yetenek | Durum |
 |---|---|
-| Discord gateway bağlantısı, yeniden bağlanma, log'da token olmaması | BLOCKED (token yok) — log redaction TESTED_OFFLINE |
-| Guild slash komut kaydı + `/` seçicisinde görünme | BLOCKED — kayıt planı/önizleme TESTED_OFFLINE |
-| `/help`, `/bot status|about|source`, `/modules list` | BLOCKED — TESTED_OFFLINE |
-| `/privacy export|delete` | BLOCKED — TESTED_OFFLINE |
-| `/setup` akışı | BLOCKED — TESTED_OFFLINE |
-| `/modules enable|disable` (guild kapsamı) | BLOCKED — TESTED_OFFLINE |
-| `/esports …` Discord etkileşimi | BLOCKED — TESTED_OFFLINE |
-| Liquipedia canlı veri (komutlar, autocomplete verisi, bildirimler) | BLOCKED (onaylı API anahtarı yok) — fixture ile TESTED_OFFLINE |
-| Yönetici yetki ayrımı (sunucu tarafı) | BLOCKED — TESTED_OFFLINE |
-| Autocomplete etkileşimi | BLOCKED — TESTED_OFFLINE |
-| Rol paneli / self-service rol verme-alma | BLOCKED — TESTED_OFFLINE |
-| TEST/DEMO bildirimi (kanal, format, kopya yok, spoiler, ping yok) | BLOCKED — TESTED_OFFLINE (simulate) |
-| Yeniden başlatma sonrası kalıcılık | BLOCKED — TESTED_OFFLINE |
-| Guild'ler arası izolasyon | TESTED_OFFLINE (ikinci gerçek guild yoksa öyle kalır) |
-| Bildirim çökme kurtarma, 429, yarış durumları | TESTED_OFFLINE (canlıda yıkıcı test yapılmaz) |
-| VRS canlı veri (Valve deposu) | NOT_RUN — TESTED_OFFLINE; ağ erişimiyle ayrıca doğrulanabilir |
+| Token/Application ID eşleşmesi (senkron aracı Discord'dan uygulama kimliğini okur) | **VERIFIED_LIVE** |
+| Discord gateway bağlantısı (Connected → Ready, "TSQ Bot", 1 guild) | **VERIFIED_LIVE** (6 başlatma) |
+| Log'da token yok (token değeri ve gizli parçası log'da 0 kez) | **VERIFIED_LIVE** |
+| Guild komut kaydı: önizleme → yalnızca 7 Create → uygula → tekrar önizleme "Nothing to change" | **VERIFIED_LIVE** (global yok, başka komuta dokunulmadı) |
+| Komutların slash ile çağrılması (/bot, /modules, /esports, /esports-admin, /privacy, /setup) | **VERIFIED_LIVE** |
+| `/bot status`, `/bot about` (TSQ Bot, sürüm+commit, AGPL, "resmî devamı değildir"), `/bot source` (URL + çalışan commit) | **VERIFIED_LIVE** |
+| `/help` | NOT_REPORTED (sahipten sonuç gelmedi) |
+| `/modules list`; esports'u `/setup` ile etkinleştirme | **VERIFIED_LIVE** |
+| `/setup` esports adımı: kanal seçimi kalıcı, sihirbaz mesajı güncelleniyor (düzeltme sonrası) | **VERIFIED_LIVE** |
+| `/esports-admin configure reminder_minutes`, `/esports-admin doctor` | **VERIFIED_LIVE** |
+| `/esports matches`, `/esports rankings`, `follow` / `subscriptions` / `unfollow` | **VERIFIED_LIVE** (etkileşim; veri TEST/DEMO) |
+| `/privacy export` (JSON eki, "TSQ Bot", yalnızca çağıran) ; `/privacy delete` önizlemesi | **VERIFIED_LIVE**; silme onayı: henüz basılmadı |
+| TEST/DEMO bildirimi: doğru kanal, [TEST/DEMO] etiketi, ping yok, Türkçe, tek mesaj | **VERIFIED_LIVE** (mesaj `1552805032611815436`) |
+| Aynı çalışmada tekrar taramada kopya yok (`new=0`) | **VERIFIED_LIVE** |
+| Yeniden başlatma: yeni mesaj yok, mevcut mesaj ping'siz düzenlendi (`updated=1`, tek outbox satırı) | **VERIFIED_LIVE** |
+| Ayar/modül durumu yeniden başlatmada korunur | **VERIFIED_LIVE** |
+| Autocomplete etkileşimi | Sahip tarafından ayrıca teyit edilmedi |
+| Yönetici yetki ayrımı (normal üye) | Beklemede — ikinci hesap gerekli; TESTED_OFFLINE |
+| Rol paneli / self-service rol | Beklemede — test rolü gerekli; TESTED_OFFLINE |
+| Guild'ler arası izolasyon | TESTED_OFFLINE (tek gerçek guild) |
+| Bildirim çökme kurtarma, 429, belirsiz teslimat | TESTED_OFFLINE (canlıda yıkıcı test yok) |
+| Liquipedia canlı veri | **BLOCKED** (onaylı API anahtarı yok) |
+| VRS canlı veri | NOT_RUN — TESTED_OFFLINE |
 | Global komut kaydı, herkese açık bot | DEFERRED |
 | GitHub deposunun public olması | PRE-RELEASE REQUIREMENT |
+
+Canlıda bulunup düzeltilen hatalar (hepsi `feature/live-validation`, regresyon testli, 202/202 ×3):
+1. `f4f3b4e` — hatalı yapılandırma değeri CLI'ı yığın izi ile çökertip değeri ekrana basıyordu (`<…>` ile kaydedilmiş Application ID).
+2. `49f4363` — Discord.Net'in ±2^53−1 "sınır yok" değerleri metin/kanal seçeneklerine yazılıyordu → her senkronda sahte Update.
+3. `1178946` — `/setup` kanal seçimi kaydediliyor ama sihirbaz yenilenmiyordu (Etkinleştir pasif kalıyordu); status/about metinleri İngilizceydi.
+4. `12fbd76` — demo saatleri her taramada yeniden bazlanıyordu → 15 dk hatırlatma hiç tetiklenmiyordu.
+5. `7eaa62f` — demo bildirimleri gerçek twitch/Liquipedia bağlantısı veriyor ve "Kaynak: Liquipedia" diyordu.
+6. `3577e54` — demo sıralaması "Kaynak: Valve" diyordu.
+
+Bilinen demo yan etkisi: demo saatleri her süreç başlatmada yeniden hesaplanır; bu yüzden gönderilmiş demo hatırlatması
+yeniden başlatmada "başlangıç saati güncellendi" notuyla (ping'siz) düzenlenir. Gerçek veride bu davranış doğrudur.
 
 Discord yapılandırması (koddan doğrulandı): gateway intent yalnızca **Guilds** (ayrıcalıklı intent yok); zorunlu kanal
 izinleri View Channel + Send Messages + Embed Links, isteğe bağlı Read Message History (uzlaştırma) ve Manage Roles
