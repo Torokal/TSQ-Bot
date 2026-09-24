@@ -37,6 +37,7 @@ public static partial class Cli
             {
                 "run" => await RunBotAsync(rest),
                 "commands" => await CommandsAsync(rest),
+                "esports" => await EsportsAsync(rest),
                 "doctor" => await DoctorAsync(rest),
                 "db" => await DbAsync(rest),
                 "simulate" => await Simulation.RunAsync(rest),
@@ -52,7 +53,7 @@ public static partial class Cli
         catch (Exception ex)
         {
             // Last line of defence: never print secrets.
-            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey")]);
+            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token")]);
             await Console.Error.WriteLineAsync("FATAL: " + redactor.Redact(ex.ToString()));
             return Failed;
         }
@@ -89,6 +90,7 @@ public static partial class Cli
               doctor                                  configuration diagnosis
               db migrate | db backup [--out DIR] | db restore FILE --yes
               simulate                                offline end-to-end demo (fixture data, fake Discord, temp DB)
+              esports demo-cards --guild ID [--apply] TEST/DEMO match cards into the outbox of an authorized test guild
             """);
         return Usage;
     }
@@ -118,6 +120,64 @@ public static partial class Cli
     {
         await using var scope = services.CreateAsyncScope();
         await DatabaseMaintenance.MigrateAsync(scope.ServiceProvider.GetRequiredService<ToroDbContext>(), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Stages one TEST/DEMO card of every match-card kind into the durable outbox for an authorized test guild's esports
+    /// channel; the running bot delivers them. Re-running stages nothing new (same logical keys). Dry-run by default.
+    /// </summary>
+    private static async Task<int> EsportsAsync(string[] args)
+    {
+        if (args.Length == 0 || args[0] != "demo-cards")
+            return PrintUsage();
+        var options = ParseOptions(args.Skip(1).ToArray());
+        if (!options.TryGetValue("guild", out var g) || !ulong.TryParse(g, NumberStyles.None, CultureInfo.InvariantCulture, out var guildId))
+            return PrintUsage();
+
+        var builder = ToroHost.CreateBuilder([], longRunning: false);
+        using var host = builder.Build();
+        await MigrateAsync(host.Services);
+        var discord = host.Services.GetRequiredService<IOptions<DiscordOptions>>().Value;
+        if (!discord.TestGuildIds.Contains(guildId))
+        {
+            await Console.Error.WriteLineAsync("BLOCKED: demo cards only go to guilds listed in Discord:TestGuildIds. Nothing was staged.");
+            return Blocked;
+        }
+
+        await using var scope = host.Services.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+        var db = sp.GetRequiredService<ToroDbContext>();
+        var config = await db.Set<ToroSquad.Modules.Esports.Persistence.EsportsGuildConfigEntity>().AsNoTracking().FirstOrDefaultAsync(c => c.GuildId == guildId);
+        if (config?.ChannelId is not { } channelId)
+        {
+            await Console.Error.WriteLineAsync("BLOCKED: this guild has no esports channel (run /setup). Nothing was staged.");
+            return Blocked;
+        }
+
+        var guild = new ToroSquad.Core.GuildId(guildId);
+        var settings = await sp.GetRequiredService<ToroSquad.Core.Guilds.IGuildSettingsStore>().GetAsync(guild, CancellationToken.None);
+        if (!ToroSquad.Core.Guilds.GuildTime.TryResolve(settings.TimeZoneId, out var zone))
+            ToroSquad.Core.Guilds.GuildTime.TryResolve(ToroSquad.Core.Guilds.GuildSettings.DefaultTimeZoneId, out zone);
+        // Always the demo renderer: cards are labelled TEST/DEMO whatever the configured provider mode is.
+        var renderer = new ToroSquad.Modules.Esports.Application.NotificationRenderer(sp.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>(),
+            new EsportsDataMode(ProviderMode.Fixture));
+        var now = sp.GetRequiredService<TimeProvider>().GetUtcNow();
+        var cards = ToroSquad.Modules.Esports.Application.EsportsDemoCards.Build(renderer, settings.Language, zone, now);
+        foreach (var (kind, message) in cards)
+            Console.WriteLine($"  {kind,-20} {message.Embed!.Title} | {message.Embed.Description!.Split('\n')[0]}");
+
+        if (!options.ContainsKey("apply"))
+        {
+            Console.WriteLine("Dry-run only. Re-run with --apply to stage these cards (the running bot delivers them).");
+            return Ok;
+        }
+
+        var outbox = sp.GetRequiredService<ToroSquad.Core.Notifications.INotificationOutbox>();
+        foreach (var request in ToroSquad.Modules.Esports.Application.EsportsDemoCards.Requests(guild, new ToroSquad.Core.ChannelId(channelId), cards, now))
+            Console.WriteLine($"  {request.Kind,-20} {await outbox.StageAsync(request, CancellationToken.None)}");
+        await db.SaveChangesAsync();
+        Console.WriteLine($"Staged for guild {guildId}, channel {channelId}. Delivery needs the running bot with Delivery:Mode=Send.");
+        return Ok;
     }
 
     private static async Task<int> CommandsAsync(string[] args)
@@ -220,10 +280,17 @@ public static partial class Cli
         Add("OK", $"Global command sync allowed: {discord.AllowGlobalCommandSync}");
         Add(discord.TestGuildIds.Length == 0 ? "WARN" : "OK", $"Authorized test guilds: {discord.TestGuildIds.Length}");
 
+        var providerName = config.GetValue("Esports:Provider:Name", "PandaScore");
+        var liquipediaSelected = string.Equals(providerName, "Liquipedia", StringComparison.OrdinalIgnoreCase);
+        Add("OK", "Esports match provider: " + (liquipediaSelected ? "Liquipedia (legacy/optional)" : "PandaScore (default)"));
+        var pandaTokenSet = !string.IsNullOrWhiteSpace(config["PandaScore:Token"]);
+        Add(pandaTokenSet ? "OK" : liquipediaSelected ? "INFO" : "BLOCKED",
+            "PandaScore token: " + (pandaTokenSet ? "set (value hidden)" : "NOT SET (live PandaScore data BLOCKED)"));
         var apiKeySet = !string.IsNullOrWhiteSpace(config["Esports:Liquipedia:ApiKey"]);
-        Add(apiKeySet ? "OK" : "BLOCKED", "Liquipedia API key: " + (apiKeySet ? "set (value hidden)" : "NOT SET (live esports data NOT_CONFIGURED)"));
+        Add(apiKeySet ? "OK" : liquipediaSelected ? "BLOCKED" : "INFO", "Liquipedia API key: " + (apiKeySet ? "set (value hidden)" : "NOT SET" + (liquipediaSelected ? " (live esports data NOT_CONFIGURED)" : " (not needed: provider is PandaScore)")));
         var ua = config["Esports:Liquipedia:UserAgent"];
-        Add(string.IsNullOrWhiteSpace(ua) ? "BLOCKED" : "OK", "Liquipedia User-Agent: " + (string.IsNullOrWhiteSpace(ua) ? "NOT SET (required for live)" : ua));
+        if (liquipediaSelected)
+            Add(string.IsNullOrWhiteSpace(ua) ? "BLOCKED" : "OK", "Liquipedia User-Agent: " + (string.IsNullOrWhiteSpace(ua) ? "NOT SET (required for live)" : ua));
         var bot = config.GetSection(BotOptions.Section).Get<BotOptions>() ?? new BotOptions();
         Add(string.IsNullOrWhiteSpace(bot.SourceUrl) ? "WARN" : "OK", "Bot:SourceUrl (AGPL Corresponding Source): " + (bot.SourceUrl ?? "NOT SET"));
 

@@ -116,6 +116,23 @@ public sealed class MatchSnapshotEntity
 
     /// <summary>Already finished when the bot first saw it (initial bootstrap) — never announced.</summary>
     public bool IsBaseline { get; set; }
+
+    // Lifecycle transitions, each recorded once when first OBSERVED between two known provider states (never inferred
+    // from the clock, never on first sight, never from Unknown). Shared by all guilds; per-guild delivery is idempotent.
+
+    /// <summary>Scheduled/postponed → running (provider-stated).</summary>
+    public DateTimeOffset? StartedObservedAt { get; set; }
+
+    /// <summary>Scheduled → postponed (new date unknown).</summary>
+    public DateTimeOffset? PostponedObservedAt { get; set; }
+
+    /// <summary>Any known state → cancelled (not a forfeit).</summary>
+    public DateTimeOffset? CancelledObservedAt { get; set; }
+
+    /// <summary>Latest meaningful start-time change of a scheduled match (or a postponed match getting a date).</summary>
+    public DateTimeOffset? RescheduledObservedAt { get; set; }
+
+    public DateTimeOffset? RescheduledToUtc { get; set; }
 }
 
 /// <summary>Provider health + small cached datasets (events, rankings) so /bot status and commands survive restarts.</summary>
