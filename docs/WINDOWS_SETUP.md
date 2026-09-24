@@ -71,8 +71,9 @@ Liquipedia API erişimi başvuru ile ve çoğu planda ücretlidir (docs/PROVIDER
 
 ## 7. Herkese açık kullanım (production)
 
-`Bot:SourceUrl` zorunludur (AGPL-3.0). Varsayılanı kanonik depodur: https://github.com/Torokal/TSQ-Bot — depo şu an **private**; bot
-başkalarına sunulmadan önce depo public olmalı ya da `Export-Source.ps1` arşivi yayımlanıp `Bot:SourceUrl` ona çevrilmeli
-(`/bot source` sürüm ve commit ile birlikte gösterir). Çalışan commit o depoda yayımlanmış olmalıdır; **değiştirilmiş** bir
-sürüm çalıştırıyorsanız `Bot:SourceUrl` kendi deponuzu göstermeli ya da `.\scripts\Export-Source.ps1` arşivini yayımlamalısınız. `Bot:OperatorContact` ayarlayın. Global komut kaydı `Discord:AllowGlobalCommandSync=true`
+`Bot:SourceUrl` zorunludur (AGPL-3.0). Varsayılanı kanonik depodur: https://github.com/Torokal/TSQ-Bot (`/bot source`
+sürüm ve commit ile birlikte gösterir). Depo geliştirme/test süresince **private**tir; **PRE-RELEASE REQUIREMENT:** bot
+herkese açılmadan önce depo public yapılır ve yayımlanan kaynak dağıtılan commit ile eşleşmelidir (bkz. docs/OPERATIONS.md
+"Yayın öncesi güvenlik kapısı"). **Değiştirilmiş** bir sürüm işletiyorsanız `Bot:SourceUrl` kendi deponuzu göstermeli ya da
+`.\scripts\Export-Source.ps1` arşivini yayımlamalısınız. `Bot:OperatorContact` ayarlayın. Global komut kaydı `Discord:AllowGlobalCommandSync=true`
 gerektiren ayrı bir karardır. 7/24 barındırma seçilmemiştir — bkz. docs/OPERATIONS.md.

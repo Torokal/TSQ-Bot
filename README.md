@@ -38,6 +38,7 @@ real APIs · **BLOCKED** = waiting on an owner action · **DEFERRED** = intentio
 | Live VRS fetch | not run yet |
 | News notifications, "match is live" notifications, Docker / 24×7 hosting | DEFERRED |
 | Anything | **VERIFIED_LIVE: none yet** |
+| GitHub repository public visibility | **PRE-RELEASE REQUIREMENT** — private during development/testing, made public before public bot launch |
 
 ## Features
 
@@ -154,13 +155,21 @@ data-access code are adapted from BOT-Greg-v2_API (AGPL-3.0); provenance and att
 
 ## Source Code
 
-Canonical repository: **https://github.com/Torokal/TSQ-Bot** (currently private). `/bot source` shows this URL together with the running
-version and commit. If you run a **modified** version for other users, AGPL-3.0 §13 requires you to offer *your*
-modified source: set `Bot:SourceUrl` to your own repository (or use `Export-Source.ps1`).
+Canonical repository: **https://github.com/Torokal/TSQ-Bot**. `/bot source` shows this URL together with the running
+version and commit.
+
+Release approach: the repository is **private during development and testing** (TSQ Bot is not publicly launched, so
+the link only works for authorized GitHub users for now). **Before public bot launch the repository will be made
+public**, and the same URL becomes the public Corresponding Source location; the published source must match the
+deployed version. This is the project's compliance approach, not legal advice.
+
+If you run a **modified** version for other users, AGPL-3.0 §13 requires you to offer *your* modified source: set
+`Bot:SourceUrl` to your own repository (or publish an `Export-Source.ps1` archive).
 
 ## Current Limitations
 
 - No live verification yet (Discord, Liquipedia, VRS) — see the status table.
+- Not publicly launched; the source repository is private until the pre-release step makes it public.
 - No "match is live" detection: Liquipedia offers no verified live flag, so reminders are planned-start reminders.
 - Single instance only (SQLite, in-process scheduler); no horizontal scaling.
 - No DM commands or DM notifications (by design).
