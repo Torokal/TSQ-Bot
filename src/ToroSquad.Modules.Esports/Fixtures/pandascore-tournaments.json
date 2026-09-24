@@ -1,0 +1,20 @@
+[
+  {
+    "_comment": "SYNTHETIC DEMO DATA for TSQ Bot fixture mode. Fictional event; shape follows PandaScore /csgo/tournaments.",
+    "id": 920002, "name": "Group Stage", "slug": "demo-masters-2026-groups", "tier": "s", "type": "offline", "region": "EEU", "country": null,
+    "begin_at": "{{D-3}}", "end_at": "{{D+2}}", "prizepool": "250000 United States Dollar", "serie_id": 940001,
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "teams": [
+      { "id": 9101, "name": "Toro Wolves" }, { "id": 9102, "name": "Iron Bulls" }, { "id": 9103, "name": "Nordic Owls" },
+      { "id": 9104, "name": "Blue Foxes" }, { "id": 9105, "name": "Crimson Esports" }, { "id": 9106, "name": "Nova" }
+    ]
+  },
+  {
+    "id": 920001, "name": "Playoffs", "slug": "demo-masters-2026-playoffs", "tier": "s", "type": "offline", "region": "EEU", "country": null,
+    "begin_at": "{{D+0}}", "end_at": "{{D+2}}", "prizepool": null, "serie_id": 940001,
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "teams": [ { "id": 9101, "name": "Toro Wolves" }, { "id": 9102, "name": "Iron Bulls" }, { "id": 9103, "name": "Nordic Owls" }, { "id": 9104, "name": "Blue Foxes" } ]
+  }
+]

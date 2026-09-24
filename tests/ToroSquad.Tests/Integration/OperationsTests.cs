@@ -47,7 +47,16 @@ public sealed partial class OperationsTests
         problems.Should().Contain(p => p.Contains("bot token", StringComparison.Ordinal));
         problems.Should().Contain(p => p.Contains("ApplicationId", StringComparison.Ordinal));
         problems.Should().Contain(p => p.Contains("SourceUrl", StringComparison.Ordinal));
-        problems.Should().Contain(p => p.Contains("ApiKey is not set", StringComparison.Ordinal));
+        problems.Should().Contain(p => p.Contains("PandaScore:Token is not set", StringComparison.Ordinal), "PandaScore is the default provider");
+
+        var legacy = ToroHost.ValidateConfiguration(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Esports:Provider:Mode"] = "Live",
+            ["Esports:Provider:Name"] = "Liquipedia",
+            ["Esports:MatchPollMinutes"] = "10",
+        }).Build());
+        legacy.Should().Contain(p => p.Contains("ApiKey is not set", StringComparison.Ordinal));
+        legacy.Should().NotContain(p => p.Contains("PandaScore", StringComparison.Ordinal));
     }
 
     [Fact]

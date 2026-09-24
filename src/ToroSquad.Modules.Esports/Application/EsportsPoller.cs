@@ -20,12 +20,14 @@ public sealed class EsportsPoller(
     IEsportsDataProvider matchProvider,
     IRankingsProvider rankingsProvider,
     EsportsCache cache,
+    MatchLinkCatalog links,
     IOptions<EsportsOptions> options,
     TimeProvider clock,
     ILogger<EsportsPoller> logger) : BackgroundService
 {
-    public const string MatchesKey = "liquipedia:matches";
-    public const string EventsKey = "liquipedia:events";
+    // Provider-specific keys: switching providers never mixes their cached data.
+    public string MatchesKey => matchProvider.Id + ":matches";
+    public string EventsKey => matchProvider.Id + ":events";
     public const string RankingsKey = "valve:vrs";
 
     private DateTimeOffset _nextMatches = DateTimeOffset.MinValue;
@@ -90,6 +92,8 @@ public sealed class EsportsPoller(
         var previousFetch = cache.Matches.FetchedAt;
         var window = new MatchWindow(now - TimeSpan.FromHours(o.PastWindowHours), now + TimeSpan.FromHours(o.FutureWindowHours));
         var result = await SafeAsync(() => matchProvider.GetMatchesAsync(window, ct), now);
+        if (result.HasData)
+            result = result with { Value = result.Value!.Select(links.Apply).ToList() }; // curated verified links only
         cache.UpdateMatches(result, now);
         _nextMatches = NextAttempt(result, TimeSpan.FromMinutes(o.MatchPollMinutes), cache.Matches.ConsecutiveFailures);
 
@@ -140,8 +144,9 @@ public sealed class EsportsPoller(
         var db = scope.ServiceProvider.GetRequiredService<ToroDbContext>();
         var states = await db.Set<ProviderStateEntity>().AsNoTracking().ToDictionaryAsync(s => s.Key, ct);
         var horizon = clock.GetUtcNow() - TimeSpan.FromHours(options.Value.PastWindowHours);
+        var prefix = matchProvider.Id + ":";
         var snapshots = await db.Set<MatchSnapshotEntity>().AsNoTracking()
-            .Where(s => s.ScheduledStartUtc == null || s.ScheduledStartUtc >= horizon)
+            .Where(s => s.MatchKey.StartsWith(prefix) && (s.ScheduledStartUtc == null || s.ScheduledStartUtc >= horizon))
             .Select(s => s.PayloadJson).ToListAsync(ct);
         var matches = snapshots.Select(MatchJson.Deserialize).OfType<EsportsMatch>().ToList();
         var teams = await db.Set<KnownTeamEntity>().AsNoTracking().ToListAsync(ct);
@@ -155,7 +160,13 @@ public sealed class EsportsPoller(
 
         cache.Restore(matches.Count > 0 ? matches : null, states.GetValueOrDefault(MatchesKey)?.LastSuccessAt,
             events, ev?.LastSuccessAt, rankings,
-            teams.Select(t => new TeamRef(Providers.Liquipedia.LiquipediaParser.Source, t.TeamKey, t.Name, t.ShortName)).ToList());
+            teams.Where(t => IsProviderTeam(t.TeamKey)).Select(t => new TeamRef(matchProvider.Id, t.TeamKey, t.Name, t.ShortName)).ToList());
+    }
+
+    private bool IsProviderTeam(string teamKey)
+    {
+        var pandaKey = teamKey.StartsWith("ps-team:", StringComparison.Ordinal);
+        return matchProvider.Id == Providers.PandaScore.PandaScoreParser.Source ? pandaKey : !pandaKey;
     }
 
     private async Task MaintenanceAsync(CancellationToken ct)

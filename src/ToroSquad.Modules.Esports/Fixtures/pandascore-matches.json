@@ -1,0 +1,131 @@
+[
+  {
+    "_comment": "SYNTHETIC DEMO DATA for TSQ Bot fixture mode. Fictional teams/events; shape follows PandaScore /csgo/matches. No stream links on purpose.",
+    "id": 910001, "slug": "toro-wolves-vs-nordic-owls-demo", "name": "Upper bracket: Toro Wolves vs Nordic Owls",
+    "status": "not_started", "scheduled_at": "{{T+00:20}}", "begin_at": "{{T+00:20}}", "end_at": null,
+    "original_scheduled_at": "{{T+00:20}}", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": null, "winner": null, "winner_type": "Team",
+    "tournament_id": 920001, "tournament": { "id": 920001, "name": "Playoffs", "tier": "s", "slug": "demo-masters-2026-playoffs" },
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie_id": 940001, "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 9101, "name": "Toro Wolves", "acronym": "TW", "slug": "toro-wolves" } },
+      { "type": "Team", "opponent": { "id": 9103, "name": "Nordic Owls", "acronym": "NO", "slug": "nordic-owls" } }
+    ],
+    "results": [ { "team_id": 9101, "score": 0 }, { "team_id": 9103, "score": 0 } ],
+    "games": [], "streams_list": []
+  },
+  {
+    "id": 910002, "slug": "iron-bulls-vs-blue-foxes-demo", "name": "Lower bracket: Iron Bulls vs Blue Foxes",
+    "status": "running", "scheduled_at": "{{T-00:30}}", "begin_at": "{{T-00:25}}", "end_at": null,
+    "original_scheduled_at": "{{T-00:30}}", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": null, "winner": null, "winner_type": "Team",
+    "tournament_id": 920001, "tournament": { "id": 920001, "name": "Playoffs", "tier": "s", "slug": "demo-masters-2026-playoffs" },
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie_id": 940001, "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 9102, "name": "Iron Bulls", "acronym": "IB", "slug": "iron-bulls" } },
+      { "type": "Team", "opponent": { "id": 9104, "name": "Blue Foxes", "acronym": "BF", "slug": "blue-foxes" } }
+    ],
+    "results": [ { "team_id": 9102, "score": 1 }, { "team_id": 9104, "score": 0 } ],
+    "games": [
+      { "id": 1, "position": 1, "status": "finished", "winner": { "id": 9102, "type": "Team" } },
+      { "id": 2, "position": 2, "status": "running", "winner": { "id": null, "type": "Team" } }
+    ],
+    "streams_list": []
+  },
+  {
+    "id": 910003, "slug": "toro-wolves-vs-iron-bulls-demo", "name": "Upper bracket: Toro Wolves vs Iron Bulls",
+    "status": "finished", "scheduled_at": "{{T-03:00}}", "begin_at": "{{T-03:00}}", "end_at": "{{T-01:10}}",
+    "original_scheduled_at": "{{T-03:00}}", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": 9101, "winner": { "id": 9101, "name": "Toro Wolves" }, "winner_type": "Team",
+    "tournament_id": 920001, "tournament": { "id": 920001, "name": "Playoffs", "tier": "s", "slug": "demo-masters-2026-playoffs" },
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie_id": 940001, "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 9101, "name": "Toro Wolves", "acronym": "TW", "slug": "toro-wolves" } },
+      { "type": "Team", "opponent": { "id": 9102, "name": "Iron Bulls", "acronym": "IB", "slug": "iron-bulls" } }
+    ],
+    "results": [ { "team_id": 9101, "score": 2 }, { "team_id": 9102, "score": 1 } ],
+    "games": [
+      { "id": 3, "position": 1, "status": "finished", "winner": { "id": 9101, "type": "Team" } },
+      { "id": 4, "position": 2, "status": "finished", "winner": { "id": 9102, "type": "Team" } },
+      { "id": 5, "position": 3, "status": "finished", "winner": { "id": 9101, "type": "Team" } }
+    ],
+    "streams_list": []
+  },
+  {
+    "id": 910004, "slug": "crimson-esports-vs-nova-demo", "name": "Group A: Crimson Esports vs Nova",
+    "status": "postponed", "scheduled_at": "{{T+02:00}}", "begin_at": "{{T+02:00}}", "end_at": null,
+    "original_scheduled_at": "{{T+02:00}}", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 1, "winner_id": null, "winner": null, "winner_type": "Team",
+    "tournament_id": 920002, "tournament": { "id": 920002, "name": "Group Stage", "tier": "s", "slug": "demo-masters-2026-groups" },
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie_id": 940001, "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 9105, "name": "Crimson Esports", "acronym": "CRM", "slug": "crimson-esports" } },
+      { "type": "Team", "opponent": { "id": 9106, "name": "Nova", "acronym": "NOVA", "slug": "nova" } }
+    ],
+    "results": [ { "team_id": 9105, "score": 0 }, { "team_id": 9106, "score": 0 } ],
+    "games": [], "streams_list": []
+  },
+  {
+    "id": 910005, "slug": "nordic-owls-vs-crimson-esports-demo", "name": "Group A: Nordic Owls vs Crimson Esports",
+    "status": "not_started", "scheduled_at": "{{T+05:00}}", "begin_at": "{{T+05:00}}", "end_at": null,
+    "original_scheduled_at": "{{T+01:00}}", "rescheduled": true, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": null, "winner": null, "winner_type": "Team",
+    "tournament_id": 920002, "tournament": { "id": 920002, "name": "Group Stage", "tier": "s", "slug": "demo-masters-2026-groups" },
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie_id": 940001, "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 9103, "name": "Nordic Owls", "acronym": "NO", "slug": "nordic-owls" } },
+      { "type": "Team", "opponent": { "id": 9105, "name": "Crimson Esports", "acronym": "CRM", "slug": "crimson-esports" } }
+    ],
+    "results": [ { "team_id": 9103, "score": 0 }, { "team_id": 9105, "score": 0 } ],
+    "games": [], "streams_list": []
+  },
+  {
+    "id": 910006, "slug": "blue-foxes-vs-nova-demo", "name": "Group B: Blue Foxes vs Nova",
+    "status": "canceled", "scheduled_at": "{{T-02:00}}", "begin_at": null, "end_at": null,
+    "original_scheduled_at": "{{T-02:00}}", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 1, "winner_id": null, "winner": null, "winner_type": "Team",
+    "tournament_id": 920002, "tournament": { "id": 920002, "name": "Group Stage", "tier": "s", "slug": "demo-masters-2026-groups" },
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie_id": 940001, "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 9104, "name": "Blue Foxes", "acronym": "BF", "slug": "blue-foxes" } },
+      { "type": "Team", "opponent": { "id": 9106, "name": "Nova", "acronym": "NOVA", "slug": "nova" } }
+    ],
+    "results": [ { "team_id": 9104, "score": 0 }, { "team_id": 9106, "score": 0 } ],
+    "games": [], "streams_list": []
+  },
+  {
+    "id": 910007, "slug": "nordic-owls-vs-iron-bulls-demo", "name": "Group B: Nordic Owls vs Iron Bulls",
+    "status": "canceled", "scheduled_at": "{{T-04:00}}", "begin_at": null, "end_at": null,
+    "original_scheduled_at": "{{T-04:00}}", "rescheduled": false, "forfeit": true, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": 9103, "winner": { "id": 9103, "name": "Nordic Owls" }, "winner_type": "Team",
+    "tournament_id": 920002, "tournament": { "id": 920002, "name": "Group Stage", "tier": "s", "slug": "demo-masters-2026-groups" },
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie_id": 940001, "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 9103, "name": "Nordic Owls", "acronym": "NO", "slug": "nordic-owls" } },
+      { "type": "Team", "opponent": { "id": 9102, "name": "Iron Bulls", "acronym": "IB", "slug": "iron-bulls" } }
+    ],
+    "results": [ { "team_id": 9103, "score": 0 }, { "team_id": 9102, "score": 0 } ],
+    "games": [], "streams_list": []
+  },
+  {
+    "id": 910008, "slug": "toro-wolves-vs-tbd-demo", "name": "Grand final: Toro Wolves vs TBD",
+    "status": "not_started", "scheduled_at": "{{T+23:30}}", "begin_at": "{{T+23:30}}", "end_at": null,
+    "original_scheduled_at": "{{T+23:30}}", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 5, "winner_id": null, "winner": null, "winner_type": "Team",
+    "tournament_id": 920001, "tournament": { "id": 920001, "name": "Playoffs", "tier": "s", "slug": "demo-masters-2026-playoffs" },
+    "league": { "id": 930001, "name": "Demo Masters", "slug": "demo-masters", "url": null, "image_url": null },
+    "serie_id": 940001, "serie": { "id": 940001, "full_name": "2026", "name": null, "year": 2026 },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 9101, "name": "Toro Wolves", "acronym": "TW", "slug": "toro-wolves" } }
+    ],
+    "results": [ { "team_id": 9101, "score": 0 } ],
+    "games": [], "streams_list": []
+  }
+]
