@@ -1,0 +1,71 @@
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,csx}]
+indent_size = 4
+end_of_line = crlf
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_var_for_built_in_types = true:silent
+csharp_style_var_when_type_is_apparent = true:silent
+csharp_prefer_braces = when_multiline:silent
+csharp_using_directive_placement = outside_namespace:warning
+dotnet_sort_system_directives_first = true
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_readonly_field = true:warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+# Analyzer tuning (documented in docs/ADR/0001-architecture.md)
+# CA1848/CA1873: LoggerMessage source generators are nice-to-have; structured logging templates are still enforced by CA2254.
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
+# CA1716: identifiers such as "Module" are domain vocabulary here.
+dotnet_diagnostic.CA1716.severity = none
+# CA1711: "...Collection"/"...Queue" suffix conventions are not meaningful for our domain types.
+dotnet_diagnostic.CA1711.severity = none
+# CA1062: nullable reference types already cover argument null checks.
+dotnet_diagnostic.CA1062.severity = none
+# CA2007: no SynchronizationContext in a generic host application.
+dotnet_diagnostic.CA2007.severity = none
+# CA1303: user-facing strings come from localization catalogs; log/exception texts are English on purpose.
+dotnet_diagnostic.CA1303.severity = none
+# CA1812: internal classes instantiated by DI / EF.
+dotnet_diagnostic.CA1812.severity = none
+# CA1515: public types are required for Discord.Net module discovery and tests.
+dotnet_diagnostic.CA1515.severity = none
+# CA1859: return-type micro-optimisation suggestions conflict with intentionally abstract APIs.
+dotnet_diagnostic.CA1859.severity = none
+# IDE0005 requires GenerateDocumentationFile to run in build.
+dotnet_diagnostic.IDE0005.severity = none
+
+[tests/**.cs]
+# Test method names use underscores for readability.
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA2000.severity = none
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA1063.severity = none
+dotnet_diagnostic.CA1816.severity = none
+dotnet_diagnostic.CA1001.severity = none
+dotnet_diagnostic.CA1305.severity = none
+dotnet_diagnostic.CA1307.severity = none
+dotnet_diagnostic.CA1310.severity = none
+dotnet_diagnostic.CA1859.severity = none
+dotnet_diagnostic.CA2201.severity = none
+dotnet_diagnostic.CA1822.severity = none
+
+[*.{json,md,yml,yaml,props,csproj,slnx,xml}]
+indent_size = 2
+
+[*.ps1]
+indent_size = 4
+end_of_line = crlf
