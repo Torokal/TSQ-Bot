@@ -73,11 +73,11 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
 | Source | HLTV match link? | Access | Status |
 |---|---|---|---|
 | HLTV itself | — | **No official public API** found; every "HLTV API" found is an unofficial scraper | Not usable (scraping prohibited) |
-| **Liquipedia (LPDB match2 )** | **Yes** — editors enter the HLTV match id; Liquipedia builds  (VERIFIED: Liquipedia/Lua-Modules  + , commit 23835da, 2026-09-09) and stores it with the match; upstream BOT-Greg-v2 reads  (VERIFIED) — this is how BOT Greg's "Matchpage" worked | Approved LPDB API key (free for approved open-source non-commercial projects, else paid) | Parser support **TESTED_OFFLINE**; live **BLOCKED** (no key) |
+| **Liquipedia (LPDB match2 `links.hltv`)** | **Yes** — editors enter the HLTV match id; Liquipedia builds `https://www.hltv.org/matches/<id>/match` (VERIFIED: Liquipedia/Lua-Modules `Module:MatchExternalLinks` + `MatchGroup/Input/Custom.getLinks`, commit 23835da, 2026-09-09) and stores it with the match; upstream BOT-Greg-v2 reads `links.hltv["1"]["1"]` (VERIFIED) — this is how BOT Greg's "Matchpage" worked | Approved LPDB API key (free for approved open-source non-commercial projects, else paid) | Parser support **TESTED_OFFLINE**; live **BLOCKED** (no key) |
 | PandaScore | No HLTV id/URL in the match object (VERIFIED, OpenAPI) | — | Not available |
 | GRID | NOT_VERIFIED | All listed plans commercial, custom-priced (grid.gg, 2026-09-25) | Not evaluated further |
 
-With  the cards link to HLTV automatically. With PandaScore as match provider, HLTV links
+With `Esports:Provider:Name=Liquipedia` the cards link to HLTV automatically. With PandaScore as match provider, HLTV links
 would need a second source (Liquipedia) and a cross-provider match mapping — not implemented (owner decision pending).
 
 ## Capabilities (as implemented)
