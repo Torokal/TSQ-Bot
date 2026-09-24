@@ -124,6 +124,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | B1 | Discord uygulaması / bot token yok | Developer Portal'da uygulama oluştur, token'ı user-secrets'a koy (docs/WINDOWS_SETUP.md §3–4) | Hesap/yetkilendirme — sahip |
 | B2 | Test guild ve davet | Botu test sunucusuna davet et (izin 84992 / 268520448), `Discord:TestGuildIds` + `CommandSyncGuildIds` | Bot daveti — sahip |
 | B3 | Liquipedia API erişimi | Başvuru/plan seçimi (ücretli olabilir; ücretsiz yalnızca açık kaynak + ticari olmayan, onaylı) | Ücret/abonelik — sahip |
+| B7 | Bu makineden Discord'a ağ erişimi yok (2026-09-25) | `discord.com` / `gateway.discord.gg` bağlantısı zaman aşımına uğruyor veya TLS el sıkışmasında sıfırlanıyor; DNS (1.1.1.1) çözüyor, GitHub erişilebilir, etkin tek bağdaştırıcı fiziksel Ethernet (VPN yok). Token, Application ID (1552783366963863592), test guild izin listeleri yapılandırıldı; komut senkronu Discord'a hiç ulaşamadan durdu, **hiçbir şey kaydedilmedi** | Ağ/VPN yönlendirmesi — sahip |
 | B5 | Upstream geliştiriciye mesaj | docs/drafts/upstream-contact.md taslağı gönderilmedi | Dış iletişim — sahip |
 
 ## Yetenek bazlı durum (Discord canlı doğrulama matrisi)
