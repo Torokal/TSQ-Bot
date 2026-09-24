@@ -121,6 +121,43 @@ public sealed class CommandManifestTests
         new(name, description, new Dictionary<string, string> { ["tr"] = "açıklama" }, [], null, [0], [0], false, "core");
 
     [Fact]
+    public async Task Numeric_bounds_appear_only_on_numeric_options_so_a_resync_converges()
+    {
+        var (manifest, _) = await BuildAsync();
+        var options = Flatten(manifest.Commands.SelectMany(c => c.Options)).ToList();
+
+        options.Where(o => o.MinValue is not null || o.MaxValue is not null)
+            .Should().OnlyContain(o => o.Type == OptionType.Integer || o.Type == OptionType.Number);
+        options.Should().NotContain(o => o.MinValue <= -CommandManifestValidator.UnsetNumericBound || o.MaxValue >= CommandManifestValidator.UnsetNumericBound);
+        options.Where(o => o.MinLength is not null || o.MaxLength is not null).Should().OnlyContain(o => o.Type == OptionType.String);
+        options.Should().Contain(o => o.Name == "top" && o.MinValue == 1 && o.MaxValue == 50, "declared bounds are kept");
+
+        // What Discord returns for a string option omits bounds; the canonical JSON must then be identical.
+        var team = options.First(o => o.Name == "team" && o.Type == OptionType.String);
+        var command = new ManifestCommand("x", "d", new Dictionary<string, string>(), [team], null, [0], [0], false, "t");
+        var remote = command with { Options = [team with { MinValue = null, MaxValue = null, MinLength = null, MaxLength = null }] };
+        CommandManifest.CanonicalJson(remote, false).Should().Be(CommandManifest.CanonicalJson(command, false));
+    }
+
+    [Fact]
+    public void Validator_rejects_bounds_on_non_numeric_options()
+    {
+        var bad = new ManifestOption(OptionType.String, "team", "Team", new Dictionary<string, string> { ["tr"] = "Takım" }, false, [], [], true,
+            -CommandManifestValidator.UnsetNumericBound, CommandManifestValidator.UnsetNumericBound, null, null, []);
+        var command = new ManifestCommand("demo", "Demo", new Dictionary<string, string> { ["tr"] = "Demo" }, [bad], null, [0], [0], false, "core");
+        var errors = CommandManifestValidator.Validate(new CommandManifest([command], []), new HashSet<string>());
+        errors.Should().Contain(e => e.Contains("min/max value only valid for integer/number", StringComparison.Ordinal))
+            .And.Contain(e => e.Contains("sentinel", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Update_items_explain_where_local_and_remote_differ()
+    {
+        CommandSyncPlanner.DescribeDifference("{\"a\":1,\"b\":2}", "{\"a\":1,\"c\":2}")
+            .Should().StartWith("at char 8:").And.Contain("\"b\"").And.Contain("\"c\"");
+    }
+
+    [Fact]
     public void Empty_manifest_blocks_sync_and_deletes_nothing()
     {
         var plan = CommandSyncPlanner.Plan(new CommandManifest([], []), [new RemoteCommand(1, "help", "{}")], new Dictionary<string, ulong> { ["help"] = 1 }, Request(prune: true));
@@ -166,7 +203,8 @@ public sealed class CommandManifestTests
             new SyncPlanItem(SyncAction.Update, "bot", 2),
             new SyncPlanItem(SyncAction.KeepManagedNotInManifest, "legacy", 3),
             new SyncPlanItem(SyncAction.KeepUnmanaged, "someone-elses", 4),
-        });
+        }, o => o.Excluding(i => i.Detail));
+        dry.Items.Single(i => i.Name == "bot").Detail.Should().Contain("new description").And.Contain("old description");
 
         var prune = CommandSyncPlanner.Plan(manifest, remote, managed, Request(prune: true));
         prune.Items.Should().Contain(new SyncPlanItem(SyncAction.DeleteManaged, "legacy", 3));

@@ -190,7 +190,7 @@ public static partial class Cli
         foreach (var e in report.Plan.BlockingErrors)
             await Console.Error.WriteLineAsync("BLOCKED: " + e);
         foreach (var item in report.Plan.Items)
-            Console.WriteLine($"  {item.Action,-26} /{item.Name}");
+            Console.WriteLine($"  {item.Action,-26} /{item.Name}" + (item.Detail is null ? "" : $"\n      {item.Detail}"));
         foreach (var p in report.Performed)
             Console.WriteLine("  done: " + p);
         foreach (var f in report.Failures)
