@@ -67,8 +67,10 @@ public sealed class EsportsModule : IToroModule
         }
         else
         {
-            liquipedia.ConfigurePrimaryHttpMessageHandler(sp => new FixtureHttpHandler(sp.GetRequiredService<TimeProvider>()));
-            valve.ConfigurePrimaryHttpMessageHandler(sp => new FixtureHttpHandler(sp.GetRequiredService<TimeProvider>()));
+            // One anchor for the process: IHttpClientFactory recycles handlers, so it cannot live in the handler.
+            services.AddSingleton<FixtureAnchor>();
+            liquipedia.ConfigurePrimaryHttpMessageHandler(sp => new FixtureHttpHandler(sp.GetRequiredService<TimeProvider>(), anchor: sp.GetRequiredService<FixtureAnchor>()));
+            valve.ConfigurePrimaryHttpMessageHandler(sp => new FixtureHttpHandler(sp.GetRequiredService<TimeProvider>(), anchor: sp.GetRequiredService<FixtureAnchor>()));
         }
 
         services.AddSingleton<IEsportsDataProvider>(sp => new LiquipediaProvider(sp.GetRequiredService<LiquipediaClient>(), sp.GetRequiredService<EsportsDataMode>()));

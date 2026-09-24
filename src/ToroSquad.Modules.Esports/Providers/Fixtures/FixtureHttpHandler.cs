@@ -24,10 +24,11 @@ public sealed record EsportsDataMode(ProviderMode Mode)
 
 /// <summary>
 /// Serves LiquipediaDB-shaped and GitHub-shaped responses from embedded fixture files so that fixture mode runs the
-/// real HTTP client, pagination and parsers. Placeholders like {{T+00:30}} / {{T-02:00}} / {{D+3}} are rebased on the
-/// current clock so a demo always has upcoming matches. Synthetic data only — no copied third-party content.
+/// real HTTP client, pagination and parsers. Placeholders like {{T+00:30}} / {{T-02:00}} / {{D+3}} are rebased on a
+/// <see cref="FixtureAnchor"/> (fixed for the process) when one is supplied, otherwise on the current clock.
+/// Synthetic data only — no copied third-party content.
 /// </summary>
-public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSource? source = null) : HttpMessageHandler
+public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSource? source = null, FixtureAnchor? anchor = null) : HttpMessageHandler
 {
     private readonly IFixtureSource _source = source ?? new EmbeddedFixtureSource();
 
@@ -75,7 +76,7 @@ public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSourc
 
     private string Rebase(string json)
     {
-        var now = clock.GetUtcNow();
+        var now = anchor?.Get() ?? clock.GetUtcNow();
         return Placeholder().Replace(json, m =>
         {
             var sign = m.Groups[2].Value == "-" ? -1 : 1;
@@ -96,6 +97,23 @@ public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSourc
 
     [GeneratedRegex(@"\{\{([TD])([+-])([0-9:]+)\}\}", RegexOptions.CultureInvariant)]
     private static partial Regex Placeholder();
+}
+
+/// <summary>
+/// The moment demo placeholders are rebased on: captured at the first fixture request and then kept for the process
+/// lifetime. Rebasing on "now" at every poll made the demo match always 20 minutes away, so a reminder never became
+/// due and its start time drifted on every poll (found in the first live test-guild run, 2026-09-25).
+/// </summary>
+public sealed class FixtureAnchor(TimeProvider clock)
+{
+    private readonly Lock _gate = new();
+    private DateTimeOffset? _at;
+
+    public DateTimeOffset Get()
+    {
+        lock (_gate)
+            return _at ??= clock.GetUtcNow();
+    }
 }
 
 public interface IFixtureSource
