@@ -13,8 +13,8 @@ using ToroSquad.Modules.Esports.Application;
 using ToroSquad.Modules.Esports.Domain;
 using ToroSquad.Modules.Esports.Persistence;
 using ToroSquad.Tests.Support;
-using CorePermission = ToroSquad.Core.Security.GuildPermission;
 using ActorContext = ToroSquad.Core.Security.ActorContext;
+using CorePermission = ToroSquad.Core.Security.GuildPermission;
 
 namespace ToroSquad.Tests.Integration;
 

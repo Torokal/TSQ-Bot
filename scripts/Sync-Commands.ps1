@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Registers ToroSquad Bot slash commands — DRY-RUN by default.
+    Registers ToroSquad Bot slash commands - DRY-RUN by default.
 .DESCRIPTION
     1. Builds the command manifest offline and validates it (refuses to continue if invalid/empty/partially loaded).
     2. Logs in with the bot token (user-secrets / TOROSQUAD_Discord__Token) and verifies the token belongs to
@@ -37,7 +37,7 @@ try {
     $code = Invoke-Bot @botArgs
     switch ($code) {
         0 { if (-not $Apply) { Write-Host "Dry-run complete. Nothing was changed on Discord." -ForegroundColor Green } }
-        3 { Write-Host "BLOCKED — see messages above (token, application id or allow-list)." -ForegroundColor Yellow }
+        3 { Write-Host "BLOCKED - see messages above (token, application id or allow-list)." -ForegroundColor Yellow }
         default { Write-Host "Sync failed (exit $code)." -ForegroundColor Red }
     }
     exit $code

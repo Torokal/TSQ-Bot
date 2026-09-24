@@ -111,6 +111,14 @@ public sealed partial class OperationsTests
     }
 
     [Fact]
+    public void Powershell_scripts_are_ascii_so_windows_powershell_5_1_parses_them()
+    {
+        // PS 5.1 reads BOM-less files as ANSI; a UTF-8 em dash becomes a smart quote and breaks string parsing.
+        foreach (var script in Directory.GetFiles(Path.Combine(CommandManifestTests.RepoRoot(), "scripts"), "*.ps1"))
+            File.ReadAllBytes(script).Should().OnlyContain(b => b < 0x80, Path.GetFileName(script));
+    }
+
+    [Fact]
     public void Localization_catalogs_have_identical_keys_and_placeholders_in_turkish_and_english()
     {
         foreach (var dir in new[] { "src/ToroSquad.Discord/Localization", "src/ToroSquad.Modules.Esports/Localization", "src/ToroSquad.Modules.Example/Localization" })

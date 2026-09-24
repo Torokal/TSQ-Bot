@@ -2,10 +2,10 @@
 .SYNOPSIS
     Runs ToroSquad Bot locally.
 .DESCRIPTION
-    Default: Development environment with the SAFE defaults from appsettings.json — Fake Discord transport (no
+    Default: Development environment with the SAFE defaults from appsettings.json - Fake Discord transport (no
     connection), fixture esports data, dry-run delivery. Nothing is sent anywhere.
 
-    -Simulate runs a one-shot offline end-to-end demo (fixture data → planner → outbox → fake transport) against a
+    -Simulate runs a one-shot offline end-to-end demo (fixture data -> planner -> outbox -> fake transport) against a
     temporary database and prints the resulting messages.
 
     Going live (real Discord gateway) is a configuration decision, not a script flag: set Discord:Transport=Gateway,

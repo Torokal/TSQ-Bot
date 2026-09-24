@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Creates the Corresponding Source archive of the committed version (AGPL-3.0 §13) under artifacts\.
+    Creates the Corresponding Source archive of the committed version (AGPL-3.0 section 13) under artifacts\.
 .DESCRIPTION
     Uses `git archive` of HEAD, so only committed, tracked files are included: no local data, databases, logs,
     user-secrets or environment variables. The archive contains build instructions (README.md, docs/WINDOWS_SETUP.md).

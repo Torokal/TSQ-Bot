@@ -19,7 +19,7 @@
     <VersionPrefix>0.1.0</VersionPrefix>
     <VersionSuffix>dev</VersionSuffix>
     <!-- Git commit is embedded into AssemblyInformationalVersion (+sha) by the .NET SDK SourceLink support
-         when building inside a git checkout; see docs/ADR/0003-license-and-source.md -->
+         when building inside a git checkout; see docs/adr/0003-license-and-source.md -->
     <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 

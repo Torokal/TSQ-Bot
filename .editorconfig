@@ -8,7 +8,6 @@ trim_trailing_whitespace = true
 
 [*.{cs,csx}]
 indent_size = 4
-end_of_line = crlf
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_style_var_for_built_in_types = true:silent
 csharp_style_var_when_type_is_apparent = true:silent
@@ -17,6 +16,20 @@ csharp_using_directive_placement = outside_namespace:warning
 dotnet_sort_system_directives_first = true
 dotnet_style_qualification_for_field = false:warning
 dotnet_style_readonly_field = true:warning
+# Static and const private fields use PascalCase (more specific rules win over the instance-field rule).
+dotnet_naming_rule.private_const_pascal.symbols = private_const_fields
+dotnet_naming_rule.private_const_pascal.style = pascal
+dotnet_naming_rule.private_const_pascal.severity = warning
+dotnet_naming_symbols.private_const_fields.applicable_kinds = field
+dotnet_naming_symbols.private_const_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_const_fields.required_modifiers = const
+dotnet_naming_rule.private_static_pascal.symbols = private_static_fields
+dotnet_naming_rule.private_static_pascal.style = pascal
+dotnet_naming_rule.private_static_pascal.severity = warning
+dotnet_naming_symbols.private_static_fields.applicable_kinds = field
+dotnet_naming_symbols.private_static_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_static_fields.required_modifiers = static
+dotnet_naming_style.pascal.capitalization = pascal_case
 dotnet_naming_rule.private_fields_underscore.symbols = private_fields
 dotnet_naming_rule.private_fields_underscore.style = underscore_camel
 dotnet_naming_rule.private_fields_underscore.severity = warning
@@ -25,7 +38,7 @@ dotnet_naming_symbols.private_fields.applicable_accessibilities = private
 dotnet_naming_style.underscore_camel.required_prefix = _
 dotnet_naming_style.underscore_camel.capitalization = camel_case
 
-# Analyzer tuning (documented in docs/ADR/0001-architecture.md)
+# Analyzer tuning (documented in docs/adr/0001-modular-monolith.md)
 # CA1848/CA1873: LoggerMessage source generators are nice-to-have; structured logging templates are still enforced by CA2254.
 dotnet_diagnostic.CA1848.severity = none
 dotnet_diagnostic.CA1873.severity = none
@@ -70,7 +83,6 @@ indent_size = 2
 
 [*.ps1]
 indent_size = 4
-end_of_line = crlf
 
 # EF Core migrations are generated code (dotnet ef migrations add ...).
 [src/ToroSquad.Bot/Migrations/**.cs]
