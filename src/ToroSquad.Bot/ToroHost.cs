@@ -125,6 +125,7 @@ public static class ToroHost
             bot.SourceUrl,
             bot.OperatorContact,
             [
+                new Attribution("PandaScore", "https://pandascore.co", "about.attr.pandascore_terms", "about.attr.pandascore"),
                 new Attribution("Liquipedia", "https://liquipedia.net/counterstrike", "CC BY-SA 3.0", "about.attr.liquipedia"),
                 new Attribution("Valve Regional Standings", "https://github.com/ValveSoftware/counter-strike_regional_standings", "about.attr.valve_license", "about.attr.valve"),
                 new Attribution("BOT-Greg-v2_API (Julius Gmeinder)", "https://github.com/julius-gmeinder/BOT-Greg-v2_API", "AGPL-3.0", "about.attr.upstream"),

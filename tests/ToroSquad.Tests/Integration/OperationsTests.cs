@@ -85,7 +85,7 @@ public sealed partial class OperationsTests
         info.License.Should().Be("AGPL-3.0-only");
         info.SourceConfigured.Should().BeTrue();
         info.Attributions.Select(a => a.Name).Should().Contain(n => n.Contains("BOT-Greg-v2_API", StringComparison.Ordinal))
-            .And.Contain("Liquipedia").And.Contain("Valve Regional Standings");
+            .And.Contain("PandaScore").And.Contain("Liquipedia").And.Contain("Valve Regional Standings");
         ToroHost.BuildProductInfo(new ConfigurationBuilder().Build()).SourceConfigured.Should().BeFalse();
     }
 
