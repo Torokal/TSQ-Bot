@@ -210,13 +210,13 @@ public sealed class EsportsHealthCheck(EsportsCache cache, IEsportsDataProvider 
         var entries = new List<HealthEntry>();
         if (!provider.IsConfigured)
         {
-            entries.Add(new("Esports data", HealthState.NotConfigured, "health.provider_not_configured"));
+            entries.Add(new("health.component.data", HealthState.NotConfigured, "health.provider_not_configured"));
         }
         else
         {
             var m = cache.Matches;
             var state = m.FetchedAt is null ? HealthState.Unavailable : m.IsStale(now, cache.StaleAfter) ? HealthState.Degraded : HealthState.Healthy;
-            entries.Add(new(mode.IsDemo ? "Esports data (DEMO)" : "Esports data", state,
+            entries.Add(new(mode.IsDemo ? "health.component.data_demo" : "health.component.data", state,
                 m.FetchedAt is null ? "health.no_data_yet" : "health.data_age", m.FetchedAt is null ? null : [ToroSquad.Core.Messaging.DiscordText.Timestamp(m.FetchedAt.Value, 'R')]));
         }
 

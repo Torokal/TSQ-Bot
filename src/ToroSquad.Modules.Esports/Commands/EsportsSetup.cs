@@ -55,7 +55,8 @@ public sealed class EsportsSetupComponents(
     InteractionServices services,
     EsportsConfigService config,
     EsportsPreviewService preview,
-    ModuleManagementService modules) : ToroInteractionModule(services)
+    ModuleManagementService modules,
+    IModuleGate gate) : ToroInteractionModule(services)
 {
     [ComponentInteraction(EsportsSetupFlow.ChannelId + "*", ignoreGroupNames: true)]
     public async Task ChannelAsync(string owner, string[] values)
@@ -69,7 +70,10 @@ public sealed class EsportsSetupComponents(
             return;
         }
 
-        await ReplyResultAsync(await config.ConfigureAsync(Actor, channel, null, null, null, null, CancellationToken.None));
+        var result = await config.ConfigureAsync(Actor, channel, null, null, null, null, CancellationToken.None);
+        if (result.Succeeded)
+            await RefreshWizardAsync();
+        await ReplyResultAsync(result);
     }
 
     [ComponentInteraction(EsportsSetupFlow.PreviewId + "*", ignoreGroupNames: true)]
@@ -105,7 +109,26 @@ public sealed class EsportsSetupComponents(
             return;
         }
 
-        await ReplyResultAsync(await modules.SetEnabledAsync(Actor, EsportsModule.ModuleIdValue, true, CancellationToken.None));
+        var result = await modules.SetEnabledAsync(Actor, EsportsModule.ModuleIdValue, true, CancellationToken.None);
+        if (result.Succeeded)
+            await RefreshWizardAsync();
+        await ReplyResultAsync(result);
+    }
+
+    /// <summary>
+    /// Re-renders the wizard message the component belongs to, so state-dependent controls follow the saved state
+    /// (found live: after choosing a channel the Enable button stayed disabled because only a follow-up was sent).
+    /// </summary>
+    private async Task RefreshWizardAsync()
+    {
+        if (Context.Interaction is not IComponentInteraction component)
+            return;
+        var (embed, components) = await new EsportsSetupFlow(Localizer, config, gate).RenderAsync(Actor, await LangAsync(), CancellationToken.None);
+        await component.ModifyOriginalResponseAsync(m =>
+        {
+            m.Embed = DiscordConversions.ToEmbed(embed);
+            m.Components = components;
+        });
     }
 
     private async Task<bool> OwnerAsync(string owner)

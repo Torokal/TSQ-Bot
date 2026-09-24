@@ -247,5 +247,7 @@
   "cmd.esports-admin.roles.selfservice.mapping": "Mapping",
   "cmd.esports-admin.roles.selfservice.enabled": "Allow self-service",
   "esports.result.spoiler_maps_hidden": "Map details are not shown in spoiler mode; see the source link.",
-  "esports.roles.mention_not_allowed": "This role is not mentionable; to make it a ping target you need the 'Mention Everyone' permission yourself."
+  "esports.roles.mention_not_allowed": "This role is not mentionable; to make it a ping target you need the 'Mention Everyone' permission yourself.",
+  "health.component.data": "Esports data",
+  "health.component.data_demo": "Esports data (DEMO)"
 }

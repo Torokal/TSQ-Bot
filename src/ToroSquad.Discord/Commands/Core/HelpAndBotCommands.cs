@@ -3,6 +3,7 @@ using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
 using ToroSquad.Core;
+using ToroSquad.Core.Localization;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Security;
@@ -110,7 +111,7 @@ public sealed class BotCommands(
             foreach (var entry in report.Entries)
             {
                 var args = entry.Args?.ToArray() ?? [];
-                fields.Add(new($"{entry.Component}", $"{HealthIcon(entry.State)} {Localizer.Get(language, entry.DetailKey, args)}", false));
+                fields.Add(new(LocalizedOrRaw(language, entry.Component), $"{HealthIcon(entry.State)} {Localizer.Get(language, entry.DetailKey, args)}", false));
             }
         }
 
@@ -127,8 +128,9 @@ public sealed class BotCommands(
         };
         if (!string.IsNullOrWhiteSpace(product.OperatorContact))
             fields.Add(new(await T("about.operator"), DiscordText.Untrusted(product.OperatorContact, 200), false));
+        var lang = await LangAsync();
         foreach (var a in product.Attributions)
-            fields.Add(new(a.Name, $"{a.Note}\n{a.License} — {a.Url}", false));
+            fields.Add(new(a.Name, $"{LocalizedOrRaw(lang, a.Note)}\n{LocalizedOrRaw(lang, a.License)} — {a.Url}", false));
 
         await ReplyEmbedAsync(new MessageEmbed(
             ProductInfo.ProductName,
@@ -148,6 +150,10 @@ public sealed class BotCommands(
             description + "\n\n" + await T("source.license_note", product.License),
             product.SourceConfigured ? product.SourceUrl : null, [], null, null, product.SourceConfigured ? NeutralColor : WarningColor));
     }
+
+    /// <summary>Component names and attribution texts may be localization keys; plain text is shown as-is.</summary>
+    private string LocalizedOrRaw(string language, string keyOrText) =>
+        Localizer.HasKey(language, keyOrText) || Localizer.HasKey(Languages.Fallback, keyOrText) ? Localizer.Get(language, keyOrText) : keyOrText;
 
     private static string HealthIcon(HealthState state) => state switch
     {
