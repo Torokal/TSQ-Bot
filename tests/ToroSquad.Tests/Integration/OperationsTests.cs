@@ -267,6 +267,21 @@ public sealed partial class OperationsTests
     }
 
     [Fact]
+    public void Invalid_configuration_values_are_reported_by_key_without_echoing_the_value()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Discord:ApplicationId"] = "<123456789012345678>",
+        }).Build();
+        var error = Record.Exception(() => config.GetSection("Discord").Get<ToroSquad.Discord.DiscordOptions>());
+
+        var message = Cli.DescribeConfigurationError(error!);
+
+        message.Should().StartWith("'Discord:ApplicationId' has an invalid value for UInt64").And.NotContain("123456789012345678");
+        Cli.DescribeConfigurationError(new InvalidOperationException("unrelated")).Should().BeNull();
+    }
+
+    [Fact]
     public void Shipped_source_url_is_the_canonical_public_repository()
     {
         var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Bot", "appsettings.json")));
