@@ -40,7 +40,7 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
         lines.Add(Freshness(language, fetchedAt));
 
         var fields = CommonFields(match, language);
-        var streams = match.Streams.Select(s => DiscordText.SafeUrl(s.Url, AllowedLinkHosts) is { } url ? $"[{s.Platform}]({url})" : null)
+        var streams = match.Streams.Select(s => Link(s.Url) is { } url ? $"[{s.Platform}]({url})" : null)
             .OfType<string>().Take(5).ToList();
         if (streams.Count > 0)
             fields.Add(new EmbedField(L(language, "esports.field.streams"), string.Join(" · ", streams), false));
@@ -50,7 +50,7 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
             new MessageEmbed(
                 Demo(language) + L(language, "esports.reminder.title", Name(match.A, language), Name(match.B, language)),
                 string.Join("\n", lines),
-                DiscordText.SafeUrl(match.SourceUrl, AllowedLinkHosts),
+                Link(match.SourceUrl),
                 fields,
                 Footer(language),
                 fetchedAt,
@@ -76,7 +76,7 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
             new MessageEmbed(
                 Demo(language) + L(language, "esports.result.title", Name(match.A, language), Name(match.B, language)),
                 description + "\n" + Freshness(language, fetchedAt),
-                DiscordText.SafeUrl(match.SourceUrl, AllowedLinkHosts),
+                Link(match.SourceUrl),
                 fields,
                 Footer(language),
                 fetchedAt,
@@ -159,8 +159,13 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
     public string Freshness(string language, DateTimeOffset fetchedAt) =>
         L(language, "esports.freshness", DiscordText.Timestamp(fetchedAt, 'R'));
 
+    // Demo data is synthetic: it must not claim a real source or link to real pages/channels (a synthetic stream name
+    // could belong to a stranger). Found in the first live TEST/DEMO notification, 2026-09-25.
     public string Footer(string language) =>
-        (mode.IsDemo ? L(language, "esports.demo_footer") + " • " : "") + L(language, "esports.footer_source");
+        mode.IsDemo ? L(language, "esports.demo_footer") + " • " + L(language, "esports.footer_source_demo") : L(language, "esports.footer_source");
+
+    /// <summary>Safe outgoing link, or none at all for demo data.</summary>
+    public string? Link(string? url) => mode.IsDemo ? null : DiscordText.SafeUrl(url, AllowedLinkHosts);
 
     public string Demo(string language) => mode.IsDemo ? L(language, "esports.demo_label") + " " : "";
 

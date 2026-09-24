@@ -249,5 +249,6 @@
   "esports.result.spoiler_maps_hidden": "Map details are not shown in spoiler mode; see the source link.",
   "esports.roles.mention_not_allowed": "This role is not mentionable; to make it a ping target you need the 'Mention Everyone' permission yourself.",
   "health.component.data": "Esports data",
-  "health.component.data_demo": "Esports data (DEMO)"
+  "health.component.data_demo": "Esports data (DEMO)",
+  "esports.footer_source_demo": "Source: synthetic demo data (Liquipedia API shape)"
 }

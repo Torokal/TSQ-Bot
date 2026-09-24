@@ -249,5 +249,6 @@
   "esports.result.spoiler_maps_hidden": "Spoiler modunda harita ayrıntıları gösterilmez; kaynak bağlantısına bakın.",
   "esports.roles.mention_not_allowed": "Bu rol bahsedilebilir değil; ping hedefi yapmak için sizin de 'Herkesten Bahset' izniniz olmalı.",
   "health.component.data": "Esports verisi",
-  "health.component.data_demo": "Esports verisi (DEMO)"
+  "health.component.data_demo": "Esports verisi (DEMO)",
+  "esports.footer_source_demo": "Kaynak: sentetik demo verisi (Liquipedia API biçiminde)"
 }
