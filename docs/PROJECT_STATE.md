@@ -36,7 +36,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | /privacy export/delete, saklama süresi, ayrılan guild temizliği | TESTED_OFFLINE |
 | Kaynak/lisans (/bot about, /bot source, Export-Source.ps1, commit gömme) | IMPLEMENTED + TESTED_OFFLINE (ürün bilgisi); yayımlanmış kaynak URL'si **yok** |
 | Türkçe varsayılan / İngilizce fallback, Europe/Istanbul (Windows'ta test edildi) | TESTED_OFFLINE |
-| PowerShell scriptleri: Doctor, Start-Dev (+Simulate), Test, Sync-Commands, Export-Source | Doctor/Test/Start-Dev/Sync(BLOCKED yolu)/Simulate **çalıştırıldı** (PS 5.1); Export-Source henüz çalıştırılmadı |
+| PowerShell scriptleri: Doctor, Start-Dev (+Simulate), Test, Sync-Commands, Export-Source | Hepsi **çalıştırıldı** (PS 5.1); Sync yalnızca BLOCKED (token yok) yolunda |
 | Gateway bağlantısı (Discord.Net), gerçek interaction işleme | IMPLEMENTED, **BLOCKED** (token yok) |
 | Haber bildirimleri, eski Greg "yıldız puanı" | DEFERRED (doğrulanmış kaynak yok; VRS yeniden adlandırılmaz) |
 | Canlı maç durumu bildirimi | DEFERRED (Liquipedia doğrulanmış canlı durum sunmuyor) |
@@ -67,8 +67,9 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 
 ## Çalıştırılan testler (gerçek çıktılar)
 
-- `.\scripts\Test.ps1 -Repeat 3` (PS 5.1): Release build **0 uyarı / 0 hata**, `dotnet format --verify-no-changes` temiz,
-  manifest geçerli (7 komut, hash `63a5f52b0827…`), testler **181/181 ×3 geçti**.
+- **Son doğrulama** — `.\scripts\Test.ps1 -Repeat 3` (PS 5.1, inceleme düzeltmelerinden sonra): Release build **0 uyarı /
+  0 hata**, `dotnet format --verify-no-changes` temiz, manifest geçerli (7 komut, hash `63a5f52b0827…`), testler
+  **193/193 ×3 geçti**. Önceki tur (düzeltmelerden önce): 181/181 ×3 + 14 ek tam koşu.
 - İlk koşulardan birinde tek seferlik `DbUpdateException` (kök neden bilinmiyor, bkz. docs/TESTING.md "Bilinen gözlem");
   daha sonra yeniden üretilemedi.
 - **Bağımsız kod incelemesi** (salt-okunur Claude alt ajanı): 1 yüksek, 8 orta, 5 düşük bulgu; **hepsi doğrulandı ve
@@ -80,7 +81,8 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 - Elle çalıştırılanlar: `Doctor.ps1` (canlı eksikleri BLOCKED gösterdi), `Start-Dev.ps1` 35 sn duman testi (Fake transport,
   8 komut çevrimdışı doğrulandı, ilk poll baseline), `Start-Dev.ps1 -Simulate` eşdeğeri `simulate` (1 hatırlatma sahte
   transport'a gitti, ikinci poll kopya üretmedi, 5 bitmiş maç baseline, spoiler render'ı skor sızdırmadı),
-  `Sync-Commands.ps1 -GuildId …` (token yok → "BLOCKED … Nothing was changed").
+  `Sync-Commands.ps1 -GuildId …` (token yok → "BLOCKED … Nothing was changed"), `Export-Source.ps1` (212 dosya; veritabanı
+  ve secret yok). Simulate inceleme düzeltmelerinden sonra yeniden koşuldu: spoiler satırı tek, harita satırı yok.
 - **Hiçbir canlı Discord veya canlı Liquipedia/Valve çağrısı yapılmadı.**
 
 ## Blocker'lar (sahibin eylemi gerekir)
