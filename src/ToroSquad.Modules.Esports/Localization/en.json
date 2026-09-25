@@ -262,7 +262,7 @@
   "esports.card.finished": "🏁 Match finished",
   "esports.card.finished_unknown": "🏁 Match finished — the source does not state a winner",
   "esports.card.spoiler": "Result: {0}",
-  "esports.card.started": "▶️ Match started · {0}",
+  "esports.card.started": "🔴 Match started · {0}",
   "esports.card.postponed": "⏸️ Match postponed · no new date yet",
   "esports.card.rescheduled": "🕒 Match time changed",
   "esports.card.cancelled": "❌ Match cancelled",

@@ -67,7 +67,7 @@ public sealed partial class MatchCardTests
     {
         var e = Live().Started(Match(MatchStatus.Live, 0, 0), "tr", MentionPolicy.None, Start.AddMinutes(3)).Embed!;
         e.Title.Should().Be("Natus Vincere vs Aurora");
-        e.Description.Should().Be("▶️ Maç başladı · <t:1789664400:R>", "status plus relative time, like Greg's 'Live 13 days ago'");
+        e.Description.Should().Be("🔴 Maç başladı · <t:1789664400:R>", "status plus relative time, like Greg's 'Live 13 days ago'");
         e.Fields.Select(f => (f.Name, f.Value)).Should().Equal(("Etkinlik", "StarLadder StarSeries Fall 2026"), ("Format", "bo3"));
         e.Footer.Should().Be("Kaynak: PandaScore");
         e.Timestamp.Should().Be(Start, "the provider's actual begin time");

@@ -20,7 +20,7 @@ Ayrıntı: [adr/0006-pandascore-lifecycle-and-match-links.md](adr/0006-pandascor
 
 ```
 Natus Vincere [0] - [2] Aurora          ← başlık; doğrulanmış maç sayfası varsa başlık ona bağlanır
-🏆 Aurora maçı kazandı                  ← TEK durum satırı (▶️ Maç başladı · 3 dakika önce / ⏸️ / 🕒 / ❌ / 🏳️ / ⏰)
+🏆 Aurora maçı kazandı                  ← TEK durum satırı (🔴 Maç başladı · 3 dakika önce / ⏸️ / 🕒 / ❌ / 🏳️ / ⏰)
 Etkinlik                     Format      (Yeni Saat)   ← satır içi alanlar
 StarLadder StarSeries Fall 2026   bo3
 Maç Sayfası                             ← alanların altında, yalnızca güvenli bağlantı varsa

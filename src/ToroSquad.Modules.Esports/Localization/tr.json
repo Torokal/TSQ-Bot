@@ -262,7 +262,7 @@
   "esports.card.finished": "🏁 Maç bitti",
   "esports.card.finished_unknown": "🏁 Maç bitti — kaynak kazananı belirtmiyor",
   "esports.card.spoiler": "Sonuç: {0}",
-  "esports.card.started": "▶️ Maç başladı · {0}",
+  "esports.card.started": "🔴 Maç başladı · {0}",
   "esports.card.postponed": "⏸️ Maç ertelendi · yeni tarih açıklanmadı",
   "esports.card.rescheduled": "🕒 Maçın saati değişti",
   "esports.card.cancelled": "❌ Maç iptal edildi",
