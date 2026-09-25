@@ -128,12 +128,15 @@ public sealed class Formula1Poller(
         var now = clock.GetUtcNow();
         var changed = false;
 
+        // Order matters for standings proof: lifecycle (captures pre-session baselines from tables stored in EARLIER ticks and
+        // records finishes) → results (a complete classification proves the session is over) → standings (a table fetched
+        // now can only be attributed if it first appeared after that proof).
         if (now >= _nextSchedule)
             changed |= await Step("schedule", () => RefreshScheduleAsync(sp, ct));
-        if (now >= _nextStandings || await workflow.StandingsCheckDueAsync(ct))
-            changed |= await Step("standings", () => RefreshStandingsAsync(sp, ct));
         changed |= await Step("lifecycle", () => LifecycleAsync(sp, ct));
         changed |= await Step("results", () => ResultsAsync(sp, ct));
+        if (now >= _nextStandings || await workflow.StandingsCheckDueAsync(ct))
+            changed |= await Step("standings", () => RefreshStandingsAsync(sp, ct));
 
         if (changed || clock.GetUtcNow() >= _nextPlan)
         {

@@ -322,6 +322,7 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
                 stored.Corrections++;
                 outcome = F1ResultApplyOutcome.Corrected;
                 logger.LogInformation("F1 results: correction detected for {Session} (correction #{Count})", row.SessionKey, stored.Corrections);
+                ReopenStandingsWatch(row, now);
             }
             else
             {
@@ -340,6 +341,30 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
         row.UpdatedAt = now;
         await db.SaveChangesAsync(ct);
         return outcome;
+    }
+
+    /// <summary>
+    /// A corrected sprint/race classification (penalty, DSQ) can change the championship: the standings reconciliation is
+    /// reopened so the SAME result card can also receive the corrected table. Bounded by the settle window and never beyond
+    /// the result correction window. The pre-session baseline and any already attached table are kept (an unchanged
+    /// provider table never removes what is shown). Practice/qualifying corrections never start standings work.
+    /// </summary>
+    private void ReopenStandingsWatch(F1SessionSnapshotEntity row, DateTimeOffset now)
+    {
+        if (!F1SessionTypes.AwardsChampionshipPoints((F1SessionType)row.SessionType) || row.IsBaseline || row.FinalisedObservedAt is not { } finalised)
+            return;
+        var o = options.Value;
+        var correctionEnd = finalised + TimeSpan.FromHours(o.ResultCorrectionHours);
+        var until = now + TimeSpan.FromMinutes(o.StandingsSettleWindowMinutes);
+        if (until > correctionEnd)
+            until = correctionEnd;
+        if (until <= now)
+            return;
+        row.StandingsWindowClosed = false;
+        row.StandingsWatchUntil = row.StandingsWatchUntil is { } current && current > until ? current : until;
+        row.StandingsNextCheckAt = now;
+        row.StandingsChecks = 0;
+        logger.LogInformation("F1 standings: watch for {Session} reopened after a result correction (until {Until:u})", row.SessionKey, row.StandingsWatchUntil);
     }
 
     // ---------------------------------------------------------------- standings
@@ -453,8 +478,13 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
     private async Task<string?> AttributionProblemAsync(F1SessionSnapshotEntity row, F1StandingsSnapshot snapshot, F1StandingsSnapshotEntity candidate, CancellationToken ct)
     {
         var cutoff = BaselineCutoff(row);
-        if (candidate.FetchedAt < cutoff)
-            return "table predates the session";
+        // The table must have FIRST appeared after the session was provably over. candidate.FetchedAt is when this
+        // canonical table first appeared (a new row is stored only when the hash changes; later confirmations only move
+        // LastConfirmedAt, which never turns a table that existed during the session into a post-session update).
+        if (SessionCompletionEvidenceAt(row) is not { } completed)
+            return "no proof that the session is over";
+        if (candidate.FetchedAt < completed)
+            return "table already existed before the session was over (it cannot contain this session's points)";
         if (snapshot.Round is not { } published || published < row.Round)
             return $"table covers round {snapshot.Round?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?"} only (session round {row.Round})";
 
@@ -469,7 +499,8 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
 
         if (type == F1SessionType.Race && sameRound.FirstOrDefault(s => s.SessionType == (int)F1SessionType.Sprint) is { } sprint)
         {
-            var sprintEnd = sprint.FinishedObservedAt ?? ToSession(sprint).PlannedEndUtc;
+            if (SessionCompletionEvidenceAt(sprint) is not { } sprintEnd)
+                return "sprint weekend: no proof that the sprint is over";
             var preSprint = await TableBeforeAsync(snapshot.Kind, row.Season, BaselineCutoff(sprint), ct);
             var postSprintSeen = preSprint is not null && await db.Set<F1StandingsSnapshotEntity>().AsNoTracking().AnyAsync(s =>
                 s.Kind == (int)snapshot.Kind && s.Season == row.Season && s.FetchedAt > sprintEnd && s.FetchedAt < cutoff &&
@@ -480,6 +511,12 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
 
         return null;
     }
+
+    /// <summary>
+    /// Earliest proof that a session is over: the provider-observed finish, otherwise the moment a complete classification
+    /// was first accepted (a complete classification only exists for a finished session). No proof → null.
+    /// </summary>
+    public static DateTimeOffset? SessionCompletionEvidenceAt(F1SessionSnapshotEntity row) => row.FinishedObservedAt ?? row.FinalisedObservedAt;
 
     /// <summary>Baselines for sprint/race sessions that are about to start (before any points can change).</summary>
     public async Task CaptureUpcomingBaselinesAsync(IEnumerable<string> sessionKeys, CancellationToken ct)
