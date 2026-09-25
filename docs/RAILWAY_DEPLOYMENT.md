@@ -130,6 +130,13 @@ Gaming, Eternal Fire) ve istersen rol eşlemesini yeniden yap. İlk canlı taram
 
 ## 8. Yedekler
 
+**Uygulama içi günlük yedek (varsayılan açık, plan gerektirmez):** bot 24 saatte bir veritabanının tutarlı kopyasını
+(SQLite backup API, çalışırken güvenli) `/data/backups/torosquad-<yyyyMMddTHHmmssZ>.db` olarak alır, bütünlüğünü
+kontrol eder (bozuk kopya silinir) ve en yeni **7** kopyayı tutar (`TOROSQUAD_Bot__Backup__Enabled`, `__IntervalHours`,
+`__Keep`). Loglarda: `Database backup written: /data/backups/… (… bytes, integrity OK)`. Kopyalar **aynı volume'dedir**:
+bozulma/yanlış işlem için geri dönüş sağlar, volume'ün kendisinin kaybına karşı korumaz. Geri yükleme: bot **bekleme
+modundayken** `db restore /data/backups/<dosya> --yes` (Railway konsolu/`railway ssh`).
+
 **Plan sınırı (2026-09-25, panelde görüldü):** yedek oluşturma ve zamanlama yalnızca **Pro** planda var; Hobby'de Backups
 sekmesi yalnızca mevcut yedeklerin geri yüklenmesine izin verir. Pro'da: Service → **Backups**: **Daily** zamanlaması
 (6 gün saklanır). Ücret: artımlı + copy-on-write, **artımlı volume depolaması** olarak (volume birim fiyatı) faturalanır. Ayrıca elle yedek:

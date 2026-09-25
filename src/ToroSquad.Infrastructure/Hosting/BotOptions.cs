@@ -24,6 +24,9 @@ public sealed class BotOptions
     /// </summary>
     public bool Standby { get; set; }
 
+    /// <summary>In-app scheduled database backups (see <see cref="DatabaseBackupService"/>).</summary>
+    public DatabaseBackupOptions Backup { get; set; } = new();
+
     /// <summary>How long guild data is kept after the bot is removed from that guild.</summary>
     public int GuildDataRetentionDays { get; set; } = 30;
 

@@ -18,6 +18,9 @@
   https://docs.railway.com/reference/pricing/plans.
 
 ## Yedekleme / geri yükleme (SQLite)
+
+Otomatik: çalışan bot 24 saatte bir `<veri klasörü>/backups/torosquad-<zaman>.db` yedeği alır (bütünlük kontrollü, en
+yeni 7 tutulur; `Bot:Backup:Enabled|IntervalHours|Keep|Directory`). Yalnızca bu adlandırmadaki dosyalar temizlenir.
 ```powershell
 dotnet run --project src\ToroSquad.Bot -- db backup                       # çalışırken güvenli (SQLite backup API)
 dotnet run --project src\ToroSquad.Bot -- db backup --out D:\yedek

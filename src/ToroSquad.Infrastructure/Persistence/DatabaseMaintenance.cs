@@ -55,7 +55,7 @@ public static class DatabaseMaintenance
         var stamp = clock.GetUtcNow().ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
         var target = Path.Combine(backupDirectory, $"torosquad-{stamp}.db");
         using var source = new SqliteConnection(ConnectionString(databasePath));
-        using var destination = new SqliteConnection(ConnectionString(target));
+        using var destination = new SqliteConnection(new SqliteConnectionStringBuilder(ConnectionString(target)) { Pooling = false }.ToString());
         source.Open();
         destination.Open();
         source.BackupDatabase(destination);
