@@ -6,6 +6,11 @@
 - Başlangıç sırası (`run`): yapılandırma doğrulaması → depolama kontrolleri (Railway'de volume zorunlu, klasör yazılabilir)
   → instance kilidi → **bütünlük kontrolü** (`PRAGMA integrity_check`; hata → başlamaz, hiçbir şey silinmez) → migration
   → Discord + işçiler. Elle: `db migrate`, `db check [DOSYA]` (salt okunur bütünlük).
+- **Tek sunucu (canlı, 2026-09-25):** `Discord:AllowedGuildIds` = ana sunucu. Her etkileşim (komut, düğme, modal, otomatik
+  tamamlama) işlenmeden önce sunucu kontrolü yapılır; liste dışı sunucu kısa bir retle geri çevrilir, hiçbir şey okunmaz/
+  yazılmaz. Planlayıcı liste dışı sunucuyu görmez; teslimat da son anda iptal eder (`guild_not_allowed`). Liste varken
+  `TestGuildIds`/`CommandSyncGuildIds` listenin dışına çıkamaz ve global komut izni açılamaz (başlangıç doğrulaması).
+  **Canlı bot yalnızca Railway'de çalışır; yerel ortam geliştirme/test içindir — üretim botunu yerelde başlatmayın.**
 - **Bekleme modu** `Bot:Standby=true`: doğrular ve bekler; Discord yok, işçi yok, veritabanı açılmaz (dağıtım/bakım).
 - **7/24 barındırma: Railway** (özel test barındırma, sahip kararı 2026-09-25) — kurulum, değişkenler, volume, veritabanı
   taşıma, yedek ve geri dönüş: **[RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md)**. Depoda `Dockerfile` (SDK 10.0.401 →

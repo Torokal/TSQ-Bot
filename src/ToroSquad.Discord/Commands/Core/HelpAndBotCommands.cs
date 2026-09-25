@@ -82,6 +82,7 @@ public sealed class HelpCommands(InteractionServices services, InteractionHost h
 public sealed class BotCommands(
     InteractionServices services,
     ProductInfo product,
+    DeploymentPolicy deployment,
     IBotConnectionStatus connection,
     ModuleManagementService modules,
     IEnumerable<IModuleHealthCheck> healthChecks) : ToroInteractionModule(services)
@@ -97,6 +98,10 @@ public sealed class BotCommands(
                 ? await T("status.connected", connection.LatencyMs ?? 0)
                 : await T(connection.Mode == "fake" ? "status.fake_mode" : "status.disconnected"), true),
             new(await T("status.uptime"), DiscordText.Timestamp(connection.StartedAt, 'R'), true),
+            new(await T("status.deployment"), await T("status.deployment_value", deployment.Hosting,
+                deployment.SingleGuild ? await T("status.single_guild")
+                : deployment.GuildRestricted ? await T("status.guild_restricted", deployment.AllowedGuildIds!.Count)
+                : await T("status.unrestricted")), true),
         };
 
         foreach (var status in await modules.ListAsync(Actor.GuildId, CancellationToken.None))
@@ -115,7 +120,8 @@ public sealed class BotCommands(
             }
         }
 
-        await ReplyEmbedAsync(new MessageEmbed(await T("status.title"), null, null, fields.Take(25).ToList(), product.Version, null, NeutralColor));
+        var footer = product.Commit is { Length: > 0 } commit ? $"{product.Version} ({commit[..Math.Min(7, commit.Length)]})" : product.Version;
+        await ReplyEmbedAsync(new MessageEmbed(await T("status.title"), null, null, fields.Take(25).ToList(), footer, null, NeutralColor));
     }
 
     [SlashCommand("about", $"What {ProductInfo.ProductName} is, its version and attributions")]

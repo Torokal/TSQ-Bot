@@ -28,6 +28,12 @@ public sealed class DiscordOptions
     /// </summary>
     public ulong[] TestGuildIds { get; set; } = [];
 
+    /// <summary>
+    /// Runtime guild allow-list (server-side guard). When set, interactions from any other guild are refused and no
+    /// notification is planned or delivered elsewhere. Empty = unrestricted (local development only).
+    /// </summary>
+    public ulong[] AllowedGuildIds { get; set; } = [];
+
     /// <summary>Guilds the Sync-Commands tool is allowed to register commands in (explicit allow-list).</summary>
     public ulong[] CommandSyncGuildIds { get; set; } = [];
 

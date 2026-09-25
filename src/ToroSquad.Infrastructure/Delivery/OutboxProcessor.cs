@@ -139,7 +139,14 @@ public sealed class OutboxProcessor(
             return;
         }
 
-        // Last-moment gates: module enabled + module policy (paused, channel still configured, ...).
+        // Last-moment gates: guild allow-list, module enabled, module policy (paused, channel still configured, ...).
+        if (sp.GetService<DeploymentPolicy>() is { } deployment && !deployment.IsGuildAllowed(guild))
+        {
+            CancelOrDropEdit(row, isEdit, "guild_not_allowed", now);
+            await db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         var gate = sp.GetRequiredService<IModuleGate>();
         if (!await gate.IsEnabledAsync(guild, module, cancellationToken))
         {
