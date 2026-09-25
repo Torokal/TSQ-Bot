@@ -5,7 +5,7 @@
 
 Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama PR #2'de (açık, merge edilmedi).
 **PandaScore + yaşam döngüsü + sade kartlar** `feature/pandascore-notifications` dalında (PR #2 üzerine yığılı);
-çevrimdışı **319/319 ×3**. PandaScore canlı: BLOCKED (token yok). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
+çevrimdışı **335/335 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı: BLOCKED (token yok). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
 yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esports:VerifiedMatchLinks` elle yedek.
 
 ## PandaScore / bildirim aşaması (2026-09-25)
@@ -165,7 +165,10 @@ Send, sağlayıcı Fixture (TEST/DEMO), Example modülü kapalı (7 komut grubu)
 | `/esports-admin configure reminder_minutes`, `/esports-admin doctor` | **VERIFIED_LIVE** |
 | `/esports matches`, `/esports rankings`, `follow` / `subscriptions` / `unfollow` | **VERIFIED_LIVE** (etkileşim; veri TEST/DEMO) |
 | `/privacy export` (JSON eki, "TSQ Bot", yalnızca çağıran); `/privacy delete` önizleme + onay + silme (DB'de takip/tercih 0) | **VERIFIED_LIVE** |
-| TEST/DEMO bildirimi: doğru kanal, [TEST/DEMO] etiketi, ping yok, Türkçe, tek mesaj | **VERIFIED_LIVE** (mesaj `1552805032611815436`) |
+| TEST/DEMO bildirimi: doğru kanal, [TEST/DEMO] etiketi, ping yok, Türkçe, tek mesaj | **VERIFIED_LIVE** (mesaj `1552805032611815436`; eski düzen — 2026-09-25'ten beri TEST/DEMO yalnızca footer'da) |
+| v2 **Rescheduled** TEST/DEMO kartının Discord görünümü (sade düzen, Etkinlik/Format/Yeni Saat) | **VERIFIED_LIVE** (sahip canlı gördü, 2026-09-25; UI temizliği öncesi düzen: başlıkta [TEST/DEMO], footer'da ref) |
+| UI temizliği: başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok (tüm v2 türleri) | TESTED_OFFLINE — canlı görünüm her tür için ayrı ayrı doğrulanmadı |
+| v2 Started / Finished / Postponed / Canceled / Forfeit kartlarının Discord görünümü | TESTED_OFFLINE — **VERIFIED_LIVE değil** (türe göre ayrı görsel doğrulama bekliyor) |
 | Aynı çalışmada tekrar taramada kopya yok (`new=0`) | **VERIFIED_LIVE** |
 | Yeniden başlatma: yeni mesaj yok, mevcut mesaj ping'siz düzenlendi (`updated=1`, tek outbox satırı) | **VERIFIED_LIVE** |
 | Ayar/modül durumu yeniden başlatmada korunur | **VERIFIED_LIVE** |
@@ -233,7 +236,8 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 1. **Sahip:** PR #2'yi (canlı doğrulama) incelemek/merge etmek; ardından PR #3 (PandaScore) `main`'e yönelir.
 2. **Sahip (isteğe bağlı):** test sunucusunda `/esports-admin roles unmap mapping:2` (ping'li test eşlemesi).
-3. **Ajan + sahip:** bot çalışırken `esports demo-cards --guild 618763184815472651 --apply` → sahip kartların ekran
+3. **Ajan + sahip:** demo kartları yeni düzene düzenlendi → sahip her türü (başladı, bitti, ertelendi, iptal, hükmen) ayrı ayrı
+   görsel doğrular → o tür VERIFIED_LIVE. Rescheduled zaten VERIFIED_LIVE (2026-09-25). Eski adım: `esports demo-cards … --apply` → sahip kartların ekran
    görüntüsünü paylaşır → "Discord kart görünümü" VERIFIED_LIVE (sağlayıcı değil).
 4. **Sahip:** PandaScore token'ı (`dotnet user-secrets set "PandaScore:Token" …`) → ajan önce yalnızca okuma doğrulaması.
 

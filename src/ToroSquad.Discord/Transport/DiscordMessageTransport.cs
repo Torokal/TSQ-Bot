@@ -98,7 +98,7 @@ public sealed class DiscordMessageTransport(DiscordSocketClient client, ILogger<
         }
     }
 
-    public async Task<ReconcileOutcome> FindRecentByMarkerAsync(ChannelId channel, string marker, int scanLimit, CancellationToken cancellationToken)
+    public async Task<ReconcileOutcome> FindRecentAsync(ChannelId channel, DeliveryProbe probe, int scanLimit, CancellationToken cancellationToken)
     {
         try
         {
@@ -106,12 +106,12 @@ public sealed class DiscordMessageTransport(DiscordSocketClient client, ILogger<
             if (target is null)
                 return new ReconcileOutcome.NotPossible("channel not found");
             var selfId = client.CurrentUser?.Id ?? 0;
-            var needle = "ref " + marker;
             var messages = await target.GetMessagesAsync(Math.Clamp(scanLimit, 1, 100), CacheMode.AllowDownload,
                 new RequestOptions { CancelToken = cancellationToken }).FlattenAsync();
-            var match = messages.FirstOrDefault(m =>
-                m.Author.Id == selfId &&
-                m.Embeds.Any(e => e.Footer?.Text?.Contains(needle, StringComparison.Ordinal) == true));
+            // Newest first: the most recent own message created after the attempt with exactly the sent content.
+            var match = messages
+                .Where(m => m.Author.Id == selfId && m.CreatedAt >= probe.NotBefore && !probe.Exclude.Contains(new MessageId(m.Id)))
+                .FirstOrDefault(m => Fingerprint(m) == probe.Fingerprint || m.Embeds.Any(e => probe.MatchesLegacyFooter(e.Footer?.Text)));
             return match is null ? new ReconcileOutcome.NotFound() : new ReconcileOutcome.Found(new MessageId(match.Id));
         }
         catch (HttpException ex) when (ex.HttpCode is HttpStatusCode.Forbidden)
@@ -125,6 +125,13 @@ public sealed class DiscordMessageTransport(DiscordSocketClient client, ILogger<
             return new ReconcileOutcome.NotPossible(ex.GetType().Name);
         }
     }
+
+    /// <summary>The <see cref="MessageFingerprint"/> of a message as Discord returned it (first embed only; we send one).</summary>
+    public static string Fingerprint(IMessage message) => Fingerprint(message.Content, message.Embeds.FirstOrDefault());
+
+    public static string Fingerprint(string? content, IEmbed? embed) =>
+        MessageFingerprint.Compute(content, embed?.Title, embed?.Description, embed?.Footer?.Text, embed?.Timestamp,
+            embed?.Color?.RawValue, embed?.Fields.Select(f => (f.Name, f.Value)) ?? []);
 
     private async Task<IMessageChannel?> ResolveAsync(ChannelId channel)
     {

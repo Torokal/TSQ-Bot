@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -115,8 +116,17 @@ public sealed class TestHost : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        string? connectionString;
+        await using (var scope = Services.CreateAsyncScope())
+            connectionString = scope.ServiceProvider.GetRequiredService<ToroDbContext>().Database.GetConnectionString();
         await Services.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        // Only THIS host's pool: ClearAllPools() would reclaim connections of tests running in parallel
+        // ("database is locked" in another test's teardown).
+        if (connectionString is not null)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            SqliteConnection.ClearPool(connection);
+        }
         try
         {
             System.IO.Directory.Delete(Directory, recursive: true);

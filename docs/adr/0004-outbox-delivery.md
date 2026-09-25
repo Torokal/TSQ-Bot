@@ -8,8 +8,12 @@
 - Planlayıcı snapshot + outbox satırlarını **tek transaction**'da yazar.
 - Durumlar: `Pending → InFlight → Sent | Failed | DeliveryUnknown`, ayrıca `Cancelled`, `Expired`, `Simulated`.
   InFlight, Discord'a istek atılmadan **önce** commit edilir. Yeniden başlatmada InFlight → DeliveryUnknown.
-- Belirsiz sonuç (timeout, create sırasında 500/502/504): kör tekrar yok. Embed footer'daki `ref <marker>` ile son 50
-  bot mesajında sınırlı uzlaştırma: bulunursa Sent, **doğrulanmış yoklukta** tek yeniden gönderim (ikinci kez belirsiz olursa
+- Belirsiz sonuç (timeout, create sırasında 500/502/504): kör tekrar yok. Son 50 bot mesajında sınırlı uzlaştırma
+  (2026-09-25'ten itibaren kullanıcıya görünen `ref` yoktur): talep anında gönderilen mesajın **içerik parmak izi**
+  (`DeliveredFingerprint`: içerik, başlık, açıklama, footer, zaman damgası, renk, alanlar) kaydedilir; uzlaştırma bu parmak
+  izine sahip, denemeden (−5 dk) sonra oluşturulmuş ve **başka bir outbox satırına ait olmayan** bot mesajını arar. Yük
+  belirsizlik sırasında değişse de gönderilen hâl aranır. Eski mesajlar footer'daki `ref <marker>` ile hâlâ bulunur.
+  Marker veritabanında ve loglarda ("Delivered … ref=…") kalır. Sonuç: bulunursa Sent, **doğrulanmış yoklukta** tek yeniden gönderim (ikinci kez belirsiz olursa
   Failed — döngü yok), uzlaştırma mümkün
   değilse (izin yok) 3 denemeden sonra operatöre bırakılır (doctor). **"Exactly once" iddiası yoktur.**
 - Discord.Net `RetryMode.RetryRatelimit`: yalnızca 429'lar SDK tarafından Retry-After'a uyarak tekrarlanır; timeouts/502

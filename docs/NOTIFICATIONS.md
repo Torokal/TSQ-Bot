@@ -24,8 +24,13 @@ Natus Vincere [0] - [2] Aurora          ← başlık; doğrulanmış maç sayfas
 Etkinlik                     Format      (Yeni Saat)   ← satır içi alanlar
 StarLadder StarSeries Fall 2026   bo3
 Maç Sayfası                             ← alanların altında, yalnızca güvenli bağlantı varsa
-Kaynak: PandaScore · 17/09/2026 20:46   ← zorunlu atıf + zaman damgası
+Kaynak: PandaScore · 17/09/2026 20:46   ← zorunlu atıf + zaman damgası (iç referans/ref YOK)
 ```
+
+Tüm v2 türlerinde aynı düzen: başladı, bitti, ertelendi, saat değişti, iptal, hükmen. TEST/DEMO kartlarında başlık yine
+yalnızca maçtır ("Nordic Owls vs Crimson Esports"); demo olduğu **yalnızca footer'da** yazar: "TEST/DEMO — sentetik veri,
+gerçek maç değil" (bağlantı yok, gerçek kaynak adı yok). Gerçek (production) kartlarda TEST/DEMO footer'ı yoktur. Teslimat
+referansı (`ref`) kullanıcıya gösterilmez; yalnızca veritabanı ve loglarda durur.
 
 Bilinçli farklar: "hltv.org" başlık satırı yok (veri HLTV'den gelmiyor), "Stars" yok (güvenilir kaynak yok → DEFERRED).
 
@@ -100,10 +105,11 @@ adı) → 3) "team/esports/gaming/clan/club/gg" ayıklanmış ad **tek adaya** d
   **tek, sabit düzenli** bir `||spoiler||` satırının içindedir; kazanan satırı ve harita ayrıntısı yoktur; renk kazanana göre
   değişmez; Maç Sayfası bağlantısı kalabilir; mesaj içeriği yalnızca rol ping'lerinden oluşur.
 - Kaynak atfı: PandaScore verisinde "Kaynak: PandaScore" (PandaScore koşulları md. 6.4), Liquipedia verisinde
-  "Kaynak: Liquipedia (CC BY-SA 3.0)"; demo veride `[TEST/DEMO]` başlık ve "sentetik demo verisi" footer'ı, bağlantı yok.
+  "Kaynak: Liquipedia (CC BY-SA 3.0)"; demo kartlarda başlık önekisiz, footer "TEST/DEMO — sentetik veri, gerçek maç değil", bağlantı yok (komut yanıtlarındaki
+  listeler `[TEST/DEMO]` önekini korur).
 
 ## Teslimat
 
 Ayrıntı: [adr/0004-outbox-delivery.md](adr/0004-outbox-delivery.md). Özet: tekil mantıksal anahtar, tek transaction,
-InFlight-önce-commit, belirsiz teslimatta marker ile sınırlı uzlaştırma, 429'da Retry-After, kalıcı hatalarda retry yok ve
+InFlight-önce-commit, belirsiz teslimatta içerik parmak izi ile sınırlı uzlaştırma (görünür ref yok), 429'da Retry-After, kalıcı hatalarda retry yok ve
 kanal işaretlenir, gönderimden hemen önce kapı/pause kontrolü, exactly-once iddiası yok.

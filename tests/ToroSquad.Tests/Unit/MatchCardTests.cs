@@ -112,6 +112,55 @@ public sealed partial class MatchCardTests
         noWinner.Description.Should().Be("🏳️ Maç hükmen sonuçlandı", "no winner is stated without reliable winner data");
     }
 
+    /// <summary>Every v2 kind, real mode: plain match title, compact inline fields, Match Page last, attribution-only footer.</summary>
+    public static TheoryData<string> Kinds => ["started", "finished", "postponed", "rescheduled", "cancelled", "forfeit"];
+
+    private static OutgoingMessage Kind(NotificationRenderer r, string kind, MatchLinks? links) => kind switch
+    {
+        "started" => r.Started(Match(MatchStatus.Live, 0, 0, links: links), "tr", MentionPolicy.None, Start.AddMinutes(3)),
+        "finished" => r.Result(Result(links), "tr", false, MentionPolicy.None, End),
+        "postponed" => r.Postponed(Match(MatchStatus.Postponed, links: links), "tr", Start),
+        "rescheduled" => r.Rescheduled(Match(links: links), "tr", Start.AddHours(2), Istanbul, Start),
+        "cancelled" => r.Cancelled(Match(MatchStatus.Cancelled, links: links), "tr", Start),
+        "forfeit" => r.Result(Match(MatchStatus.Finished, winner: 1, forfeit: true, links: links), "tr", false, MentionPolicy.None, End),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+
+    [Theory]
+    [MemberData(nameof(Kinds))]
+    public void Every_kind_has_a_plain_title_compact_fields_match_page_last_and_an_attribution_only_footer(string kind)
+    {
+        var e = Kind(Live(), kind, new MatchLinks(HltvMatchUrl: HltvUrl)).Embed!;
+        e.Title.Should().BeOneOf("Natus Vincere vs Aurora", "Natus Vincere [0] - [2] Aurora");
+        e.Footer.Should().Be("Kaynak: PandaScore", "production cards: attribution only, no TEST/DEMO, no internal ref");
+        e.Url.Should().Be(HltvUrl);
+
+        var expected = new List<(string, bool)> { ("Etkinlik", true), ("Format", true) };
+        if (kind == "rescheduled")
+            expected.Add(("Yeni Saat", true));
+        expected.Add((NotificationRenderer.ZeroWidth, false));
+        e.Fields.Select(f => (f.Name, f.Inline)).Should().Equal(expected, "Etkinlik / Format (/ Yeni Saat) inline, Match Page under them");
+        e.Fields[^1].Value.Should().Be("[Maç Sayfası](" + HltvUrl + ")");
+
+        var noLink = Kind(Live(), kind, null).Embed!;
+        noLink.Fields.Should().NotContain(f => f.Name == NotificationRenderer.ZeroWidth || f.Value.Contains("Maç Sayfası", StringComparison.Ordinal), "no link → no field");
+        noLink.Url.Should().BeNull();
+        noLink.Footer.Should().Be("Kaynak: PandaScore");
+    }
+
+    [Theory]
+    [MemberData(nameof(Kinds))]
+    public void Every_kind_in_demo_mode_says_test_demo_only_in_the_footer(string kind)
+    {
+        var demo = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture));
+        var e = Kind(demo, kind, new MatchLinks(HltvMatchUrl: HltvUrl)).Embed!;
+        e.Title.Should().BeOneOf("Natus Vincere vs Aurora", "Natus Vincere [0] - [2] Aurora");
+        e.Footer.Should().Be("TEST/DEMO — sentetik veri, gerçek maç değil");
+        e.Url.Should().BeNull("demo cards never link");
+        e.Fields.Should().NotContain(f => f.Name == NotificationRenderer.ZeroWidth);
+        e.Fields.Take(2).Select(f => (f.Name, f.Inline)).Should().Equal(("Etkinlik", true), ("Format", true));
+    }
+
     [Fact]
     public void Cards_are_compact_no_maps_streams_stages_ids_freshness_or_stars()
     {
@@ -292,10 +341,11 @@ public sealed partial class MatchCardTests
     {
         var demo = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture));
         var e = demo.Result(Result(new MatchLinks(HltvMatchUrl: HltvUrl)), "tr", false, MentionPolicy.None, End).Embed!;
-        e.Title.Should().StartWith("[TEST/DEMO] ");
+        e.Title.Should().Be("Natus Vincere [0] - [2] Aurora", "demo is said only in the footer");
         e.Url.Should().BeNull();
         string.Join("\n", e.Fields.Select(f => f.Value).Append(e.Description)).Should().NotContain("hltv").And.NotContain("](");
-        e.Footer.Should().Contain("TEST/DEMO").And.NotContain("PandaScore");
+        e.Footer.Should().Be("TEST/DEMO — sentetik veri, gerçek maç değil").And.NotContain("PandaScore");
+        e.Fields.Should().NotContain(f => f.Name == NotificationRenderer.ZeroWidth, "no Match Page field without a link");
     }
 
     [Fact]
@@ -328,8 +378,8 @@ public sealed partial class MatchCardTests
         cards.Select(c => c.Kind).Should().Equal("demo-started", "demo-result", "demo-result-spoiler", "demo-postponed", "demo-rescheduled", "demo-cancelled", "demo-forfeit");
         foreach (var (_, message) in cards)
         {
-            message.Embed!.Title.Should().StartWith("[TEST/DEMO] ");
-            message.Embed.Footer.Should().Contain("TEST/DEMO");
+            message.Embed!.Title.Should().NotContain("TEST").And.NotContain("DEMO");
+            message.Embed.Footer.Should().Be("TEST/DEMO — sentetik veri, gerçek maç değil");
             message.Embed.Url.Should().BeNull();
             message.Embed.Fields.Should().NotContain(f => f.Value.Contains("](", StringComparison.Ordinal));
             message.Content.Should().BeNull();

@@ -84,7 +84,8 @@ public sealed class FakeMessageTransport(ILogger<FakeMessageTransport>? logger =
         return Task.FromResult<SendOutcome>(new SendOutcome.Sent(message));
     }
 
-    public Task<ReconcileOutcome> FindRecentByMarkerAsync(ChannelId channel, string marker, int scanLimit, CancellationToken cancellationToken)
+    /// <summary>Same matching as the Discord transport (fake ids carry no creation time, so NotBefore is not checked).</summary>
+    public Task<ReconcileOutcome> FindRecentAsync(ChannelId channel, DeliveryProbe probe, int scanLimit, CancellationToken cancellationToken)
     {
         if (ScriptedReconcile is not null)
             return Task.FromResult(ScriptedReconcile);
@@ -93,7 +94,8 @@ public sealed class FakeMessageTransport(ILogger<FakeMessageTransport>? logger =
             var match = _messages
                 .Where(m => m.Channel == channel)
                 .TakeLast(scanLimit)
-                .LastOrDefault(m => m.Message.Embed?.Footer?.Contains("ref " + marker, StringComparison.Ordinal) == true);
+                .Where(m => !probe.Exclude.Contains(m.Id))
+                .LastOrDefault(m => MessageFingerprint.Of(m.Message) == probe.Fingerprint || probe.MatchesLegacyFooter(m.Message.Embed?.Footer));
             return Task.FromResult<ReconcileOutcome>(match is null ? new ReconcileOutcome.NotFound() : new ReconcileOutcome.Found(match.Id));
         }
     }

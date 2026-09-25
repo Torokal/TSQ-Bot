@@ -84,8 +84,8 @@ public sealed partial class MessageSafetyTests
     {
         var renderer = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture));
         var msg = renderer.Result(Finished(), "tr", false, MentionPolicy.None, DateTimeOffset.UnixEpoch);
-        msg.Embed!.Title.Should().StartWith("[TEST/DEMO]");
-        msg.Embed.Footer.Should().Contain("TEST/DEMO");
+        msg.Embed!.Title.Should().NotContain("TEST/DEMO", "the title is just the match");
+        msg.Embed.Footer.Should().Be("TEST/DEMO — sentetik veri, gerçek maç değil");
     }
 
     [Fact]

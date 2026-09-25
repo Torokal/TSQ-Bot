@@ -19,7 +19,8 @@ namespace ToroSquad.Modules.Esports.Application;
 /// <item>Spoiler mode: title names both teams only; winner, score and forfeit live inside one fixed-layout
 /// ||spoiler|| line; the colour does not depend on the winner.</item>
 /// <item>Nothing the source did not state is shown (no invented winner, score, time or stars).</item>
-/// <item>Demo data is labelled TEST/DEMO, never links anywhere and never claims a real source.</item>
+/// <item>Demo data is labelled TEST/DEMO in the footer only (the title is just the match), never links anywhere and never
+/// claims a real source. Real cards carry only the source attribution in the footer (no internal ids).</item>
 /// </list>
 /// </summary>
 public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode mode, IEsportsDataProvider? provider = null)
@@ -206,7 +207,8 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
 
         return new OutgoingMessage(
             Content(pings),
-            new MessageEmbed(Demo(language) + title, string.Join("\n", lines), page?.Url, fields, CardFooter(language, match.Key.Source), timestamp, color),
+            // The title is only the match; demo cards say TEST/DEMO in the footer (no prefix, no link, no real source).
+            new MessageEmbed(title, string.Join("\n", lines), page?.Url, fields, CardFooter(language, match.Key.Source), timestamp, color),
             pings);
     }
 

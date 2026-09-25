@@ -83,7 +83,7 @@ public sealed class OutboxDeliveryTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Ambiguous_timeout_is_reconciled_by_marker_instead_of_resent()
+    public async Task Ambiguous_timeout_is_reconciled_by_fingerprint_instead_of_resent()
     {
         await StageAsync(Request(GuildA, ChannelA));
         _host.Transport.ScriptAcceptedButTimedOut();
@@ -286,11 +286,90 @@ public sealed class OutboxDeliveryTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Sent_messages_carry_the_reconciliation_marker_in_the_footer()
+    public async Task Sent_messages_show_no_internal_reference_the_fingerprint_is_kept_in_the_database()
     {
         await StageAsync(Request(GuildA, ChannelA));
         await Processor.ProcessOnceAsync(CancellationToken.None);
+        var row = (await RowsAsync()).Single();
+        var sent = _host.Transport.Messages.Single().Message;
+        sent.Embed!.Footer.Should().Be("footer", "the footer is exactly what the module rendered");
+        sent.Embed.Footer.Should().NotContain("ref").And.NotContain(row.Marker);
+        row.DeliveredFingerprint.Should().Be(MessageFingerprint.Of(sent));
+        row.Marker.Should().NotBeNullOrEmpty("the reference stays for logs/support");
+    }
+
+    [Fact]
+    public async Task A_payload_replaced_while_delivery_is_unknown_is_still_reconciled_then_edited()
+    {
+        await StageAsync(Request(GuildA, ChannelA));
+        _host.Transport.ScriptAcceptedButTimedOut();
+        await Processor.ProcessOnceAsync(CancellationToken.None);
+        (await StageAsync(Request(GuildA, ChannelA, title: "A vs B (corrected)"))).Should().Be(StageOutcome.UpdatedPending);
+
+        _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await Processor.ProcessOnceAsync(CancellationToken.None); // reconcile: finds what was SENT, not the new payload
+        await Processor.ProcessOnceAsync(CancellationToken.None); // then edits it
+        var message = _host.Transport.Messages.Should().ContainSingle("no duplicate").Subject;
+        message.Edits.Should().ContainSingle().Which.Embed!.Title.Should().Be("A vs B (corrected)");
+        _host.Transport.SendCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task An_identical_message_owned_by_another_delivery_is_never_taken()
+    {
+        // Two different notifications with identical visible content in one channel.
+        await StageAsync(Request(GuildA, ChannelA, source: "liquipedia:counterstrike:M1"));
+        await Processor.ProcessOnceAsync(CancellationToken.None);
+        await StageAsync(Request(GuildA, ChannelA, source: "liquipedia:counterstrike:M2"));
+        _host.Transport.ScriptSend(() => new SendOutcome.Ambiguous("timeout before Discord got it"));
+        await Processor.ProcessOnceAsync(CancellationToken.None);
+
+        _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await Processor.ProcessOnceAsync(CancellationToken.None); // reconcile: the look-alike belongs to M1 → absent
+        await Processor.ProcessOnceAsync(CancellationToken.None); // single resend
+        var rows = await RowsAsync();
+        rows.Should().HaveCount(2).And.OnlyContain(r => r.Status == OutboxStatus.Sent);
+        rows.Select(r => r.DiscordMessageId).Should().OnlyHaveUniqueItems();
+        _host.Transport.Messages.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Messages_sent_before_the_change_are_still_found_by_their_footer_reference()
+    {
+        await StageAsync(Request(GuildA, ChannelA));
         var marker = (await RowsAsync()).Single().Marker;
-        _host.Transport.Messages.Single().Message.Embed!.Footer.Should().EndWith("ref " + marker);
+        // Legacy message: its footer carried "ref <marker>" and the row predates DeliveredFingerprint.
+        await StageAsync(new NotificationRequest(GuildA, EsportsModule.ModuleIdTyped, "liquipedia:counterstrike:M1", ChannelA, NotificationPlanner.KindResult,
+            new OutgoingMessage(null, new MessageEmbed("A vs B", "body", null, [], "footer • ref " + marker, null, null), MentionPolicy.None),
+            TestHost.T0.AddHours(6), IsDryRun: false));
+        _host.Transport.ScriptAcceptedButTimedOut();
+        await Processor.ProcessOnceAsync(CancellationToken.None);
+        await _host.InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<ToroDbContext>();
+            var row = await db.Outbox.SingleAsync();
+            row.DeliveredFingerprint = null;
+            await db.SaveChangesAsync();
+        });
+        (await StageAsync(Request(GuildA, ChannelA, title: "A vs B (new)"))).Should().Be(StageOutcome.UpdatedPending);
+
+        _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await Processor.ProcessOnceAsync(CancellationToken.None);
+        (await RowsAsync()).Single().Status.Should().Be(OutboxStatus.Sent);
+        _host.Transport.SendCalls.Should().Be(1, "found by the legacy footer reference, not resent");
+    }
+
+    [Fact]
+    public void Discord_side_fingerprint_of_the_converted_embed_equals_the_recorded_one()
+    {
+        var message = new OutgoingMessage("<@&77>",
+            new MessageEmbed("Natus Vincere vs Aurora", "🕒 Maçın saati değişti", "https://www.hltv.org/matches/1/x",
+                [new EmbedField("Etkinlik", "StarLadder", true), new EmbedField("​", "[Maç Sayfası](https://www.hltv.org/matches/1/x)")],
+                "Kaynak: PandaScore", new DateTimeOffset(2026, 9, 25, 16, 0, 0, 123, TimeSpan.Zero), 0xF59F00),
+            new MentionPolicy([new RoleId(77)]));
+        ToroSquad.Discord.Transport.DiscordMessageTransport.Fingerprint(message.Content, ToroSquad.Discord.Transport.DiscordConversions.ToEmbed(message.Embed))
+            .Should().Be(MessageFingerprint.Of(message));
+        MessageFingerprint.Of(message with { Embed = message.Embed! with { Footer = "Kaynak: PandaScore • ref x" } })
+            .Should().NotBe(MessageFingerprint.Of(message));
     }
 }

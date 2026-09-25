@@ -60,7 +60,7 @@ dotnet user-secrets set "Discord:CommandSyncGuildIds:0" "<TEST_GUILD_ID>" --proj
 .\scripts\Sync-Commands.ps1 -GuildId <TEST_GUILD_ID> -Apply   # sonra uygulayın
 .\scripts\Start-Dev.ps1
 ```
-Sunucuda: `/setup` → esports kanalı → önizleme → etkinleştir. Fixture modunda mesajlar `[TEST/DEMO]` etiketlidir ve
+Sunucuda: `/setup` → esports kanalı → önizleme → etkinleştir. Fixture modunda mesajlar TEST/DEMO etiketlidir (bildirim kartlarında footer'da, komut yanıtlarında başlıkta) ve
 yalnızca `TestGuildIds` içindeki sunuculara gider. Gerçek bildirim göndermek için ayrıca `Delivery:Mode=Send` gerekir.
 
 ## 6. Canlı esports verisi (ayrı onay kapısı)
