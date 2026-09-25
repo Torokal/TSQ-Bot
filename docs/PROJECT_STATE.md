@@ -3,8 +3,9 @@
 > Tek doğruluk kaynağı: gerçek durum, kararlar, çalıştırılan testler, blocker'lar ve tek NEXT ACTION.
 > Yeni oturumda önce bu dosyayı, sonra `git status` / `git log --oneline -10` çıktısını doğrula.
 
-Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama PR #2'de (açık, merge edilmedi).
-**PandaScore + yaşam döngüsü + sade kartlar** `feature/pandascore-notifications` dalında (PR #2 üzerine yığılı);
+Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama **main'de** (PR #2, sahip onayıyla normal merge,
+`c54793a`; merge öncesi dal ucunda tam kapı 202/202 ×3). **PandaScore + yaşam döngüsü + sade kartlar**
+`feature/pandascore-notifications` dalında (PR #3, hedefi artık `main`, çakışma yok, merge edilmedi);
 çevrimdışı **343/343 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı: BLOCKED (token yok). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
 yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esports:VerifiedMatchLinks` elle yedek.
 
@@ -216,8 +217,9 @@ testi sırasında varsayılanla oluştu; ileride demo hatırlatmaları bu test r
 Demo saatleri (düzeltildi, 2026-09-25): fixture zaman çıpası artık veritabanında (tablo `esports_provider_state`, anahtar `fixture:anchor`) saklanır
 ve 24 saate kadar yeniden kullanılır. Önceden her yeniden başlatma demo saatlerini kaydırıyor, planlayıcı da bunu haklı olarak
 "saat değişti" sayıp test kanalına yeni bir TEST/DEMO kartı gönderiyordu. Artık yeniden başlatma yeni kart üretmez; 24 saatten
-sonra demo zaman çizelgesi bir kez yenilenir (aksi hâlde tüm demo maçlar geçmişte kalırdı). TESTED_OFFLINE; canlıda bir sonraki
-yeniden başlatmada gözlenecek (ilk yeniden başlatma çıpayı kaydeder, sonrakiler kart üretmemeli).
+sonra demo zaman çizelgesi bir kez yenilenir (aksi hâlde tüm demo maçlar geçmişte kalırdı). **VERIFIED_LIVE** (test guild,
+2026-09-25): 1. yeniden başlatma 01:34Z çıpayı kaydetti (`new=0`); 2. yeniden başlatma 01:51Z — eski kodla yeni kart üretecek
+kadar geç (≥15 dk) — `new=0 updated=0`, `rescheduled-*` satır sayısı 3'te kaldı, çıpa değişmedi.
 
 Discord yapılandırması (koddan doğrulandı): gateway intent yalnızca **Guilds** (ayrıcalıklı intent yok); zorunlu kanal
 izinleri View Channel + Send Messages + Embed Links, isteğe bağlı Read Message History (uzlaştırma) ve Manage Roles
@@ -250,12 +252,12 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 ## NEXT ACTION (güncel)
 
-1. **Sahip:** PR #2'yi (canlı doğrulama) incelemek/merge etmek; ardından PR #3 (PandaScore) `main`'e yönelir.
-2. **Sahip (isteğe bağlı):** test sunucusunda `/esports-admin roles unmap mapping:2` (ping'li test eşlemesi).
-3. Kart görselleri tamamlandı: tüm v2 türleri (Started 🔴, Finished normal/spoiler, Postponed, Rescheduled, Canceled,
-   Forfeit) ve Maç Sayfası görünümü **VERIFIED_LIVE** (2026-09-25). Yeniden başlatmada yeni demo "saat değişti" kartı sorunu
-   düzeltildi (kalıcı fixture çıpası) — TESTED_OFFLINE, canlı gözlem bekliyor.
-4. **Sahip:** PandaScore token'ı (`dotnet user-secrets set "PandaScore:Token" …`) → ajan önce yalnızca okuma doğrulaması.
+1. **Sahip:** PandaScore token'ı (`dotnet user-secrets set "PandaScore:Token" "<TOKEN>" --project src\ToroSquad.Bot`; sohbete
+   yazılmaz). Doctor 2026-09-25: "PandaScore token: NOT SET". Sonra ajan önce **yalnızca okuma** doğrulaması (bildirim yok):
+   gerçek maçlar, sayfalama, kota başlıkları, ücretsiz planda sonuç alanlarının dolu olup olmadığı.
+2. **Sahip:** PR #3'ü incelemek; merge kararı sahibin (PR #2 merge edildi, PR #3 artık `main`'e yönelik).
+3. Tamamlananlar: tüm v2 kart görselleri + Maç Sayfası **VERIFIED_LIVE**; yeniden başlatmada demo kart sorunu düzeltildi ve
+   canlıda doğrulandı. (Rol eşleme #2 sahip tarafından daha önce kaldırıldı.)
 
 ## NEXT ACTION (önceki kayıt)
 
