@@ -44,6 +44,11 @@ public static partial class Cli
                 _ => PrintUsage(),
             };
         }
+        catch (Exception ex) when (DescribeConfigurationError(ex) is { } problem)
+        {
+            await Console.Error.WriteLineAsync("CONFIG: " + problem);
+            return Failed;
+        }
         catch (Exception ex)
         {
             // Last line of defence: never print secrets.
@@ -51,6 +56,26 @@ public static partial class Cli
             await Console.Error.WriteLineAsync("FATAL: " + redactor.Redact(ex.ToString()));
             return Failed;
         }
+    }
+
+    /// <summary>
+    /// Turns a configuration binding failure into a one-line message naming the key and expected type. The offending
+    /// value is never echoed (it may be a secret pasted into the wrong key).
+    /// </summary>
+    public static string? DescribeConfigurationError(Exception exception)
+    {
+        for (var e = exception; e is not null; e = e.InnerException)
+        {
+            var match = ConfigurationConversionError().Match(e.Message);
+            if (match.Success)
+            {
+                var type = match.Groups["type"].Value;
+                return $"'{match.Groups["key"].Value}' has an invalid value for {type[(type.LastIndexOf('.') + 1)..]} (value not shown). " +
+                       "Remove placeholder characters such as < > or quotes and set it again (user-secrets or TOROSQUAD_ environment variables).";
+            }
+        }
+
+        return null;
     }
 
     private static int PrintUsage()
@@ -165,7 +190,7 @@ public static partial class Cli
         foreach (var e in report.Plan.BlockingErrors)
             await Console.Error.WriteLineAsync("BLOCKED: " + e);
         foreach (var item in report.Plan.Items)
-            Console.WriteLine($"  {item.Action,-26} /{item.Name}");
+            Console.WriteLine($"  {item.Action,-26} /{item.Name}" + (item.Detail is null ? "" : $"\n      {item.Detail}"));
         foreach (var p in report.Performed)
             Console.WriteLine("  done: " + p);
         foreach (var f in report.Failures)
@@ -305,4 +330,7 @@ public static partial class Cli
 
     [GeneratedRegex("\"ApiKey\"\\s*:\\s*\"[^\"]{8,}\"", RegexOptions.CultureInvariant)]
     private static partial Regex ApiKeyValue();
+
+    [GeneratedRegex(@"^Failed to convert configuration value .* at '(?<key>[^']+)' to type '(?<type>[^']+)'", RegexOptions.CultureInvariant | RegexOptions.Singleline)]
+    private static partial Regex ConfigurationConversionError();
 }

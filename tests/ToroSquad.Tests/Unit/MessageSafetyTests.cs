@@ -88,6 +88,21 @@ public sealed partial class MessageSafetyTests
     }
 
     [Fact]
+    public void Demo_messages_link_nowhere_and_do_not_claim_a_real_source()
+    {
+        var match = Finished() with { Status = MatchStatus.Scheduled, SourceUrl = "https://liquipedia.net/counterstrike/X", Streams = [new StreamLink("twitch", "https://www.twitch.tv/somebody")] };
+        var demo = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture)).Reminder(match, "tr", MentionPolicy.None, DateTimeOffset.UnixEpoch, null).Embed!;
+        demo.Url.Should().BeNull();
+        demo.Fields.Should().NotContain(f => f.Value.Contains("twitch", StringComparison.OrdinalIgnoreCase));
+        demo.Footer.Should().Contain("sentetik").And.NotContain("Kaynak: Liquipedia");
+
+        var live = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Live)).Reminder(match, "tr", MentionPolicy.None, DateTimeOffset.UnixEpoch, null).Embed!;
+        live.Url.Should().Be("https://liquipedia.net/counterstrike/X");
+        live.Fields.Should().Contain(f => f.Value.Contains("twitch.tv/somebody", StringComparison.Ordinal));
+        live.Footer.Should().Contain("Liquipedia (CC BY-SA 3.0)");
+    }
+
+    [Fact]
     public void Allowed_mentions_default_is_closed()
     {
         var none = DiscordConversions.ToAllowedMentions(MentionPolicy.None);

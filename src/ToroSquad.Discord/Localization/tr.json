@@ -86,5 +86,10 @@
   "cmd.modules.enable.module": "Modül kimliği",
   "cmd.modules.disable": "Bir modülü durdurur (veriler korunur)",
   "cmd.modules.disable.module": "Modül kimliği",
-  "cmd.setup": "{product} için adım adım sunucu kurulumu"
+  "cmd.setup": "{product} için adım adım sunucu kurulumu",
+  "about.attr.liquipedia": "CS2 maç ve turnuva verisi (LiquipediaDB API üzerinden).",
+  "about.attr.valve": "VRS sıralamaları; etkinlik verisini HLTV.org sağlar.",
+  "about.attr.valve_license": "Valve bir lisans belirtmemiş",
+  "about.attr.upstream": "Veri erişim kodunun bazı bölümleri buradan uyarlanmıştır (değiştirilmiş).",
+  "about.attr.discordnet": "Discord API kütüphanesi."
 }

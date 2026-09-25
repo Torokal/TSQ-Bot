@@ -125,10 +125,10 @@ public static class ToroHost
             bot.SourceUrl,
             bot.OperatorContact,
             [
-                new Attribution("Liquipedia", "https://liquipedia.net/counterstrike", "CC BY-SA 3.0", "CS2 match/tournament data (via LiquipediaDB API)."),
-                new Attribution("Valve Regional Standings", "https://github.com/ValveSoftware/counter-strike_regional_standings", "no license stated by Valve", "VRS rankings; event data provided by HLTV.org."),
-                new Attribution("BOT-Greg-v2_API (Julius Gmeinder)", "https://github.com/julius-gmeinder/BOT-Greg-v2_API", "AGPL-3.0", "Portions of the data-access code are derived from it (modified)."),
-                new Attribution("Discord.Net", "https://github.com/discord-net/Discord.Net", "MIT", "Discord API library."),
+                new Attribution("Liquipedia", "https://liquipedia.net/counterstrike", "CC BY-SA 3.0", "about.attr.liquipedia"),
+                new Attribution("Valve Regional Standings", "https://github.com/ValveSoftware/counter-strike_regional_standings", "about.attr.valve_license", "about.attr.valve"),
+                new Attribution("BOT-Greg-v2_API (Julius Gmeinder)", "https://github.com/julius-gmeinder/BOT-Greg-v2_API", "AGPL-3.0", "about.attr.upstream"),
+                new Attribution("Discord.Net", "https://github.com/discord-net/Discord.Net", "MIT", "about.attr.discordnet"),
             ]);
     }
 }

@@ -28,7 +28,8 @@ public enum SyncAction
     DeleteManaged = 5,
 }
 
-public sealed record SyncPlanItem(SyncAction Action, string Name, ulong? RemoteId);
+/// <param name="Detail">For updates: where the local definition first differs from what Discord returned.</param>
+public sealed record SyncPlanItem(SyncAction Action, string Name, ulong? RemoteId, string? Detail = null);
 
 public sealed record SyncRequest(
     SyncScope Scope,
@@ -96,7 +97,9 @@ public static class CommandSyncPlanner
             }
 
             var local = CommandManifest.CanonicalJson(command, includeGlobalFields);
-            items.Add(new(local == existing.CanonicalJson ? SyncAction.Unchanged : SyncAction.Update, command.Name, existing.Id));
+            items.Add(local == existing.CanonicalJson
+                ? new(SyncAction.Unchanged, command.Name, existing.Id)
+                : new(SyncAction.Update, command.Name, existing.Id, DescribeDifference(local, existing.CanonicalJson)));
         }
 
         foreach (var extra in remote.Where(r => manifest.Find(r.Name) is null).OrderBy(r => r.Name, StringComparer.Ordinal))
@@ -110,5 +113,17 @@ public static class CommandSyncPlanner
         }
 
         return new SyncPlan(items, []);
+    }
+
+    /// <summary>Shows a short window around the first differing character of the two canonical JSON documents.</summary>
+    public static string DescribeDifference(string local, string remote)
+    {
+        var i = 0;
+        while (i < local.Length && i < remote.Length && local[i] == remote[i])
+            i++;
+        const int Before = 60, After = 60;
+        var start = Math.Max(0, i - Before);
+        string Window(string s) => s.Length <= start ? "<end>" : s.Substring(start, Math.Min(Before + After, s.Length - start));
+        return $"at char {i}: local …{Window(local)}… | discord …{Window(remote)}…";
     }
 }

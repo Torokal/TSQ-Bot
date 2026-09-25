@@ -115,9 +115,9 @@ public sealed class EsportsCommands(
             .Select(e => string.Create(CultureInfo.InvariantCulture, $"`#{e.Rank,3}` {DiscordText.Untrusted(e.TeamName, 60)} — {e.Points}"))
             .ToList();
         var description = string.Join("\n", lines) + "\n\n" +
-                          await T("esports.rankings.source", snapshot.PublishedOn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), DiscordText.Timestamp(snapshot.FetchedAt, 'R'));
+                          await T(renderer.IsDemo ? "esports.rankings.source_demo" : "esports.rankings.source", snapshot.PublishedOn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), DiscordText.Timestamp(snapshot.FetchedAt, 'R'));
         await ReplyEmbedAsync(new MessageEmbed(renderer.Demo(Lang) + await T("esports.rankings.title"), description,
-            DiscordText.SafeUrl(snapshot.SourceUrl, NotificationRenderer.AllowedLinkHosts), [], await T("esports.rankings.footer"), snapshot.FetchedAt, NeutralColor));
+            renderer.Link(snapshot.SourceUrl), [], await T(renderer.IsDemo ? "esports.rankings.footer_demo" : "esports.rankings.footer"), snapshot.FetchedAt, NeutralColor));
     }
 
     [SlashCommand("team", "Team info, VRS match and upcoming/recent matches")]
@@ -231,8 +231,7 @@ public sealed class EsportsCommands(
         var text = await T(outcome.Result.MessageKey, outcome.Result.Args.ToArray());
         foreach (var note in outcome.NoteKeys)
             text += "\n" + await T(note);
-        if (!outcome.Result.Succeeded && outcome.Result.TraceCode is not null)
-            text += "\n" + await T("error.trace_code", outcome.Result.TraceCode);
+        text += await TraceLineAsync(outcome.Result);
         await SendEphemeralAsync(text, null, null);
     }
 

@@ -3,8 +3,9 @@
 > Tek doğruluk kaynağı: gerçek durum, kararlar, çalıştırılan testler, blocker'lar ve tek NEXT ACTION.
 > Yeni oturumda önce bu dosyayı, sonra `git status` / `git log --oneline -10` çıktısını doğrula.
 
-Son güncelleme: **2026-09-24** — Foundation **main'e merge edildi** (PR #1, merge `27e7ab3`); depo PRIVATE (geliştirme);
-Discord test-guild doğrulamasına hazır, ancak Discord uygulaması/token/test guild henüz yok (BLOCKED).
+Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). **Test guild canlı doğrulaması sürüyor** (dal
+`feature/live-validation`, push edilmedi): gateway, guild komut kaydı, temel komutlar, kurulum, TEST/DEMO bildirimi ve
+yeniden başlatma kalıcılığı VERIFIED_LIVE. Canlıda bulunan 6 hata düzeltildi. Liquipedia canlı: BLOCKED.
 
 ## Ürün kimliği ve depo
 
@@ -18,7 +19,9 @@ Discord test-guild doğrulamasına hazır, ancak Discord uygulaması/token/test 
 | Pull request | https://github.com/Torokal/TSQ-Bot/pull/1 — "Foundation: modular TSQ Bot core and esports module"; **MERGED** 2026-09-24T20:42:13Z, normal merge commit (squash/force/rebase yok). Merge öncesi inceleme: 10 commit, 159 dosya (158 eklenen + 1 yeniden adlandırılan), binary/veritabanı/runtime/`bin`/`obj`/`TestResults`/arşiv yok, makine yolu yok; tüm geçmişte secret taraması: yalnızca bilinen sahte test dizesi. GitHub PR diff'i 20.000 satır sınırını aştığı için inceleme aynı SHA üzerinde yerel `git diff` ile yapıldı. CI yok |
 | Merge SHA | `27e7ab3290ca3dc739fe3d42b21a5128e209ea04` (ebeveynler `177b5f7` + `bd52f74`); `main` ağacı = `feature/foundation` ağacı |
 | Güncel `main` | merge commit + bu durum kaydı commit'i (yalnızca bu dosya, doğrudan `main`'e, fast-forward push). `feature/foundation` dalı ve geçmişi GitHub'da korunuyor |
-| Discord uygulama adı | "TSQ Bot" olarak varsayılır — **BLOCKED**: Developer Portal'da uygulama henüz oluşturulmadı/yapılandırılmadı |
+| Discord uygulaması | **"TSQ Bot"**, Application ID `1552783366963863592` (token user-secrets'ta; değer hiçbir çıktıda gösterilmedi) |
+| Test guild | `618763184815472651` (TestGuildIds + CommandSyncGuildIds; yerel user-secrets). Global kayıt **yok** |
+| Ağ | Türkiye'de Discord erişimi ISS düzeyinde engelli; SplitWire-Turkey (WireSock/WARP) `AllowedApps` listesine sahip onayıyla `dotnet.exe`, `ToroSquad.Bot.exe` eklendi (yedek: `wgcf-profile.conf.20260925-002819.bak`). Token'sız doğrulama: discord.com:443, gateway.discord.gg:443, `/api/v10/gateway` 200 |
 
 Adlandırma kuralı: kullanıcıya görünen ad yalnızca `ProductInfo.ProductName` sabitinden gelir (localization'da `{product}`
 belirteci). Bilerek **değiştirilmeyen** teknik kimlikler (fayda yok, kırılma riski var): `ToroSquad.*` proje/namespace/
@@ -124,32 +127,62 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | B1 | Discord uygulaması / bot token yok | Developer Portal'da uygulama oluştur, token'ı user-secrets'a koy (docs/WINDOWS_SETUP.md §3–4) | Hesap/yetkilendirme — sahip |
 | B2 | Test guild ve davet | Botu test sunucusuna davet et (izin 84992 / 268520448), `Discord:TestGuildIds` + `CommandSyncGuildIds` | Bot daveti — sahip |
 | B3 | Liquipedia API erişimi | Başvuru/plan seçimi (ücretli olabilir; ücretsiz yalnızca açık kaynak + ticari olmayan, onaylı) | Ücret/abonelik — sahip |
+| B7 | Discord ağ erişimi | **Çözüldü** (2026-09-25) — SplitWire AllowedApps, sahip onayıyla | — |
 | B5 | Upstream geliştiriciye mesaj | docs/drafts/upstream-contact.md taslağı gönderilmedi | Dış iletişim — sahip |
 
-## Yetenek bazlı durum (Discord canlı doğrulama matrisi)
+## Yetenek bazlı durum (Discord canlı doğrulama matrisi — 2026-09-25, test guild)
 
-Canlı hiçbir şey gözlenmedi. Bir işlemin başarılı olması tüm alt sistemi VERIFIED_LIVE yapmaz.
+Bir işlemin başarılı olması tüm alt sistemi VERIFIED_LIVE yapmaz. Ortam: Development, Discord transport Gateway, gönderim
+Send, sağlayıcı Fixture (TEST/DEMO), Example modülü kapalı (7 komut grubu).
 
 | Yetenek | Durum |
 |---|---|
-| Discord gateway bağlantısı, yeniden bağlanma, log'da token olmaması | BLOCKED (token yok) — log redaction TESTED_OFFLINE |
-| Guild slash komut kaydı + `/` seçicisinde görünme | BLOCKED — kayıt planı/önizleme TESTED_OFFLINE |
-| `/help`, `/bot status|about|source`, `/modules list` | BLOCKED — TESTED_OFFLINE |
-| `/privacy export|delete` | BLOCKED — TESTED_OFFLINE |
-| `/setup` akışı | BLOCKED — TESTED_OFFLINE |
-| `/modules enable|disable` (guild kapsamı) | BLOCKED — TESTED_OFFLINE |
-| `/esports …` Discord etkileşimi | BLOCKED — TESTED_OFFLINE |
-| Liquipedia canlı veri (komutlar, autocomplete verisi, bildirimler) | BLOCKED (onaylı API anahtarı yok) — fixture ile TESTED_OFFLINE |
-| Yönetici yetki ayrımı (sunucu tarafı) | BLOCKED — TESTED_OFFLINE |
-| Autocomplete etkileşimi | BLOCKED — TESTED_OFFLINE |
-| Rol paneli / self-service rol verme-alma | BLOCKED — TESTED_OFFLINE |
-| TEST/DEMO bildirimi (kanal, format, kopya yok, spoiler, ping yok) | BLOCKED — TESTED_OFFLINE (simulate) |
-| Yeniden başlatma sonrası kalıcılık | BLOCKED — TESTED_OFFLINE |
-| Guild'ler arası izolasyon | TESTED_OFFLINE (ikinci gerçek guild yoksa öyle kalır) |
-| Bildirim çökme kurtarma, 429, yarış durumları | TESTED_OFFLINE (canlıda yıkıcı test yapılmaz) |
-| VRS canlı veri (Valve deposu) | NOT_RUN — TESTED_OFFLINE; ağ erişimiyle ayrıca doğrulanabilir |
+| Token/Application ID eşleşmesi (senkron aracı Discord'dan uygulama kimliğini okur) | **VERIFIED_LIVE** |
+| Discord gateway bağlantısı (Connected → Ready, "TSQ Bot", 1 guild) | **VERIFIED_LIVE** (6 başlatma) |
+| Log'da token yok (token değeri ve gizli parçası log'da 0 kez) | **VERIFIED_LIVE** |
+| Guild komut kaydı: önizleme → yalnızca 7 Create → uygula → tekrar önizleme "Nothing to change" | **VERIFIED_LIVE** (global yok, başka komuta dokunulmadı) |
+| Komutların slash ile çağrılması (/bot, /modules, /esports, /esports-admin, /privacy, /setup) | **VERIFIED_LIVE** |
+| `/bot status`, `/bot about` (TSQ Bot, sürüm+commit, AGPL, "resmî devamı değildir"), `/bot source` (URL + çalışan commit) | **VERIFIED_LIVE** |
+| `/help` | **VERIFIED_LIVE** (sahip bildirimi) |
+| `/modules list`; esports'u `/setup` ile etkinleştirme | **VERIFIED_LIVE** |
+| `/setup` esports adımı: kanal seçimi kalıcı, sihirbaz mesajı güncelleniyor (düzeltme sonrası) | **VERIFIED_LIVE** |
+| `/esports-admin configure reminder_minutes`, `/esports-admin doctor` | **VERIFIED_LIVE** |
+| `/esports matches`, `/esports rankings`, `follow` / `subscriptions` / `unfollow` | **VERIFIED_LIVE** (etkileşim; veri TEST/DEMO) |
+| `/privacy export` (JSON eki, "TSQ Bot", yalnızca çağıran); `/privacy delete` önizleme + onay + silme (DB'de takip/tercih 0) | **VERIFIED_LIVE** |
+| TEST/DEMO bildirimi: doğru kanal, [TEST/DEMO] etiketi, ping yok, Türkçe, tek mesaj | **VERIFIED_LIVE** (mesaj `1552805032611815436`) |
+| Aynı çalışmada tekrar taramada kopya yok (`new=0`) | **VERIFIED_LIVE** |
+| Yeniden başlatma: yeni mesaj yok, mevcut mesaj ping'siz düzenlendi (`updated=1`, tek outbox satırı) | **VERIFIED_LIVE** |
+| Ayar/modül durumu yeniden başlatmada korunur | **VERIFIED_LIVE** |
+| Takım autocomplete (`/esports follow team:`) | **VERIFIED_LIVE** (sahip bildirimi) |
+| Eşleme autocomplete (`roles unmap/selfservice mapping:`) | **HATALI** — Discord "Loading options failed"; log yoktu. `148523b` hatayı loglar ve boş liste döner; kök neden bir canlı denemeyle loga düşecek |
+| Bot izinleri = 268520448 (View Channels, Send Messages, Embed Links, Read Message History, Manage Roles); Administrator yok; ayrıcalıklı intent yok | **VERIFIED_LIVE** |
+| Yönetici yetki ayrımı (normal üye) | **BLOCKED** — sahibin ikinci hesabı yok; TESTED_OFFLINE |
+| Rol eşleme (`roles map`) ve self-service onayı | **VERIFIED_LIVE** (DB: eşleme #1 TSQ Test Bildirim → Toro Wolves, ping kapalı, self-service) |
+| Rol verme/alma, önceden sahip olunan rolün korunması, güvensiz rol reddi, panel | Sahip testleri yarıda bıraktı (sonuç teyit edilmedi) — TESTED_OFFLINE |
+| Başarısız işlemlerin takip kodu log'da (`2e7f9bd`) | Uygulandı; canlıda bir hata vakasıyla henüz gözlenmedi |
+| Guild'ler arası izolasyon | TESTED_OFFLINE (tek gerçek guild) |
+| Bildirim çökme kurtarma, 429, belirsiz teslimat | TESTED_OFFLINE (canlıda yıkıcı test yok) |
+| Liquipedia canlı veri | **BLOCKED** (onaylı API anahtarı yok) |
+| VRS canlı veri | NOT_RUN — TESTED_OFFLINE |
 | Global komut kaydı, herkese açık bot | DEFERRED |
 | GitHub deposunun public olması | PRE-RELEASE REQUIREMENT |
+
+Canlıda bulunup düzeltilen hatalar (hepsi `feature/live-validation`, regresyon testli, 202/202 ×3):
+1. `f4f3b4e` — hatalı yapılandırma değeri CLI'ı yığın izi ile çökertip değeri ekrana basıyordu (`<…>` ile kaydedilmiş Application ID).
+2. `49f4363` — Discord.Net'in ±2^53−1 "sınır yok" değerleri metin/kanal seçeneklerine yazılıyordu → her senkronda sahte Update.
+3. `1178946` — `/setup` kanal seçimi kaydediliyor ama sihirbaz yenilenmiyordu (Etkinleştir pasif kalıyordu); status/about metinleri İngilizceydi.
+4. `12fbd76` — demo saatleri her taramada yeniden bazlanıyordu → 15 dk hatırlatma hiç tetiklenmiyordu.
+5. `7eaa62f` — demo bildirimleri gerçek twitch/Liquipedia bağlantısı veriyor ve "Kaynak: Liquipedia" diyordu.
+6. `3577e54` — demo sıralaması "Kaynak: Valve" diyordu.
+7. `2e7f9bd` — kullanıcıya gösterilen takip kodları log'a yazılmıyordu.
+8. `148523b` — autocomplete hataları loglanmıyor ve yanıtsız kalıyordu (eşleme autocomplete kök nedeni açık).
+
+Test guild'de kalan yapılandırma: rol eşleme #2 (TSQ Test Bildirim → **tüm maçlar**, hatırlatma ping'i **açık**) — sahip
+testi sırasında varsayılanla oluştu; ileride demo hatırlatmaları bu test rolünü etiketleyebilir. Kaldırma:
+`/esports-admin roles unmap mapping:2`.
+
+Bilinen demo yan etkisi: demo saatleri her süreç başlatmada yeniden hesaplanır; bu yüzden gönderilmiş demo hatırlatması
+yeniden başlatmada "başlangıç saati güncellendi" notuyla (ping'siz) düzenlenir. Gerçek veride bu davranış doğrudur.
 
 Discord yapılandırması (koddan doğrulandı): gateway intent yalnızca **Guilds** (ayrıcalıklı intent yok); zorunlu kanal
 izinleri View Channel + Send Messages + Embed Links, isteğe bağlı Read Message History (uzlaştırma) ve Manage Roles
@@ -170,16 +203,9 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 ## NEXT ACTION
 
-**Sahip (B1+B2):**
-1. Discord Developer Portal'da **"TSQ Bot"** uygulamasını oluştur (Bot sekmesinde ayrıcalıklı intent'leri açma).
-2. Token ve uygulama kimliğini **sohbete yazmadan**, kendi terminalinde kaydet:
-   `dotnet user-secrets set "Discord:Token" "<token>" --project src\ToroSquad.Bot`
-   `dotnet user-secrets set "Discord:ApplicationId" "<id>" --project src\ToroSquad.Bot`
-3. Botu yalnızca bir **test sunucusuna** davet et (`bot applications.commands`, izin 84992; self-service rol testleri için
-   268520448). Test için zararsız, izinsiz ayrı roller oluştur; bot rolünü bu rollerin üstüne koy.
-4. Bu oturuma test guild ID'sini ve "**test sunucusunda guild komut kaydı + TEST/DEMO bildirimi**" onayını ver.
+**Sahip (isteğe bağlı, tek adım):** `/esports-admin roles unmap` yazıp `mapping` alanına tıklamak → ajan log'daki
+"Autocomplete failed [TS-…]" satırından kök nedeni düzeltir. Aynı komutla `mapping:2` girilerek ping'li test eşlemesi kaldırılabilir.
 
-**Onaydan sonra ajan:** token'ın doğru uygulamaya ait olduğunu doğrular → `Sync-Commands.ps1 -GuildId <id>` önizleme
-(oluşturulacak/güncellenecek/silinecek; TSQ Bot'a ait olmayan komutlara dokunulmaz) → temizse `-Apply` (yalnızca guild,
-global yok) → yukarıdaki matrisi madde madde canlı doğrular → sonuçları bu dosyaya yazar. Liquipedia anahtarı yoksa veri
-kısmı BLOCKED kalır.
+**Karar bekleyen:** `feature/live-validation` dalını GitHub'a push edip `main'e PR açmak (sahip onayı gerekir; push edilmedi).
+Kalan canlı maddeler (yetki ayrımı için ikinci hesap, rol verme/alma, güvensiz rol, panel) TESTED_OFFLINE olarak kalabilir.
+Liquipedia canlı: onaylı API anahtarı gelene kadar BLOCKED.

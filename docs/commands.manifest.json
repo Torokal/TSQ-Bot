@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "965cae891cfcc86b2bb6a344697145046de78e3fb4c333ed5bf0a8e8437b9c95",
+  "hash": "036fc397ac8d1e2db5691c8f13789744a3fa181a1bb67ef0247858ab51428009",
   "commands": [
     {
       "module": "core",
@@ -81,9 +81,7 @@
                   "tr": "Yalnızca bu takımın maçları"
                 },
                 "required": false,
-                "autocomplete": true,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "autocomplete": true
               },
               {
                 "type": 3,
@@ -93,9 +91,7 @@
                   "tr": "Yalnızca bu turnuvanın maçları"
                 },
                 "required": false,
-                "autocomplete": true,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "autocomplete": true
               },
               {
                 "type": 5,
@@ -104,9 +100,7 @@
                 "description_localizations": {
                   "tr": "Yalnızca takip ettiğiniz takımlar"
                 },
-                "required": false,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "required": false
               }
             ]
           },
@@ -126,9 +120,7 @@
                   "tr": "Yalnızca bu takımın sonuçları"
                 },
                 "required": false,
-                "autocomplete": true,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "autocomplete": true
               },
               {
                 "type": 5,
@@ -137,9 +129,7 @@
                 "description_localizations": {
                   "tr": "Skorları spoiler ile gizle (varsayılan: tercihiniz)"
                 },
-                "required": false,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "required": false
               }
             ]
           },
@@ -188,9 +178,7 @@
                   "tr": "Takım"
                 },
                 "required": true,
-                "autocomplete": true,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "autocomplete": true
               }
             ]
           },
@@ -210,9 +198,7 @@
                   "tr": "Takip edilecek takım"
                 },
                 "required": true,
-                "autocomplete": true,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "autocomplete": true
               }
             ]
           },
@@ -232,9 +218,7 @@
                   "tr": "Takibi bırakılacak takım"
                 },
                 "required": true,
-                "autocomplete": true,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "autocomplete": true
               }
             ]
           },
@@ -283,8 +267,6 @@
                   "tr": "Otomatik bildirim kanalı"
                 },
                 "required": false,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991,
                 "channel_types": [
                   0,
                   5
@@ -297,9 +279,7 @@
                 "description_localizations": {
                   "tr": "Planlanan başlangıç hatırlatmaları gönder"
                 },
-                "required": false,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "required": false
               },
               {
                 "type": 4,
@@ -319,9 +299,7 @@
                 "description_localizations": {
                   "tr": "Sonuç bildirimleri gönder"
                 },
-                "required": false,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "required": false
               },
               {
                 "type": 5,
@@ -330,9 +308,7 @@
                 "description_localizations": {
                   "tr": "Sonuç bildirimlerinde skorları gizle"
                 },
-                "required": false,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "required": false
               }
             ]
           },
@@ -423,9 +399,7 @@
                         },
                         "value": "remove"
                       }
-                    ],
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    ]
                   },
                   {
                     "type": 3,
@@ -435,9 +409,7 @@
                       "tr": "Takım"
                     },
                     "required": true,
-                    "autocomplete": true,
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    "autocomplete": true
                   }
                 ]
               },
@@ -472,9 +444,7 @@
                         },
                         "value": "remove"
                       }
-                    ],
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    ]
                   },
                   {
                     "type": 3,
@@ -484,9 +454,7 @@
                       "tr": "Turnuva"
                     },
                     "required": true,
-                    "autocomplete": true,
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    "autocomplete": true
                   }
                 ]
               },
@@ -521,9 +489,7 @@
                         },
                         "value": "remove"
                       }
-                    ],
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    ]
                   },
                   {
                     "type": 3,
@@ -569,9 +535,7 @@
                         },
                         "value": "5"
                       }
-                    ],
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    ]
                   }
                 ]
               },
@@ -637,9 +601,7 @@
                     "description_localizations": {
                       "tr": "Mevcut rol"
                     },
-                    "required": true,
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    "required": true
                   },
                   {
                     "type": 3,
@@ -649,9 +611,7 @@
                       "tr": "Yalnızca bu takımın maçları (boş = tüm duyurulan maçlar)"
                     },
                     "required": false,
-                    "autocomplete": true,
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    "autocomplete": true
                   },
                   {
                     "type": 5,
@@ -660,9 +620,7 @@
                     "description_localizations": {
                       "tr": "Planlanan başlangıç hatırlatmalarında ping at"
                     },
-                    "required": false,
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    "required": false
                   },
                   {
                     "type": 5,
@@ -671,9 +629,7 @@
                     "description_localizations": {
                       "tr": "Sonuçlarda ping at"
                     },
-                    "required": false,
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    "required": false
                   }
                 ]
               },
@@ -693,9 +649,7 @@
                       "tr": "Eşleştirme"
                     },
                     "required": true,
-                    "autocomplete": true,
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    "autocomplete": true
                   }
                 ]
               },
@@ -715,9 +669,7 @@
                       "tr": "Eşleştirme"
                     },
                     "required": true,
-                    "autocomplete": true,
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    "autocomplete": true
                   },
                   {
                     "type": 5,
@@ -726,9 +678,7 @@
                     "description_localizations": {
                       "tr": "Self-servise izin ver"
                     },
-                    "required": true,
-                    "min_value": -9007199254740991,
-                    "max_value": 9007199254740991
+                    "required": true
                   }
                 ]
               }
@@ -799,9 +749,7 @@
                   "tr": "Modül kimliği"
                 },
                 "required": true,
-                "autocomplete": true,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "autocomplete": true
               }
             ]
           },
@@ -821,9 +769,7 @@
                   "tr": "Modül kimliği"
                 },
                 "required": true,
-                "autocomplete": true,
-                "min_value": -9007199254740991,
-                "max_value": 9007199254740991
+                "autocomplete": true
               }
             ]
           }

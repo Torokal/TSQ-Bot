@@ -14,6 +14,9 @@ public static partial class CommandManifestValidator
     public const int MaxCommandCharacters = 8000;
     public const string RequiredLocale = "tr";
 
+    /// <summary>2^53 - 1: what Discord.Net reports for an undeclared numeric bound.</summary>
+    public const double UnsetNumericBound = 9007199254740991;
+
     /// <summary>Discord: InteractionContextType.GUILD = 0.</summary>
     public const int GuildContext = 0;
 
@@ -105,6 +108,12 @@ public static partial class CommandManifestValidator
                         errors.Add($"{optionPath}: autocomplete and choices are mutually exclusive");
                     if (option.Autocomplete && option.Type is not (OptionType.String or OptionType.Integer or OptionType.Number))
                         errors.Add($"{optionPath}: autocomplete only valid for string/integer/number");
+                    if ((option.MinValue is not null || option.MaxValue is not null) && option.Type is not (OptionType.Integer or OptionType.Number))
+                        errors.Add($"{optionPath}: min/max value only valid for integer/number (Discord drops it; sync would never converge)");
+                    if (option.MinValue is { } lo && Math.Abs(lo) >= UnsetNumericBound || option.MaxValue is { } hi && Math.Abs(hi) >= UnsetNumericBound)
+                        errors.Add($"{optionPath}: min/max value is the 'unset' sentinel");
+                    if ((option.MinLength is not null || option.MaxLength is not null) && option.Type != OptionType.String)
+                        errors.Add($"{optionPath}: min/max length only valid for string");
                     foreach (var choice in option.Choices)
                     {
                         if (choice.Name.Length is < 1 or > 100)

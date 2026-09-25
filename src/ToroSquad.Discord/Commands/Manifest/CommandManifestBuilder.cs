@@ -127,12 +127,19 @@ public static class CommandManifestBuilder
             choices,
             [],
             p.IsAutocomplete,
-            p.MinValue,
-            p.MaxValue,
-            p.MinLength,
-            p.MaxLength,
+            IsNumeric(type) ? Bound(p.MinValue) : null,
+            IsNumeric(type) ? Bound(p.MaxValue) : null,
+            type == OptionType.String ? p.MinLength : null,
+            type == OptionType.String ? p.MaxLength : null,
             p.ChannelTypes.Select(t => (int)t).ToList());
     }
+
+    private static bool IsNumeric(OptionType type) => type is OptionType.Integer or OptionType.Number;
+
+    // Discord.Net reports +/-(2^53 - 1) when no bound was declared; Discord does not store such values, so emitting
+    // them would make every sync see a spurious difference (found in the first live guild sync, 2026-09-25).
+    private static double? Bound(double? value) =>
+        value is { } v && Math.Abs(v) < CommandManifestValidator.UnsetNumericBound ? v : null;
 
     private static IReadOnlyDictionary<string, string> Tr(ILocalizer localizer, string key) =>
         localizer.HasKey(Languages.Turkish, key)

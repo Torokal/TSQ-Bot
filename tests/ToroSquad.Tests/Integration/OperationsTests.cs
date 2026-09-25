@@ -220,6 +220,31 @@ public sealed partial class OperationsTests
     }
 
     [Fact]
+    public async Task Demo_fixture_times_stay_fixed_between_polls_so_a_15_minute_reminder_becomes_due()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var guild = new GuildId(900_000_000_000_000_601);
+        await host.SetUpEsportsGuildAsync(guild, new ChannelId(61));
+        await host.InScopeAsync(async sp => (await sp.GetRequiredService<EsportsConfigService>()
+            .ConfigureAsync(TestHost.Admin(guild), null, null, 15, null, null, CancellationToken.None)).Succeeded.Should().BeTrue());
+        var poller = host.Services.GetRequiredService<EsportsPoller>();
+        var cache = host.Services.GetRequiredService<EsportsCache>();
+
+        async Task<int> RemindersAsync() => await host.InScopeAsync(sp =>
+            sp.GetRequiredService<ToroDbContext>().Set<ToroSquad.Infrastructure.Persistence.OutboxMessageEntity>().CountAsync(o => o.Kind == NotificationPlanner.KindReminder));
+
+        await poller.RefreshMatchesAsync(CancellationToken.None);
+        var upcoming = cache.Matches.Data!.Where(m => m.Status == MatchStatus.Scheduled && m.ScheduledStartUtc > host.Clock.GetUtcNow()).MinBy(m => m.ScheduledStartUtc)!;
+        (await RemindersAsync()).Should().Be(0, "20 minutes out, lead 15: not due yet");
+
+        host.Clock.Advance(TimeSpan.FromMinutes(10));
+        await poller.RefreshMatchesAsync(CancellationToken.None);
+
+        cache.Matches.Data!.Single(m => m.Key == upcoming.Key).ScheduledStartUtc.Should().Be(upcoming.ScheduledStartUtc, "demo times are anchored, not re-based on every poll");
+        (await RemindersAsync()).Should().Be(1, "10 minutes later the match is 10 minutes out, inside the 15-minute lead");
+    }
+
+    [Fact]
     public async Task Provider_failure_keeps_last_good_data_marks_it_stale_and_plans_nothing()
     {
         await using var host = await TestHost.CreateAsync();
@@ -264,6 +289,21 @@ public sealed partial class OperationsTests
         DescriptionTexts(manifest.RootElement).Should().Contain("About TSQ Bot: status, version, source code");
 
         File.ReadAllText(Path.Combine(root, "README.md")).Should().StartWith("# TSQ Bot").And.NotContain("ToroSquad Bot");
+    }
+
+    [Fact]
+    public void Invalid_configuration_values_are_reported_by_key_without_echoing_the_value()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Discord:ApplicationId"] = "<123456789012345678>",
+        }).Build();
+        var error = Record.Exception(() => config.GetSection("Discord").Get<ToroSquad.Discord.DiscordOptions>());
+
+        var message = Cli.DescribeConfigurationError(error!);
+
+        message.Should().StartWith("'Discord:ApplicationId' has an invalid value for UInt64").And.NotContain("123456789012345678");
+        Cli.DescribeConfigurationError(new InvalidOperationException("unrelated")).Should().BeNull();
     }
 
     [Fact]
