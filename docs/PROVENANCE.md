@@ -23,7 +23,7 @@ not a replacement bot, and nothing indicates the old bot's credentials, data or 
 | Parsing | `teamsNode[i]` for i=0..1, `GetProperty(...)!`, `GetString()!` | Crash on missing opponents/fields/nulls | Tolerant accessors, explicit TBD/Unknown opponents, warnings instead of exceptions |
 | Dates | `DateTime.Parse(date)` (local-culture, unspecified kind) | Timezone/culture bugs | `ParseExact` as UTC (LPDB dates are UTC), invalid → null + warning |
 | Scores | Map scores default `{0,0}`; forfeit mapped to "1-0" | Invented scores | Scores only when the source states them (`status=S`, ≥0); forfeit/draw/not-played explicit |
-| User-Agent | `BOT-Greg-v2/1.0 (julius.gmeinder@proton.me)` | Impersonates another operator | Operator-configured UA required; config validation rejects the upstream identity |
+| User-Agent | `BOT-Greg-v2/1.0 (julius.gmeinder@proton.me)` | Impersonates another operator | Own UA always sent (operator-configured recommended, product default `TSQBot (https://github.com/Torokal/TSQ-Bot)` otherwise); config validation rejects the upstream identity |
 | VRS | Latest file by string sort of whole tree path, column positions fixed | Wrong file / silent misparse | Date from file name, header-based columns, host allow-list, failure types |
 | Tier | `Convert.ToInt32(liquipediatier)` | Crash on empty/non-numeric | Kept as string, nullable |
 
@@ -66,7 +66,9 @@ technical record, not legal advice.
 
 | Source | Terms (see docs/PROVIDERS.md) | How TSQ Bot complies |
 |---|---|---|
-| Liquipedia (LiquipediaDB API) | CC BY-SA 3.0; attribution + link required; API key by approval; 60 req/h baseline | Footer "Kaynak: Liquipedia (CC BY-SA 3.0)" + source link on every message; per-table request budget |
+| PandaScore (REST API) — default | pandascore.co terms: art. 6.4 "Source: PandaScore" on any medium reproducing the data; no raw-data redistribution; no direct API access/URLs for end users (6.3); free plan 1,000 req/h | Footer "Kaynak: PandaScore" on every card, PandaScore in `/bot about`; only processed cards, never raw JSON or API URLs; local request budget (50% of the plan) |
+| Liquipedia (LiquipediaDB API) — legacy/optional | CC BY-SA 3.0; attribution + link required; API key by approval; 60 req/h baseline | Footer "Kaynak: Liquipedia (CC BY-SA 3.0)" + source link on every message; per-table request budget |
+| HLTV | Not used as a data source (no scraping, no unofficial endpoints) | Only operator-verified match-page URLs are linked (`Esports:VerifiedMatchLinks`); pages are never fetched |
 | Valve regional standings | Public GitHub repo, **no license file**; data credits HLTV.org | Displayed with source, date and attribution only; no bulk redistribution; synthetic fixtures in tests |
 
 ## Contact with the upstream developer

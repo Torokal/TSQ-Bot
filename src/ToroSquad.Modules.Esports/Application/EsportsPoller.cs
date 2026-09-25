@@ -20,12 +20,15 @@ public sealed class EsportsPoller(
     IEsportsDataProvider matchProvider,
     IRankingsProvider rankingsProvider,
     EsportsCache cache,
+    MatchLinkCatalog links,
+    LiquipediaHltvLinkSource hltvLinks,
     IOptions<EsportsOptions> options,
     TimeProvider clock,
     ILogger<EsportsPoller> logger) : BackgroundService
 {
-    public const string MatchesKey = "liquipedia:matches";
-    public const string EventsKey = "liquipedia:events";
+    // Provider-specific keys: switching providers never mixes their cached data.
+    public string MatchesKey => matchProvider.Id + ":matches";
+    public string EventsKey => matchProvider.Id + ":events";
     public const string RankingsKey = "valve:vrs";
 
     private DateTimeOffset _nextMatches = DateTimeOffset.MinValue;
@@ -90,12 +93,30 @@ public sealed class EsportsPoller(
         var previousFetch = cache.Matches.FetchedAt;
         var window = new MatchWindow(now - TimeSpan.FromHours(o.PastWindowHours), now + TimeSpan.FromHours(o.FutureWindowHours));
         var result = await SafeAsync(() => matchProvider.GetMatchesAsync(window, ct), now);
+        ProviderResult<IReadOnlyList<EsportsMatch>>? linkResult = null;
+        if (result.HasData)
+        {
+            // External match pages: operator-curated first, then Liquipedia's HLTV links (unique match only). Never HLTV itself.
+            // The optional link source can never fail the match poll.
+            try
+            {
+                linkResult = await hltvLinks.RefreshIfDueAsync(window, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "HLTV link source refresh threw; keeping known links");
+            }
+
+            result = result with { Value = result.Value!.Select(links.Apply).Select(hltvLinks.Apply).ToList() };
+        }
         cache.UpdateMatches(result, now);
         _nextMatches = NextAttempt(result, TimeSpan.FromMinutes(o.MatchPollMinutes), cache.Matches.ConsecutiveFailures);
 
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ToroDbContext>();
         await SaveStateAsync(db, MatchesKey, result, null, ct);
+        if (linkResult is not null)
+            await SaveStateAsync(db, hltvLinks.StateKey, linkResult, linkResult.HasData ? MatchJson.SerializeList(hltvLinks.Candidates) : null, ct);
         if (!result.HasData)
         {
             logger.LogWarning("Esports matches fetch: {Outcome} {Detail}", result.Outcome, result.Detail);
@@ -140,8 +161,9 @@ public sealed class EsportsPoller(
         var db = scope.ServiceProvider.GetRequiredService<ToroDbContext>();
         var states = await db.Set<ProviderStateEntity>().AsNoTracking().ToDictionaryAsync(s => s.Key, ct);
         var horizon = clock.GetUtcNow() - TimeSpan.FromHours(options.Value.PastWindowHours);
+        var prefix = matchProvider.Id + ":";
         var snapshots = await db.Set<MatchSnapshotEntity>().AsNoTracking()
-            .Where(s => s.ScheduledStartUtc == null || s.ScheduledStartUtc >= horizon)
+            .Where(s => s.MatchKey.StartsWith(prefix) && (s.ScheduledStartUtc == null || s.ScheduledStartUtc >= horizon))
             .Select(s => s.PayloadJson).ToListAsync(ct);
         var matches = snapshots.Select(MatchJson.Deserialize).OfType<EsportsMatch>().ToList();
         var teams = await db.Set<KnownTeamEntity>().AsNoTracking().ToListAsync(ct);
@@ -153,9 +175,18 @@ public sealed class EsportsPoller(
         if (states.TryGetValue(RankingsKey, out var rk) && rk.DataJson is not null)
             rankings = MatchJson.Deserialize<RankingSnapshot>(rk.DataJson);
 
+        if (states.TryGetValue(hltvLinks.StateKey, out var lk))
+            hltvLinks.Restore(lk.DataJson is null ? null : MatchJson.DeserializeList<EsportsMatch>(lk.DataJson), lk.LastAttemptAt);
+
         cache.Restore(matches.Count > 0 ? matches : null, states.GetValueOrDefault(MatchesKey)?.LastSuccessAt,
             events, ev?.LastSuccessAt, rankings,
-            teams.Select(t => new TeamRef(Providers.Liquipedia.LiquipediaParser.Source, t.TeamKey, t.Name, t.ShortName)).ToList());
+            teams.Where(t => IsProviderTeam(t.TeamKey)).Select(t => new TeamRef(matchProvider.Id, t.TeamKey, t.Name, t.ShortName)).ToList());
+    }
+
+    private bool IsProviderTeam(string teamKey)
+    {
+        var pandaKey = teamKey.StartsWith("ps-team:", StringComparison.Ordinal);
+        return matchProvider.Id == Providers.PandaScore.PandaScoreParser.Source ? pandaKey : !pandaKey;
     }
 
     private async Task MaintenanceAsync(CancellationToken ct)

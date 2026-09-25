@@ -2,9 +2,9 @@
 
 Modular Discord bot with esports match tracking and extensible server modules.
 
-> **Status (2026-09-24): early development — not production-ready and not live-verified.**
-> Everything below is built and tested **offline** (automated tests, fake Discord transport, synthetic provider data).
-> The bot has **not** yet been connected to a real Discord server or to the live Liquipedia API.
+> **Status (2026-09-25): early development — not production-ready, not publicly launched.**
+> Core Discord behaviour is verified live in one private **test guild**; match data runs on **synthetic demo data**
+> because no provider credentials are configured (PandaScore/Liquipedia live data: BLOCKED).
 > Up-to-date state (in Turkish): [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
 
 ## What is TSQ Bot?
@@ -22,22 +22,22 @@ Details: [docs/PROVENANCE.md](docs/PROVENANCE.md).
 
 ## Current Status
 
-Status words: **TESTED_OFFLINE** = proven by automated tests locally · **VERIFIED_LIVE** = checked against real Discord /
-real APIs · **BLOCKED** = waiting on an owner action · **DEFERRED** = intentionally not built yet.
+Status words: **TESTED_OFFLINE** = proven by automated tests locally · **VERIFIED_LIVE** = observed against real Discord /
+real APIs · **BLOCKED** = waiting on an owner action · **DEFERRED** = intentionally not built yet ·
+**PRE-RELEASE REQUIREMENT** = must happen before public launch.
 
 | Area | Status |
 |---|---|
-| Module core, per-server module enable/disable, server-side authorization, guild isolation | TESTED_OFFLINE |
-| Slash command schema (`/help`, `/bot`, `/privacy`, `/setup`, `/modules`, `/esports`, `/esports-admin`) | TESTED_OFFLINE |
-| Command registration tool (dry-run default, guild allow-list, prune only on explicit flag) | TESTED_OFFLINE (fake registrar) |
-| Liquipedia client/parser (error types, pagination, request budget) · VRS parser and team matching | TESTED_OFFLINE (synthetic fixtures) |
-| Notification planner, durable outbox, safe self-service roles, spoiler mode, mention safety | TESTED_OFFLINE |
-| Privacy export/delete, data retention | TESTED_OFFLINE |
-| Real Discord connection, commands visible in a server, real role changes | **BLOCKED** — no Discord application/token or test server yet |
-| Live Liquipedia data | **BLOCKED** — needs an approved Liquipedia API key |
-| Live VRS fetch | not run yet |
-| News notifications, "match is live" notifications, Docker / 24×7 hosting | DEFERRED |
-| Anything | **VERIFIED_LIVE: none yet** |
+| Discord gateway, guild-only command registration (no global commands), minimum permissions, no privileged intents | **VERIFIED_LIVE** (test guild) |
+| `/help`, `/bot`, `/modules`, `/setup`, `/esports …`, `/esports-admin configure\|doctor\|roles map`, team autocomplete, `/privacy export\|delete` | **VERIFIED_LIVE** (test guild) |
+| TEST/DEMO notification delivery, no duplicate on re-scan or restart, settings survive restarts | **VERIFIED_LIVE** (test guild) |
+| Compact match cards (started / result / postponed / rescheduled / cancelled / forfeit) | TESTED_OFFLINE; Discord rendering pending live check |
+| PandaScore provider (default): parser, lifecycle, pagination, error types, rate budget | TESTED_OFFLINE (synthetic fixtures) — **live BLOCKED** (no token) |
+| Liquipedia provider (legacy/optional) | TESTED_OFFLINE — live BLOCKED (no approved key) |
+| Valve VRS rankings | TESTED_OFFLINE — live fetch not run |
+| Verified external match links (HLTV/official/provider), URL safety | TESTED_OFFLINE |
+| Admin/member permission separation with a second account, role grant/removal, cross-guild isolation, crash recovery | TESTED_OFFLINE |
+| HLTV as a data provider, BOT Greg "stars", news, Docker / 24×7 hosting, global commands, public launch | DEFERRED |
 | GitHub repository public visibility | **PRE-RELEASE REQUIREMENT** — private during development/testing, made public before public bot launch |
 
 ## Features
@@ -45,9 +45,14 @@ real APIs · **BLOCKED** = waiting on an owner action · **DEFERRED** = intentio
 - **Real Discord slash commands** only (no prefix/message commands; Message Content intent is not used).
 - **Modules**: each server enables/disables modules; disabling stops delivery but keeps data.
 - **Esports (CS2)**: upcoming matches, results, events, VRS rankings, team lookup, follow/unfollow teams,
-  per-server filters (team / tournament / tier / VRS top-N), planned-start reminders and result posts.
-- **Honest data**: provider errors are never shown as "no matches"; a passed start time is never called "live";
-  live mode never falls back to demo data.
+  per-server filters (team / tournament / tier / VRS top-N).
+- **Match notifications as compact cards**: planned-start reminder, **match started** (only when the provider states
+  `running`), **result** (score in the title, winner line), **postponed**, **time changed** (provider-flagged, shown in
+  Europe/Istanbul), **cancelled**, **forfeit** — each sent once, never duplicated by re-scans or restarts.
+- **"Maç Sayfası" link**: a verified HLTV match page is preferred, then an official or provider page, otherwise no link.
+  HLTV is **never scraped** and HLTV URLs are never guessed.
+- **Honest data**: provider errors are never shown as "no matches" or turned into match states; a passed start time is
+  never called "started"; live mode never falls back to demo data; unknown stays unknown.
 - **Durable delivery**: persistent outbox with de-duplication, crash recovery and ambiguous-delivery reconciliation;
   corrections edit the existing message without pinging. No "exactly once" claim.
 - **Safe roles**: only roles that grant no permissions and sit below the approver can be self-service; the bot never
@@ -112,27 +117,40 @@ test server, going live.
 |---|---|---|
 | `Discord:Transport` | `Fake` | no Discord connection; messages stay in-process |
 | `Delivery:Mode` | `DryRun` | notifications are planned and logged, not sent |
+| `Esports:Provider:Name` | `PandaScore` | match data provider (`Liquipedia` = legacy/optional) |
 | `Esports:Provider:Mode` | `Fixture` | synthetic data through the real client/parser, labelled TEST/DEMO |
+| `Esports:MatchPollMinutes` | `5` | validated against the provider's request budget at startup |
+| `Esports:VerifiedMatchLinks` | `[]` | operator-curated verified HLTV/official match pages |
 | `Discord:AllowGlobalCommandSync` | `false` | global command registration is a separate approval gate |
 | `Bot:SourceUrl` | `https://github.com/Torokal/TSQ-Bot` | shown by `/bot source` (see [Source Code](#source-code)) |
 
 Secrets are read **only** from `dotnet user-secrets` or environment variables with the `TOROSQUAD_` prefix
-(`:` → `__`, e.g. `TOROSQUAD_Discord__Token`). There is no `.env` file support, and secrets never belong in the repository.
+(`:` → `__`, e.g. `TOROSQUAD_Discord__Token`, `TOROSQUAD_PandaScore__Token`). There is no `.env` file support, and secrets never belong in the repository.
 
 ## Discord Setup
 
-**BLOCKED — the Discord application "TSQ Bot" has not been created/configured yet.**
-When it is: create the application and bot in the Discord Developer Portal, store the token with
+The Discord application **"TSQ Bot"** exists and is verified in a private test guild. To run your own: create the
+application and bot in the Discord Developer Portal, store the token with
 `dotnet user-secrets set "Discord:Token" "<token>" --project src\ToroSquad.Bot`, invite the bot to a **test** server
 (scopes `bot applications.commands`; permissions integer 84992, or 268520448 with self-service roles; no Administrator),
 then register commands with `Sync-Commands.ps1` (dry-run first). Only the non-privileged **Guilds** gateway intent is used.
 
-## Liquipedia Setup
+## Data Providers
 
-**BLOCKED — no approved Liquipedia API key.** LiquipediaDB API access is granted on request; paid plans exist and free
-access is limited to approved open-source, non-commercial projects (the decision and any cost are the operator's).
-Live mode also requires a User-Agent that identifies **your** bot and contact. Liquipedia content is CC BY-SA 3.0 and is
-attributed in every message. Details: [docs/PROVIDERS.md](docs/PROVIDERS.md).
+- **PandaScore (default)** — create a token at app.pandascore.co (a free plan with 1,000 requests/hour exists; no paid plan
+  is enabled automatically) and store it with `dotnet user-secrets set "PandaScore:Token" "<TOKEN>" --project src\ToroSquad.Bot`.
+  Without a token live PandaScore data is **BLOCKED**. Every card says "Kaynak: PandaScore" as PandaScore's terms require.
+- **Liquipedia (optional)** — optional HLTV match-page link enrichment for PandaScore matches, or the legacy match
+  provider if `Esports:Provider:Name=Liquipedia`. Needs an approved LiquipediaDB API key (60 requests/hour; Basic/Premium
+  currently unavailable, free access by application). **BLOCKED/OPTIONAL** until the owner applies after the repository
+  goes public at release; the bot runs normally without it. A custom User-Agent is sent (your own via
+  `Esports:Liquipedia:UserAgent` is recommended; the contact requirement in Liquipedia's terms is stated for the MediaWiki
+  API, not separately for LPDB). Content is CC BY-SA 3.0 and attributed in every message.
+- **Valve Regional Standings** — rankings for `/esports rankings` and VRS filters.
+- **HLTV** — not a data source; only verified match-page links (from Liquipedia when available, or the manual
+  `Esports:VerifiedMatchLinks` list).
+
+Details, verified limits and terms: [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
 ## Testing
 
@@ -168,9 +186,11 @@ If you run a **modified** version for other users, AGPL-3.0 §13 requires you to
 
 ## Current Limitations
 
-- No live verification yet (Discord, Liquipedia, VRS) — see the status table.
+- Live match data is not verified yet (no PandaScore token); cards were verified with synthetic TEST/DEMO data only.
+- Whether PandaScore's free plan fills result fields (`winner_id`, scores) is unverified (official pages conflict).
 - Not publicly launched; the source repository is private until the pre-release step makes it public.
-- No "match is live" detection: Liquipedia offers no verified live flag, so reminders are planned-start reminders.
+- "Match started" needs a provider that states it (PandaScore); with Liquipedia only planned-start reminders exist.
+- PandaScore offers no public match page; a "Maç Sayfası" link appears only for operator-verified links.
 - Single instance only (SQLite, in-process scheduler); no horizontal scaling.
 - No DM commands or DM notifications (by design).
 - Policies in `docs/policies/` are drafts, not legal advice.

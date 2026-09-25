@@ -61,21 +61,22 @@ public sealed partial class MessageSafetyTests
     }
 
     [Fact]
-    public void Non_spoiler_result_shows_score_winner_and_maps()
+    public void Non_spoiler_result_shows_score_in_the_title_and_the_winner_line()
     {
         var renderer = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Live));
         var e = renderer.Result(Finished(), "en", spoiler: false, MentionPolicy.None, DateTimeOffset.UnixEpoch).Embed!;
-        e.Description.Should().Contain("**2** – **1**").And.Contain("Winner: **Alpha Squad**");
-        e.Fields.Should().Contain(f => f.Value.Contains("1. Mirage: 13–7", StringComparison.Ordinal));
+        e.Title.Should().Be("Alpha Squad [2] - [1] Bravo Crew");
+        e.Description.Should().StartWith("🏆 Alpha Squad won the match");
     }
 
     [Fact]
-    public void Incomplete_maps_are_called_out_instead_of_filled_in()
+    public void Default_result_card_never_shows_map_scores()
     {
-        var match = Finished() with { Maps = [new MapGame(1, "Mirage", GameStatus.Played, 13, 7, 0)] };
+        // Compact cards (Greg-style): map-by-map detail does not belong in the notification.
         var renderer = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Live));
-        renderer.Result(match, "en", false, MentionPolicy.None, DateTimeOffset.UnixEpoch).Embed!.Description
-            .Should().Contain("Map details are incomplete");
+        var e = renderer.Result(Finished(), "en", false, MentionPolicy.None, DateTimeOffset.UnixEpoch).Embed!;
+        var all = string.Join("\n", new[] { e.Title, e.Description }.Concat(e.Fields.Select(f => f.Name + " " + f.Value)));
+        all.Should().NotContain("Mirage").And.NotContain("13").And.NotContain("Nuke");
     }
 
     [Fact]
@@ -83,8 +84,8 @@ public sealed partial class MessageSafetyTests
     {
         var renderer = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture));
         var msg = renderer.Result(Finished(), "tr", false, MentionPolicy.None, DateTimeOffset.UnixEpoch);
-        msg.Embed!.Title.Should().StartWith("[TEST/DEMO]");
-        msg.Embed.Footer.Should().Contain("TEST/DEMO");
+        msg.Embed!.Title.Should().NotContain("TEST/DEMO", "the title is just the match");
+        msg.Embed.Footer.Should().Be("TEST/DEMO — sentetik veri, gerçek maç değil");
     }
 
     [Fact]
@@ -93,12 +94,14 @@ public sealed partial class MessageSafetyTests
         var match = Finished() with { Status = MatchStatus.Scheduled, SourceUrl = "https://liquipedia.net/counterstrike/X", Streams = [new StreamLink("twitch", "https://www.twitch.tv/somebody")] };
         var demo = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture)).Reminder(match, "tr", MentionPolicy.None, DateTimeOffset.UnixEpoch, null).Embed!;
         demo.Url.Should().BeNull();
+        demo.Description.Should().NotContain("](", "demo cards contain no links at all");
         demo.Fields.Should().NotContain(f => f.Value.Contains("twitch", StringComparison.OrdinalIgnoreCase));
         demo.Footer.Should().Contain("sentetik").And.NotContain("Kaynak: Liquipedia");
 
         var live = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Live)).Reminder(match, "tr", MentionPolicy.None, DateTimeOffset.UnixEpoch, null).Embed!;
+        live.Fields.Should().Contain(f => f.Value == "[Maç Sayfası](https://liquipedia.net/counterstrike/X)");
         live.Url.Should().Be("https://liquipedia.net/counterstrike/X");
-        live.Fields.Should().Contain(f => f.Value.Contains("twitch.tv/somebody", StringComparison.Ordinal));
+        live.Fields.Should().NotContain(f => f.Value.Contains("twitch", StringComparison.Ordinal), "compact cards carry no stream list");
         live.Footer.Should().Contain("Liquipedia (CC BY-SA 3.0)");
     }
 

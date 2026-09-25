@@ -36,7 +36,7 @@ public sealed class DeliveryOptions
 /// <item>Module gate + module delivery policy are checked immediately before every send/edit.</item>
 /// <item>Row is marked InFlight and committed before calling Discord; a crash leaves it InFlight, which recovery
 /// turns into DeliveryUnknown — never blindly resent.</item>
-/// <item>Ambiguous outcomes (timeouts) become DeliveryUnknown and go through bounded marker reconciliation.</item>
+/// <item>Ambiguous outcomes (timeouts) become DeliveryUnknown and go through bounded reconciliation (content fingerprint of what was sent; no visible reference in the message).</item>
 /// <item>Edits never ping; a missing edit target is not replaced by a new message.</item>
 /// <item>One guild's failure never stops the batch.</item>
 /// </list>
@@ -186,7 +186,8 @@ public sealed class OutboxProcessor(
             return;
         }
 
-        var message = NotificationMarker.Apply(PayloadSerializer.Deserialize(row.PayloadJson), row.Marker);
+        // Sent exactly as rendered: the internal reference (row.Marker) stays in the database and the logs only.
+        var message = PayloadSerializer.Deserialize(row.PayloadJson);
 
         if (isEdit)
         {
@@ -199,6 +200,7 @@ public sealed class OutboxProcessor(
         row.Attempts++;
         row.LastAttemptAt = now;
         row.DeliveredPayloadHash = row.PayloadHash;
+        row.DeliveredFingerprint = MessageFingerprint.Of(message);
         row.UpdatedAt = now;
         await db.SaveChangesAsync(cancellationToken);
 
@@ -229,6 +231,9 @@ public sealed class OutboxProcessor(
     private async Task ApplySendOutcomeAsync(ToroDbContext db, OutboxMessageEntity row, ChannelId channel, SendOutcome outcome, IDeliveryPolicy? policy, CancellationToken ct)
     {
         await SaveResilientAsync(db, row, r => ApplySendOutcome(r, outcome), ct);
+
+        if (outcome is SendOutcome.Sent sent)
+            logger.LogInformation("Delivered {Kind} ref={Marker} guild={Guild} channel={Channel} message={MessageId}", row.Kind, row.Marker, row.GuildId, row.ChannelId, sent.MessageId.Value);
 
         if (outcome is SendOutcome.Ambiguous ambiguous)
             logger.LogWarning("Outbox {OutboxId} delivery unknown ({Reason}); will reconcile, not resend", row.Id, ambiguous.Reason);
@@ -375,7 +380,7 @@ public sealed class OutboxProcessor(
         ReconcileOutcome outcome;
         try
         {
-            outcome = await transport.FindRecentByMarkerAsync(channel, row.Marker, _options.ReconcileScanLimit, ct);
+            outcome = await transport.FindRecentAsync(channel, await ProbeAsync(db, row, ct), _options.ReconcileScanLimit, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -419,6 +424,27 @@ public sealed class OutboxProcessor(
                     break;
             }
         }, ct);
+    }
+
+    /// <summary>
+    /// Describes the ambiguous delivery: the fingerprint of what was transmitted (older rows: the current payload), created
+    /// no earlier than the attempt (minus clock skew), and never a message another row already owns.
+    /// </summary>
+    private static async Task<DeliveryProbe> ProbeAsync(ToroDbContext db, OutboxMessageEntity row, CancellationToken ct)
+    {
+        var attemptAt = row.LastAttemptAt ?? row.CreatedAt;
+        var channelId = row.ChannelId;
+        var owned = await db.Outbox.AsNoTracking()
+            .Where(o => o.ChannelId == channelId && o.Id != row.Id && o.DiscordMessageId != null)
+            .OrderByDescending(o => o.Id)
+            .Take(500)
+            .Select(o => o.DiscordMessageId!.Value)
+            .ToListAsync(ct);
+        return new DeliveryProbe(
+            row.DeliveredFingerprint ?? MessageFingerprint.Of(PayloadSerializer.Deserialize(row.PayloadJson)),
+            attemptAt - TimeSpan.FromMinutes(5),
+            owned.Select(id => new MessageId(id)).ToHashSet(),
+            row.Marker);
     }
 
     private static bool IsChannelProblem(PermanentFailureKind kind) =>
@@ -476,18 +502,6 @@ public sealed class OutboxProcessor(
     }
 
     private static string Truncate(string value) => value.Length <= 480 ? value : value[..480];
-}
-
-public static class NotificationMarker
-{
-    /// <summary>Appends the public reference to the footer (used by reconciliation and support).</summary>
-    public static OutgoingMessage Apply(OutgoingMessage message, string marker)
-    {
-        if (message.Embed is null)
-            return message;
-        var footer = string.IsNullOrEmpty(message.Embed.Footer) ? $"ref {marker}" : $"{message.Embed.Footer} • ref {marker}";
-        return message with { Embed = message.Embed with { Footer = footer } };
-    }
 }
 
 public sealed class OutboxDispatcherService(OutboxProcessor processor, IOptions<DeliveryOptions> options, TimeProvider clock, ILogger<OutboxDispatcherService> logger)

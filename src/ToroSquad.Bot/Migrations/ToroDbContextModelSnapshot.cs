@@ -158,6 +158,9 @@ namespace ToroSquad.Bot.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("DeliveredFingerprint")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("DeliveredPayloadHash")
                         .HasColumnType("TEXT");
 
@@ -356,6 +359,9 @@ namespace ToroSquad.Bot.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("CancelledObservedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ContentHash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -380,13 +386,25 @@ namespace ToroSquad.Bot.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("PostponedObservedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long?>("PreviousStartUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("RescheduledObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("RescheduledToUtc")
                         .HasColumnType("INTEGER");
 
                     b.Property<long?>("ScheduledStartUtc")
                         .HasColumnType("INTEGER");
 
                     b.Property<long?>("StartChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StartedObservedAt")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Status")

@@ -22,6 +22,30 @@ public sealed class LiquipediaParserContractTests
     private static EsportsMatch M(string id) => Parsed.Value.Matches[id];
 
     [Fact]
+    public void Hltv_match_page_comes_from_liquipedias_links_field()
+    {
+        M("C-BO3-FIN").Links!.HltvMatchUrl.Should().Be("https://www.hltv.org/matches/2399001/match");
+        M("C-BO3-FIN").SourceUrl.Should().StartWith("https://liquipedia.net/");
+        Parsed.Value.Matches.Values.Where(m => m.Key.Id != "C-BO3-FIN").Should().OnlyContain(m => m.Links == null, "no link is invented");
+    }
+
+    [Theory]
+    [InlineData("""{"links":{"hltv":{"1":{"1":"https://www.hltv.org/matches/2399001/match","2":0}}}}""", "https://www.hltv.org/matches/2399001/match")]
+    [InlineData("""{"links":{"hltv":"https://www.hltv.org/matches/2399002/match"}}""", "https://www.hltv.org/matches/2399002/match")]
+    [InlineData("""{"links":{"hltv":[["https://www.hltv.org/matches/2399003/match",0]]}}""", "https://www.hltv.org/matches/2399003/match")]
+    [InlineData("""{"links":{"hltv":{"1":{"1":"https://evil.example/matches/1/match"}}}}""", null)]
+    [InlineData("""{"links":{"hltv":{"1":{"1":"javascript:alert(1)"}}}}""", null)]
+    [InlineData("""{"links":{"faceit":{"1":{"1":"https://www.faceit.com/en/match/room/x"}}}}""", null)]
+    [InlineData("""{"links":[]}""", null)]
+    [InlineData("""{"links":null}""", null)]
+    [InlineData("""{}""", null)]
+    public void Liquipedia_hltv_link_shapes_are_read_and_validated(string json, string? expected)
+    {
+        using var doc = JsonDocument.Parse(json);
+        LiquipediaParser.HltvLink(doc.RootElement).Should().Be(expected);
+    }
+
+    [Fact]
     public void Finished_bo3_keeps_series_score_winner_and_complete_maps()
     {
         var m = M("C-BO3-FIN");

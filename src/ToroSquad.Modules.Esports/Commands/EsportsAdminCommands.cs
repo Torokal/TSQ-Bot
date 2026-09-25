@@ -153,7 +153,7 @@ public sealed class EsportsAdminCommands(
             var view = await config.GetAsync(Actor.GuildId, CancellationToken.None);
             var language = await LangAsync();
             string Values(FilterDimension d, IEnumerable<string> values) =>
-                string.Join(", ", values.Select(v => DiscordText.Untrusted(view.FilterLabels.GetValueOrDefault((d, v)) ?? v, 60)));
+                string.Join(", ", values.Select(v => DiscordText.Untrusted(view.FilterLabels.GetValueOrDefault((d, v)) ?? (d == FilterDimension.Team ? TeamLabel(v) : null) ?? v, 60)));
             var fields = new List<EmbedField>
             {
                 new(await T("esports.filters.team"), Or(Values(FilterDimension.Team, view.Filters.TeamKeys)), false),

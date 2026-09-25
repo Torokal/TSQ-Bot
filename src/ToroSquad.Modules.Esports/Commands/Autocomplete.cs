@@ -15,8 +15,9 @@ using ToroSquad.Modules.Esports.Persistence;
 namespace ToroSquad.Modules.Esports.Commands;
 
 /// <summary>
-/// Autocomplete must answer quickly and cannot be deferred: all handlers read in-memory caches or a single small
-/// SQLite query. Outside a guild or with the module disabled they return nothing.
+/// Autocomplete must answer quickly and cannot be deferred: handlers read in-memory caches or a single small SQLite query;
+/// team pickers may add ONE time-boxed, cached provider catalog search (<see cref="TeamDirectory"/>). Outside a guild or
+/// with the module disabled they return nothing.
 /// </summary>
 public abstract class EsportsAutocompleteBase : AutocompleteHandler
 {
@@ -46,17 +47,13 @@ public abstract class EsportsAutocompleteBase : AutocompleteHandler
 public sealed class TeamAutocomplete : EsportsAutocompleteBase
 {
     protected override Task<IEnumerable<(string Name, object Value)>> SuggestAsync(GuildId guild, UserId user, string typed, IServiceProvider services) =>
-        Task.FromResult(Suggest(typed, services));
+        Suggest(typed, services);
 
-    internal static IEnumerable<(string Name, object Value)> Suggest(string typed, IServiceProvider services)
-    {
-        var cache = services.GetRequiredService<EsportsCache>();
-        return cache.Teams
-            .Where(t => Matches(typed, t.Name, t.ShortName))
-            .Where(t => t.Key.Length <= 100)
-            .Select(t => (t.ShortName is null || t.ShortName == t.Name ? t.Name : $"{t.Name} ({t.ShortName})", (object)t.Key))
-            .ToList();
-    }
+    /// <summary>Known teams, then (3+ characters) the provider's team catalog — so teams without a match in the window can be picked.</summary>
+    internal static async Task<IEnumerable<(string Name, object Value)>> Suggest(string typed, IServiceProvider services) =>
+        (await services.GetRequiredService<TeamDirectory>().SuggestAsync(typed, CancellationToken.None))
+            .Where(s => s.Key.Length <= 100)
+            .Select(s => (s.Display, (object)s.Key));
 }
 
 /// <summary>Admin variant (works while the module is still disabled, e.g. configuring filters before enabling).</summary>
@@ -65,7 +62,7 @@ public sealed class AdminTeamAutocomplete : EsportsAutocompleteBase
     protected override bool AllowWhenDisabled => true;
 
     protected override Task<IEnumerable<(string Name, object Value)>> SuggestAsync(GuildId guild, UserId user, string typed, IServiceProvider services) =>
-        Task.FromResult(TeamAutocomplete.Suggest(typed, services));
+        TeamAutocomplete.Suggest(typed, services);
 }
 
 /// <summary>Teams to follow, plus "all matches" when the server offers an all-matches self-service role.</summary>
@@ -79,8 +76,7 @@ public sealed class FollowAutocomplete : EsportsAutocompleteBase
         var list = new List<(string, object)>();
         if (await db.Set<RoleMappingEntity>().AnyAsync(m => m.GuildId == guild.Value && m.SelfService && m.TeamKey == ""))
             list.Add((localizer.Get(language, "esports.all_matches"), SubscriptionService.AllMatchesKey));
-        var cache = services.GetRequiredService<EsportsCache>();
-        list.AddRange(cache.Teams.Where(t => Matches(typed, t.Name, t.ShortName) && t.Key.Length <= 100).Select(t => (t.Name, (object)t.Key)));
+        list.AddRange(await TeamAutocomplete.Suggest(typed, services));
         return list;
     }
 }

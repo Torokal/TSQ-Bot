@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -37,7 +38,7 @@ public sealed class TestHost : IAsyncDisposable
     public FakeMessageTransport Transport => Services.GetRequiredService<FakeMessageTransport>();
     public FakeGuildGateway Guilds => Services.GetRequiredService<FakeGuildGateway>();
 
-    public static async Task<TestHost> CreateAsync(Dictionary<string, string?>? overrides = null, DateTimeOffset? start = null)
+    public static async Task<TestHost> CreateAsync(Dictionary<string, string?>? overrides = null, DateTimeOffset? start = null, Action<IServiceCollection>? replace = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), "torosquad-tests", Guid.NewGuid().ToString("N"));
         System.IO.Directory.CreateDirectory(directory);
@@ -47,6 +48,8 @@ public sealed class TestHost : IAsyncDisposable
             ["Discord:Transport"] = "Fake",
             ["Delivery:Mode"] = "Send",
             ["Esports:Provider:Mode"] = "Fixture",
+            // Legacy suites run on the Liquipedia fixtures; PandaScore suites select their provider explicitly.
+            ["Esports:Provider:Name"] = "Liquipedia",
             ["Esports:Liquipedia:UserAgent"] = "TSQBot-tests/0 (https://localhost; tests)",
             ["Esports:MatchPollMinutes"] = "10",
         };
@@ -59,6 +62,7 @@ public sealed class TestHost : IAsyncDisposable
         services.AddSingleton<TimeProvider>(clock);
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
         ToroHost.AddToroSquad(services, configuration, directory, longRunning: false);
+        replace?.Invoke(services); // last registration wins (e.g. a failing provider)
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
         await using (var scope = provider.CreateAsyncScope())
@@ -112,8 +116,17 @@ public sealed class TestHost : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        string? connectionString;
+        await using (var scope = Services.CreateAsyncScope())
+            connectionString = scope.ServiceProvider.GetRequiredService<ToroDbContext>().Database.GetConnectionString();
         await Services.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        // Only THIS host's pool: ClearAllPools() would reclaim connections of tests running in parallel
+        // ("database is locked" in another test's teardown).
+        if (connectionString is not null)
+        {
+            using var connection = new SqliteConnection(connectionString);
+            SqliteConnection.ClearPool(connection);
+        }
         try
         {
             System.IO.Directory.Delete(Directory, recursive: true);

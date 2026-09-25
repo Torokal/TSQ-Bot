@@ -17,7 +17,9 @@ public readonly record struct MatchKey(string Source, string Id)
 
 /// <summary>
 /// Match lifecycle as supported by provider evidence. Reaching the scheduled start time is NOT evidence of
-/// <see cref="Live"/>; a provider must explicitly support verified live status (Liquipedia does not).
+/// <see cref="Live"/> (running): only a provider that states it (PandaScore `running`) may set it; Liquipedia never does.
+/// A rescheduled match stays <see cref="Scheduled"/> with <see cref="EsportsMatch.Rescheduled"/> set. <see cref="Unknown"/>
+/// stays unknown — it is never turned into running/finished/cancelled.
 /// </summary>
 public enum MatchStatus
 {
@@ -76,6 +78,16 @@ public sealed record TournamentRef(string Source, string Key, string Name, strin
 public sealed record StreamLink(string Platform, string Url);
 
 /// <summary>
+/// External pages for a match, kept apart from data ingestion. <see cref="HltvMatchUrl"/> may only come from a trusted,
+/// deterministic source (curated mapping, authorized provider/API) and must pass <see cref="MatchLinkPolicy"/> — TSQ Bot
+/// never scrapes HLTV and never builds an HLTV URL from a guessed id.
+/// </summary>
+public sealed record MatchLinks(string? HltvMatchUrl = null, string? OfficialMatchUrl = null, string? ProviderMatchUrl = null)
+{
+    public static MatchLinks None { get; } = new();
+}
+
+/// <summary>
 /// Provider-independent CS2 match. Everything that the source did not state stays null — we never invent scores,
 /// winners or times. <see cref="SeriesScoreKnown"/> and <see cref="MapsComplete"/> are kept separate on purpose.
 /// </summary>
@@ -95,7 +107,12 @@ public sealed record EsportsMatch(
     IReadOnlyList<MapGame> Maps,
     string? Stage,
     string? SourceUrl,
-    IReadOnlyList<StreamLink> Streams)
+    IReadOnlyList<StreamLink> Streams,
+    DateTimeOffset? BeginAtUtc = null,
+    DateTimeOffset? EndAtUtc = null,
+    DateTimeOffset? OriginalScheduledStartUtc = null,
+    bool Rescheduled = false,
+    MatchLinks? Links = null)
 {
     public IEnumerable<MatchOpponent> Opponents => [A, B];
 

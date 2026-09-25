@@ -1,0 +1,104 @@
+[
+  {
+    "_comment": "SYNTHETIC contract fixture (fixed dates) in PandaScore /csgo/matches shape — field list per the OpenAPI definition read 2026-09-25. Fictional teams.",
+    "id": 1001, "status": "not_started", "scheduled_at": "2026-09-24T18:00:00Z", "begin_at": "2026-09-24T18:00:00Z", "end_at": null,
+    "original_scheduled_at": "2026-09-24T18:00:00Z", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": null, "winner": null,
+    "tournament_id": 2001, "tournament": { "id": 2001, "name": "Playoffs", "tier": "s" },
+    "league": { "id": 3001, "name": "StarLadder StarSeries", "url": "https://example.org/league" },
+    "serie_id": 4001, "serie": { "id": 4001, "full_name": "Fall 2026", "name": "Fall" },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 11, "name": "Alpha Squad", "acronym": "ALP" } },
+      { "type": "Team", "opponent": { "id": 12, "name": "Bravo Crew", "acronym": "BRV" } }
+    ],
+    "results": [ { "team_id": 11, "score": 0 }, { "team_id": 12, "score": 0 } ],
+    "games": [],
+    "streams_list": [
+      { "raw_url": "https://www.twitch.tv/example_secondary", "main": false, "official": true, "language": "en" },
+      { "raw_url": "https://www.twitch.tv/example_main", "main": true, "official": true, "language": "en" }
+    ]
+  },
+  {
+    "id": 1002, "status": "running", "scheduled_at": "2026-09-24T11:00:00Z", "begin_at": "2026-09-24T11:12:00Z", "end_at": null,
+    "original_scheduled_at": "2026-09-24T11:00:00Z", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": null, "winner": null,
+    "tournament_id": 2001, "tournament": { "id": 2001, "name": "Playoffs", "tier": "s" },
+    "league": { "id": 3001, "name": "StarLadder StarSeries" }, "serie_id": 4001, "serie": { "id": 4001, "full_name": "Fall 2026" },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 13, "name": "Charlie Five", "acronym": null } },
+      { "type": "Team", "opponent": { "id": 14, "name": "Delta Force", "acronym": "DLT" } }
+    ],
+    "results": [ { "team_id": 13, "score": 1 }, { "team_id": 14, "score": 0 } ],
+    "games": [ { "id": 51, "position": 1, "status": "finished", "winner": { "id": 13 } }, { "id": 52, "position": 2, "status": "running", "winner": { "id": null } } ],
+    "streams_list": []
+  },
+  {
+    "id": 1003, "status": "finished", "scheduled_at": "2026-09-24T08:00:00Z", "begin_at": "2026-09-24T08:05:00Z", "end_at": "2026-09-24T10:20:00Z",
+    "original_scheduled_at": "2026-09-24T08:00:00Z", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": 16, "winner": { "id": 16, "name": "Foxtrot" },
+    "tournament_id": 2001, "tournament": { "id": 2001, "name": "Playoffs", "tier": "a" },
+    "league": { "id": 3001, "name": "StarLadder StarSeries" }, "serie_id": 4001, "serie": { "id": 4001, "full_name": "Fall 2026" },
+    "opponents": [
+      { "type": "Team", "opponent": { "id": 15, "name": "Echo Esports", "acronym": "ECH" } },
+      { "type": "Team", "opponent": { "id": 16, "name": "Foxtrot", "acronym": "FOX" } }
+    ],
+    "results": [ { "team_id": 15, "score": 0 }, { "team_id": 16, "score": 2 } ],
+    "games": [ { "id": 61, "position": 1, "status": "finished", "winner": { "id": 16 } }, { "id": 62, "position": 2, "status": "finished", "winner": { "id": 16 } }, { "id": 63, "position": 3, "status": "not_played", "winner": { "id": null } } ],
+    "streams_list": []
+  },
+  {
+    "id": 1004, "status": "postponed", "scheduled_at": "2026-09-24T20:00:00Z", "begin_at": "2026-09-24T20:00:00Z", "end_at": null,
+    "original_scheduled_at": "2026-09-24T20:00:00Z", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 1, "winner_id": null, "winner": null,
+    "tournament_id": 2002, "tournament": { "id": 2002, "name": "Group Stage", "tier": "b" },
+    "league": { "id": 3001, "name": "StarLadder StarSeries" }, "serie_id": 4001, "serie": { "id": 4001, "full_name": "Fall 2026" },
+    "opponents": [ { "type": "Team", "opponent": { "id": 11, "name": "Alpha Squad" } }, { "type": "Team", "opponent": { "id": 14, "name": "Delta Force" } } ],
+    "results": [], "games": [], "streams_list": []
+  },
+  {
+    "id": 1005, "status": "not_started", "scheduled_at": "2026-09-25T19:00:00Z", "begin_at": "2026-09-25T19:00:00Z", "end_at": null,
+    "original_scheduled_at": "2026-09-24T19:00:00Z", "rescheduled": true, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": null, "winner": null,
+    "tournament_id": 2002, "tournament": { "id": 2002, "name": "Group Stage", "tier": "unranked" },
+    "league": { "id": 3001, "name": "StarLadder StarSeries" }, "serie_id": 4001, "serie": { "id": 4001, "full_name": "StarLadder StarSeries Fall 2026" },
+    "opponents": [ { "type": "Team", "opponent": { "id": 12, "name": "Bravo Crew" } }, { "type": "Team", "opponent": { "id": 13, "name": "Charlie Five" } } ],
+    "results": [], "games": [], "streams_list": []
+  },
+  {
+    "id": 1006, "status": "canceled", "scheduled_at": "2026-09-24T06:00:00Z", "begin_at": null, "end_at": null,
+    "original_scheduled_at": "2026-09-24T06:00:00Z", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 1, "winner_id": null, "winner": null,
+    "tournament_id": 2002, "tournament": { "id": 2002, "name": "Group Stage", "tier": "c" },
+    "league": { "id": 3001, "name": "StarLadder StarSeries" }, "serie_id": 4001, "serie": { "id": 4001, "full_name": "Fall 2026" },
+    "opponents": [ { "type": "Team", "opponent": { "id": 15, "name": "Echo Esports" } }, { "type": "Team", "opponent": { "id": 16, "name": "Foxtrot" } } ],
+    "results": [], "games": [], "streams_list": []
+  },
+  {
+    "id": 1007, "status": "canceled", "scheduled_at": "2026-09-24T05:00:00Z", "begin_at": null, "end_at": null,
+    "original_scheduled_at": "2026-09-24T05:00:00Z", "rescheduled": false, "forfeit": true, "draw": false,
+    "match_type": "best_of", "number_of_games": 3, "winner_id": 12, "winner": { "id": 12, "name": "Bravo Crew" },
+    "tournament_id": 2002, "tournament": { "id": 2002, "name": "Group Stage", "tier": "d" },
+    "league": { "id": 3001, "name": "StarLadder StarSeries" }, "serie_id": 4001, "serie": { "id": 4001, "full_name": "Fall 2026" },
+    "opponents": [ { "type": "Team", "opponent": { "id": 11, "name": "Alpha Squad" } }, { "type": "Team", "opponent": { "id": 12, "name": "Bravo Crew" } } ],
+    "results": [ { "team_id": 11, "score": 0 }, { "team_id": 12, "score": 0 } ], "games": [], "streams_list": []
+  },
+  {
+    "id": 1008, "status": "delayed_by_admin", "scheduled_at": "2026-09-24T21:00:00Z", "begin_at": "2026-09-24T21:00:00Z", "end_at": null,
+    "original_scheduled_at": "2026-09-24T21:00:00Z", "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "first_to", "number_of_games": 2, "winner_id": 99, "winner": null,
+    "tournament_id": 2002, "tournament": { "id": 2002, "name": "Group Stage", "tier": "s" },
+    "league": { "id": 3001, "name": "StarLadder StarSeries" }, "serie_id": 4001, "serie": { "id": 4001, "full_name": "Fall 2026" },
+    "opponents": [ { "type": "Team", "opponent": { "id": 13, "name": "Charlie Five" } }, { "type": "Player", "opponent": { "id": 700, "name": "solo_player" } } ],
+    "results": [], "games": [], "streams_list": []
+  },
+  {
+    "id": 1009, "status": "not_started", "scheduled_at": "not a date", "begin_at": null, "end_at": null,
+    "original_scheduled_at": null, "rescheduled": false, "forfeit": false, "draw": false,
+    "match_type": "best_of", "number_of_games": 5, "winner_id": null, "winner": null,
+    "tournament_id": 2001, "tournament": { "id": 2001, "name": "Playoffs", "tier": "s" },
+    "league": { "id": 3001, "name": "StarLadder StarSeries" }, "serie_id": 4001, "serie": { "id": 4001, "full_name": "Fall 2026" },
+    "opponents": [ { "type": "Team", "opponent": { "id": 16, "name": "Foxtrot" } } ],
+    "results": [], "games": [], "streams_list": []
+  },
+  { "status": "finished", "_comment": "no id: must be skipped with a warning" }
+]

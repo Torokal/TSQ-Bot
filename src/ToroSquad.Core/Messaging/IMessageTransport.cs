@@ -44,8 +44,51 @@ public interface IMessageTransport
     Task<SendOutcome> EditAsync(ChannelId channel, MessageId message, OutgoingMessage content, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Bounded reconciliation for ambiguous deliveries: scan the last <paramref name="scanLimit"/> messages
-    /// authored by the bot for the marker (we put it in the embed footer).
+    /// Bounded reconciliation for ambiguous deliveries: scan the last <paramref name="scanLimit"/> messages authored by
+    /// the bot for the one described by <paramref name="probe"/>. Nothing internal is shown to users for this.
     /// </summary>
-    Task<ReconcileOutcome> FindRecentByMarkerAsync(ChannelId channel, string marker, int scanLimit, CancellationToken cancellationToken);
+    Task<ReconcileOutcome> FindRecentAsync(ChannelId channel, DeliveryProbe probe, int scanLimit, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// What an ambiguous delivery looked like: the <see cref="MessageFingerprint"/> of exactly the message that was sent, the
+/// earliest time it can have been created, and messages already owned by other deliveries (never matched). Messages sent
+/// before the footer reference was removed still carry "ref &lt;marker&gt;" in the footer; <see cref="LegacyMarker"/>
+/// finds those.
+/// </summary>
+public sealed record DeliveryProbe(string Fingerprint, DateTimeOffset NotBefore, IReadOnlySet<MessageId> Exclude, string? LegacyMarker = null)
+{
+    public bool MatchesLegacyFooter(string? footer) =>
+        LegacyMarker is { Length: > 0 } marker && footer?.Contains("ref " + marker, StringComparison.Ordinal) == true;
+}
+
+/// <summary>
+/// Content fingerprint of a message as Discord stores it (content, title, description, footer, timestamp to the second,
+/// colour, fields). Used instead of a visible reference to recognise our own message after an ambiguous send.
+/// </summary>
+public static class MessageFingerprint
+{
+    public static string Of(OutgoingMessage message) => Compute(
+        message.Content, message.Embed?.Title, message.Embed?.Description, message.Embed?.Footer, message.Embed?.Timestamp,
+        message.Embed?.Color, message.Embed?.Fields.Select(f => (f.Name, f.Value)) ?? []);
+
+    public static string Compute(string? content, string? title, string? description, string? footer, DateTimeOffset? timestamp, uint? color,
+        IEnumerable<(string Name, string Value)> fields)
+    {
+        var text = new System.Text.StringBuilder();
+        void Add(string? value) => text.Append((value ?? "").Replace("\r\n", "\n", StringComparison.Ordinal).Trim()).Append('\u001F');
+        Add(content);
+        Add(title);
+        Add(description);
+        Add(footer);
+        Add(timestamp?.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Add(color?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var (name, value) in fields)
+        {
+            Add(name);
+            Add(value);
+        }
+
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString())))[..32];
+    }
 }

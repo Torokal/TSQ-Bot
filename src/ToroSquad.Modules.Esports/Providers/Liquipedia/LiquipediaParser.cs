@@ -156,7 +156,32 @@ public static partial class LiquipediaParser
             maps,
             J.NonEmpty(J.Str(el, "section")),
             pagename is null ? null : PageUrl(wiki, pagename),
-            ParseStreams(el, wiki));
+            ParseStreams(el, wiki),
+            Links: HltvLink(el) is { } hltv ? new MatchLinks(HltvMatchUrl: hltv) : null);
+    }
+
+    /// <summary>
+    /// The editor-entered HLTV match page Liquipedia stores with the match: <c>links.hltv</c> is a Lua list serialized as
+    /// <c>{"1": {"1": url, "2": index}}</c> (Liquipedia Lua-Modules MatchGroup/Input/Custom.getLinks; the URL is built as
+    /// https://www.hltv.org/matches/&lt;id&gt;/match by Module:MatchExternalLinks; upstream BOT-Greg-v2 reads it the same way).
+    /// A plain string or JSON array is tolerated. Only URLs that pass <see cref="MatchLinkPolicy"/> are kept; HLTV itself is
+    /// never contacted.
+    /// </summary>
+    public static string? HltvLink(JsonElement el)
+    {
+        if (el.ValueKind != JsonValueKind.Object || !el.TryGetProperty("links", out var links) || links.ValueKind != JsonValueKind.Object ||
+            !links.TryGetProperty("hltv", out var hltv))
+            return null;
+
+        static string? First(JsonElement node) => node.ValueKind switch
+        {
+            JsonValueKind.String => node.GetString(),
+            JsonValueKind.Array => node.EnumerateArray().Select(First).FirstOrDefault(u => u is not null),
+            JsonValueKind.Object when node.TryGetProperty("1", out var one) => First(one),
+            _ => null,
+        };
+
+        return MatchLinkPolicy.ValidHltvMatchUrl(First(hltv));
     }
 
     public static EsportsEvent? ParseEvent(JsonElement el, string wiki, ICollection<string> warnings)

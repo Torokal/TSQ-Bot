@@ -108,6 +108,18 @@ public sealed class EsportsCache(IOptions<EsportsOptions> options)
         }
     }
 
+    /// <summary>Teams found by a catalog search (no match in the window): resolvable for filters, follows and labels.</summary>
+    public void RememberTeams(IEnumerable<TeamRef> teams)
+    {
+        lock (_gate)
+        {
+            var merged = _teams.ToDictionary(t => t.Key);
+            foreach (var team in teams)
+                merged.TryAdd(team.Key, team);
+            _teams = merged.Values.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+    }
+
     private void MergeTeams(IReadOnlyList<EsportsMatch> matches)
     {
         var merged = _teams.ToDictionary(t => t.Key);

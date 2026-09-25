@@ -72,6 +72,15 @@ public interface IEsportsDataProvider
     Task<ProviderResult<IReadOnlyList<EsportsEvent>>> GetEventsAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken);
 }
 
+/// <summary>A team from a provider's team catalog; <see cref="Location"/> (country code) helps tell same-named teams apart.</summary>
+public sealed record TeamSearchHit(TeamRef Team, string? Location);
+
+/// <summary>Optional: providers with a searchable team catalog (teams without a match in the poll window).</summary>
+public interface ITeamSearchProvider
+{
+    Task<ProviderResult<IReadOnlyList<TeamSearchHit>>> SearchTeamsAsync(string query, CancellationToken cancellationToken);
+}
+
 public interface IRankingsProvider
 {
     string Id { get; }

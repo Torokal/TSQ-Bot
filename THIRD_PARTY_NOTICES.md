@@ -15,7 +15,8 @@ Exact dependency versions are pinned in `Directory.Packages.props` and the per-p
 
 | Source | Terms | Attribution in the bot |
 |---|---|---|
-| Liquipedia (LiquipediaDB API) | Content CC BY-SA 3.0; API access by approval under Liquipedia's API terms | "Kaynak: Liquipedia (CC BY-SA 3.0)" + link on every message using it |
+| PandaScore (REST API) — default match data | PandaScore terms and conditions (source attribution required, no raw-data redistribution) | "Kaynak: PandaScore" on every card using it; listed in `/bot about` |
+| Liquipedia (LiquipediaDB API) — optional | Content CC BY-SA 3.0; API access by approval under Liquipedia's API terms | "Kaynak: Liquipedia (CC BY-SA 3.0)" + link on every message using it |
 | Valve Counter-Strike Regional Standings (GitHub) | No license file published; event data credited to HLTV.org | Source, publication date and attribution shown with rankings |
 
 Test and demo fixtures in this repository are synthetic (fictional teams/events) and contain no copied third-party rows.

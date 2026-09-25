@@ -47,6 +47,8 @@ public static class MatchJson
 /// <item>Per guild, nothing that became due before the guild's watermark (enable/resume time) is sent.</item>
 /// <item>After a polling gap, result catch-up is limited in age and count.</item>
 /// <item>Reminders are "planned start" reminders — never claims of a live match.</item>
+/// <item>Lifecycle cards (started, postponed, rescheduled, cancelled) are sent once per guild+match+kind, only for
+/// transitions observed between two known provider states after the guild's watermark, and only while fresh.</item>
 /// <item>One message per guild+match+channel+kind; later changes edit that message without pinging.</item>
 /// </list>
 /// </summary>
@@ -66,6 +68,14 @@ public sealed class NotificationPlanner(
 {
     public const string KindReminder = "reminder";
     public const string KindResult = "result";
+    public const string KindStarted = "started";
+    public const string KindPostponed = "postponed";
+    public const string KindCancelled = "cancelled";
+    public const string KindRescheduledPrefix = "rescheduled-";
+
+    /// <summary>One rescheduled card per distinct new start time (a later second reschedule is a new message).</summary>
+    public static string KindRescheduled(DateTimeOffset newStartUtc) =>
+        KindRescheduledPrefix + newStartUtc.UtcDateTime.ToString("yyyyMMddHHmm", System.Globalization.CultureInfo.InvariantCulture);
 
     public async Task<PlanReport> PlanAsync(IReadOnlyList<EsportsMatch> matches, DateTimeOffset fetchedAt, bool afterGap, CancellationToken cancellationToken)
     {
@@ -123,7 +133,10 @@ public sealed class NotificationPlanner(
             var channel = new ChannelId(config.ChannelId!.Value);
             var filters = await LoadFiltersAsync(config, cancellationToken);
             var mappings = await db.Set<RoleMappingEntity>().AsNoTracking().Where(m => m.GuildId == config.GuildId).ToListAsync(cancellationToken);
-            var language = (await guildSettings.GetAsync(guild, cancellationToken)).Language;
+            var settings = await guildSettings.GetAsync(guild, cancellationToken);
+            var language = settings.Language;
+            if (!GuildTime.TryResolve(settings.TimeZoneId, out var zone))
+                GuildTime.TryResolve(GuildSettings.DefaultTimeZoneId, out zone);
             var catchUp = 0;
 
             foreach (var match in matches.OrderBy(m => m.ScheduledStartUtc))
@@ -187,11 +200,64 @@ public sealed class NotificationPlanner(
                             catchUp++;
                     }
                 }
+
+                if (config.NotifyReminders)
+                {
+                    var lifecycle = await StageLifecycleAsync(match, snapshot, config, guild, channel, language, zone, mappings, existingKeys, dryRun, now, cancellationToken);
+                    created += lifecycle.Created;
+                    updated += lifecycle.Updated;
+                }
             }
         }
 
         await db.SaveChangesAsync(cancellationToken);
         return new PlanReport(matches.Count, guilds, created, updated, filtered, blocked, SkippedStale: false, suppressed);
+    }
+
+    private readonly record struct Staged(int Created, int Updated);
+
+    /// <summary>
+    /// Started / postponed / rescheduled / cancelled cards. Each needs (a) a transition recorded on the shared snapshot,
+    /// (b) the match still being in that state, (c) the transition observed after the guild's watermark and (d) within
+    /// the freshness window. Only "started" may ping (reminder role mappings); schedule changes never ping.
+    /// </summary>
+    private async Task<Staged> StageLifecycleAsync(EsportsMatch match, MatchSnapshotEntity snapshot, EsportsGuildConfigEntity config, GuildId guild,
+        ChannelId channel, string language, TimeZoneInfo zone, IReadOnlyList<RoleMappingEntity> mappings, HashSet<string> existingKeys, bool dryRun,
+        DateTimeOffset now, CancellationToken ct)
+    {
+        int created = 0, updated = 0;
+        var fresh = TimeSpan.FromMinutes(options.Value.LifecycleFreshMinutes);
+
+        async Task StageAsync(string kind, DateTimeOffset? observed, bool stillTrue, Func<OutgoingMessage> render)
+        {
+            if (observed is not { } at || !stillTrue || at < config.WatermarkUtc)
+                return;
+            var key = NotificationRequest.BuildLogicalKey(guild, EsportsModule.ModuleIdTyped, match.Key.ToString(), channel, kind, dryRun);
+            var inWindow = now - at <= fresh;
+            if (!inWindow)
+                return; // too old to announce, and an existing message is no longer corrected either
+            var outcome = await outbox.StageAsync(new NotificationRequest(guild, EsportsModule.ModuleIdTyped, match.Key.ToString(), channel,
+                kind, render(), at + fresh, dryRun), ct);
+            if (!existingKeys.Contains(key) && outcome == StageOutcome.Created)
+                created++;
+            else if (outcome is StageOutcome.UpdatedPending or StageOutcome.EditScheduled)
+                updated++;
+        }
+
+        await StageAsync(KindStarted, snapshot.StartedObservedAt, match.Status == MatchStatus.Live,
+            () => renderer.Started(match, language, Pings(mappings, match, reminder: true, guild), snapshot.StartedObservedAt!.Value));
+        await StageAsync(KindPostponed, snapshot.PostponedObservedAt, match.Status == MatchStatus.Postponed,
+            () => renderer.Postponed(match, language, snapshot.PostponedObservedAt!.Value));
+        await StageAsync(KindCancelled, snapshot.CancelledObservedAt, match.Status == MatchStatus.Cancelled,
+            () => renderer.Cancelled(match, language, snapshot.CancelledObservedAt!.Value));
+        if (snapshot.RescheduledToUtc is { } to)
+        {
+            await StageAsync(KindRescheduled(to), snapshot.RescheduledObservedAt,
+                match.Status == MatchStatus.Scheduled && match.ScheduledStartUtc == to,
+                () => renderer.Rescheduled(match, language, to, zone, snapshot.RescheduledObservedAt!.Value));
+        }
+
+        return new Staged(created, updated);
     }
 
     private static void Count(StageOutcome outcome, ref int created, ref int updated)
@@ -226,15 +292,22 @@ public sealed class NotificationPlanner(
         var keys = matches.Select(m => m.Key.ToString()).ToList();
         var set = db.Set<MatchSnapshotEntity>();
         var existing = await set.Where(s => keys.Contains(s.MatchKey)).ToDictionaryAsync(s => s.MatchKey, StringComparer.Ordinal, ct);
-        var bootstrap = existing.Count == 0 && !await set.AnyAsync(ct);
+        // Bootstrap is per provider: switching providers (e.g. Liquipedia → PandaScore) must not announce the new
+        // provider's already-finished matches just because the database is not empty.
+        var sourcePrefix = matches.Count > 0 ? matches[0].Key.Source + ":" : "";
+        var bootstrap = existing.Count == 0 && !await set.AnyAsync(s => s.MatchKey.StartsWith(sourcePrefix), ct);
         if (bootstrap)
             logger.LogInformation("Esports planner bootstrap: {Count} matches recorded as baseline (no backlog notifications)", matches.Count);
 
+        var threshold = TimeSpan.FromMinutes(options.Value.RescheduleThresholdMinutes);
         foreach (var match in matches)
         {
             var key = match.Key.ToString();
             var json = MatchJson.Serialize(match);
             var hash = MatchJson.Hash(json);
+            MatchStatus? previous = null;
+            if (existing.TryGetValue(key, out var known))
+                previous = (MatchStatus)known.Status;
             if (!existing.TryGetValue(key, out var snapshot))
             {
                 snapshot = new MatchSnapshotEntity
@@ -253,6 +326,7 @@ public sealed class NotificationPlanner(
                 snapshot.LastChangedAt = now;
             }
 
+            var oldStartUtc = snapshot.ScheduledStartUtc;
             if (snapshot.ScheduledStartUtc is { } oldStart && match.ScheduledStartUtc is { } newStart && oldStart != newStart)
             {
                 // Only a time change was observed — reported as such, never as "postponed"/"cancelled".
@@ -260,17 +334,50 @@ public sealed class NotificationPlanner(
                 snapshot.StartChangedAt = now;
             }
 
+            RecordTransitions(snapshot, previous, match, oldStartUtc, threshold, now);
+
             if (match.Status == MatchStatus.Finished && snapshot.FinishedObservedAt is null)
                 snapshot.FinishedObservedAt = now;
 
             snapshot.ScheduledStartUtc = match.ScheduledStartUtc;
-            snapshot.Status = (int)match.Status;
+            // Unknown never overwrites the last known state, so Unknown → Running later is still a real "started".
+            if (match.Status != MatchStatus.Unknown)
+                snapshot.Status = (int)match.Status;
             snapshot.PayloadJson = json;
             snapshot.ContentHash = hash;
             snapshot.LastSeenAt = now;
         }
 
         return existing;
+    }
+
+    /// <summary>
+    /// Records lifecycle transitions between two KNOWN provider states. Nothing is recorded on first sight (no previous
+    /// state), from/to Unknown, or from the clock. Reschedules need the provider's own "rescheduled" flag plus a move of
+    /// at least the threshold (demo re-anchoring or small corrections are not announcements).
+    /// </summary>
+    public static void RecordTransitions(MatchSnapshotEntity snapshot, MatchStatus? previous, EsportsMatch match, DateTimeOffset? oldStartUtc, TimeSpan threshold, DateTimeOffset now)
+    {
+        if (previous is not { } prev || prev == MatchStatus.Unknown || match.Status == MatchStatus.Unknown)
+            return;
+
+        if (match.Status == MatchStatus.Live && prev is MatchStatus.Scheduled or MatchStatus.Postponed)
+            snapshot.StartedObservedAt ??= now;
+        if (match.Status == MatchStatus.Postponed && prev == MatchStatus.Scheduled)
+            snapshot.PostponedObservedAt ??= now;
+        if (match.Status == MatchStatus.Cancelled && prev is MatchStatus.Scheduled or MatchStatus.Postponed or MatchStatus.Live)
+            snapshot.CancelledObservedAt ??= now;
+
+        if (match.Status == MatchStatus.Scheduled && match.Rescheduled && match.ScheduledStartUtc is { } to && snapshot.RescheduledToUtc != to)
+        {
+            var fromPostponed = prev == MatchStatus.Postponed;
+            var moved = prev == MatchStatus.Scheduled && oldStartUtc is { } from && (to - from).Duration() >= threshold;
+            if (fromPostponed || moved)
+            {
+                snapshot.RescheduledObservedAt = now;
+                snapshot.RescheduledToUtc = to;
+            }
+        }
     }
 
     private async Task UpsertKnownTeamsAsync(IReadOnlyList<EsportsMatch> matches, DateTimeOffset now, CancellationToken ct)

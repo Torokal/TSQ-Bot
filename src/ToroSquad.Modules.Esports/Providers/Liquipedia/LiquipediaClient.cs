@@ -22,13 +22,17 @@ public sealed class LiquipediaOptions
     public string? ApiKey { get; set; }
 
     /// <summary>
-    /// REQUIRED for live access: "TSQBot/&lt;version&gt; (&lt;your contact URL or e-mail&gt;)". Liquipedia's terms
-    /// require contact information. Never reuse another operator's contact.
+    /// Optional, recommended: "TSQBot/&lt;version&gt; (&lt;your contact URL or e-mail&gt;)". The API terms require a
+    /// contact User-Agent explicitly for the MediaWiki API (which TSQ Bot does not use), not in the LiquipediaDB section;
+    /// when unset, <see cref="LiquipediaClient.DefaultUserAgent"/> is sent. Never reuse another operator's contact.
     /// </summary>
     public string? UserAgent { get; set; }
 
-    /// <summary>Verified baseline limit from the API terms: 60 requests/hour (per table, see docs/PROVIDERS.md).</summary>
-    public int RequestsPerHourPerTable { get; set; } = 60;
+    /// <summary>
+    /// LiquipediaDB API terms (verified 2026-09-25): "no more than 60 requests per 1 hour" for ALL requests of the key,
+    /// so every table shares one budget (see docs/PROVIDERS.md).
+    /// </summary>
+    public int RequestsPerHour { get; set; } = 60;
 
     /// <summary>We plan to use at most this share of the hourly budget.</summary>
     public double BudgetShare { get; set; } = 0.8;
@@ -39,7 +43,7 @@ public sealed class LiquipediaOptions
     public int MaxRetries { get; set; } = 2;
 }
 
-/// <summary>Token bucket per LPDB table so polling can never exceed the verified quota.</summary>
+/// <summary>Token bucket (one shared LPDB bucket) so polling can never exceed the verified quota.</summary>
 public sealed class RequestBudget(TimeProvider clock)
 {
     private readonly ConcurrentDictionary<string, (double Tokens, DateTimeOffset At)> _buckets = new();
@@ -78,25 +82,32 @@ public sealed class LiquipediaClient(HttpClient http, IOptions<LiquipediaOptions
 
     public LiquipediaOptions Options => _options;
 
+    /// <summary>Sent when no operator User-Agent is configured: identifies the product, never a person.</summary>
+    public const string DefaultUserAgent = "TSQBot (https://github.com/Torokal/TSQ-Bot)";
+
+    /// <summary>The single LPDB request budget bucket (the 60/h limit covers all tables together).</summary>
+    public const string BudgetBucket = "lpdb";
+
     public static string? ConfigurationProblem(LiquipediaOptions o, bool requireKey)
     {
         if (requireKey && string.IsNullOrWhiteSpace(o.ApiKey))
             return "Esports:Liquipedia:ApiKey is not set";
-        if (string.IsNullOrWhiteSpace(o.UserAgent))
-            return "Esports:Liquipedia:UserAgent is not set (must include operator contact)";
-        if (!o.UserAgent.Contains('(', StringComparison.Ordinal) || !(o.UserAgent.Contains('@', StringComparison.Ordinal) || o.UserAgent.Contains("http", StringComparison.OrdinalIgnoreCase)))
-            return "Esports:Liquipedia:UserAgent must contain contact info, e.g. 'TSQBot/0.1 (https://example.org; ops@example.org)'";
-        if (o.UserAgent.Contains("gmeinder", StringComparison.OrdinalIgnoreCase) || o.UserAgent.Contains("BOT-Greg", StringComparison.OrdinalIgnoreCase))
+        if (o.UserAgent is { } ua && (ua.Contains("gmeinder", StringComparison.OrdinalIgnoreCase) || ua.Contains("BOT-Greg", StringComparison.OrdinalIgnoreCase)))
             return "Esports:Liquipedia:UserAgent must identify YOUR bot and contact, not the upstream developer's";
         return null;
     }
+
+    /// <summary>A contact in the User-Agent is recommended (Doctor shows a hint), not required for LiquipediaDB.</summary>
+    public static bool UserAgentHasContact(string? userAgent) =>
+        userAgent is not null && userAgent.Contains('(', StringComparison.Ordinal) &&
+        (userAgent.Contains('@', StringComparison.Ordinal) || userAgent.Contains("http", StringComparison.OrdinalIgnoreCase));
 
     public async Task<ProviderResult<IReadOnlyList<JsonElement>>> QueryAsync(string table, string conditions, string order, CancellationToken cancellationToken)
     {
         var rows = new List<JsonElement>();
         var warnings = new List<string>();
         string? previousFirst = null;
-        var perHour = (int)Math.Floor(_options.RequestsPerHourPerTable * Math.Clamp(_options.BudgetShare, 0.1, 1.0));
+        var perHour = (int)Math.Floor(_options.RequestsPerHour * Math.Clamp(_options.BudgetShare, 0.1, 1.0));
 
         for (var page = 0; page < _options.MaxPages; page++)
         {
@@ -104,7 +115,7 @@ public sealed class LiquipediaClient(HttpClient http, IOptions<LiquipediaOptions
             var url = string.Create(CultureInfo.InvariantCulture,
                 $"{table}?wiki={Uri.EscapeDataString(_options.Wiki)}&limit={_options.PageSize}&offset={offset}&order={Uri.EscapeDataString(order)}&conditions={Uri.EscapeDataString(conditions)}");
 
-            var response = await SendWithRetryAsync(url, "lpdb:" + table, perHour, cancellationToken);
+            var response = await SendWithRetryAsync(url, BudgetBucket, perHour, cancellationToken);
             if (response.Failure is { } failure)
             {
                 // Never degrade a failure into "empty": partial data is labelled as partial.
@@ -158,8 +169,7 @@ public sealed class LiquipediaClient(HttpClient http, IOptions<LiquipediaOptions
                 using var request = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
                 if (!string.IsNullOrWhiteSpace(_options.ApiKey))
                     request.Headers.Authorization = new AuthenticationHeaderValue("Apikey", _options.ApiKey);
-                if (!string.IsNullOrWhiteSpace(_options.UserAgent))
-                    request.Headers.TryAddWithoutValidation("User-Agent", _options.UserAgent);
+                request.Headers.TryAddWithoutValidation("User-Agent", string.IsNullOrWhiteSpace(_options.UserAgent) ? DefaultUserAgent : _options.UserAgent);
                 request.Headers.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
 
                 using var response = await http.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeout.Token);

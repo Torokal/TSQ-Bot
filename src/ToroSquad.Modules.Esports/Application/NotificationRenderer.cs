@@ -2,125 +2,110 @@ using System.Globalization;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Modules.Esports.Domain;
+using ToroSquad.Modules.Esports.Providers;
 using ToroSquad.Modules.Esports.Providers.Fixtures;
 using ToroSquad.Modules.Esports.Providers.Liquipedia;
+using ToroSquad.Modules.Esports.Providers.PandaScore;
 
 namespace ToroSquad.Modules.Esports.Application;
 
 /// <summary>
-/// Builds notification/listing messages. Rules enforced here (and tested):
+/// Builds compact match cards modelled on the owner's BOT Greg reference (docs/NOTIFICATIONS.md): a title that names the
+/// match (clickable when a safe match page exists), ONE status line with a relative time, the inline "Event" and "Format"
+/// fields (+ "New time" for reschedules), an optional "Match Page" link under the fields, and the source attribution.
+/// No maps, streams, rosters, freshness lines or internal ids. Rules enforced here (and tested):
 /// <list type="bullet">
-/// <item>All provider text is treated as untrusted (mention/markdown defused).</item>
-/// <item>Spoiler mode: no score, winner, map result or winner-dependent colour outside ||spoiler|| tags — the
-/// title and message content only ever name both teams in source order.</item>
-/// <item>No score is shown unless the source stated it; missing map data is called out, not filled in.</item>
-/// <item>Every message links the source and shows data freshness; demo data is labelled TEST/DEMO.</item>
+/// <item>All provider text is untrusted: mentions/markdown/links defused; only validated URLs become links.</item>
+/// <item>Spoiler mode: title names both teams only; winner, score and forfeit live inside one fixed-layout
+/// ||spoiler|| line; the colour does not depend on the winner.</item>
+/// <item>Nothing the source did not state is shown (no invented winner, score, time or stars).</item>
+/// <item>Demo data is labelled TEST/DEMO in the footer only (the title is just the match), never links anywhere and never
+/// claims a real source. Real cards carry only the source attribution in the footer (no internal ids).</item>
 /// </list>
 /// </summary>
-public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode mode)
+public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode mode, IEsportsDataProvider? provider = null)
 {
     public const uint ReminderColor = 0x1C7ED6;
-    public const uint ResultColor = 0x495057; // neutral on purpose (no winner colour, spoiler-safe)
+    public const uint StartedColor = 0x1C7ED6;
+    public const uint ResultColor = 0x2F9E44;
+    public const uint ChangeColor = 0xF59F00;
+    public const uint CancelledColor = 0xE03131;
 
+    /// <summary>Hosts allowed for provider-supplied links in listings (rankings source etc.).</summary>
     public static readonly IReadOnlyCollection<string> AllowedLinkHosts = ["liquipedia.net", "twitch.tv", "youtube.com", "kick.com", "github.com"];
 
     public OutgoingMessage Reminder(EsportsMatch match, string language, MentionPolicy pings, DateTimeOffset fetchedAt, DateTimeOffset? previousStart)
     {
+        // "Planned start" wording is the honesty guarantee: a reminder never claims that the match started.
         var lines = new List<string>();
         if (match.ScheduledStartUtc is { } start)
-        {
-            lines.Add(L(language, "esports.reminder.starts", DiscordText.Timestamp(start, 'F'), DiscordText.Timestamp(start, 'R')));
-            if (!match.StartTimeExact)
-                lines.Add(L(language, "esports.reminder.estimated"));
-        }
-
+            lines.Add(L(language, match.StartTimeExact ? "esports.card.reminder" : "esports.card.reminder_estimated", DiscordText.Timestamp(start, 'R')));
         if (previousStart is { } previous && match.ScheduledStartUtc != previous)
             lines.Add(L(language, "esports.reminder.time_updated", DiscordText.Timestamp(previous, 'f')));
-        lines.Add(L(language, "esports.reminder.planned_note"));
-        lines.Add(Freshness(language, fetchedAt));
-
-        var fields = CommonFields(match, language);
-        var streams = match.Streams.Select(s => Link(s.Url) is { } url ? $"[{s.Platform}]({url})" : null)
-            .OfType<string>().Take(5).ToList();
-        if (streams.Count > 0)
-            fields.Add(new EmbedField(L(language, "esports.field.streams"), string.Join(" · ", streams), false));
-
-        return new OutgoingMessage(
-            Content(pings),
-            new MessageEmbed(
-                Demo(language) + L(language, "esports.reminder.title", Name(match.A, language), Name(match.B, language)),
-                string.Join("\n", lines),
-                Link(match.SourceUrl),
-                fields,
-                Footer(language),
-                fetchedAt,
-                ReminderColor),
-            pings);
+        return Card(match, language, Title(match, language), lines, [], match.ScheduledStartUtc ?? fetchedAt, ReminderColor, pings);
     }
+
+    /// <summary>Sent only on a provider-stated scheduled → running transition (never because the clock passed).</summary>
+    public OutgoingMessage Started(EsportsMatch match, string language, MentionPolicy pings, DateTimeOffset observedAt) =>
+        Card(match, language, Title(match, language), [L(language, "esports.card.started", DiscordText.Timestamp(match.BeginAtUtc ?? observedAt, 'R'))], [],
+            match.BeginAtUtc ?? observedAt, StartedColor, pings);
+
+    public OutgoingMessage Postponed(EsportsMatch match, string language, DateTimeOffset observedAt) =>
+        Card(match, language, Title(match, language), [L(language, "esports.card.postponed")], [], observedAt, ChangeColor, MentionPolicy.None);
+
+    public OutgoingMessage Rescheduled(EsportsMatch match, string language, DateTimeOffset newStartUtc, TimeZoneInfo zone, DateTimeOffset observedAt) =>
+        Card(match, language, Title(match, language), [L(language, "esports.card.rescheduled")],
+            [new EmbedField(L(language, "esports.field.new_time"), LocalTime(newStartUtc, zone), true)], observedAt, ChangeColor, MentionPolicy.None);
+
+    public OutgoingMessage Cancelled(EsportsMatch match, string language, DateTimeOffset observedAt) =>
+        Card(match, language, Title(match, language), [L(language, "esports.card.cancelled")], [], observedAt, CancelledColor, MentionPolicy.None);
 
     public OutgoingMessage Result(EsportsMatch match, string language, bool spoiler, MentionPolicy pings, DateTimeOffset fetchedAt)
     {
-        // Spoiler mode: a single fixed-layout line (both teams in source order) inside the spoiler. The winner's name is
-        // NOT repeated and per-map lines are omitted, because the blurred width/height of those would reveal the result.
-        var description = spoiler
-            ? L(language, "esports.result.spoiler_hint") + "\n" + DiscordText.Spoiler(SpoilerLine(match, language)) + "\n" + L(language, "esports.result.spoiler_maps_hidden")
-            : string.Join("\n", ResultLines(match, language));
+        string title;
+        List<string> lines;
+        if (spoiler)
+        {
+            // Everything result-related is inside ONE spoiler line whose visible layout does not depend on the winner.
+            title = Title(match, language);
+            lines = [L(language, "esports.card.finished"), L(language, "esports.card.spoiler", DiscordText.Spoiler(SpoilerLine(match, language)))];
+        }
+        else
+        {
+            title = match.SeriesScoreKnown
+                ? L(language, "esports.card.score_title", Name(match.A, language), match.A.Score, match.B.Score, Name(match.B, language))
+                : Title(match, language);
+            lines = ResultLines(match, language);
+        }
 
-        var fields = CommonFields(match, language);
-        var maps = spoiler ? [] : MapLines(match, language);
-        if (maps.Count > 0)
-            fields.Add(new EmbedField(L(language, "esports.field.maps"), string.Join("\n", maps), false));
-
-        return new OutgoingMessage(
-            Content(pings),
-            new MessageEmbed(
-                Demo(language) + L(language, "esports.result.title", Name(match.A, language), Name(match.B, language)),
-                description + "\n" + Freshness(language, fetchedAt),
-                Link(match.SourceUrl),
-                fields,
-                Footer(language),
-                fetchedAt,
-                ResultColor),
-            pings);
+        return Card(match, language, title, lines, [], match.EndAtUtc ?? fetchedAt, ResultColor, pings);
     }
 
-    /// <summary>Result as one line whose visible length does not depend on who won.</summary>
+    /// <summary>Result as one line whose visible length does not depend on who won (spoiler content).</summary>
     public string SpoilerLine(EsportsMatch match, string language)
     {
-        if (match.SeriesScoreKnown)
-            return L(language, "esports.result.score", NameMd(match.A, language), match.A.Score, match.B.Score, NameMd(match.B, language));
-        if (match.IsForfeit && match.WinnerIndex is { } w)
-            return L(language, "esports.result.score", NameMd(match.A, language), w == 0 ? "W" : "FF", w == 0 ? "FF" : "W", NameMd(match.B, language));
-        return L(language, "esports.result.series_unknown");
+        var line = match.SeriesScoreKnown
+            ? L(language, "esports.result.score", NameMd(match.A, language), match.A.Score, match.B.Score, NameMd(match.B, language))
+            : match.IsForfeit && match.WinnerIndex is { } w
+                ? L(language, "esports.result.score", NameMd(match.A, language), w == 0 ? "W" : "FF", w == 0 ? "FF" : "W", NameMd(match.B, language))
+                : L(language, "esports.result.series_unknown");
+        return match.IsForfeit ? line + " · " + L(language, "esports.card.forfeit_short") : line;
     }
 
-    /// <summary>Plain (non-spoiler) result lines.</summary>
+    /// <summary>Plain (non-spoiler) result status lines: winner / draw / forfeit — never guessed.</summary>
     public List<string> ResultLines(EsportsMatch match, string language)
     {
-        var lines = new List<string>();
-        if (match.SeriesScoreKnown)
-            lines.Add(L(language, "esports.result.score", NameMd(match.A, language), match.A.Score, match.B.Score, NameMd(match.B, language)));
-        else
-            lines.Add(L(language, "esports.result.series_unknown"));
-
-        if (match.IsDraw)
-            lines.Add(L(language, "esports.result.draw"));
-        else if (match.WinnerName is { } winner)
-            lines.Add(L(language, match.IsForfeit ? "esports.result.forfeit" : "esports.result.winner", DiscordText.Untrusted(winner, 100)));
-        else
-            lines.Add(L(language, "esports.result.winner_unknown"));
-
-        if (match.SeriesScoreKnown && !match.MapsComplete && !match.IsForfeit)
-            lines.Add(L(language, "esports.result.maps_incomplete"));
-        return lines;
+        var winner = match.WinnerName is { } w ? DiscordText.Untrusted(w, 100) : null;
+        var line = match switch
+        {
+            { IsForfeit: true } when winner is not null => L(language, "esports.card.forfeit_winner", winner),
+            { IsForfeit: true } => L(language, "esports.card.forfeit"),
+            { IsDraw: true } => L(language, "esports.card.draw"),
+            _ when winner is not null => L(language, "esports.card.winner", winner),
+            _ => L(language, "esports.card.finished_unknown"),
+        };
+        return [line];
     }
-
-    public List<string> MapLines(EsportsMatch match, string language) =>
-        match.Maps
-            .Where(m => m.Status == GameStatus.Played && m.ScoreA is not null && m.ScoreB is not null)
-            .Select(m => L(language, "esports.map_line", m.Index,
-                m.MapName is null ? L(language, "esports.map_tba") : DiscordText.Untrusted(m.MapName, 40), m.ScoreA, m.ScoreB))
-            .ToList();
 
     public string MatchLine(EsportsMatch match, string language, bool hideResult, DateTimeOffset now)
     {
@@ -133,10 +118,11 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
                 : $"**{match.A.Score}–{match.B.Score}**",
             MatchStatus.Finished => L(language, "esports.status.finished"),
             MatchStatus.Cancelled => L(language, "esports.status.not_played"),
+            MatchStatus.Postponed => L(language, "esports.status.postponed"),
+            MatchStatus.Live => L(language, "esports.status.live"),
             MatchStatus.Scheduled when match.ScheduledStartUtc is { } start && start <= now =>
                 L(language, "esports.status.awaiting_result"),
-            MatchStatus.Live => L(language, "esports.status.live"),
-            _ => match.BestOf is { } bo ? string.Create(CultureInfo.InvariantCulture, $"BO{bo}") : "",
+            _ => match.BestOf is { } bo ? Format(bo) : "",
         };
         return $"{when} — {teams} · {status} · {DiscordText.Untrusted(match.Tournament.Name, 80)}";
     }
@@ -159,29 +145,78 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
     public string Freshness(string language, DateTimeOffset fetchedAt) =>
         L(language, "esports.freshness", DiscordText.Timestamp(fetchedAt, 'R'));
 
-    // Demo data is synthetic: it must not claim a real source or link to real pages/channels (a synthetic stream name
-    // could belong to a stranger). Found in the first live TEST/DEMO notification, 2026-09-25.
-    public string Footer(string language) =>
-        mode.IsDemo ? L(language, "esports.demo_footer") + " • " + L(language, "esports.footer_source_demo") : L(language, "esports.footer_source");
+    /// <summary>Source attribution for listings (the configured provider).</summary>
+    public string Footer(string language) => Footer(language, provider?.Id);
+
+    /// <summary>
+    /// Attribution required by the data source: PandaScore terms art. 6.4 ("Source: PandaScore"); Liquipedia CC BY-SA 3.0.
+    /// Demo data is synthetic: it names no real source.
+    /// </summary>
+    public string Footer(string language, string? source) =>
+        mode.IsDemo ? L(language, "esports.demo_footer") + " • " + L(language, "esports.footer_source_demo")
+        : source == PandaScoreParser.Source ? L(language, "esports.footer_source_pandascore")
+        : L(language, "esports.footer_source");
 
     public bool IsDemo => mode.IsDemo;
+
+    /// <summary>Card footer: only the required attribution (the embed timestamp shows the time); demo cards say so briefly.</summary>
+    public string CardFooter(string language, string? source) =>
+        mode.IsDemo ? L(language, "esports.card.demo_footer") : Footer(language, source);
+
+    /// <summary>Invisible field name for the "Match Page" field (Discord requires a non-empty name).</summary>
+    public const string ZeroWidth = "\u200B";
 
     /// <summary>Safe outgoing link, or none at all for demo data.</summary>
     public string? Link(string? url) => mode.IsDemo ? null : DiscordText.SafeUrl(url, AllowedLinkHosts);
 
+    /// <summary>The "Match Page" target: verified HLTV → official → provider page → none. Demo data never links.</summary>
+    public MatchPage? MatchPageFor(EsportsMatch match)
+    {
+        // Demo data never links to a real site. The only exception is the IANA-reserved test domain (RFC 2606), which can
+        // never be a real match page: it lets a TEST/DEMO card show how the "Match Page" link renders.
+        if (mode.IsDemo)
+            return MatchLinkPolicy.ValidGeneralUrl(match.Links?.OfficialMatchUrl, [ReservedTestHost]) is { } test
+                ? new MatchPage(MatchPageKind.Official, test)
+                : null;
+        var links = match.Links ?? MatchLinks.None;
+        if (links.ProviderMatchUrl is null && match.SourceUrl is not null)
+            links = links with { ProviderMatchUrl = match.SourceUrl };
+        return MatchLinkPolicy.Resolve(links, AllowedLinkHosts);
+    }
+
+    /// <summary>Reserved for documentation/testing by RFC 2606; the only link a demo card may carry.</summary>
+    public const string ReservedTestHost = "example.com";
+
     public string Demo(string language) => mode.IsDemo ? L(language, "esports.demo_label") + " " : "";
 
-    private List<EmbedField> CommonFields(EsportsMatch match, string language)
+    public static string Format(int bestOf) => string.Create(CultureInfo.InvariantCulture, $"bo{bestOf}");
+
+    public static string LocalTime(DateTimeOffset utc, TimeZoneInfo zone) =>
+        TimeZoneInfo.ConvertTime(utc, zone).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+
+    private string Title(EsportsMatch match, string language) =>
+        L(language, "esports.card.vs", Name(match.A, language), Name(match.B, language));
+
+    private OutgoingMessage Card(EsportsMatch match, string language, string title, List<string> lines, List<EmbedField> extraFields, DateTimeOffset timestamp, uint color, MentionPolicy pings)
     {
         var fields = new List<EmbedField>
         {
-            new(L(language, "esports.field.tournament"), DiscordText.Untrusted(match.Tournament.Name, 200), true),
+            new(L(language, "esports.field.event"), DiscordText.Untrusted(match.Tournament.Name, 200), true),
         };
-        if (match.Stage is { } stage)
-            fields.Add(new EmbedField(L(language, "esports.field.stage"), DiscordText.Untrusted(stage, 100), true));
         if (match.BestOf is { } bo)
-            fields.Add(new EmbedField(L(language, "esports.field.format"), string.Create(CultureInfo.InvariantCulture, $"BO{bo}"), true));
-        return fields;
+            fields.Add(new EmbedField(L(language, "esports.field.format"), Format(bo), true));
+        fields.AddRange(extraFields);
+
+        // Greg layout: the match page sits under the fields (and the title links to it too).
+        var page = MatchPageFor(match);
+        if (page is not null)
+            fields.Add(new EmbedField(ZeroWidth, $"[{L(language, "esports.card.match_page")}]({page.Url})", false));
+
+        return new OutgoingMessage(
+            Content(pings),
+            // The title is only the match; demo cards say TEST/DEMO in the footer (no prefix, no link, no real source).
+            new MessageEmbed(title, string.Join("\n", lines), page?.Url, fields, CardFooter(language, match.Key.Source), timestamp, color),
+            pings);
     }
 
     private static string? Content(MentionPolicy pings) =>

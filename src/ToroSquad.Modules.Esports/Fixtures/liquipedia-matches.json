@@ -4,7 +4,7 @@
     "pageid": 900001, "pagename": "Demo_Masters/2026", "match2id": "DemoMst26_R01-M001",
     "status": "", "winner": "", "walkover": "", "resulttype": "", "finished": 0,
     "type": "Online", "section": "Group Stage", "game": "cs2", "date": "{{T+00:20}}", "dateexact": 1,
-    "stream": { "twitch": "tsqbot_demo", "twitch_en_1": "tsqbot_demo" }, "links": [], "bestof": 3,
+    "stream": { "twitch": "tsqbot_demo", "twitch_en_1": "tsqbot_demo" }, "links": { "hltv": { "1": { "1": "https://www.hltv.org/matches/1000001/demo-fixture-not-a-real-match", "2": 0 } } }, "bestof": 3,
     "tournament": "Demo Masters 2026", "parent": "Demo_Masters/2026", "liquipediatier": "1", "liquipediatiertype": "", "publishertier": "",
     "match2opponents": [
       { "id": 1, "type": "team", "name": "Toro Wolves", "template": "toro wolves", "score": -1, "status": "", "placement": null, "match2players": [],

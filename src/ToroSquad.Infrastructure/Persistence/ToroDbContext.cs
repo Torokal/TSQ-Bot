@@ -188,6 +188,12 @@ public sealed class OutboxMessageEntity
 
     /// <summary>Hash of the payload currently visible in Discord (differs from PayloadHash while an edit is pending).</summary>
     public string? DeliveredPayloadHash { get; set; }
+
+    /// <summary>
+    /// MessageFingerprint of exactly what the last send attempt transmitted (the payload may be replaced while the
+    /// delivery is unknown); reconciliation looks for it instead of a visible reference.
+    /// </summary>
+    public string? DeliveredFingerprint { get; set; }
     public bool EditPending { get; set; }
     public int EditAttempts { get; set; }
     public int ReconcileAttempts { get; set; }

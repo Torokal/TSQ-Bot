@@ -15,6 +15,7 @@ using ToroSquad.Modules.Esports.Persistence;
 using ToroSquad.Modules.Esports.Providers;
 using ToroSquad.Modules.Esports.Providers.Fixtures;
 using ToroSquad.Modules.Esports.Providers.Liquipedia;
+using ToroSquad.Modules.Esports.Providers.PandaScore;
 using ToroSquad.Modules.Esports.Providers.Valve;
 
 namespace ToroSquad.Modules.Esports;
@@ -48,8 +49,10 @@ public sealed class EsportsModule : IToroModule
         var section = configuration.GetSection(EsportsOptions.Section);
         services.AddOptions<EsportsOptions>().Bind(section);
         services.AddOptions<LiquipediaOptions>().Bind(section.GetSection("Liquipedia"));
+        services.AddOptions<PandaScoreOptions>().Bind(configuration.GetSection(PandaScoreOptions.Section));
         services.AddOptions<ValveStandingsOptions>().Bind(section.GetSection("Valve"));
         var mode = section.GetSection("Provider").GetValue("Mode", ProviderMode.Fixture);
+        var providerName = section.GetSection("Provider").GetValue("Name", MatchProviderName.PandaScore);
         services.AddSingleton(new EsportsDataMode(mode));
 
         services.AddSingleton<LocalizationSource>(new LocalizationSource(typeof(EsportsModule).Assembly, "ToroSquad.Modules.Esports.Localization"));
@@ -58,22 +61,34 @@ public sealed class EsportsModule : IToroModule
         services.AddSingleton<RequestBudget>();
         var liquipediaBase = section.GetSection("Liquipedia").GetValue("BaseUrl", new LiquipediaOptions().BaseUrl)!;
         var liquipedia = services.AddHttpClient<LiquipediaClient>(c => c.BaseAddress = new Uri(liquipediaBase));
+        var pandaBase = configuration.GetSection(PandaScoreOptions.Section).GetValue("BaseUrl", new PandaScoreOptions().BaseUrl)!;
+        var panda = services.AddHttpClient<PandaScoreClient>(c => c.BaseAddress = new Uri(pandaBase));
         var valve = services.AddHttpClient<IRankingsProvider, ValveStandingsProvider>();
         if (mode == ProviderMode.Live)
         {
             // Live: real network only. There is deliberately NO fallback to fixture data on errors.
             liquipedia.ConfigurePrimaryHttpMessageHandler(LiveHandler);
+            panda.ConfigurePrimaryHttpMessageHandler(LiveHandler);
             valve.ConfigurePrimaryHttpMessageHandler(LiveHandler);
         }
         else
         {
-            // One anchor for the process: IHttpClientFactory recycles handlers, so it cannot live in the handler.
+            // One anchor for the process (kept across restarts): IHttpClientFactory recycles handlers, so it cannot live in the handler.
+            services.AddSingleton<IFixtureAnchorStore, ProviderStateFixtureAnchorStore>();
             services.AddSingleton<FixtureAnchor>();
             liquipedia.ConfigurePrimaryHttpMessageHandler(sp => new FixtureHttpHandler(sp.GetRequiredService<TimeProvider>(), anchor: sp.GetRequiredService<FixtureAnchor>()));
+            panda.ConfigurePrimaryHttpMessageHandler(sp => new FixtureHttpHandler(sp.GetRequiredService<TimeProvider>(), anchor: sp.GetRequiredService<FixtureAnchor>()));
             valve.ConfigurePrimaryHttpMessageHandler(sp => new FixtureHttpHandler(sp.GetRequiredService<TimeProvider>(), anchor: sp.GetRequiredService<FixtureAnchor>()));
         }
 
-        services.AddSingleton<IEsportsDataProvider>(sp => new LiquipediaProvider(sp.GetRequiredService<LiquipediaClient>(), sp.GetRequiredService<EsportsDataMode>()));
+        // Provider-independent from here on: the planner, cache, commands and renderer only see IEsportsDataProvider.
+        if (providerName == MatchProviderName.Liquipedia)
+            services.AddSingleton<IEsportsDataProvider>(sp => new LiquipediaProvider(sp.GetRequiredService<LiquipediaClient>(), sp.GetRequiredService<EsportsDataMode>()));
+        else
+            services.AddSingleton<IEsportsDataProvider>(sp => new PandaScoreProvider(sp.GetRequiredService<PandaScoreClient>(), sp.GetRequiredService<EsportsDataMode>()));
+        services.AddSingleton<MatchLinkCatalog>();
+        services.AddSingleton<TeamDirectory>();
+        services.AddSingleton<LiquipediaHltvLinkSource>();
 
         services.AddSingleton<EsportsCache>();
         services.AddSingleton<NotificationRenderer>();
@@ -107,9 +122,16 @@ public sealed class EsportsModule : IToroModule
         var section = configuration.GetSection(EsportsOptions.Section);
         var esports = section.Get<EsportsOptions>() ?? new EsportsOptions();
         var liquipedia = section.GetSection("Liquipedia").Get<LiquipediaOptions>() ?? new LiquipediaOptions();
-        var errors = new List<string>(esports.Validate(liquipedia));
-        if (esports.Provider.Mode == ProviderMode.Live && LiquipediaClient.ConfigurationProblem(liquipedia, requireKey: true) is { } problem)
-            errors.Add("Live provider mode: " + problem);
+        var panda = configuration.GetSection(PandaScoreOptions.Section).Get<PandaScoreOptions>() ?? new PandaScoreOptions();
+        var errors = new List<string>(esports.Validate(liquipedia, panda));
+        if (esports.Provider.Mode == ProviderMode.Live)
+        {
+            var problem = esports.Provider.Name == MatchProviderName.Liquipedia
+                ? LiquipediaClient.ConfigurationProblem(liquipedia, requireKey: true)
+                : PandaScoreOptions.ConfigurationProblem(panda, requireToken: true);
+            if (problem is not null)
+                errors.Add("Live provider mode: " + problem);
+        }
         return errors;
     }
 }

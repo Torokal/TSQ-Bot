@@ -3,9 +3,36 @@
 > Tek doğruluk kaynağı: gerçek durum, kararlar, çalıştırılan testler, blocker'lar ve tek NEXT ACTION.
 > Yeni oturumda önce bu dosyayı, sonra `git status` / `git log --oneline -10` çıktısını doğrula.
 
-Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). **Test guild canlı doğrulaması sürüyor** (dal
-`feature/live-validation`, push edilmedi): gateway, guild komut kaydı, temel komutlar, kurulum, TEST/DEMO bildirimi ve
-yeniden başlatma kalıcılığı VERIFIED_LIVE. Canlıda bulunan 6 hata düzeltildi. Liquipedia canlı: BLOCKED.
+Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama **main'de** (PR #2, sahip onayıyla normal merge,
+`c54793a`; merge öncesi dal ucunda tam kapı 202/202 ×3). **PandaScore + yaşam döngüsü + sade kartlar**
+`feature/pandascore-notifications` dalında (PR #3, hedefi artık `main`, çakışma yok, merge edilmedi);
+çevrimdışı **349/349 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı **okuma** VERIFIED_LIVE (sahibin ücretsiz token'ı, 2026-09-25; bildirim henüz canlı veriyle açılmadı). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
+yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esports:VerifiedMatchLinks` elle yedek.
+
+## PandaScore / bildirim aşaması (2026-09-25)
+
+| Konu | Durum |
+|---|---|
+| Varsayılan maç sağlayıcısı | **PandaScore** (`Esports:Provider:Name`), Liquipedia eski/isteğe bağlı; normal çalışma Liquipedia gerektirmez |
+| PandaScore resmî doküman doğrulaması | Yapıldı (2026-09-25): uçlar, Bearer auth, 1.000 istek/saat (ücretsiz), sayfalama ≤100, durumlar, rescheduled/forfeit, "Source: PandaScore" atfı (docs/PROVIDERS.md) |
+| PandaScore ayrıştırma, yaşam döngüsü, sayfalama, hata türleri, bütçe | TESTED_OFFLINE (sentetik) |
+| PandaScore gerçek API — okuma (yaklaşan/biten, sayfalama, kota, etkinlikler) | **VERIFIED_LIVE** (2026-09-25, `esports provider-check`, yalnızca okuma, hiçbir şey gönderilmedi): 163 maç / 2 sayfa (Scheduled 131, Finished 32), 35 etkinlik, kalan kota 994/1000 |
+| PandaScore ücretsiz planda sonuç alanları | **VERIFIED_LIVE** — 32 bitmiş maçın 32'sinde kazanan, 27'sinde seri skoru, 5 hükmen (kazanan var, skor yok). Resmî sayfalardaki çelişki çözüldü |
+| PandaScore canlı "oynanıyor" / ertelendi / iptal geçişleri | Okumada o an oynanan maç yoktu → **TESTED_OFFLINE**; canlı bildirim açıldığında gözlenecek |
+| Canlı veriyle bildirim (test guild) | **AÇIK** (sahip onayı, 2026-09-25 03:40Z): `Esports:Provider:Mode=Live`, `Delivery:Mode=Send`, Gateway. Sunucu takım filtresi (sahip `/esports-admin filters team` ile ekledi): Aurora Gaming `ps-team:131505` + Eternal Fire `ps-team:129413` (akademiler hariç; takım kimlikleri `esports provider-check --team` ile seçildi) |
+| Filtresiz ilk canlı tarama (DryRun) | 03:33Z: filtre eklenmeden önce 5 alakasız sonuç kartı **yalnızca simüle edildi**, gönderilmedi (Simulated, terminal) — önce DryRun kararının doğrulaması |
+| Sunucu takım filtresi canlıda | **VERIFIED_LIVE** (03:38Z ve 03:40Z taramaları: 162 maçın 160'ı elendi; geçen 2 maç Eternal Fire'ın; Aurora'nın 48 saatte maçı yok) |
+| Filtre yalnızca yönetici | `/esports-admin` Discord'a `default_member_permissions=32` (Sunucuyu Yönet) ile kayıtlı; sunucu tarafında her filtre işlemi `Authorize.Require(ManageGuild)` — TESTED_OFFLINE (`Regular_members_are_refused_every_admin_operation`); normal üye hesabıyla canlı sınama **BLOCKED** (ikinci hesap yok). `/esports follow` kişiseldir, sunucu filtresini genişletmez |
+| Etiketlenme (ping) isteğe bağlı | Kanal kartları ping'siz; ping yalnızca yöneticinin eşlediği role, üye rolü kendi seçimiyle alır (`/esports follow` / panel, self-service). Test guild'de gerçek takımlar için ping rolü **yok** (tek eşleme sahte Toro Wolves, ping kapalı) → şu an kimse etiketlenmez |
+| Maçı olmayan takımı seçebilme | Takım otomatik tamamlaması 3+ harfte PandaScore takım kataloğunu arar (tek sayfa, 2 sn, 1 saat önbellek; ad + kısaltma + ülke). TESTED_OFFLINE (6 test) + **VERIFIED_LIVE** (sahip ekran görüntüsü, 2026-09-25 06:51 TR): "aurora" → AURORA (AUR · IS), Aurora Gaming (AUR · RU), Aurora Young Blood (AUR.YB · RU), ex-Aurora Gaming (AG · RU); seçilen Aurora Gaming filtreye adıyla kaydedildi (`ps-team:131505`, Label=Aurora Gaming) |
+| Gerçek veriyle kart görünümü (`/esports-admin preview`, ephemeral, ping'siz) | **VERIFIED_LIVE** (sahip ekran görüntüsü, 2026-09-25 06:49 TR): "Eternal Fire vs WBT", "⏰ Planlanan başlangıç: in 5 hours", Etkinlik "Stake Ranked Episode 5: Closed Qualifier 2026", Format bo3, footer "Kaynak: PandaScore • Today at 12:00", TEST/DEMO yok; "ping atılacak rol yok" notu |
+| İlk gerçek maç bildirimi | Bekleniyor: Eternal Fire vs WBT 2026-09-25 09:00Z (Stake Ranked), hatırlatma 08:40Z (20 dk önce). Kanalda görünene kadar TESTED_OFFLINE |
+| Başladı / bitti / ertelendi / saat değişti / iptal / hükmen kartları | TESTED_OFFLINE; Discord'da görünüm: demo kartlarıyla doğrulanacak |
+| Sade kart tasarımı (Greg referansı) | Uygulandı; Greg ekran görüntüsü bu turda paylaşılmadı → metin şablonuna göre |
+| HLTV | Veri sağlayıcısı değil, **kazıma yok**. Araştırma: HLTV'nin resmî API'si yok; BOT Greg'in "Matchpage" bağlantısı Liquipedia maç verisindeki `links.hltv`'den geliyordu (Liquipedia Lua-Modules + upstream kodu). Sahip kararı (2026-09-25): veri PandaScore, HLTV bağlantısı Liquipedia'dan (aynı iki takım + ≤90 dk + tek aday). TESTED_OFFLINE; canlı **BLOCKED/OPTIONAL** (Liquipedia anahtarı yok); elle yedek `Esports:VerifiedMatchLinks` çalışır (TESTED_OFFLINE) |
+| Kart başlığı tıklanınca maç sayfası | Uygulandı (Greg gibi); gerçek HLTV bağlantısı Liquipedia anahtarı gelince görünür; demo kartları bilinçli olarak bağlantısız |
+| Yıldız (BOT Greg puanı) | DEFERRED — güvenilir kaynak yok, gösterilmez |
+| Test guild'deki rol eşleme #2 (tüm maçlar, hatırlatma ping'i açık) | Sahibin yapılandırması, dokunulmadı; demo hatırlatması test rolünü etiketleyebilir → `/esports-admin roles unmap mapping:2` |
 
 ## Ürün kimliği ve depo
 
@@ -126,7 +153,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 |---|---|---|---|
 | B1 | Discord uygulaması / bot token yok | Developer Portal'da uygulama oluştur, token'ı user-secrets'a koy (docs/WINDOWS_SETUP.md §3–4) | Hesap/yetkilendirme — sahip |
 | B2 | Test guild ve davet | Botu test sunucusuna davet et (izin 84992 / 268520448), `Discord:TestGuildIds` + `CommandSyncGuildIds` | Bot daveti — sahip |
-| B3 | Liquipedia API erişimi | Başvuru/plan seçimi (ücretli olabilir; ücretsiz yalnızca açık kaynak + ticari olmayan, onaylı) | Ücret/abonelik — sahip |
+| B3 | Liquipedia API erişimi (isteğe bağlı) | Basic/Premium geçici olarak kullanılamıyor, ticari: Enterprise; ücretsiz erişim başvuruyla (açık kaynak / ticari olmayan / topluluk, çoğu zaman süreli). **Sahip kararı:** depo public olduktan sonra, yayın aşamasında başvurulacak | Başvuru/ücret — sahip |
 | B7 | Discord ağ erişimi | **Çözüldü** (2026-09-25) — SplitWire AllowedApps, sahip onayıyla | — |
 | B5 | Upstream geliştiriciye mesaj | docs/drafts/upstream-contact.md taslağı gönderilmedi | Dış iletişim — sahip |
 
@@ -149,7 +176,23 @@ Send, sağlayıcı Fixture (TEST/DEMO), Example modülü kapalı (7 komut grubu)
 | `/esports-admin configure reminder_minutes`, `/esports-admin doctor` | **VERIFIED_LIVE** |
 | `/esports matches`, `/esports rankings`, `follow` / `subscriptions` / `unfollow` | **VERIFIED_LIVE** (etkileşim; veri TEST/DEMO) |
 | `/privacy export` (JSON eki, "TSQ Bot", yalnızca çağıran); `/privacy delete` önizleme + onay + silme (DB'de takip/tercih 0) | **VERIFIED_LIVE** |
-| TEST/DEMO bildirimi: doğru kanal, [TEST/DEMO] etiketi, ping yok, Türkçe, tek mesaj | **VERIFIED_LIVE** (mesaj `1552805032611815436`) |
+| TEST/DEMO bildirimi: doğru kanal, [TEST/DEMO] etiketi, ping yok, Türkçe, tek mesaj | **VERIFIED_LIVE** (mesaj `1552805032611815436`; eski düzen — 2026-09-25'ten beri TEST/DEMO yalnızca footer'da) |
+| Eski render (başlıkta [TEST/DEMO], footer'da ref) Rescheduled TEST/DEMO kartının görünümü | VERIFIED_LIVE **yalnızca o eski render için** (sahip canlı gördü, 2026-09-25). Görünür yapı sonradan değişti (önek kaldırıldı, footer sadeleşti, ref görünür içerikten çıktı, ref yerine parmak izi uzlaştırması) → **güncel render için geçerli değildir** |
+| Discord mesaj düzenleme/güncelleme teslimatı | **VERIFIED_LIVE** (2026-09-25: 7 demo kartı yeni render'a düzenlendi; Discord düzenlemeyi kabul etti — outbox Sent, EditPending=0, DeliveredPayloadHash=PayloadHash, hata yok) |
+| Mevcut demo kartları kopya üretmeden güncellendi | **VERIFIED_LIVE** (7 satır EditScheduled → aynı mesajlar düzenlendi; yeni outbox satırı/mesaj yok) |
+| Güncelleme rol/kullanıcı ping'i olmadan yapıldı | **VERIFIED_LIVE** (düzenlemeler her zaman allowed_mentions boş; demo kartların içeriği yok) |
+| **Güncel** Started kartı görünümü (🔴 sürümü) | **VERIFIED_LIVE** (sahip 🔴 sürümünü Discord'da görüp onayladı, 2026-09-25; "🔴 Maç başladı · <Discord yerel göreli zaman>") |
+| Started kartı görünümü (▶️ sürümü, düzen aynı) | **VERIFIED_LIVE** (sahip güncel kartı inceleyip onayladı, 2026-09-25; Discord'un yerel göreli zamanı `<t:…:R>` dahil — "43 minutes ago" gibi metni Discord kullanıcının diline/saat dilimine göre üretir, TSQ Bot çevirmez) |
+| **Güncel** Finished (normal) kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
+| **Güncel** Finished (spoiler) kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
+| **Güncel** Postponed kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
+| **Güncel** Rescheduled kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25; güncel render) |
+| **Güncel** Canceled kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
+| **Güncel** Forfeit kartı görünümü | **VERIFIED_LIVE** (sahip tam kartı inceleyip onayladı, 2026-09-25) |
+| Maç Sayfası bağlantısının görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25; tıklanabilir başlık + en altta "Maç Sayfası"). Kontrollü test: demo hükmen kartı RFC 2606 ayrılmış test alanına (`https://example.com/tsq-bot-demo-match-page`) bağlanır; HLTV değil, sahte üretim bağlantısı değil, hiçbir şey indirilmez |
+| Zaman gösterimi | Kart göreli zamanı ve embed zaman damgası Discord'un yerel biçimlendirmesi (kullanıcının dili/saat dilimi); elle çeviri yok. "Yeni Saat" alanı onaylı mevcut biçim (sunucu saat dilimi, dd/MM/yyyy HH:mm) |
+| Parmak izi tabanlı belirsiz-gönderim uzlaştırması | TESTED_OFFLINE (canlı timeout tetiklenemez) |
+| Eski footer ref'i ile uzlaştırma (legacy) | TESTED_OFFLINE |
 | Aynı çalışmada tekrar taramada kopya yok (`new=0`) | **VERIFIED_LIVE** |
 | Yeniden başlatma: yeni mesaj yok, mevcut mesaj ping'siz düzenlendi (`updated=1`, tek outbox satırı) | **VERIFIED_LIVE** |
 | Ayar/modül durumu yeniden başlatmada korunur | **VERIFIED_LIVE** |
@@ -162,7 +205,7 @@ Send, sağlayıcı Fixture (TEST/DEMO), Example modülü kapalı (7 komut grubu)
 | Başarısız işlemlerin takip kodu log'da (`2e7f9bd`) | Uygulandı; canlıda bir hata vakasıyla henüz gözlenmedi |
 | Guild'ler arası izolasyon | TESTED_OFFLINE (tek gerçek guild) |
 | Bildirim çökme kurtarma, 429, belirsiz teslimat | TESTED_OFFLINE (canlıda yıkıcı test yok) |
-| Liquipedia canlı veri | **BLOCKED** (onaylı API anahtarı yok) |
+| Liquipedia canlı veri / HLTV bağlantı zenginleştirmesi | **BLOCKED/OPTIONAL** (onaylı API anahtarı yok; yayın aşamasında başvuru) |
 | VRS canlı veri | NOT_RUN — TESTED_OFFLINE |
 | Global komut kaydı, herkese açık bot | DEFERRED |
 | GitHub deposunun public olması | PRE-RELEASE REQUIREMENT |
@@ -181,13 +224,28 @@ Test guild'de kalan yapılandırma: rol eşleme #2 (TSQ Test Bildirim → **tüm
 testi sırasında varsayılanla oluştu; ileride demo hatırlatmaları bu test rolünü etiketleyebilir. Kaldırma:
 `/esports-admin roles unmap mapping:2`.
 
-Bilinen demo yan etkisi: demo saatleri her süreç başlatmada yeniden hesaplanır; bu yüzden gönderilmiş demo hatırlatması
-yeniden başlatmada "başlangıç saati güncellendi" notuyla (ping'siz) düzenlenir. Gerçek veride bu davranış doğrudur.
+Demo saatleri (düzeltildi, 2026-09-25): fixture zaman çıpası artık veritabanında (tablo `esports_provider_state`, anahtar `fixture:anchor`) saklanır
+ve 24 saate kadar yeniden kullanılır. Önceden her yeniden başlatma demo saatlerini kaydırıyor, planlayıcı da bunu haklı olarak
+"saat değişti" sayıp test kanalına yeni bir TEST/DEMO kartı gönderiyordu. Artık yeniden başlatma yeni kart üretmez; 24 saatten
+sonra demo zaman çizelgesi bir kez yenilenir (aksi hâlde tüm demo maçlar geçmişte kalırdı). **VERIFIED_LIVE** (test guild,
+2026-09-25): 1. yeniden başlatma 01:34Z çıpayı kaydetti (`new=0`); 2. yeniden başlatma 01:51Z — eski kodla yeni kart üretecek
+kadar geç (≥15 dk) — `new=0 updated=0`, `rescheduled-*` satır sayısı 3'te kaldı, çıpa değişmedi.
 
 Discord yapılandırması (koddan doğrulandı): gateway intent yalnızca **Guilds** (ayrıcalıklı intent yok); zorunlu kanal
 izinleri View Channel + Send Messages + Embed Links, isteğe bağlı Read Message History (uzlaştırma) ve Manage Roles
 (self-service); davet tamsayıları 84992 = 1024+2048+16384+65536 ve 268520448 = 84992+268435456 bu listeyle birebir
 eşleşiyor. Administrator istenmez; Mention Everyone önerilmez (rolü "bahsedilebilir" yapın).
+
+## Liquipedia resmî durumu ve karar (2026-09-25)
+
+| Konu | Durum |
+|---|---|
+| LPDB API Terms (canlı sayfa okundu, VERIFIED) | Tüm istekler için en fazla **60 istek/saat**; sonuçları mümkün olduğunca uzun önbelleğe al; anahtar paylaşılmaz |
+| User-Agent | İletişim bilgili UA şartı Terms'te açıkça **MediaWiki API** bölümünde; LPDB bölümünde ayrıca belirtilmiyor. TSQ Bot MediaWiki API kullanmaz → UA artık zorunlu değil (önerilir); her istekte özel UA gider (ayarlı değilse `TSQBot (https://github.com/Torokal/TSQ-Bot)`); upstream kimliği reddedilir |
+| Planlar (sahip bildirimi; plan sayfası araçlarımıza insan doğrulaması gösterdi, aşılmadı) | Basic/Premium **geçici olarak kullanılamıyor**; ticari: Enterprise; ücretsiz: başvuruyla, çoğu zaman süreli |
+| Bütçe | Kod artık tüm LPDB tabloları için **tek ortak** bütçe kullanıyor (önceden tablo başınaydı); bağlantı kaynağı 30 dk × ≤5 sayfa = en kötü ≈10 istek/saat |
+| Önbellek | HLTV bağlantı adayları veritabanında (tablo `esports_provider_state`, anahtar `liquipedia:hltv-links`); yeniden başlatma erken istek yapmaz — TESTED_OFFLINE |
+| Karar | Depo geliştirme boyunca PRIVATE; yalnızca Liquipedia için erken public yapılmaz; başvuru yayın aşamasında. O zamana kadar zenginleştirme BLOCKED/OPTIONAL, `Esports:VerifiedMatchLinks` elle yedek, PandaScore Liquipedia'dan bağımsız (TESTED_OFFLINE) |
 
 ## Yayın öncesi gereksinimler (PRE-RELEASE REQUIREMENT)
 
@@ -200,8 +258,18 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 | Tüm git geçmişinde secret taraması (bilinen sahte test token'ı hariç) | PRE-RELEASE REQUIREMENT — yayın anında tekrar |
 | İzlenen dosya + kaynak arşivi denetimi, lisans/provenance, README kamu incelemesi | PRE-RELEASE REQUIREMENT |
 | Global komut kaydı, herkese açık bot | DEFERRED (yayın aşaması) |
+| Depo public olduktan **sonra** Liquipedia ücretsiz API erişimine başvuru (depo bunun için erkenden public yapılmaz) | PRE-RELEASE REQUIREMENT — sahip kararı (2026-09-25) |
 
-## NEXT ACTION
+## NEXT ACTION (güncel)
+
+1. **Sahip + ajan:** 08:40Z'de (TR 11:40) Eternal Fire – WBT hatırlatma kartı kanala düşmeli (ping'siz); maç bitince sonuç kartı.
+   Sahip görünce: ilk gerçek hatırlatma/sonuç kartı VERIFIED_LIVE. İsteğe bağlı: opt-in ping rolü (Discord'da rol oluştur →
+   `/esports-admin roles map` → `roles selfservice` → üyeler `/esports follow` veya panel).
+2. **Sahip:** PR #3'ü incelemek; merge kararı sahibin (PR #2 merge edildi, PR #3 artık `main`'e yönelik).
+3. Tamamlananlar: tüm v2 kart görselleri + Maç Sayfası **VERIFIED_LIVE**; yeniden başlatmada demo kart sorunu düzeltildi ve
+   canlıda doğrulandı. (Rol eşleme #2 sahip tarafından daha önce kaldırıldı.)
+
+## NEXT ACTION (önceki kayıt)
 
 **Sahip (isteğe bağlı, tek adım):** `/esports-admin roles unmap` yazıp `mapping` alanına tıklamak → ajan log'daki
 "Autocomplete failed [TS-…]" satırından kök nedeni düzeltir. Aynı komutla `mapping:2` girilerek ping'li test eşlemesi kaldırılabilir.
