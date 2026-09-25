@@ -13,6 +13,8 @@ presence izlemez. Profil, avatar, kullanıcı adı **saklanmaz**.
 | `outbox` | Sunucu kanalına gönderilen bildirimlerin içeriği ve durumu (kişisel veri içermez; rol ping ID'leri) | sunucu | sunucu verisiyle birlikte |
 | `confirmation` | Kısa ömürlü silme onayı (kullanıcı ID, 5 dk) | kullanıcı | tüketilince / süresi dolunca |
 | `esports_match_snapshot`, `esports_known_team`, `esports_provider_state` | Herkese açık maç/takım/sıralama verisi | — | 14 gün görülmeyen maçlar silinir |
+| `f1_guild_config` | Formula 1 sunucu ayarları; değiştiren yöneticinin kullanıcı ID'si | sunucu | bot sunucudan çıkarıldıktan 30 gün sonra |
+| `f1_session_snapshot`, `f1_result_snapshot`, `f1_standings_snapshot`, `f1_provider_state` | Herkese açık F1 takvim, seans durumu, sonuç ve puan durumu verisi (kişisel veri yok) | — | — |
 
 Discord ID'leri kayıpsız (64-bit) saklanır.
 

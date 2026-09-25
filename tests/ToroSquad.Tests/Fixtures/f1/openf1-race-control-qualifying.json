@@ -1,0 +1,80 @@
+[
+  {
+    "meeting_key": 1800,
+    "session_key": 8804,
+    "date": "2030-06-08T07:00:00.155000+00:00",
+    "driver_number": null,
+    "lap_number": null,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": 1,
+    "message": "SESSION STARTED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8804,
+    "date": "2030-06-08T07:18:00.157000+00:00",
+    "driver_number": null,
+    "lap_number": null,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": 1,
+    "message": "SESSION FINISHED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8804,
+    "date": "2030-06-08T07:25:00.220000+00:00",
+    "driver_number": null,
+    "lap_number": null,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": 2,
+    "message": "SESSION STARTED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8804,
+    "date": "2030-06-08T07:40:00.250000+00:00",
+    "driver_number": null,
+    "lap_number": null,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": 2,
+    "message": "SESSION FINISHED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8804,
+    "date": "2030-06-08T07:48:00.147000+00:00",
+    "driver_number": null,
+    "lap_number": null,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": 3,
+    "message": "SESSION STARTED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8804,
+    "date": "2030-06-08T08:00:00.162000+00:00",
+    "driver_number": null,
+    "lap_number": null,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": 3,
+    "message": "SESSION FINISHED"
+  }
+]

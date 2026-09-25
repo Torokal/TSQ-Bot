@@ -23,6 +23,8 @@ public static class InfrastructureServiceCollectionExtensions
         "Discord:Token",
         "Esports:Liquipedia:ApiKey",
         "PandaScore:Token",
+        "Formula1:OpenF1:Username",
+        "Formula1:OpenF1:Password",
     ];
 
     public static IServiceCollection AddToroInfrastructure(this IServiceCollection services, IConfiguration configuration, string contentRoot)

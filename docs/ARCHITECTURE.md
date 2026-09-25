@@ -28,9 +28,10 @@ ToroSquad.Modules.Esports   ToroSquad.Modules.Example  (her modül yalnızca pla
 | `ToroSquad.Discord` | Interaction altyapısı, çekirdek komutlar, komut manifesti/doğrulama/senkron, gerçek ve sahte transport, guild geçidi | Infrastructure, modüller, EF |
 | `ToroSquad.Modules.Esports` | CS2 alan modeli, sağlayıcılar, planlayıcı, servisler, komutlar | Example modülü; `Domain/Providers/Application/Persistence` ad alanları Discord SDK kullanamaz |
 | `ToroSquad.Modules.Example` | Referans modül (üretimde kayıtlı değil) | Esports, Infrastructure |
+| `ToroSquad.Modules.Formula1` | F1 alan modeli (yaşam döngüsü durum makinesi), yetenek bazlı sağlayıcılar (Jolpica, OpenF1), iş akışı, planlayıcı, komutlar ([FORMULA1.md](FORMULA1.md)) | Esports ve diğer modüller; `Domain/Providers/Application/Persistence` Discord SDK kullanamaz; `Commands` sağlayıcılara/HTTP'ye erişemez; sağlayıcılar ve canlı dinleyici outbox'a/Discord'a erişemez |
 | `ToroSquad.Bot` | Modül listesi, DI, yapılandırma doğrulama, CLI fiilleri, EF migration'ları | — |
 
-Bu yönler `tests/ToroSquad.Tests/Architecture/ArchitectureTests.cs` ile (assembly referansları + ArchUnitNET tip
+Bu yönler `tests/ToroSquad.Tests/Architecture/ArchitectureTests.cs` ve `F1ArchitectureTests.cs` ile (assembly referansları + ArchUnitNET tip
 bağımlılıkları) denetlenir.
 
 ## Modül sözleşmesi

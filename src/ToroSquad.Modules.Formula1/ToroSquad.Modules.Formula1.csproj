@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Formula 1 module. Depends on the shared TSQ layers only (never on another feature module). Domain/Providers/
+       Application/Persistence namespaces must not use the Discord SDK (architecture tests); only Commands talks to Discord.Net. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Infrastructure\ToroSquad.Infrastructure.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <!-- OpenF1 documents MQTT (mqtt.openf1.org:8883, TLS) as the recommended live channel for backend applications. -->
+    <PackageReference Include="MQTTnet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Formula1.Localization.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Fixtures\*" LogicalName="ToroSquad.Modules.Formula1.Fixtures.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

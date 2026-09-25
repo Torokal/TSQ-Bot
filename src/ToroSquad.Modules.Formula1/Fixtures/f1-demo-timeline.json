@@ -1,0 +1,80 @@
+{
+  "_comment": "SYNTHETIC TEST/DEMO timeline for Formula1:Provider:Mode=Fixture. Fictional events, drivers and teams; no real data. Session 'start' is minutes relative to the fixture anchor; event 'at' is minutes relative to the session start.",
+  "meetings": [
+    {
+      "round": 1,
+      "name": "TSQ Demo Opening Grand Prix",
+      "circuit": "Demo Park Circuit",
+      "circuitId": "demo_park",
+      "locality": "Demo City",
+      "country": "Testland",
+      "sessions": [
+        { "type": "fp1", "key": 9101, "start": -14520, "minutes": 60 },
+        { "type": "fp2", "key": 9102, "start": -14280, "minutes": 60 },
+        { "type": "fp3", "key": 9103, "start": -13080, "minutes": 60 },
+        { "type": "quali", "key": 9104, "start": -12840, "minutes": 60 },
+        { "type": "race", "key": 9105, "start": -11400, "minutes": 120 }
+      ]
+    },
+    {
+      "round": 2,
+      "name": "TSQ Test Grand Prix",
+      "circuit": "Test Circuit",
+      "circuitId": "test_circuit",
+      "locality": "Test City",
+      "country": "Testland",
+      "sessions": [
+        { "type": "fp1", "key": 9201, "start": 20, "minutes": 60 },
+        { "type": "sq", "key": 9202, "start": 120, "minutes": 44 },
+        { "type": "sprint", "key": 9203, "start": 200, "minutes": 60 },
+        { "type": "quali", "key": 9204, "start": 300, "minutes": 60 },
+        { "type": "race", "key": 9205, "start": 420, "minutes": 120 }
+      ]
+    },
+    {
+      "round": 3,
+      "name": "TSQ Demo Finale Grand Prix",
+      "circuit": "Finale Street Circuit",
+      "circuitId": "finale_street",
+      "locality": "Finale Town",
+      "country": "Testland",
+      "sessions": [
+        { "type": "fp1", "key": 9301, "start": 20180, "minutes": 60 },
+        { "type": "fp2", "key": 9302, "start": 20420, "minutes": 60 },
+        { "type": "fp3", "key": 9303, "start": 21620, "minutes": 60 },
+        { "type": "quali", "key": 9304, "start": 21860, "minutes": 60 },
+        { "type": "race", "key": 9305, "start": 23300, "minutes": 120 }
+      ]
+    }
+  ],
+  "events": [
+    { "key": 9101, "at": 0, "message": "SESSION STARTED" },
+    { "key": 9101, "at": 60, "message": "SESSION FINISHED" },
+    { "key": 9105, "at": 3, "message": "SESSION STARTED" },
+    { "key": 9105, "at": 110, "message": "SESSION FINISHED" },
+    { "key": 9201, "at": 1, "message": "SESSION STARTED" },
+    { "key": 9201, "at": 30, "message": "SESSION ABORTED" },
+    { "key": 9201, "at": 36, "message": "SESSION STARTED" },
+    { "key": 9201, "at": 60, "message": "SESSION FINISHED" },
+    { "key": 9202, "at": 0, "message": "SESSION STARTED", "phase": 1 },
+    { "key": 9202, "at": 12, "message": "SESSION FINISHED", "phase": 1 },
+    { "key": 9202, "at": 19, "message": "SESSION STARTED", "phase": 2 },
+    { "key": 9202, "at": 29, "message": "SESSION FINISHED", "phase": 2 },
+    { "key": 9202, "at": 36, "message": "SESSION STARTED", "phase": 3 },
+    { "key": 9202, "at": 44, "message": "SESSION FINISHED", "phase": 3 },
+    { "key": 9203, "at": 1, "message": "SESSION STARTED" },
+    { "key": 9203, "at": 45, "message": "SESSION FINISHED" },
+    { "key": 9204, "at": 0, "message": "SESSION STARTED", "phase": 1 },
+    { "key": 9204, "at": 18, "message": "SESSION FINISHED", "phase": 1 },
+    { "key": 9204, "at": 25, "message": "SESSION STARTED", "phase": 2 },
+    { "key": 9204, "at": 40, "message": "SESSION FINISHED", "phase": 2 },
+    { "key": 9204, "at": 48, "message": "SESSION STARTED", "phase": 3 },
+    { "key": 9204, "at": 60, "message": "SESSION FINISHED", "phase": 3 },
+    { "key": 9205, "at": 3, "message": "SESSION STARTED" },
+    { "key": 9205, "at": 50, "message": "SESSION ABORTED" },
+    { "key": 9205, "at": 70, "message": "SESSION STARTED" },
+    { "key": 9205, "at": 120, "message": "SESSION FINISHED" }
+  ],
+  "resultDelayMinutes": 5,
+  "standingsDelayMinutes": 15
+}

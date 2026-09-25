@@ -5,6 +5,7 @@
     <Project Path="src/ToroSquad.Discord/ToroSquad.Discord.csproj" />
     <Project Path="src/ToroSquad.Modules.Esports/ToroSquad.Modules.Esports.csproj" />
     <Project Path="src/ToroSquad.Modules.Example/ToroSquad.Modules.Example.csproj" />
+    <Project Path="src/ToroSquad.Modules.Formula1/ToroSquad.Modules.Formula1.csproj" />
     <Project Path="src/ToroSquad.Bot/ToroSquad.Bot.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -14,6 +14,16 @@ invite link and no global command registration. The source code is public under 
 - **Development:** Windows 10/11 with the .NET 10 SDK ([WINDOWS_SETUP.md](WINDOWS_SETUP.md)).
 - Horizontal scaling is not supported (SQLite, single in-process scheduler).
 
+## Formula 1 module (new, 2026-09-25)
+
+- **IMPLEMENTED / TESTED_OFFLINE**: schedule (Jolpica), driver/constructor standings (Jolpica), live lifecycle via OpenF1
+  MQTT + REST reconciliation, results and corrections (OpenF1), standings on sprint/race cards, commands, admin, preview,
+  doctor, migration `Formula1Module` — covered by fixture/contract/integration tests (no network).
+- **Not VERIFIED_LIVE**: no real Discord delivery and no live provider run yet. Provider payload shapes were checked once
+  against the public APIs (read-only) on 2026-09-25.
+- **BLOCKED**: OpenF1 live access needs a paid sponsor account (owner decision); until then start notifications are
+  honestly `NOT_CONFIGURED`. Details and usage terms: [FORMULA1.md](FORMULA1.md).
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

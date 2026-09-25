@@ -1,5 +1,8 @@
 # Bildirimler, filtreler, roller ve spoiler
 
+> Formula 1 bildirimleri (seans başladı, sonuç, puan durumu) ayrı modüldür; kuralları [FORMULA1.md](FORMULA1.md)'de.
+> Aynı outbox'ı kullanır: tek mantıksal anahtar, düzeltmeler aynı mesajı pingsiz düzenler, `allowed_mentions` kilitli.
+
 ## Bildirim türleri
 
 | Tür (outbox) | Ne zaman | Ping | Not |

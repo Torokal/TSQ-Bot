@@ -10,6 +10,14 @@ Resmî kaynaklar (okundu 2026-09-25): [Volumes](https://docs.railway.com/referen
 [Variables](https://docs.railway.com/reference/variables) · [CLI volume](https://docs.railway.com/cli/volume) ·
 [Plans](https://docs.railway.com/reference/pricing/plans).
 
+## Formula 1 modülü ortam değişkenleri
+
+Yeni servis gerekmez. Canlı F1 verisi için `TOROSQUAD_Formula1__Provider__Mode=Live`; canlı başlangıç bildirimleri için
+ayrıca `TOROSQUAD_Formula1__OpenF1__Username` ve `TOROSQUAD_Formula1__OpenF1__Password` (**secret**, ücretli OpenF1
+sponsor hesabı; sahip onayı gerekir). Sponsor hesabında `TOROSQUAD_Formula1__OpenF1__RequestsPerMinute=60` ve
+`…__RequestsPerSecond=6`. Mod `Fixture` (varsayılan) kalırsa üretimde hiçbir F1 sağlayıcısı çağrılmaz. Yeniden başlatma
+güvenlidir: yaşam döngüsü durumu volume'deki SQLite'ta. Ayrıntı: [FORMULA1.md](FORMULA1.md#railway).
+
 ## Neler hazır (depoda)
 
 | Dosya | Ne yapar |

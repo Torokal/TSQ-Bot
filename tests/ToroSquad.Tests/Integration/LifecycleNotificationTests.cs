@@ -9,6 +9,7 @@ using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Roles;
 using ToroSquad.Core.Security;
 using ToroSquad.Infrastructure.Persistence;
+using ToroSquad.Modules.Esports;
 using ToroSquad.Modules.Esports.Application;
 using ToroSquad.Modules.Esports.Domain;
 using ToroSquad.Modules.Esports.Persistence;
@@ -335,7 +336,7 @@ public sealed class LifecycleNotificationTests : IAsyncLifetime
         {
             (await sp.GetRequiredService<EsportsConfigService>().ConfigureAsync(TestHost.Admin(Guild), null, false, null, null, null, CancellationToken.None))
                 .Succeeded.Should().BeTrue();
-            return await sp.GetServices<IDeliveryPolicy>().Single().CanDeliverAsync(Guild, Channel, kind, CancellationToken.None);
+            return await sp.GetServices<IDeliveryPolicy>().Single(p => p.Module == EsportsModule.ModuleIdTyped).CanDeliverAsync(Guild, Channel, kind, CancellationToken.None);
         });
         decision.Should().BeOfType<DeliveryDecision.Cancel>();
     }

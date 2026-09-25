@@ -544,6 +544,16 @@
           "ToroSquad.Discord": "[0.1.0-dev, )"
         }
       },
+      "torosquad.modules.formula1": {
+        "type": "Project",
+        "dependencies": {
+          "MQTTnet": "[5.2.0.1603, )",
+          "Microsoft.Extensions.Http": "[10.0.12, )",
+          "ToroSquad.Core": "[0.1.0-dev, )",
+          "ToroSquad.Discord": "[0.1.0-dev, )",
+          "ToroSquad.Infrastructure": "[0.1.0-dev, )"
+        }
+      },
       "Discord.Net.Core": {
         "type": "CentralTransitive",
         "requested": "[3.20.1, )",
@@ -682,6 +692,12 @@
           "Microsoft.Extensions.Options": "10.0.12",
           "Microsoft.Extensions.Primitives": "10.0.12"
         }
+      },
+      "MQTTnet": {
+        "type": "CentralTransitive",
+        "requested": "[5.2.0.1603, )",
+        "resolved": "5.2.0.1603",
+        "contentHash": "iNuWVo/568aRo2ExEN2qkC4J5b07ckKqt+9Uok2kIbbK7PMBsXvYiKVENPHmOBWFB5ExhlNQb/qQ8M9/IYRTdQ=="
       }
     }
   }

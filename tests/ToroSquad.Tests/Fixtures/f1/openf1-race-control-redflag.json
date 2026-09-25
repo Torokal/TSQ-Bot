@@ -1,0 +1,93 @@
+[
+  {
+    "meeting_key": 1800,
+    "session_key": 8805,
+    "date": "2030-06-09T07:03:38.697000+00:00",
+    "driver_number": null,
+    "lap_number": 1,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": null,
+    "message": "SESSION STARTED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8805,
+    "date": "2030-06-09T07:50:21.752000+00:00",
+    "driver_number": null,
+    "lap_number": 32,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": null,
+    "message": "SESSION ABORTED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8805,
+    "date": "2030-06-09T07:50:22+00:00",
+    "driver_number": null,
+    "lap_number": 32,
+    "category": "Flag",
+    "flag": "RED",
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": null,
+    "message": "RED FLAG"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8805,
+    "date": "2030-06-09T08:15:00.390000+00:00",
+    "driver_number": null,
+    "lap_number": 33,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": null,
+    "message": "SESSION STARTED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8805,
+    "date": "2030-06-09T08:58:52.172000+00:00",
+    "driver_number": null,
+    "lap_number": 69,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": null,
+    "message": "SESSION FINISHED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8805,
+    "date": "2030-06-09T08:58:52.172000+00:00",
+    "driver_number": null,
+    "lap_number": 69,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": null,
+    "message": "SESSION FINISHED"
+  },
+  {
+    "meeting_key": 1800,
+    "session_key": 8805,
+    "date": "2030-06-09T09:10:00+00:00",
+    "driver_number": null,
+    "lap_number": 69,
+    "category": "SessionStatus",
+    "flag": null,
+    "scope": null,
+    "sector": null,
+    "qualifying_phase": null,
+    "message": "SESSION PAUSED WITH UNKNOWN WORDING"
+  }
+]

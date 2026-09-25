@@ -585,6 +585,344 @@ namespace ToroSquad.Bot.Migrations
 
                     b.ToTable("esports_user_pref", (string)null);
                 });
+
+            modelBuilder.Entity("ToroSquad.Modules.Formula1.Persistence.F1ProviderStateEntity", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DataJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastAttemptAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastDetail")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("LastOutcome")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastSuccessAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("NextAttemptAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("f1_provider_state", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Formula1.Persistence.F1ResultSnapshotEntity", b =>
+                {
+                    b.Property<string>("SessionKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CanonicalHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Corrections")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FetchedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FirstAvailableAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("SessionKey");
+
+                    b.ToTable("f1_result_snapshot", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Formula1.Persistence.F1SessionSnapshotEntity", b =>
+                {
+                    b.Property<string>("SessionKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CancelledObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CircuitName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("FinalisedObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("FinishedObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FirstSeenAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsBaseline")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastLifecycleEventAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastSeenAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LifecycleProvider")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LifecycleProviderRef")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MeetingKey")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MeetingName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ResultAttempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ResultLastDetail")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ResultNextAttemptAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ResultsProvider")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultsProviderRef")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ResumeCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Round")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ScheduledEndUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ScheduledStartUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Season")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SessionType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StandingsAttachedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StandingsBaselineConstructorsHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StandingsBaselineDriversHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("StandingsChecks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StandingsConstructorsSnapshotId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StandingsDriversSnapshotId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StandingsNextCheckAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StandingsWatchUntil")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("StandingsWindowClosed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StartedObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StartedRecordedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SuspendedObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("SessionKey");
+
+                    b.HasIndex("ScheduledStartUtc");
+
+                    b.HasIndex("LifecycleProvider", "LifecycleProviderRef");
+
+                    b.HasIndex("Season", "Round");
+
+                    b.ToTable("f1_session_snapshot", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Formula1.Persistence.F1StandingsSnapshotEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CanonicalHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("FetchedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastConfirmedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Round")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Season")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind", "Season", "Id");
+
+                    b.ToTable("f1_standings_snapshot", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Formula1.Persistence.Formula1GuildConfigEntity", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChannelProblem")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ChannelProblemAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyPracticeResults")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyPracticeStart")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyQualifyingResults")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyQualifyingStart")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyRaceResults")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyRaceStart")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifySprintQualifyingResults")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifySprintQualifyingStart")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifySprintResults")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifySprintStart")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyStandings")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Paused")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("PingOnResults")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("PingOnStarts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("PingRoleId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SpoilerMode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedBy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("WatermarkUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("GuildId");
+
+                    b.ToTable("f1_guild_config", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }

@@ -2,6 +2,8 @@
 
 A modular, self-hostable Discord bot. Its first module tracks **Counter-Strike 2 esports**: it posts compact match
 cards (reminder, match started, result and schedule changes) into a server channel and answers esports slash commands.
+A separate **Formula 1** module posts confirmed session starts, results (with in-place corrections) and championship
+standings ([docs/FORMULA1.md](docs/FORMULA1.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
 **BOT Greg** and reuses adapted portions of the open-source
@@ -18,6 +20,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 - **Modules** that each server can enable or disable; disabling stops delivery but keeps data.
 - **Esports (CS2)**: upcoming matches, results, events, Valve Regional Standings (VRS), team lookup, personal team
   follows, and server filters (team / tournament / tier / VRS top-N) set by server admins.
+- **Formula 1** (separate module, off by default): session started (only when a live provider confirms it — never
+  from the clock), practice/sprint/race results, drivers' and constructors' standings, `/f1 next|schedule|results|now`.
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, time changed, cancelled, forfeit. Each is sent once; later corrections edit
   the same message without pinging again.
@@ -36,6 +40,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | Admin | `/setup`, `/modules list\|enable\|disable` | Manage Server |
 | Esports | `/esports matches\|results\|events\|rankings\|team\|follow\|unfollow\|subscriptions` | everyone (module on) |
 | Esports admin | `/esports-admin configure\|filters\|roles\|panel\|preview\|pause\|resume\|doctor` | Manage Server (+ Manage Roles for roles) |
+| Formula 1 | `/f1 next\|schedule\|results\|now`, `/f1 standings drivers\|constructors` | everyone (module on) |
+| Formula 1 admin | `/f1-admin configure channel\|notifications\|role\|spoilers`, `/f1-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
 [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md). The generated, test-checked schema is
@@ -52,6 +58,15 @@ Commands are registered per server (guild commands) with a dry-run first. Permis
 
 Operators can also add verified match links manually (`Esports:VerifiedMatchLinks`). Limits, terms and attribution:
 [docs/PROVIDERS.md](docs/PROVIDERS.md).
+
+## Formula 1 Providers
+
+| Provider | Role |
+|---|---|
+| **Jolpica F1** | Schedule and championship standings (no key; non-commercial use, data CC BY-NC-SA 4.0). |
+| **OpenF1** | Live session lifecycle (MQTT, paid sponsor access) and session results (free historical access); data CC BY-NC-SA 4.0. |
+
+Without OpenF1 live credentials the module runs honestly without start notifications. Details: [docs/FORMULA1.md](docs/FORMULA1.md).
 
 ## Installation / Development
 
@@ -80,6 +95,7 @@ Step-by-step setup (Turkish): [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md). Ad
 | `Delivery:Mode` | `DryRun` | notifications are planned and logged, not sent |
 | `Esports:Provider:Name` | `PandaScore` | match data provider |
 | `Esports:Provider:Mode` | `Fixture` | synthetic data through the real client/parser, labelled TEST/DEMO |
+| `Formula1:Provider:Mode` | `Fixture` | synthetic TEST/DEMO race weekend; `Live` for Jolpica + OpenF1 |
 | `Discord:AllowedGuildIds` | `[]` | when set, the bot only serves these servers (enforced server-side) |
 | `Discord:AllowGlobalCommandSync` | `false` | global command registration is a separate, explicit step |
 | `Bot:SourceUrl` | `https://github.com/Torokal/TSQ-Bot` | shown by `/bot source` |
@@ -111,6 +127,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Infrastructure` | EF Core/SQLite, outbox + dispatcher, backups, secret redaction |
 | `ToroSquad.Discord` | Interaction host, core commands, command manifest/sync, Discord transport |
 | `ToroSquad.Modules.Esports` | The esports module (providers, planner, commands) |
+| `ToroSquad.Modules.Formula1` | The Formula 1 module (provider capabilities, lifecycle state machine, planner, commands) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |
 

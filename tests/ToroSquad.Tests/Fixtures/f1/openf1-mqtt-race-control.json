@@ -1,0 +1,15 @@
+{
+  "meeting_key": 1800,
+  "session_key": 8805,
+  "date": "2030-06-09T07:03:38.697000+00:00",
+  "driver_number": null,
+  "lap_number": 1,
+  "category": "SessionStatus",
+  "flag": null,
+  "scope": null,
+  "sector": null,
+  "qualifying_phase": null,
+  "message": "SESSION STARTED",
+  "_key": "1749452618697_None",
+  "_id": 1749452618800
+}
