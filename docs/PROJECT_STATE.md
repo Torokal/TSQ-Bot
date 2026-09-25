@@ -11,8 +11,14 @@
 | Orijinal geçmiş | Sahibe özel **private arşiv** (GitHub) + yerel yedek (bundle) — public belgelerde bağlantı verilmez, deploy edilmez |
 | GitHub güvenliği | Secret scanning + push protection açık (0 uyarı), Dependabot uyarıları açık (otomatik PR yok), `main` korumalı: PR zorunlu, force push/silme kapalı. Tek seferlik geçmiş yeniden yazma istisnası **kapandı** |
 | Commit kimliği | Bu depoda (yerel config): `Torokal <68400310+Torokal@users.noreply.github.com>` |
-| Tek sunucu | Ana sunucu 689812743242514448; `Discord:AllowedGuildIds` = yalnızca ana sunucu (sunucu tarafı koruma: etkileşim girişinde ret, planlayıcı ve teslimatta iptal) — TESTED_OFFLINE (6 test) + Railway'de etkin (`main`, eski test sunucusu için `guilds=0`). Global komut yok |
-| Railway | `main` dalından deploy (EU West, 1 replika, Always, /data volume, genel ağ kapalı); kaynak deponun yeni public depoya bağlanması: aşağıdaki NEXT ACTION |
+| Ana sunucu | 689812743242514448 — bot en az yetkiyle (84992: kanal görme, mesaj/embed, geçmiş okuma; Administrator yok, rol yönetimi yok, ayrıcalıklı intent yok) davet edildi; 7 komut **yalnızca bu sunucuya** kaydedildi (önizleme: 7 Create, 0 Update/Delete) — **VERIFIED_LIVE**. Sahip `/setup` + takım filtrelerini yaptı; `/bot status` "Railway · Tek sunucu" — **VERIFIED_LIVE** |
+| Global komutlar | **Yok — tasarım gereği kapalı** (global önizleme: 7 Create = Discord'da hiç global komut yok; `AllowGlobalCommandSync` kapalı ve izin listesiyle birlikte açılamaz) |
+| Tek sunucu koruması | `Discord:AllowedGuildIds` = yalnızca ana sunucu. TESTED_OFFLINE (6 test) + **VERIFIED_LIVE**: eski test sunucusundaki komut "TSQ Bot bu sunucuda etkin değil." aldı, Railway kaydı `Refused ApplicationCommand interaction from guild 618763184815472651`; planlayıcı yalnızca ana sunucuyu görüyor |
+| Eski test sunucusu | **DEVRE DIŞI** — sahip entegrasyonu kaldırdı (bot + o sunucudaki komutlar). Geçmiş kayıtları veritabanında pasif; mevcut saklama kuralıyla ayrılıştan 30 gün sonra otomatik silinir (`Bot:GuildDataRetentionDays`) |
+| Railway | Kaynak **public** `Torokal/TSQ-Bot` `main` (`railway service source connect`), EU West, 1 replika, Always, /data volume, genel ağ kapalı; yeni depodan ilk deploy `4719f8b`: veritabanı korundu, bootstrap tekrarlanmadı — **VERIFIED_LIVE** |
+| Yeniden başlatma (ana sunucu kurulumundan sonra) | **VERIFIED_LIVE** — 06:04:48Z düzgün kapanma → 06:04:49Z açılış; `guilds=1 new=0 updated=0 filtered=143` (kurulum + filtreler korundu, kopya yok, test sunucusuna hiçbir şey yok) |
+| Kullanım limiti | Railway workspace **hard limit $10** (sahip kararı, `railway usage limit` ile ayarlandı ve doğrulandı) |
+| PandaScore takım kapsamı | Türk "BBL Esports" PandaScore CS2 kataloğunda **yok** (58 TR takımı tarandı; "BBL" = Danimarkalı kadro, eklenmedi). Sağlayıcı eklerse otomatik tamamlamada çıkar |
 | Yedek | Railway volume yedekleri Pro plan gerektiriyor (BLOCKED, yükseltme yok); uygulama içi günlük yedek `/data/backups` VERIFIED_LIVE |
 | Yerel üretim botu | **KAPALI** — canlı Discord bağlantısı yalnızca Railway'de; yerel ortam geliştirme/test içindir |
 
@@ -297,12 +303,11 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 ## NEXT ACTION (güncel)
 
-A. **Sahip:** GitHub → Settings → Applications → Railway → Configure → yeni **Torokal/TSQ-Bot**'a erişim ver → ajan Railway
-   kaynağını yeni public depo `main`'e bağlar (tek kontrollü deploy) ve doğrular.
-B. **Sahip:** botu ana sunucuya davet (en az yetki 84992, rol yönetimi yok) → ajan komutları yalnızca ana sunucuya kaydeder
-   (önce önizleme) → sahip `/setup` + filtreler → canlı doğrulama → Railway yeniden başlatma testi → eski test sunucusundan
-   botu çıkarma.
-C. **Sahip:** Railway → Workspace → Usage → **$10** kullanım limiti.
+Tek sunucuya geçiş ve public kaynak **tamamlandı** (2026-09-25). Açık kalanlar:
+- Ana sunucuda ilk gerçek hatırlatma/sonuç kartı kanala düştüğünde görsel onay (sahip).
+- İsteğe bağlı: Liquipedia ücretsiz API başvurusu (depo artık public) → HLTV bağlantı zenginleştirmesi.
+- Railway volume yedekleri için Pro plan kararı (sahip); o zamana kadar uygulama içi günlük yedek.
+- Canlı bot yalnızca Railway'de; yerel ortam geliştirme/test içindir. Değişiklikler PR ile `main`'e (korumalı).
 
 0. **Sahip — Railway (PC'siz çalışma):** railway.com'da GitHub ile giriş, plan seçimi (Hobby önerisi; Free'de "Always" yok ve
    $1 kredi yetmez), **New Project → Deploy from GitHub repo → Torokal/TSQ-Bot**, dal `feature/railway-deployment`,
