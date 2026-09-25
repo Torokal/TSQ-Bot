@@ -130,7 +130,9 @@ Gaming, Eternal Fire) ve istersen rol eşlemesini yeniden yap. İlk canlı taram
 
 ## 8. Yedekler
 
-Service → **Backups**: **Daily** zamanlaması öner (6 gün saklanır; ücreti kullanılan artımlı alan kadar). Ayrıca elle yedek:
+**Plan sınırı (2026-09-25, panelde görüldü):** yedek oluşturma ve zamanlama yalnızca **Pro** planda var; Hobby'de Backups
+sekmesi yalnızca mevcut yedeklerin geri yüklenmesine izin verir. Pro'da: Service → **Backups**: **Daily** zamanlaması
+(6 gün saklanır). Ücret: artımlı + copy-on-write, **artımlı volume depolaması** olarak (volume birim fiyatı) faturalanır. Ayrıca elle yedek:
 veritabanı taşımadan, büyük sürümden, sağlayıcı şeması değişikliğinden ve bakım işlemlerinden **önce**. Geri yükleme:
 Backups → ilgili tarih → **Restore** → değişiklikleri incele → **Deploy**.
 

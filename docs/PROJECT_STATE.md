@@ -266,7 +266,7 @@ eşleşiyor. Administrator istenmez; Mention Everyone önerilmez (rolü "bahsedi
 | Yeniden başlatma kalıcılığı / kopya yok | **VERIFIED_LIVE** — `railway restart` sonrası 04:53:09Z `guilds=1 new=0 updated=0 filtered=154`, bootstrap tekrarlanmadı |
 | Tek kopya | Yerel bot 04:46:17Z düzgün kapatıldı (`[Gateway] Disconnected`), yerelde `ToroSquad.Bot` süreci yok; Railway'de 1 replika |
 | PC'siz çalışma | Yerel süreç yok, bot Railway'de; **PC kapalıyken** Discord'dan yanıt vermesi sahip tarafından doğrulanınca VERIFIED_LIVE — bekliyor |
-| Yedek | Railway Backups: günlük zamanlama önerildi (sahip panelden açar); henüz ayarlanmadı |
+| Yedek (Railway volume backups) | **BLOCKED — plan kararı** (2026-09-25): Railway panelindeki Backups sekmesi "Creating backups and enabling point-in-time recovery (PITR) are only available for customers on the **Pro** plan" diyor; hesap Hobby'de → günlük zamanlama ve elle yedek **oluşturulamadı**, plan yükseltilmedi (sahip kararı). Volume'e/servise dokunulmadı, geri yükleme yapılmadı. Maliyet notu: Railway yedekleri artımlı + copy-on-write'tır ve **artımlı volume depolaması** olarak (volume ile aynı birim fiyat, GB/dakika, aylık fatura) ücretlendirilir (docs.railway.com/reference/backups). Alternatif (plan gerektirmez, henüz yapılmadı): uygulama içi günlük SQLite yedeği (`/data/backups`, SQLite backup API, saklama süresiyle) — aynı volume'de olduğu için volume kaybına karşı korumaz, veritabanı bozulması/yanlış işlem için geri dönüş sağlar |
 
 ## Yayın öncesi gereksinimler (PRE-RELEASE REQUIREMENT)
 
