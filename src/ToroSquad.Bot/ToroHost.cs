@@ -70,7 +70,8 @@ public static class ToroHost
             module.ConfigureServices(services, configuration);
 
         var discord = configuration.GetSection(DiscordOptions.Section).Get<DiscordOptions>() ?? new DiscordOptions();
-        services.AddSingleton(new DeploymentPolicy(discord.Transport == DiscordTransportMode.Gateway, discord.TestGuildIds.ToHashSet()));
+        services.AddSingleton(new DeploymentPolicy(discord.Transport == DiscordTransportMode.Gateway, discord.TestGuildIds.ToHashSet(),
+            discord.AllowedGuildIds.ToHashSet(), HostingChecks.OnRailway(Environment.GetEnvironmentVariable) ? "Railway" : "local"));
         services.AddSingleton(_ => BuildProductInfo(configuration));
 
         if (longRunning)
@@ -100,6 +101,16 @@ public static class ToroHost
             if (string.IsNullOrWhiteSpace(bot.SourceUrl) && !configuration.GetValue("Bot:AllowMissingSourceUrlForPrivateTesting", false))
                 problems.Add("[license] Bot:SourceUrl must point to the Corresponding Source of this running version (AGPL-3.0 §13). " +
                              "For a private test guild only, set Bot:AllowMissingSourceUrlForPrivateTesting=true.");
+        }
+
+        if (discord.AllowedGuildIds.Length > 0)
+        {
+            // Everything the bot may touch must be inside the runtime allow-list (single-guild operation).
+            var outside = discord.TestGuildIds.Concat(discord.CommandSyncGuildIds).Where(g => !discord.AllowedGuildIds.Contains(g)).Distinct().ToList();
+            if (outside.Count > 0)
+                problems.Add($"[discord] Discord:TestGuildIds/CommandSyncGuildIds contain guild(s) outside Discord:AllowedGuildIds: {string.Join(", ", outside)}");
+            if (discord.AllowGlobalCommandSync)
+                problems.Add("[discord] Discord:AllowGlobalCommandSync must be false while Discord:AllowedGuildIds restricts the bot to specific guilds");
         }
 
         var mode = configuration.GetValue("Esports:Provider:Mode", "Fixture");

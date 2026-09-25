@@ -67,8 +67,9 @@ Tek volume yeter. Veritabanı `/data/torosquad.db` olur (imaj `TOROSQUAD_Bot__Da
 | `TOROSQUAD_PandaScore__Token` | PandaScore token'ı | **Evet** |
 | `TOROSQUAD_Discord__ApplicationId` | `1552783366963863592` | hayır |
 | `TOROSQUAD_Discord__Transport` | `Gateway` | hayır |
-| `TOROSQUAD_Discord__TestGuildIds__0` | `618763184815472651` | hayır |
-| `TOROSQUAD_Discord__CommandSyncGuildIds__0` | `618763184815472651` | hayır |
+| `TOROSQUAD_Discord__AllowedGuildIds__0` | ana sunucu `689812743242514448` — **tek sunucu koruması** (başka sunucudan gelen her etkileşim reddedilir, oraya bildirim planlanmaz/gönderilmez) | hayır |
+| `TOROSQUAD_Discord__CommandSyncGuildIds__0` | `689812743242514448` (izin listesinin içinde olmalı) | hayır |
+| `TOROSQUAD_Discord__TestGuildIds__0` | **tanımlama** (canlıda demo yok; izin listesi dışındaki değer başlatmayı engeller) | hayır |
 | `TOROSQUAD_Delivery__Mode` | `Send` | hayır |
 | `TOROSQUAD_Esports__Provider__Mode` | `Live` | hayır |
 | `TOROSQUAD_Bot__Standby` | **`true`** (ilk kurulum) → sonra `false` | hayır |

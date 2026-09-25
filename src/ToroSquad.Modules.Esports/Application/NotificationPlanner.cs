@@ -124,7 +124,7 @@ public sealed class NotificationPlanner(
         foreach (var config in configs)
         {
             var guild = new GuildId(config.GuildId);
-            if (!await gate.IsEnabledAsync(guild, EsportsModule.ModuleIdTyped, cancellationToken))
+            if (!deployment.IsGuildAllowed(guild) || !await gate.IsEnabledAsync(guild, EsportsModule.ModuleIdTyped, cancellationToken))
                 continue;
             if (mode.IsDemo && !deployment.MayShowDemoData(guild))
                 continue; // fixture data only ever reaches explicitly authorized test guilds

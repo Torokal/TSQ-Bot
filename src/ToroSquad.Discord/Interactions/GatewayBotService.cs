@@ -1,3 +1,4 @@
+using System.Globalization;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
@@ -78,6 +79,12 @@ public sealed class GatewayBotService(
         _ = Task.Run(async () =>
         {
             await using var scope = services.CreateAsyncScope();
+            if (!scope.ServiceProvider.GetRequiredService<DeploymentPolicy>().IsGuildAllowed(interaction.GuildId))
+            {
+                await RefuseOtherGuildAsync(interaction, scope.ServiceProvider);
+                return;
+            }
+
             var context = new SocketInteractionContext(client, interaction);
             try
             {
@@ -91,6 +98,24 @@ public sealed class GatewayBotService(
             }
         });
         return Task.CompletedTask;
+    }
+
+    /// <summary>Single-guild guard: nothing runs, nothing is read or written; the user only sees a short refusal.</summary>
+    private async Task RefuseOtherGuildAsync(SocketInteraction interaction, IServiceProvider scoped)
+    {
+        logger.LogWarning("Refused {Type} interaction from guild {Guild}: not in Discord:AllowedGuildIds", interaction.Type, interaction.GuildId?.ToString(CultureInfo.InvariantCulture) ?? "DM");
+        try
+        {
+            if (interaction is SocketAutocompleteInteraction autocomplete)
+                await autocomplete.RespondAsync([]);
+            else
+                await interaction.RespondAsync(scoped.GetRequiredService<ILocalizer>().Get(Languages.Default, "error.guild_not_allowed"), ephemeral: true,
+                    allowedMentions: DiscordConversions.ToAllowedMentions(Core.Messaging.MentionPolicy.None));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not answer a refused interaction");
+        }
     }
 
     private async Task ReportFailureAsync(SocketInteraction interaction, IResult result, IServiceProvider scoped)

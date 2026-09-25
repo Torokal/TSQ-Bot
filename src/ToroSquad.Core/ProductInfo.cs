@@ -30,11 +30,25 @@ public sealed record ProductInfo(
 /// Facts about where this instance runs. Demo/fixture data may only reach a REAL Discord guild if that guild is an
 /// explicitly authorized test guild (and it is then labelled TEST/DEMO).
 /// </summary>
-public sealed record DeploymentPolicy(bool RealDiscordConnection, IReadOnlySet<ulong> TestGuildIds)
+public sealed record DeploymentPolicy(bool RealDiscordConnection, IReadOnlySet<ulong> TestGuildIds, IReadOnlySet<ulong>? AllowedGuildIds = null, string Hosting = "local")
 {
     public bool IsTestGuild(GuildId guild) => TestGuildIds.Contains(guild.Value);
 
     public bool MayShowDemoData(GuildId guild) => !RealDiscordConnection || IsTestGuild(guild);
+
+    /// <summary>True when a runtime allow-list is configured (Discord:AllowedGuildIds); empty = unrestricted (local dev).</summary>
+    public bool GuildRestricted => AllowedGuildIds is { Count: > 0 };
+
+    public bool SingleGuild => AllowedGuildIds is { Count: 1 };
+
+    /// <summary>
+    /// Server-side guild guard: with an allow-list, ONLY those guilds may use the bot (commands, buttons, modals,
+    /// autocomplete, notifications). A missing guild (DM) is refused whenever the bot is restricted.
+    /// </summary>
+    public bool IsGuildAllowed(ulong? guildId) =>
+        !GuildRestricted || (guildId is { } id && AllowedGuildIds!.Contains(id));
+
+    public bool IsGuildAllowed(GuildId guild) => IsGuildAllowed(guild.Value);
 }
 
 /// <summary>Records guild join/leave for the retention policy.</summary>

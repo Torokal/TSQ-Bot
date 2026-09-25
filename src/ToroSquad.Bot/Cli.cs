@@ -474,7 +474,10 @@ public static partial class Cli
         Add(discord.ApplicationId == 0 ? "BLOCKED" : "OK", "Discord application id: " + (discord.ApplicationId == 0 ? "NOT SET" : discord.ApplicationId.ToString(CultureInfo.InvariantCulture)));
         Add(discord.CommandSyncGuildIds.Length == 0 ? "BLOCKED" : "OK", $"Command sync guild allow-list: {discord.CommandSyncGuildIds.Length} guild(s)");
         Add("OK", $"Global command sync allowed: {discord.AllowGlobalCommandSync}");
-        Add(discord.TestGuildIds.Length == 0 ? "WARN" : "OK", $"Authorized test guilds: {discord.TestGuildIds.Length}");
+        Add(discord.TestGuildIds.Length == 0 ? "INFO" : "OK", $"Authorized test (demo) guilds: {discord.TestGuildIds.Length}");
+        Add(discord.AllowedGuildIds.Length == 0 ? (discord.Transport == DiscordTransportMode.Gateway ? "WARN" : "INFO") : "OK",
+            discord.AllowedGuildIds.Length == 0 ? "Runtime guild allow-list: none (unrestricted — set Discord:AllowedGuildIds for live operation)"
+            : $"Runtime guild allow-list: {string.Join(", ", discord.AllowedGuildIds)}{(discord.AllowedGuildIds.Length == 1 ? " (single guild)" : "")}");
 
         var providerName = config.GetValue("Esports:Provider:Name", "PandaScore");
         var liquipediaSelected = string.Equals(providerName, "Liquipedia", StringComparison.OrdinalIgnoreCase);
