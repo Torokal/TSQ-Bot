@@ -17,6 +17,16 @@ public sealed class BotOptions
     /// <summary>Operator contact shown in /bot about and used in provider User-Agent strings.</summary>
     public string? OperatorContact { get; set; }
 
+    /// <summary>
+    /// Standby (deployment/maintenance): validate configuration and prove the data directory is writable, then idle —
+    /// no Discord connection, no background workers and the database file is NOT opened (so it can be replaced safely,
+    /// e.g. when moving a local database onto a Railway volume). See docs/RAILWAY_DEPLOYMENT.md.
+    /// </summary>
+    public bool Standby { get; set; }
+
+    /// <summary>In-app scheduled database backups (see <see cref="DatabaseBackupService"/>).</summary>
+    public DatabaseBackupOptions Backup { get; set; } = new();
+
     /// <summary>How long guild data is kept after the bot is removed from that guild.</summary>
     public int GuildDataRetentionDays { get; set; } = 30;
 

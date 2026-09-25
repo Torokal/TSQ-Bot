@@ -93,7 +93,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | Haber bildirimleri, eski Greg "yıldız puanı" | DEFERRED (doğrulanmış kaynak yok; VRS yeniden adlandırılmaz) |
 | Canlı maç durumu bildirimi | DEFERRED (Liquipedia doğrulanmış canlı durum sunmuyor) |
 | DM komutları/bildirimleri | Kapsam dışı (şartname) |
-| Docker dağıtımı, 7/24 barındırma | DEFERRED (seçilmedi, doğrulanmadı) |
+| Docker dağıtımı, 7/24 barındırma | Railway seçildi — bkz. "Barındırma: Railway" |
 
 ## Ortam (2026-09-24 doğrulandı)
 
@@ -247,6 +247,28 @@ eşleşiyor. Administrator istenmez; Mention Everyone önerilmez (rolü "bahsedi
 | Önbellek | HLTV bağlantı adayları veritabanında (tablo `esports_provider_state`, anahtar `liquipedia:hltv-links`); yeniden başlatma erken istek yapmaz — TESTED_OFFLINE |
 | Karar | Depo geliştirme boyunca PRIVATE; yalnızca Liquipedia için erken public yapılmaz; başvuru yayın aşamasında. O zamana kadar zenginleştirme BLOCKED/OPTIONAL, `Esports:VerifiedMatchLinks` elle yedek, PandaScore Liquipedia'dan bağımsız (TESTED_OFFLINE) |
 
+## Barındırma: Railway (özel test, 2026-09-25)
+
+| Konu | Durum |
+|---|---|
+| Barındırma / ortam | Railway, geliştirme/test; depo **PRIVATE**; yalnızca test guild 618763184815472651; global komut yok |
+| Dal | `feature/railway-deployment` (PR #3 dalı `feature/pandascore-notifications` üzerine; PR #3'e bağımlı) |
+| Dockerfile (SDK 10.0.401 → runtime 10.0, secret yok, `/data`) | **VERIFIED_LIVE** — Railway derledi (commit `3afdd17`). İlk Railway derlemesi `.editorconfig` imaja kopyalanmadığı için analizör hatasıyla düştü → düzeltildi. Yerelde `docker build` BLOCKED (Docker yok) |
+| Depolama korumaları (volume yok/dışında/yazılamaz → başlamaz; bütünlük kontrolü; bekleme modu) | TESTED_OFFLINE (birim testleri + yayınlanmış çıktıyla Railway benzeri smoke test: volume yok → çıkış 1; bekleme → DB açılmadı; normal → DB volume'de, migration, güvenli açılış logu) |
+| SIGTERM ile düzgün kapanma (konteyner) | **VERIFIED_LIVE** — Railway yeniden başlatması 04:53:06Z: "Application is shutting down → [Gateway] Disconnected", 1 sn sonra yeni süreç |
+| Replika | 1 (panel ayarı; Railway volume'lü serviste replikaya izin vermez). Config as Code (`railway.json`) yeni servislerde kullanılamadığı için kaldırıldı |
+| Genel ağ | Kapalı (HTTP yok) |
+| Railway hesabı / plan / proje | Sahip: Hobby ($5/ay), GitHub uygulaması yalnızca Torokal/TSQ-Bot. Proje `thriving-luck`, servis `TSQ-Bot`, ortam `production`, bölge **EU West (Amsterdam)**, 1 replika, Restart **Always**, Serverless kapalı, domain yok, dal `feature/railway-deployment`. Config as Code (`railway.json`) yeni servislerde açılamıyor → ayarlar panelde |
+| Değişkenler | 10 servis değişkeni (2 secret'ı sahip girdi: Discord token, PandaScore token); `RAILWAY_RUN_UID=0`; `TOROSQUAD_Bot__Standby` önce `true` (bekleme doğrulandı), sonra `false` |
+| Railway servis deploy + Discord bağlantısı | **VERIFIED_LIVE** (04:46:55Z): `[Gateway] Ready — TSQ Bot in 1 guild(s)`; veritabanı `/data/torosquad.db`; Production; test guild 618763184815472651; global komut izni kapalı; PandaScore Live; Send |
+| Volume + yazılabilirlik + bekleme modu | **VERIFIED_LIVE** — bekleme: "database not opened … not present yet"; normal açılışta DB volume'de oluştu, migration'lar uygulandı |
+| Veritabanı taşıma | Sahip kararı: **boş veritabanı** (volume'e dosya yüklemek için Railway'e SSH anahtarı kaydı gerekiyordu). Sahip `/setup` + iki takım filtresini (Aurora Gaming, Eternal Fire) Railway botunda yeniden yaptı → 04:51:57Z `guilds=1 filtered=154` (**VERIFIED_LIVE**). İlk tarama 155 maçı baseline aldı (geçmiş duyurulmadı) |
+| Yeniden başlatma kalıcılığı / kopya yok | **VERIFIED_LIVE** — `railway restart` sonrası 04:53:09Z `guilds=1 new=0 updated=0 filtered=154`, bootstrap tekrarlanmadı |
+| Tek kopya | Yerel bot 04:46:17Z düzgün kapatıldı (`[Gateway] Disconnected`), yerelde `ToroSquad.Bot` süreci yok; Railway'de 1 replika |
+| PC'siz çalışma | Yerel süreç yok, bot Railway'de; **PC kapalıyken** Discord'dan yanıt vermesi sahip tarafından doğrulanınca VERIFIED_LIVE — bekliyor |
+| Yedek (Railway volume backups) | **BLOCKED — plan kararı** (2026-09-25): Railway panelindeki Backups sekmesi "Creating backups and enabling point-in-time recovery (PITR) are only available for customers on the **Pro** plan" diyor; hesap Hobby'de → günlük zamanlama ve elle yedek **oluşturulamadı**, plan yükseltilmedi (sahip kararı). Volume'e/servise dokunulmadı, geri yükleme yapılmadı. Maliyet notu: Railway yedekleri artımlı + copy-on-write'tır ve **artımlı volume depolaması** olarak (volume ile aynı birim fiyat, GB/dakika, aylık fatura) ücretlendirilir (docs.railway.com/reference/backups). Sahip kararı: plan yükseltme yok, **uygulama içi günlük yedek** (aşağıdaki satır) |
+| Uygulama içi günlük veritabanı yedeği | IMPLEMENTED + TESTED_OFFLINE (5 test: tutarlı + bütünlük kontrollü kopya, aralık başına bir kez, yeniden başlatmada ek yedek yok, en yeni 7, yabancı dosyalara dokunmaz, hata botu durdurmaz). `/data/backups` (aynı volume: bozulma/yanlış işleme karşı; volume kaybına karşı değil). Railway'de ilk yedek **VERIFIED_LIVE**: 2026-09-25 05:18:02Z `Database backup written: /data/backups/torosquad-20260925T051802Z.db (581632 bytes, integrity OK)` (commit `b5118c4`, açılıştan 2 dk sonra); sonraki yedek 24 saatte bir |
+
 ## Yayın öncesi gereksinimler (PRE-RELEASE REQUIREMENT)
 
 Bunlar yerel geliştirme/test için blocker **değildir**; yalnızca bot herkese açılmadan önce ve sahip açıkça yayın
@@ -262,6 +284,11 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 ## NEXT ACTION (güncel)
 
+0. **Sahip — Railway (PC'siz çalışma):** railway.com'da GitHub ile giriş, plan seçimi (Hobby önerisi; Free'de "Always" yok ve
+   $1 kredi yetmez), **New Project → Deploy from GitHub repo → Torokal/TSQ-Bot**, dal `feature/railway-deployment`,
+   volume `/data`, değişkenler (`TOROSQUAD_Bot__Standby=true` ile) — adım adım: docs/RAILWAY_DEPLOYMENT.md §0–4. Loglarda
+   `STANDBY` görününce ajan: yerel botu kapatır, veritabanı yedeği + `db check`, sahip `railway login`/`link` sonrası
+   yükleme (§5B), `Standby=false` (§6), canlı doğrulama (§7). PR #4 (hedef: PR #3 dalı).
 1. **Sahip + ajan:** 08:40Z'de (TR 11:40) Eternal Fire – WBT hatırlatma kartı kanala düşmeli (ping'siz); maç bitince sonuç kartı.
    Sahip görünce: ilk gerçek hatırlatma/sonuç kartı VERIFIED_LIVE. İsteğe bağlı: opt-in ping rolü (Discord'da rol oluştur →
    `/esports-admin roles map` → `roles selfservice` → üyeler `/esports follow` veya panel).

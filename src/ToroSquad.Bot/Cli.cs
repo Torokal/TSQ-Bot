@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ToroSquad.Core;
 using ToroSquad.Core.Modules;
@@ -89,7 +90,7 @@ public static partial class Cli
               commands sync --guild ID [--apply] [--prune]
               commands sync --global [--apply]        needs Discord:AllowGlobalCommandSync=true
               doctor                                  configuration diagnosis
-              db migrate | db backup [--out DIR] | db restore FILE --yes
+              db migrate | db backup [--out DIR] | db restore FILE --yes | db check [FILE]
               simulate                                offline end-to-end demo (fixture data, fake Discord, temp DB)
               esports demo-cards --guild ID [--kind K] [--apply]  TEST/DEMO match cards (all, or one kind) for an authorized test guild
               esports provider-check [--team NAME]    READ-ONLY live fetch summary / team key lookup (sends nothing)
@@ -109,13 +110,69 @@ public static partial class Cli
         }
 
         var bot = builder.Configuration.GetSection(BotOptions.Section).Get<BotOptions>() ?? new BotOptions();
-        var dataDir = Path.GetDirectoryName(bot.DatabasePath(builder.Environment.ContentRootPath))!;
+        var databasePath = bot.DatabasePath(builder.Environment.ContentRootPath);
+        var dataDir = Path.GetDirectoryName(databasePath)!;
+        var storage = HostingChecks.StorageProblems(databasePath, Environment.GetEnvironmentVariable).ToList();
+        if (HostingChecks.WritableProblem(dataDir, Environment.GetEnvironmentVariable) is { } writable)
+            storage.Add(writable);
+        if (storage.Count > 0)
+        {
+            foreach (var p in storage)
+                await Console.Error.WriteLineAsync("STORAGE: " + p);
+            return Failed;
+        }
+
         using var instanceLock = SingleInstanceLock.Acquire(dataDir);
+        if (bot.Standby)
+            return await StandbyAsync(args, databasePath);
+
+        // Refuse to start on a damaged database; never delete or recreate it automatically.
+        if (DatabaseMaintenance.IntegrityProblem(databasePath) is { } damaged)
+        {
+            await Console.Error.WriteLineAsync($"STORAGE: integrity check failed for {databasePath}: {damaged}. Restore a backup (docs/OPERATIONS.md); nothing was changed.");
+            return Failed;
+        }
 
         using var host = builder.Build();
+        LogStartup(host.Services, builder, databasePath);
         await MigrateAsync(host.Services);
+        host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ToroSquad.Startup").LogInformation("Database ready (migrations applied); starting Discord and background workers");
         await host.RunAsync();
         return Ok;
+    }
+
+    /// <summary>
+    /// Standby: configuration and storage are verified, then the process idles until stopped (SIGTERM/Ctrl+C). Discord is
+    /// not contacted, no worker runs and the database file is not opened, so it can be uploaded/replaced safely.
+    /// </summary>
+    private static async Task<int> StandbyAsync(string[] args, string databasePath)
+    {
+        var builder = ToroHost.CreateBuilder(args, longRunning: false);
+        using var host = builder.Build();
+        var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ToroSquad.Startup");
+        var product = host.Services.GetRequiredService<ProductInfo>();
+        var exists = File.Exists(databasePath);
+        logger.LogWarning("STANDBY: {Product} {Version} (commit {Commit}) — no Discord connection, no workers, database not opened. " +
+                          "Database {Path}: {State}. Set Bot:Standby=false to start the bot.",
+            product.Name, product.Version, product.Commit ?? "unknown", databasePath,
+            exists ? $"present, {new FileInfo(databasePath).Length} bytes" : "not present yet (created on first normal start)");
+        await host.RunAsync();
+        return Ok;
+    }
+
+    /// <summary>Safe startup summary: identity, environment, storage path and modes — never secrets or user data.</summary>
+    private static void LogStartup(IServiceProvider services, HostApplicationBuilder builder, string databasePath)
+    {
+        var config = builder.Configuration;
+        var product = services.GetRequiredService<ProductInfo>();
+        var discord = services.GetRequiredService<IOptions<DiscordOptions>>().Value;
+        services.GetRequiredService<ILoggerFactory>().CreateLogger("ToroSquad.Startup").LogInformation(
+            "{Product} {Version} (commit {Commit}); environment {Environment}; database {Path}; Discord transport {Transport}, test guilds {TestGuilds}, global commands allowed {Global}; " +
+            "match provider {Provider} ({Mode}); delivery {Delivery}; host {Host}",
+            product.Name, product.Version, product.Commit ?? "unknown", builder.Environment.EnvironmentName, databasePath,
+            discord.Transport, string.Join(",", discord.TestGuildIds), discord.AllowGlobalCommandSync,
+            config.GetValue("Esports:Provider:Name", "PandaScore"), config.GetValue("Esports:Provider:Mode", "Fixture"),
+            config.GetValue("Delivery:Mode", "DryRun"), HostingChecks.OnRailway(Environment.GetEnvironmentVariable) ? "Railway" : "local");
     }
 
     private static async Task MigrateAsync(IServiceProvider services)
@@ -500,6 +557,21 @@ public static partial class Cli
         var bot = builder.Configuration.GetSection(BotOptions.Section).Get<BotOptions>() ?? new BotOptions();
         var dbPath = bot.DatabasePath(builder.Environment.ContentRootPath);
         var options = ParseOptions(args.Skip(1).ToArray());
+        if (args[0] == "check")
+        {
+            // Read-only integrity check of the database (or of a backup file before uploading it anywhere).
+            var target = args.Skip(1).FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal)) ?? dbPath;
+            if (!File.Exists(target))
+            {
+                await Console.Error.WriteLineAsync("Not found: " + target);
+                return Failed;
+            }
+
+            var problem = DatabaseMaintenance.IntegrityProblem(target);
+            Console.WriteLine(problem is null ? $"Integrity OK: {target} ({new FileInfo(target).Length} bytes)" : $"Integrity FAILED: {target}: {problem}");
+            return problem is null ? Ok : Failed;
+        }
+
         using var host = builder.Build();
 
         switch (args[0])

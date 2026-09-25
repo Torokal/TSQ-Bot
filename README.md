@@ -3,8 +3,8 @@
 Modular Discord bot with esports match tracking and extensible server modules.
 
 > **Status (2026-09-25): early development — not production-ready, not publicly launched.**
-> Core Discord behaviour is verified live in one private **test guild**; match data runs on **synthetic demo data**
-> because no provider credentials are configured (PandaScore/Liquipedia live data: BLOCKED).
+> Core Discord behaviour is verified live in one private **test guild**, now with **live PandaScore data** and an
+> admin team filter (Liquipedia: optional, BLOCKED without an approved key).
 > Up-to-date state (in Turkish): [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
 
 ## What is TSQ Bot?
@@ -31,13 +31,14 @@ real APIs · **BLOCKED** = waiting on an owner action · **DEFERRED** = intentio
 | Discord gateway, guild-only command registration (no global commands), minimum permissions, no privileged intents | **VERIFIED_LIVE** (test guild) |
 | `/help`, `/bot`, `/modules`, `/setup`, `/esports …`, `/esports-admin configure\|doctor\|roles map`, team autocomplete, `/privacy export\|delete` | **VERIFIED_LIVE** (test guild) |
 | TEST/DEMO notification delivery, no duplicate on re-scan or restart, settings survive restarts | **VERIFIED_LIVE** (test guild) |
-| Compact match cards (started / result / postponed / rescheduled / cancelled / forfeit) | TESTED_OFFLINE; Discord rendering pending live check |
-| PandaScore provider (default): parser, lifecycle, pagination, error types, rate budget | TESTED_OFFLINE (synthetic fixtures) — **live BLOCKED** (no token) |
+| Compact match cards (started / result / spoiler / postponed / rescheduled / cancelled / forfeit, Match Page link) | **VERIFIED_LIVE** (Discord rendering, test guild) |
+| PandaScore provider (default): live read, results on the free plan, team catalog search, admin team filter | **VERIFIED_LIVE** (read + filter); lifecycle transitions TESTED_OFFLINE until observed |
 | Liquipedia provider (legacy/optional) | TESTED_OFFLINE — live BLOCKED (no approved key) |
 | Valve VRS rankings | TESTED_OFFLINE — live fetch not run |
 | Verified external match links (HLTV/official/provider), URL safety | TESTED_OFFLINE |
 | Admin/member permission separation with a second account, role grant/removal, cross-guild isolation, crash recovery | TESTED_OFFLINE |
-| HLTV as a data provider, BOT Greg "stars", news, Docker / 24×7 hosting, global commands, public launch | DEFERRED |
+| Docker image + Railway private test hosting (persistent SQLite volume) | IMPLEMENTED / TESTED_OFFLINE — Railway deploy BLOCKED (owner account step) |
+| HLTV as a data provider, BOT Greg "stars", news, global commands, public launch | DEFERRED |
 | GitHub repository public visibility | **PRE-RELEASE REQUIREMENT** — private during development/testing, made public before public bot launch |
 
 ## Features
@@ -151,6 +152,11 @@ then register commands with `Sync-Commands.ps1` (dry-run first). Only the non-pr
   `Esports:VerifiedMatchLinks` list).
 
 Details, verified limits and terms: [docs/PROVIDERS.md](docs/PROVIDERS.md).
+
+## Hosting
+
+Private test hosting on Railway (Dockerfile + persistent volume for SQLite, one replica, no public HTTP):
+[docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md). Not a public launch.
 
 ## Testing
 

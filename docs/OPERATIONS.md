@@ -3,11 +3,24 @@
 ## Çalıştırma modeli
 - Tek süreç, **tek instance** (veri dizininde işletim sistemi kilidi; ikinci instance başlamaz). Yatay ölçekleme desteklenmez.
 - Veri: `Bot:DataDirectory` (scriptlerde `<repo>\data`) → `torosquad.db` (+ `-wal`, `-shm`), `torosquad.instance.lock`.
-- Başlangıçta migration otomatik uygulanır (`run`). Elle: `dotnet run --project src\ToroSquad.Bot -- db migrate`.
-- **7/24 barındırma henüz seçilmedi/kurulmadı.** Seçenekler (karar sahibi sizsiniz): Windows'ta hizmet olarak
-  (ör. `sc.exe`/NSSM ile `ToroSquad.Bot.exe run`) veya bir VPS. Docker dağıtımı hazırlanmadı ve doğrulanmadı.
+- Başlangıç sırası (`run`): yapılandırma doğrulaması → depolama kontrolleri (Railway'de volume zorunlu, klasör yazılabilir)
+  → instance kilidi → **bütünlük kontrolü** (`PRAGMA integrity_check`; hata → başlamaz, hiçbir şey silinmez) → migration
+  → Discord + işçiler. Elle: `db migrate`, `db check [DOSYA]` (salt okunur bütünlük).
+- **Bekleme modu** `Bot:Standby=true`: doğrular ve bekler; Discord yok, işçi yok, veritabanı açılmaz (dağıtım/bakım).
+- **7/24 barındırma: Railway** (özel test barındırma, sahip kararı 2026-09-25) — kurulum, değişkenler, volume, veritabanı
+  taşıma, yedek ve geri dönüş: **[RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md)**. Depoda `Dockerfile` (SDK 10.0.401 →
+  .NET 10 runtime), `.dockerignore`; servis ayarları Railway panelinde (1 replika, Serverless kapalı, Restart Always, volume `/data`) — Railway Config as Code kullanımdan kalktığı için `railway.json` yok.
+  **Replika = 1 zorunludur** (SQLite + tek zamanlayıcı/outbox; Railway volume'lü serviste replikaya zaten izin vermez).
+  Genel HTTP/domain yok. Resmî kaynaklar (okundu 2026-09-25): https://docs.railway.com/reference/volumes ·
+  https://docs.railway.com/guides/volumes · https://docs.railway.com/reference/backups ·
+  https://docs.railway.com/deployments/restart-policy · https://docs.railway.com/config-as-code/reference ·
+  https://docs.railway.com/reference/variables · https://docs.railway.com/cli/volume ·
+  https://docs.railway.com/reference/pricing/plans.
 
 ## Yedekleme / geri yükleme (SQLite)
+
+Otomatik: çalışan bot 24 saatte bir `<veri klasörü>/backups/torosquad-<zaman>.db` yedeği alır (bütünlük kontrollü, en
+yeni 7 tutulur; `Bot:Backup:Enabled|IntervalHours|Keep|Directory`). Yalnızca bu adlandırmadaki dosyalar temizlenir.
 ```powershell
 dotnet run --project src\ToroSquad.Bot -- db backup                       # çalışırken güvenli (SQLite backup API)
 dotnet run --project src\ToroSquad.Bot -- db backup --out D:\yedek

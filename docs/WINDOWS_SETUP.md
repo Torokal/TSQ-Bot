@@ -108,4 +108,4 @@ sürüm ve commit ile birlikte gösterir). Depo geliştirme/test süresince **pr
 herkese açılmadan önce depo public yapılır ve yayımlanan kaynak dağıtılan commit ile eşleşmelidir (bkz. docs/OPERATIONS.md
 "Yayın öncesi güvenlik kapısı"). **Değiştirilmiş** bir sürüm işletiyorsanız `Bot:SourceUrl` kendi deponuzu göstermeli ya da
 `.\scripts\Export-Source.ps1` arşivini yayımlamalısınız. `Bot:OperatorContact` ayarlayın. Global komut kaydı `Discord:AllowGlobalCommandSync=true`
-gerektiren ayrı bir karardır. 7/24 barındırma seçilmemiştir — bkz. docs/OPERATIONS.md.
+gerektiren ayrı bir karardır. 7/24 barındırma: Railway — bkz. docs/RAILWAY_DEPLOYMENT.md.

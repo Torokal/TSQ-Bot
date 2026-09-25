@@ -115,7 +115,7 @@ public static class ToroHost
         var informational = typeof(ToroHost).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
         var plus = informational.IndexOf('+', StringComparison.Ordinal);
         var version = plus > 0 ? informational[..plus] : informational;
-        var commit = plus > 0 ? informational[(plus + 1)..] : null;
+        var commit = HostingChecks.Commit(plus > 0 ? informational[(plus + 1)..] : null, Environment.GetEnvironmentVariable);
         var bot = configuration.GetSection(BotOptions.Section).Get<BotOptions>() ?? new BotOptions();
         return new ProductInfo(
             ProductInfo.ProductName,
