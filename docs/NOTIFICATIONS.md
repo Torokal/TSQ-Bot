@@ -55,6 +55,26 @@ indirilmez, gerçek maç sayfası olamaz; footer TEST/DEMO der).
 Zaman: durum satırındaki göreli zaman (`<t:…:R>`) ve embed zaman damgası Discord tarafından **her kullanıcının kendi dili ve
 saat dilimiyle** gösterilir ("43 minutes ago" / "43 dakika önce"); TSQ Bot bunları çevirmez veya sabit metne dönüştürmez.
 
+## Takım logosu
+
+Kartın sağ üst köşesinde **küçük bir küçük resim** (embed thumbnail) olarak tek takım logosu; büyük görsel, kolaj veya
+arka plan yok. Kural: **doğruluk süsten önce gelir** — yanıltabilecek her durumda logo gösterilmez, kart aynen çalışır.
+
+| Kart | Logo |
+|---|---|
+| Sonuç (normal) ve hükmen | Sağlayıcının belirttiği **kazananın** logosu. Beraberlik, bilinmeyen kazanan veya kazananın logosu yoksa **yok** (kaybedenin logosu kazanan gibi görünmesin) |
+| Sonuç (spoiler) | Kazanan logosu **asla** (sonucu sızdırır). Yalnızca aşağıdaki "takip edilen takım" kuralı |
+| Başladı, ertelendi, saat değişti, iptal | Sunucunun takım filtresinde (`/esports-admin filters team`) bu maçtaki **tek** takım varsa onun logosu; hiç yoksa veya iki takım da takipteyse **yok** |
+| Hatırlatma, TEST/DEMO kartları | Yok |
+
+Kaynak yalnızca maç sağlayıcısının kendi takım verisidir: PandaScore `dark_mode_image_url` (Discord çoğunlukla koyu temada
+görüntülenir), yoksa `image_url`. Kazıma, görsel arama, HLTV/Liquipedia görseli yok. Adres yalnızca şu durumda kullanılır:
+mutlak HTTPS, `pandascore.co` görsel sunucusu, kimlik bilgisi/port/sorgu/parça yok, PNG/JPG/WebP/GIF, ≤ 512 karakter.
+Reddedilen adres logosuz devam eder ve sağlayıcı uyarısı olarak loglanır (adresin kendisi yazılmaz).
+
+Logo, teslimat parmak izine ve maç anlık görüntüsüne dahil değildir; logosuz kartların kayıtlı yükü değişmez. Logo eklenen
+bir kart, düzeltme penceresi içindeyse bir kez **ping'siz düzenlenebilir** (ör. sürüm geçişinden sonra).
+
 ## Yeniden başlatma / ilk bağlantı / geri dönüş politikası
 
 - **İlk çalıştırma (bootstrap)**: bir sağlayıcının hiç anlık görüntüsü yokken görülen bitmiş/iptal maçlar `IsBaseline` olur → hiç duyurulmaz. Sağlayıcı bazındadır: Liquipedia → PandaScore geçişi yeni sağlayıcının geçmişini duyurmaz. İlk görülen maçta hiçbir yaşam döngüsü geçişi kaydedilmez.

@@ -42,7 +42,10 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
   **rescheduled** matches keep `not_started` with `rescheduled=true`, new `scheduled_at` and `original_scheduled_at`;
   delays caused by a previous match are **not** flagged as rescheduled.
 - **Match fields used** (VERIFIED, OpenAPI): id, status, scheduled_at, begin_at, end_at, original_scheduled_at, rescheduled,
-  forfeit, draw, match_type (`best_of`/`first_to`/…), number_of_games, winner_id, opponents[{type, opponent{id,name,acronym}}],
+  forfeit, draw, match_type (`best_of`/`first_to`/…), number_of_games, winner_id,
+  opponents[{type, opponent{id,name,acronym,dark_mode_image_url,image_url}}] (logo fields VERIFIED_LIVE 2026-09-25: most
+  teams have `image_url`, fewer `dark_mode_image_url`, both on `cdn-api.pandascore.co`; used only as card thumbnails,
+  docs/NOTIFICATIONS.md "Takım logosu"),
   results[{team_id, score}], games[{position,status,winner}], tournament{name,tier}, league{name}, serie{full_name},
   streams_list (not shown in cards). Tiers `s,a,b,c,d,unranked` → TSQ scale 1..5 / none.
 - **Public match page**: **none** in the match object (`league.url` is the league website). So PandaScore matches get a
