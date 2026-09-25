@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ToroSquad.Core;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Discord;
@@ -219,6 +220,49 @@ public sealed class TeamLogoTests
         ("rescheduled", f => r.Rescheduled(Match(), "tr", Start.AddDays(1), Istanbul, observed, f)),
         ("cancelled", f => r.Cancelled(Match(MatchStatus.Cancelled), "tr", observed, f)),
     ];
+
+    private static OutgoingMessage Reminder(NotificationRenderer r, IReadOnlySet<string>? followed, MentionPolicy? pings = null) =>
+        r.Reminder(Match(), "tr", pings ?? MentionPolicy.None, Start.AddMinutes(-15), previousStart: null, followed);
+
+    [Fact]
+    public void Reminder_shows_the_logo_of_exactly_one_followed_team()
+    {
+        Reminder(Live(), FollowsA).Embed!.ThumbnailUrl.Should().Be(LogoA);
+        Reminder(Live(), FollowsB).Embed!.ThumbnailUrl.Should().Be(LogoB);
+    }
+
+    [Fact]
+    public void Reminder_without_a_followed_team_has_no_logo()
+    {
+        Reminder(Live(), null).Embed!.ThumbnailUrl.Should().BeNull();
+        Reminder(Live(), new HashSet<string>()).Embed!.ThumbnailUrl.Should().BeNull();
+        Reminder(Live(), new HashSet<string> { "ps-team:999" }).Embed!.ThumbnailUrl.Should().BeNull();
+    }
+
+    [Fact]
+    public void Reminder_with_both_teams_followed_has_no_logo() =>
+        Reminder(Live(), FollowsBoth).Embed!.ThumbnailUrl.Should().BeNull();
+
+    [Fact]
+    public void Demo_reminder_has_no_logo() =>
+        Reminder(new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture)), FollowsA).Embed!.ThumbnailUrl.Should().BeNull();
+
+    [Fact]
+    public void Reminder_logo_changes_nothing_else_including_the_role_ping()
+    {
+        var pings = new MentionPolicy([new RoleId(4441)]);
+        var withLogo = Reminder(Live(), FollowsA, pings);
+        var withoutLogo = Reminder(Live(), null, pings);
+
+        withLogo.Embed!.ThumbnailUrl.Should().Be(LogoA);
+        withLogo.Content.Should().Be("<@&4441>").And.Be(withoutLogo.Content);
+        withLogo.Mentions.Should().Be(pings);
+        withoutLogo.Mentions.Should().Be(pings);
+        (withLogo.Embed with { ThumbnailUrl = null }).Should().BeEquivalentTo(withoutLogo.Embed,
+            "reminder text, native timestamps, match page, fields, footer and colour are identical");
+        withLogo.Embed.Description.Should().Contain("<t:" + Start.ToUnixTimeSeconds() + ":R>");
+        MessageFingerprint.Of(withLogo).Should().Be(MessageFingerprint.Of(withoutLogo));
+    }
 
     [Fact]
     public void Followed_team_without_a_logo_means_no_thumbnail()

@@ -64,8 +64,8 @@ arka plan yok. Kural: **doğruluk süsten önce gelir** — yanıltabilecek her 
 |---|---|
 | Sonuç (normal) ve hükmen | Sağlayıcının belirttiği **kazananın** logosu. Beraberlik, bilinmeyen kazanan veya kazananın logosu yoksa **yok** (kaybedenin logosu kazanan gibi görünmesin) |
 | Sonuç (spoiler) | Kazanan logosu **asla** (sonucu sızdırır). Yalnızca aşağıdaki "takip edilen takım" kuralı |
-| Başladı, ertelendi, saat değişti, iptal | Sunucunun takım filtresinde (`/esports-admin filters team`) bu maçtaki **tek** takım varsa onun logosu; hiç yoksa veya iki takım da takipteyse **yok** |
-| Hatırlatma, TEST/DEMO kartları | Yok |
+| Hatırlatma, başladı, ertelendi, saat değişti, iptal | Sunucunun takım filtresinde (`/esports-admin filters team`) bu maçtaki **tek** takım varsa onun logosu; hiç yoksa veya iki takım da takipteyse **yok** |
+| TEST/DEMO kartları | Yok |
 
 Kaynak yalnızca maç sağlayıcısının kendi takım verisidir: PandaScore `dark_mode_image_url` (Discord çoğunlukla koyu temada
 görüntülenir), yoksa `image_url`. Kazıma, görsel arama, HLTV/Liquipedia görseli yok. Adres yalnızca şu durumda kullanılır:

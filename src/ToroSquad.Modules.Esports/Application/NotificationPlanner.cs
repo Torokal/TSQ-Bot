@@ -163,7 +163,7 @@ public sealed class NotificationPlanner(
                     {
                         var pings = Pings(mappings, match, reminder: true, guild);
                         var message = renderer.Reminder(match, language, pings, snapshot.LastChangedAt,
-                            snapshot.StartChangedAt is not null ? snapshot.PreviousStartUtc : null);
+                            snapshot.StartChangedAt is not null ? snapshot.PreviousStartUtc : null, filters.TeamKeys);
                         var outcome = await outbox.StageAsync(new NotificationRequest(guild, EsportsModule.ModuleIdTyped, match.Key.ToString(), channel,
                             KindReminder, message, start + TimeSpan.FromMinutes(o.ReminderGraceMinutes), dryRun), cancellationToken);
                         Count(outcome, ref created, ref updated);

@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core;
+using ToroSquad.Core.Roles;
 using ToroSquad.Core.Security;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Esports.Application;
@@ -22,6 +23,7 @@ public sealed class TeamLogoNotificationTests : IAsyncLifetime
 {
     private static readonly GuildId Guild = new(555);
     private static readonly ChannelId Channel = new(5550);
+    private static readonly RoleId BravoRole = new(5551);
     private const string LogoAlpha = "https://cdn-api.pandascore.co/images/team/image/1/alpha.png";
     private const string LogoBravo = "https://cdn-api.pandascore.co/images/team/image/2/bravo.png";
     private static readonly TeamRef Alpha = new("pandascore", "ps-team:1", "Alpha", "ALP", LogoAlpha);
@@ -34,7 +36,7 @@ public sealed class TeamLogoNotificationTests : IAsyncLifetime
         // Live data mode (no provider call happens here: the planner is fed directly).
         _host = await TestHost.CreateAsync(new() { ["Esports:Provider:Name"] = "PandaScore" },
             replace: s => s.AddSingleton(new EsportsDataMode(ProviderMode.Live)));
-        await _host.SetUpEsportsGuildAsync(Guild, Channel);
+        await _host.SetUpEsportsGuildAsync(Guild, Channel, new RoleInfo(BravoRole, "Bravo fans", 3, GuildPermission.None, false, false, true));
         await PlanAsync([M("BOOT", MatchStatus.Scheduled, TestHost.T0.AddDays(5))]);
     }
 
@@ -111,5 +113,28 @@ public sealed class TeamLogoNotificationTests : IAsyncLifetime
         var result = await OutboxAsync(NotificationPlanner.KindResult);
         result.Should().ContainSingle();
         Payload(result[0])["embed"]!["thumbnailUrl"]!.GetValue<string>().Should().Be(LogoBravo, "the winner, not the followed loser");
+    }
+
+    [Fact]
+    public async Task Reminder_for_the_followed_team_carries_its_logo_keeps_the_mapped_ping_and_is_sent_once()
+    {
+        await FollowAsync("ps-team:2");
+        await _host.InScopeAsync(async sp =>
+            (await sp.GetRequiredService<RoleMappingService>().MapAsync(TestHost.Admin(Guild), BravoRole, "ps-team:2", true, true, CancellationToken.None))
+            .Succeeded.Should().BeTrue());
+
+        var start = _host.Clock.GetUtcNow().AddMinutes(10); // inside the 15-minute reminder lead
+        await PlanAsync([M("R1", MatchStatus.Scheduled, start)]);
+        _host.Clock.Advance(TimeSpan.FromMinutes(2));
+        await PlanAsync([M("R1", MatchStatus.Scheduled, start)]);
+        await PlanAsync([M("R1", MatchStatus.Scheduled, start)]);
+
+        var reminders = await OutboxAsync(NotificationPlanner.KindReminder);
+        reminders.Should().ContainSingle("repeated polls never create a second reminder");
+        var payload = Payload(reminders[0]);
+        payload["embed"]!["thumbnailUrl"]!.GetValue<string>().Should().Be(LogoBravo);
+        payload["content"]!.GetValue<string>().Should().Be("<@&5551>", "the mapped reminder ping is unchanged by the logo");
+        payload["mentions"]!["roles"]!.AsArray().Select(r => r!["value"]!.GetValue<ulong>()).Should().Equal(5551UL);
+        payload["embed"]!["description"]!.GetValue<string>().Should().Contain("<t:" + start.ToUnixTimeSeconds() + ":R>");
     }
 }

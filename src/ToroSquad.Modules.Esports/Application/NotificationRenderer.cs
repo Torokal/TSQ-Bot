@@ -36,7 +36,8 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
     /// <summary>Hosts allowed for provider-supplied links in listings (rankings source etc.).</summary>
     public static readonly IReadOnlyCollection<string> AllowedLinkHosts = ["liquipedia.net", "twitch.tv", "youtube.com", "kick.com", "github.com"];
 
-    public OutgoingMessage Reminder(EsportsMatch match, string language, MentionPolicy pings, DateTimeOffset fetchedAt, DateTimeOffset? previousStart)
+    public OutgoingMessage Reminder(EsportsMatch match, string language, MentionPolicy pings, DateTimeOffset fetchedAt, DateTimeOffset? previousStart,
+        IReadOnlySet<string>? followedTeamKeys = null)
     {
         // "Planned start" wording is the honesty guarantee: a reminder never claims that the match started.
         var lines = new List<string>();
@@ -44,7 +45,8 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
             lines.Add(L(language, match.StartTimeExact ? "esports.card.reminder" : "esports.card.reminder_estimated", DiscordText.Timestamp(start, 'R')));
         if (previousStart is { } previous && match.ScheduledStartUtc != previous)
             lines.Add(L(language, "esports.reminder.time_updated", DiscordText.Timestamp(previous, 'f')));
-        return Card(match, language, Title(match, language), lines, [], match.ScheduledStartUtc ?? fetchedAt, ReminderColor, pings);
+        return Card(match, language, Title(match, language), lines, [], match.ScheduledStartUtc ?? fetchedAt, ReminderColor, pings,
+            LogoFor(match, followedTeamKeys, showWinner: false));
     }
 
     /// <summary>Sent only on a provider-stated scheduled → running transition (never because the clock passed).</summary>
