@@ -219,26 +219,30 @@ public sealed class Formula1Poller(
         foreach (var kind in new[] { F1StandingsKind.Drivers, F1StandingsKind.Constructors })
         {
             var result = await SafeAsync(() => standings.GetStandingsAsync(kind, now.Year, ct), now);
-            if (result.HasData && result.Value!.Count == 0)
-            {
-                // New season without standings yet: show last season's final table (labelled with its season).
-                var previous = await SafeAsync(() => standings.GetStandingsAsync(kind, now.Year - 1, ct), now);
-                if (previous.HasData && previous.Value!.Count > 0)
-                    result = previous;
-            }
-
             last = result;
-            cache.UpdateStandings(kind, result, now);
             await SaveStateAsync(sp, StandingsKey(kind), result, null, ct);
             if (!result.HasData)
             {
                 ok = false;
+                cache.UpdateStandings(kind, result, now);
                 logger.LogWarning("F1 standings {Kind}: {Outcome} {Detail}", kind, result.Outcome, result.Detail);
                 continue;
             }
 
+            // Stored even when empty: an empty current-season table is the provable baseline of the season's first race.
             var applied = await workflow.ApplyStandingsAsync(result.Value!, ct);
             changedCards |= applied.AttachedTo.Count > 0;
+
+            var shown = result;
+            if (result.Value!.Count == 0)
+            {
+                // New season without standings yet: commands show last season's final table (labelled with its season).
+                var previous = await SafeAsync(() => standings.GetStandingsAsync(kind, now.Year - 1, ct), now);
+                if (previous.HasData && previous.Value!.Count > 0)
+                    shown = previous;
+            }
+
+            cache.UpdateStandings(kind, shown, now);
         }
 
         var closed = await workflow.AdvanceStandingsWatchAsync(ct);
@@ -391,10 +395,17 @@ public sealed class Formula1Poller(
 
         foreach (var kind in new[] { F1StandingsKind.Drivers, F1StandingsKind.Constructors })
         {
-            var row = await db.Set<F1StandingsSnapshotEntity>().AsNoTracking().Where(s => s.Kind == (int)kind)
-                .OrderByDescending(s => s.Season).ThenByDescending(s => s.Id).FirstOrDefaultAsync(ct);
-            if (row is not null && F1Json.Deserialize<F1StandingsSnapshot>(row.PayloadJson) is { } snapshot)
-                cache.RestoreStandings(snapshot, states.FirstOrDefault(s => s.Key == StandingsKey(kind))?.LastSuccessAt ?? row.LastConfirmedAt);
+            // Latest non-empty table (a new season's empty table is only a baseline, not something to show).
+            var rows = await db.Set<F1StandingsSnapshotEntity>().AsNoTracking().Where(s => s.Kind == (int)kind)
+                .OrderByDescending(s => s.Season).ThenByDescending(s => s.Id).Take(10).ToListAsync(ct);
+            foreach (var row in rows)
+            {
+                if (F1Json.Deserialize<F1StandingsSnapshot>(row.PayloadJson) is { Count: > 0 } snapshot)
+                {
+                    cache.RestoreStandings(snapshot, states.FirstOrDefault(s => s.Key == StandingsKey(kind))?.LastSuccessAt ?? row.LastConfirmedAt);
+                    break;
+                }
+            }
         }
 
         await RefreshViewsAsync(scope.ServiceProvider.GetRequiredService<Formula1Workflow>(), ct);

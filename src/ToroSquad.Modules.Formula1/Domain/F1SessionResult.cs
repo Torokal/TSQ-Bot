@@ -34,8 +34,13 @@ public sealed record F1DriverResult(
     int? GapLaps,
     double? Points);
 
-/// <summary>A normalized session classification from a results provider.</summary>
-public sealed record F1SessionResult(string SessionKey, F1SessionType Type, string Source, IReadOnlyList<F1DriverResult> Entries)
+/// <summary>
+/// A normalized session classification from a results provider. <see cref="ExpectedDriverNumbers"/> is the provider's
+/// participant roster for this session (OpenF1: /drivers?session_key=…) when it supplies one; completeness is proven
+/// against it (never against a fixed grid size). Null = the provider has no roster concept.
+/// </summary>
+public sealed record F1SessionResult(string SessionKey, F1SessionType Type, string Source, IReadOnlyList<F1DriverResult> Entries,
+    IReadOnlyList<int>? ExpectedDriverNumbers = null)
 {
     /// <summary>Classified drivers by position, then the rest (DNF, DNS, DSQ, not classified) by driver number.</summary>
     public IEnumerable<F1DriverResult> Ordered => Entries
@@ -74,6 +79,9 @@ public sealed record F1SessionResult(string SessionKey, F1SessionType Type, stri
 /// <summary>
 /// Decides whether a provider classification is complete enough to publish. Empty, half-populated or inconsistent
 /// classifications are rejected (the workflow retries later) — never published with placeholders.
+/// <para>Completeness = every driver of the session's participant roster has a result row (DNF/DNS/DSQ rows count as
+/// present) and no row belongs to a driver outside the roster. A contiguous 1..10 classification is therefore NOT complete
+/// while a 20-driver roster exists. No grid size is assumed; <c>minEntries</c> is only an extra sanity lower bound.</para>
 /// </summary>
 public static class F1ResultValidator
 {
@@ -81,10 +89,24 @@ public static class F1ResultValidator
     {
         if (result.Entries.Count == 0)
             return "empty classification";
-        if (result.Entries.Count < minEntries)
-            return $"only {result.Entries.Count} entries (< {minEntries})";
         if (result.Entries.Select(e => e.DriverNumber).Distinct().Count() != result.Entries.Count)
             return "duplicate driver numbers";
+        if (result.ExpectedDriverNumbers is { } roster)
+        {
+            if (roster.Count == 0)
+                return "empty participant roster (completeness cannot be proven)";
+            if (roster.Distinct().Count() != roster.Count)
+                return "duplicate driver numbers in the participant roster (ambiguous)";
+            var present = result.Entries.Select(e => e.DriverNumber).ToHashSet();
+            var missing = roster.Count(n => !present.Contains(n));
+            if (missing > 0)
+                return $"{missing} of {roster.Count} session drivers have no result row yet";
+            if (present.Any(n => !roster.Contains(n)))
+                return "result rows for drivers outside the session roster (ambiguous)";
+        }
+
+        if (result.Entries.Count < minEntries)
+            return $"only {result.Entries.Count} entries (< {minEntries})";
         if (result.Entries.Any(e => string.IsNullOrWhiteSpace(e.DriverName)))
             return "driver without a name";
 

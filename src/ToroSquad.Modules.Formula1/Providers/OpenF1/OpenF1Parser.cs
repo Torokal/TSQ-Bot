@@ -95,12 +95,16 @@ public static class OpenF1Parser
     public static F1SessionResult ParseSessionResult(JsonElement resultRoot, JsonElement? driversRoot, F1Session session)
     {
         var drivers = new Dictionary<int, JsonElement>();
+        var roster = new List<int>(); // kept with duplicates: a duplicated roster entry is ambiguous and fails validation
         if (driversRoot is { } dr)
         {
             foreach (var d in Array(dr).EnumerateArray())
             {
                 if (Int(d, "driver_number") is { } n)
+                {
                     drivers[n] = d;
+                    roster.Add(n);
+                }
             }
         }
 
@@ -129,7 +133,8 @@ public static class OpenF1Parser
                 Double(row, "points")));
         }
 
-        return new F1SessionResult(session.Key, session.Type, Source, entries);
+        // The session roster makes completeness provable: without a driver list nothing can be proven complete.
+        return new F1SessionResult(session.Key, session.Type, Source, entries, roster.Order().ToList());
     }
 
     /// <summary>"First Last" from first_name/last_name (the full_name field upper-cases the family name).</summary>

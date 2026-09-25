@@ -34,9 +34,13 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
     // ---------------------------------------------------------------- schedule
 
     /// <summary>
-    /// Upserts the schedule. A session first seen with its scheduled start already in the past becomes a silent baseline
-    /// (first install, new season appearing late, provider switch): it is never announced. Sessions missing from a later
-    /// schedule are kept as they are — a provider omission is not a cancellation.
+    /// Upserts the schedule. A session first seen when it is already OVER (its planned end has passed: first install, new
+    /// season appearing late, provider switch) becomes a silent baseline: never announced, not even its result.
+    /// A session first seen after its scheduled start but before its planned end (delayed, or running) is NOT baseline:
+    /// a provider-confirmed start is then still subject to the guild watermark and the start freshness window (so enabling
+    /// mid-session never produces a stale "started"), and its result is delivered if it finalises after the guild's
+    /// watermark. Fail closed: a session first seen after its planned end is baseline even if it is still running.
+    /// Sessions missing from a later schedule are kept as they are — a provider omission is not a cancellation.
     /// </summary>
     public async Task<int> UpsertScheduleAsync(F1SeasonSchedule schedule, CancellationToken ct)
     {
@@ -58,7 +62,7 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
                         Round = session.Round,
                         SessionType = (int)session.Type,
                         State = (int)F1SessionState.Scheduled,
-                        IsBaseline = session.ScheduledStartUtc <= now,
+                        IsBaseline = session.PlannedEndUtc <= now,
                         FirstSeenAt = now,
                     };
                     Sessions.Add(row);
@@ -84,7 +88,7 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
         }
 
         if (baselined > 0)
-            logger.LogInformation("F1 bootstrap: {Count} past session(s) of {Season} recorded as baseline (never announced)", baselined, schedule.Season);
+            logger.LogInformation("F1 bootstrap: {Count} already-finished session(s) of {Season} recorded as baseline (never announced)", baselined, schedule.Season);
         await db.SaveChangesAsync(ct);
         return keys.Count;
     }
@@ -379,13 +383,14 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
         var watching = await Sessions.Where(s => s.Season == snapshot.Season && s.StandingsWatchUntil != null && !s.StandingsWindowClosed).ToListAsync(ct);
         foreach (var row in watching.Where(r => r.StandingsWatchUntil >= now && snapshot.Count > 0))
         {
+            // A baseline may be missing if this session finalised before one could be proven (e.g. after downtime).
+            await CaptureStandingsBaselineAsync(row, ct);
             var baseline = snapshot.Kind == F1StandingsKind.Drivers ? row.StandingsBaselineDriversHash : row.StandingsBaselineConstructorsHash;
             if (baseline is null || baseline == hash)
                 continue; // unknown baseline fails closed; unchanged means the provider has not updated yet
-            if (snapshot.Round is not { } published || published < row.Round)
+            if (await AttributionProblemAsync(row, snapshot, latest, ct) is { } problem)
             {
-                // A late correction of an EARLIER round is not "the standings after this session": never attach it here.
-                logger.LogInformation("F1 standings: {Kind} change (round {Round}) not attached to {Session} (round {SessionRound})", snapshot.Kind, snapshot.Round, row.SessionKey, row.Round);
+                logger.LogInformation("F1 standings: {Kind} change not attached to {Session}: {Problem}", snapshot.Kind, row.SessionKey, problem);
                 continue;
             }
 
@@ -406,21 +411,75 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
         return new StandingsApplied(latest.Id, changed, attached);
     }
 
-    /// <summary>Remembers the standings tables as they were before the session (captured once; never overwritten).</summary>
+    /// <summary>
+    /// Before this instant no points of the session can be in any standings table: the earlier of the observed first start
+    /// and the scheduled start (a session never scores before it starts; an early start moves the cutoff earlier).
+    /// </summary>
+    public static DateTimeOffset BaselineCutoff(F1SessionSnapshotEntity row) =>
+        row.StartedObservedAt is { } started && started < row.ScheduledStartUtc ? started : row.ScheduledStartUtc;
+
+    /// <summary>
+    /// Records the standings as they PROVABLY were before the session: the last table this bot fetched before
+    /// <see cref="BaselineCutoff"/>. Never "the latest table right now" — after downtime that may already be the
+    /// post-session table, which would hide the change. No provable pre-session table → baseline stays unknown (fail closed).
+    /// Captured once; never overwritten.
+    /// </summary>
     public async Task CaptureStandingsBaselineAsync(F1SessionSnapshotEntity row, CancellationToken ct)
     {
-        if (row.StandingsBaselineDriversHash is not null && row.StandingsBaselineConstructorsHash is not null)
-            return;
-        row.StandingsBaselineDriversHash ??= await LatestHashAsync(F1StandingsKind.Drivers, row.Season, ct);
-        row.StandingsBaselineConstructorsHash ??= await LatestHashAsync(F1StandingsKind.Constructors, row.Season, ct);
+        var cutoff = BaselineCutoff(row);
+        row.StandingsBaselineDriversHash ??= (await TableBeforeAsync(F1StandingsKind.Drivers, row.Season, cutoff, ct))?.CanonicalHash;
+        row.StandingsBaselineConstructorsHash ??= (await TableBeforeAsync(F1StandingsKind.Constructors, row.Season, cutoff, ct))?.CanonicalHash;
     }
 
-    private Task<string?> LatestHashAsync(F1StandingsKind kind, int season, CancellationToken ct) =>
+    /// <summary>The last table of that kind/season this bot had fetched strictly before <paramref name="before"/>.</summary>
+    private Task<F1StandingsSnapshotEntity?> TableBeforeAsync(F1StandingsKind kind, int season, DateTimeOffset before, CancellationToken ct) =>
         db.Set<F1StandingsSnapshotEntity>().AsNoTracking()
-            .Where(s => s.Kind == (int)kind && s.Season == season)
+            .Where(s => s.Kind == (int)kind && s.Season == season && s.FetchedAt < before)
             .OrderByDescending(s => s.Id)
-            .Select(s => s.CanonicalHash)
             .FirstOrDefaultAsync(ct);
+
+    /// <summary>
+    /// Why a changed table can NOT be shown as "the standings after this session" (null = it can). Rules, all fail closed:
+    /// <list type="bullet">
+    /// <item>it must have been fetched after the session's cutoff and cover at least this round (a late correction of an
+    /// earlier round is not this session's update);</item>
+    /// <item>sprint: it must have been fetched before the same round's race could have started (otherwise it may already
+    /// contain the race);</item>
+    /// <item>race of a sprint weekend: the round number cannot tell post-sprint from post-race, so the post-sprint table
+    /// must have been observed (changed, covering this round) between the sprint's end and the race's cutoff — only then is
+    /// the pre-race baseline known to include the sprint and a further change provably contains the race.</item>
+    /// </list>
+    /// </summary>
+    private async Task<string?> AttributionProblemAsync(F1SessionSnapshotEntity row, F1StandingsSnapshot snapshot, F1StandingsSnapshotEntity candidate, CancellationToken ct)
+    {
+        var cutoff = BaselineCutoff(row);
+        if (candidate.FetchedAt < cutoff)
+            return "table predates the session";
+        if (snapshot.Round is not { } published || published < row.Round)
+            return $"table covers round {snapshot.Round?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?"} only (session round {row.Round})";
+
+        var sameRound = await Sessions.AsNoTracking()
+            .Where(s => s.Season == row.Season && s.Round == row.Round && s.SessionKey != row.SessionKey &&
+                        (s.SessionType == (int)F1SessionType.Sprint || s.SessionType == (int)F1SessionType.Race))
+            .ToListAsync(ct);
+        var type = (F1SessionType)row.SessionType;
+        if (type == F1SessionType.Sprint && sameRound.FirstOrDefault(s => s.SessionType == (int)F1SessionType.Race) is { } race &&
+            candidate.FetchedAt >= BaselineCutoff(race))
+            return "fetched after the same round's race could have started (may include the race)";
+
+        if (type == F1SessionType.Race && sameRound.FirstOrDefault(s => s.SessionType == (int)F1SessionType.Sprint) is { } sprint)
+        {
+            var sprintEnd = sprint.FinishedObservedAt ?? ToSession(sprint).PlannedEndUtc;
+            var preSprint = await TableBeforeAsync(snapshot.Kind, row.Season, BaselineCutoff(sprint), ct);
+            var postSprintSeen = preSprint is not null && await db.Set<F1StandingsSnapshotEntity>().AsNoTracking().AnyAsync(s =>
+                s.Kind == (int)snapshot.Kind && s.Season == row.Season && s.FetchedAt > sprintEnd && s.FetchedAt < cutoff &&
+                s.Round >= row.Round && s.CanonicalHash != preSprint.CanonicalHash, ct);
+            if (!postSprintSeen)
+                return "sprint weekend: the post-sprint table was not observed before the race, so post-sprint and post-race cannot be told apart";
+        }
+
+        return null;
+    }
 
     /// <summary>Baselines for sprint/race sessions that are about to start (before any points can change).</summary>
     public async Task CaptureUpcomingBaselinesAsync(IEnumerable<string> sessionKeys, CancellationToken ct)
