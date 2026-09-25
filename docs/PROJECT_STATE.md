@@ -19,7 +19,12 @@ yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esp
 | PandaScore gerçek API — okuma (yaklaşan/biten, sayfalama, kota, etkinlikler) | **VERIFIED_LIVE** (2026-09-25, `esports provider-check`, yalnızca okuma, hiçbir şey gönderilmedi): 163 maç / 2 sayfa (Scheduled 131, Finished 32), 35 etkinlik, kalan kota 994/1000 |
 | PandaScore ücretsiz planda sonuç alanları | **VERIFIED_LIVE** — 32 bitmiş maçın 32'sinde kazanan, 27'sinde seri skoru, 5 hükmen (kazanan var, skor yok). Resmî sayfalardaki çelişki çözüldü |
 | PandaScore canlı "oynanıyor" / ertelendi / iptal geçişleri | Okumada o an oynanan maç yoktu → **TESTED_OFFLINE**; canlı bildirim açıldığında gözlenecek |
-| Canlı veriyle bildirim (test guild) | **DEFERRED — sahip kararı**: filtre olmadan pencere içindeki tüm maçlar (163) duyurulur; önce sunucu filtresi (ör. takım, seviye veya VRS Top-N) seçilmeli |
+| Canlı veriyle bildirim (test guild) | **AÇIK** (sahip onayı, 2026-09-25 03:40Z): `Esports:Provider:Mode=Live`, `Delivery:Mode=Send`, Gateway. Sunucu takım filtresi (sahip `/esports-admin filters team` ile ekledi): Aurora Gaming `ps-team:131505` + Eternal Fire `ps-team:129413` (akademiler hariç; takım kimlikleri `esports provider-check --team` ile seçildi) |
+| Filtresiz ilk canlı tarama (DryRun) | 03:33Z: filtre eklenmeden önce 5 alakasız sonuç kartı **yalnızca simüle edildi**, gönderilmedi (Simulated, terminal) — önce DryRun kararının doğrulaması |
+| Sunucu takım filtresi canlıda | **VERIFIED_LIVE** (03:38Z ve 03:40Z taramaları: 162 maçın 160'ı elendi; geçen 2 maç Eternal Fire'ın; Aurora'nın 48 saatte maçı yok) |
+| Filtre yalnızca yönetici | `/esports-admin` Discord'a `default_member_permissions=32` (Sunucuyu Yönet) ile kayıtlı; sunucu tarafında her filtre işlemi `Authorize.Require(ManageGuild)` — TESTED_OFFLINE (`Regular_members_are_refused_every_admin_operation`); normal üye hesabıyla canlı sınama **BLOCKED** (ikinci hesap yok). `/esports follow` kişiseldir, sunucu filtresini genişletmez |
+| Etiketlenme (ping) isteğe bağlı | Kanal kartları ping'siz; ping yalnızca yöneticinin eşlediği role, üye rolü kendi seçimiyle alır (`/esports follow` / panel, self-service). Test guild'de gerçek takımlar için ping rolü **yok** (tek eşleme sahte Toro Wolves, ping kapalı) → şu an kimse etiketlenmez |
+| İlk gerçek maç bildirimi | Bekleniyor: Eternal Fire vs WBT 2026-09-25 09:00Z (Stake Ranked), hatırlatma 08:40Z (20 dk önce). Kanalda görünene kadar TESTED_OFFLINE |
 | Başladı / bitti / ertelendi / saat değişti / iptal / hükmen kartları | TESTED_OFFLINE; Discord'da görünüm: demo kartlarıyla doğrulanacak |
 | Sade kart tasarımı (Greg referansı) | Uygulandı; Greg ekran görüntüsü bu turda paylaşılmadı → metin şablonuna göre |
 | HLTV | Veri sağlayıcısı değil, **kazıma yok**. Araştırma: HLTV'nin resmî API'si yok; BOT Greg'in "Matchpage" bağlantısı Liquipedia maç verisindeki `links.hltv`'den geliyordu (Liquipedia Lua-Modules + upstream kodu). Sahip kararı (2026-09-25): veri PandaScore, HLTV bağlantısı Liquipedia'dan (aynı iki takım + ≤90 dk + tek aday). TESTED_OFFLINE; canlı **BLOCKED/OPTIONAL** (Liquipedia anahtarı yok); elle yedek `Esports:VerifiedMatchLinks` çalışır (TESTED_OFFLINE) |
@@ -255,9 +260,9 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 ## NEXT ACTION (güncel)
 
-1. **Sahip:** test sunucusunda canlı veriyle bildirim açılsın mı ve hangi filtreyle? (Token kayıtlı; canlı okuma VERIFIED_LIVE.
-   Filtresiz açılırsa 48 saatlik pencerede ~130 yaklaşan maç duyurulur.) Karar sonrası ajan: filtreyi ayarla → `Esports:Provider:Mode=Live`
-   → önce DryRun gözlemi → sonra Send.
+1. **Sahip + ajan:** 08:40Z'de (TR 11:40) Eternal Fire – WBT hatırlatma kartı kanala düşmeli (ping'siz); maç bitince sonuç kartı.
+   Sahip görünce: ilk gerçek hatırlatma/sonuç kartı VERIFIED_LIVE. İsteğe bağlı: opt-in ping rolü (Discord'da rol oluştur →
+   `/esports-admin roles map` → `roles selfservice` → üyeler `/esports follow` veya panel).
 2. **Sahip:** PR #3'ü incelemek; merge kararı sahibin (PR #2 merge edildi, PR #3 artık `main`'e yönelik).
 3. Tamamlananlar: tüm v2 kart görselleri + Maç Sayfası **VERIFIED_LIVE**; yeniden başlatmada demo kart sorunu düzeltildi ve
    canlıda doğrulandı. (Rol eşleme #2 sahip tarafından daha önce kaldırıldı.)
