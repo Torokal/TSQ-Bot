@@ -10,6 +10,7 @@ using ToroSquad.Infrastructure;
 using ToroSquad.Infrastructure.Hosting;
 using ToroSquad.Modules.Esports;
 using ToroSquad.Modules.Example;
+using ToroSquad.Modules.Formula1;
 
 namespace ToroSquad.Bot;
 
@@ -23,7 +24,7 @@ public static class ToroHost
 
     public static IReadOnlyList<IToroModule> Modules(IConfiguration configuration)
     {
-        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule() };
+        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module() };
         // Example module: development/tests only. Off unless explicitly enabled.
         if (configuration.GetValue("Modules:Example:Enabled", false))
             modules.Add(new ExampleModule());
@@ -80,6 +81,7 @@ public static class ToroHost
             services.AddToroDiscordHosting(configuration);
             services.AddToroBackgroundJobs();
             EsportsModule.AddBackgroundJobs(services);
+            Formula1Module.AddBackgroundJobs(services);
         }
     }
 
@@ -139,8 +141,11 @@ public static class ToroHost
                 new Attribution("PandaScore", "https://pandascore.co", "about.attr.pandascore_terms", "about.attr.pandascore"),
                 new Attribution("Liquipedia", "https://liquipedia.net/counterstrike", "CC BY-SA 3.0", "about.attr.liquipedia"),
                 new Attribution("Valve Regional Standings", "https://github.com/ValveSoftware/counter-strike_regional_standings", "about.attr.valve_license", "about.attr.valve"),
+                new Attribution("Jolpica F1", "https://github.com/jolpica/jolpica-f1", "about.attr.f1_data_license", "about.attr.jolpica"),
+                new Attribution("OpenF1", "https://openf1.org", "about.attr.f1_data_license", "about.attr.openf1"),
                 new Attribution("BOT-Greg-v2_API (Julius Gmeinder)", "https://github.com/julius-gmeinder/BOT-Greg-v2_API", "AGPL-3.0", "about.attr.upstream"),
                 new Attribution("Discord.Net", "https://github.com/discord-net/Discord.Net", "MIT", "about.attr.discordnet"),
+                new Attribution("MQTTnet", "https://github.com/dotnet/MQTTnet", "MIT", "about.attr.mqttnet"),
             ]);
     }
 }

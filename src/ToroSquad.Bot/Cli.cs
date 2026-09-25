@@ -55,7 +55,7 @@ public static partial class Cli
         catch (Exception ex)
         {
             // Last line of defence: never print secrets.
-            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token")]);
+            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Username"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Password")]);
             await Console.Error.WriteLineAsync("FATAL: " + redactor.Redact(ex.ToString()));
             return Failed;
         }
@@ -505,6 +505,13 @@ public static partial class Cli
                 ? "default '" + LiquipediaClient.DefaultUserAgent + "' (recommended: your own with contact)"
                 : ua));
         }
+        var f1Live = string.Equals(config.GetValue("Formula1:Provider:Mode", "Fixture"), "Live", StringComparison.OrdinalIgnoreCase);
+        Add("OK", "Formula 1 data: " + (f1Live ? "LIVE (Jolpica schedule/standings, OpenF1 lifecycle/results)" : "FIXTURE (TEST/DEMO synthetic weekend)"));
+        var openF1Set = !string.IsNullOrWhiteSpace(config["Formula1:OpenF1:Username"]) && !string.IsNullOrWhiteSpace(config["Formula1:OpenF1:Password"]);
+        Add(openF1Set ? "OK" : f1Live ? "BLOCKED" : "INFO", "OpenF1 live credentials: " + (openF1Set
+            ? "set (values hidden)"
+            : "NOT SET (live session starts NOT_CONFIGURED; schedule, results and standings still work)"));
+
         var bot = config.GetSection(BotOptions.Section).Get<BotOptions>() ?? new BotOptions();
         Add(string.IsNullOrWhiteSpace(bot.SourceUrl) ? "WARN" : "OK", "Bot:SourceUrl (AGPL Corresponding Source): " + (bot.SourceUrl ?? "NOT SET"));
 

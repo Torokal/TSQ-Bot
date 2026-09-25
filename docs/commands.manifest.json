@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "036fc397ac8d1e2db5691c8f13789744a3fa181a1bb67ef0247858ab51428009",
+  "hash": "fb4b291dea6c1ea9033e1d34982733eef172a5575fb0f231fcbd6eb562927f4d",
   "commands": [
     {
       "module": "core",
@@ -677,6 +677,492 @@
                     "description": "Allow self-service",
                     "description_localizations": {
                       "tr": "Self-servise izin ver"
+                    },
+                    "required": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "module": "formula1",
+      "payload": {
+        "type": 1,
+        "name": "f1",
+        "description": "Formula 1 schedule, results and championship standings",
+        "description_localizations": {
+          "tr": "Formula 1 takvimi, sonuçlar ve şampiyona puan durumu"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "next",
+            "description": "The next Grand Prix weekend and its sessions",
+            "description_localizations": {
+              "tr": "Sıradaki Grand Prix hafta sonu ve seansları"
+            }
+          },
+          {
+            "type": 1,
+            "name": "schedule",
+            "description": "Session schedule of the current/next weekend (or a given round)",
+            "description_localizations": {
+              "tr": "Mevcut/sıradaki hafta sonunun (veya bir yarışın) seans programı"
+            },
+            "options": [
+              {
+                "type": 4,
+                "name": "round",
+                "description": "Round number (default: current or next weekend)",
+                "description_localizations": {
+                  "tr": "Yarış numarası (varsayılan: mevcut veya sıradaki hafta sonu)"
+                },
+                "required": false,
+                "min_value": 1,
+                "max_value": 40
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "results",
+            "description": "Latest session classification (from the bot's cache)",
+            "description_localizations": {
+              "tr": "Son seans sınıflandırması (botun önbelleğinden)"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "session",
+                "description": "Which session (default: the latest with a result)",
+                "description_localizations": {
+                  "tr": "Hangi seans (varsayılan: sonucu olan en son seans)"
+                },
+                "required": false,
+                "choices": [
+                  {
+                    "name": "latest",
+                    "name_localizations": {
+                      "tr": "en son"
+                    },
+                    "value": "latest"
+                  },
+                  {
+                    "name": "race",
+                    "name_localizations": {
+                      "tr": "yarış"
+                    },
+                    "value": "race"
+                  },
+                  {
+                    "name": "sprint",
+                    "name_localizations": {
+                      "tr": "sprint"
+                    },
+                    "value": "sprint"
+                  },
+                  {
+                    "name": "qualifying",
+                    "name_localizations": {
+                      "tr": "sıralama"
+                    },
+                    "value": "quali"
+                  },
+                  {
+                    "name": "sprint-qualifying",
+                    "name_localizations": {
+                      "tr": "sprint sıralaması"
+                    },
+                    "value": "sq"
+                  },
+                  {
+                    "name": "fp1",
+                    "name_localizations": {
+                      "tr": "1. antrenman"
+                    },
+                    "value": "fp1"
+                  },
+                  {
+                    "name": "fp2",
+                    "name_localizations": {
+                      "tr": "2. antrenman"
+                    },
+                    "value": "fp2"
+                  },
+                  {
+                    "name": "fp3",
+                    "name_localizations": {
+                      "tr": "3. antrenman"
+                    },
+                    "value": "fp3"
+                  }
+                ]
+              },
+              {
+                "type": 5,
+                "name": "spoiler",
+                "description": "Hide the classification behind a spoiler",
+                "description_localizations": {
+                  "tr": "Sınıflandırmayı spoiler ile gizle"
+                },
+                "required": false
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "now",
+            "description": "Is a session running right now? (live provider status, never guessed)",
+            "description_localizations": {
+              "tr": "Şu anda bir seans sürüyor mu? (canlı sağlayıcı durumu, tahmin yok)"
+            }
+          },
+          {
+            "type": 2,
+            "name": "standings",
+            "description": "Championship standings",
+            "description_localizations": {
+              "tr": "Şampiyona puan durumu"
+            },
+            "options": [
+              {
+                "type": 1,
+                "name": "drivers",
+                "description": "Drivers' championship standings",
+                "description_localizations": {
+                  "tr": "Sürücüler Şampiyonası puan durumu"
+                }
+              },
+              {
+                "type": 1,
+                "name": "constructors",
+                "description": "Constructors' championship standings",
+                "description_localizations": {
+                  "tr": "Takımlar Şampiyonası puan durumu"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "module": "formula1",
+      "payload": {
+        "type": 1,
+        "name": "f1-admin",
+        "description": "Formula 1 settings for this server (admins)",
+        "description_localizations": {
+          "tr": "Bu sunucunun Formula 1 ayarları (yöneticiler)"
+        },
+        "default_member_permissions": "32",
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "preview",
+            "description": "Ping-free TEST/DEMO preview of a Formula 1 card",
+            "description_localizations": {
+              "tr": "Pingsiz TEST/DEMO Formula 1 kart önizlemesi"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "card",
+                "description": "Which card",
+                "description_localizations": {
+                  "tr": "Hangi kart"
+                },
+                "required": false,
+                "choices": [
+                  {
+                    "name": "practice-start",
+                    "name_localizations": {
+                      "tr": "antrenman başladı"
+                    },
+                    "value": "practice-start"
+                  },
+                  {
+                    "name": "race-start",
+                    "name_localizations": {
+                      "tr": "yarış başladı"
+                    },
+                    "value": "race-start"
+                  },
+                  {
+                    "name": "practice-result",
+                    "name_localizations": {
+                      "tr": "antrenman sonucu"
+                    },
+                    "value": "practice-result"
+                  },
+                  {
+                    "name": "race-result",
+                    "name_localizations": {
+                      "tr": "yarış sonucu"
+                    },
+                    "value": "race-result"
+                  },
+                  {
+                    "name": "race-result-standings",
+                    "name_localizations": {
+                      "tr": "yarış sonucu + puan durumu"
+                    },
+                    "value": "race-result-standings"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "status",
+            "description": "Current Formula 1 configuration of this server",
+            "description_localizations": {
+              "tr": "Bu sunucunun mevcut Formula 1 ayarları"
+            }
+          },
+          {
+            "type": 1,
+            "name": "doctor",
+            "description": "Diagnose permissions, data providers, live connection and delivery",
+            "description_localizations": {
+              "tr": "İzin, veri sağlayıcı, canlı bağlantı ve gönderim tanısı"
+            }
+          },
+          {
+            "type": 1,
+            "name": "pause",
+            "description": "Pause Formula 1 notifications in this server",
+            "description_localizations": {
+              "tr": "Bu sunucunun Formula 1 bildirimlerini duraklat"
+            }
+          },
+          {
+            "type": 1,
+            "name": "resume",
+            "description": "Resume notifications (nothing missed while paused is sent)",
+            "description_localizations": {
+              "tr": "Bildirimleri yeniden başlat (kaçanlar gönderilmez)"
+            }
+          },
+          {
+            "type": 2,
+            "name": "configure",
+            "description": "Formula 1 notification settings",
+            "description_localizations": {
+              "tr": "Formula 1 bildirim ayarları"
+            },
+            "options": [
+              {
+                "type": 1,
+                "name": "channel",
+                "description": "Channel for automatic Formula 1 notifications",
+                "description_localizations": {
+                  "tr": "Otomatik Formula 1 bildirim kanalı"
+                },
+                "options": [
+                  {
+                    "type": 7,
+                    "name": "channel",
+                    "description": "Notification channel",
+                    "description_localizations": {
+                      "tr": "Bildirim kanalı"
+                    },
+                    "required": true,
+                    "channel_types": [
+                      0,
+                      5
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "notifications",
+                "description": "Which Formula 1 notifications are sent",
+                "description_localizations": {
+                  "tr": "Hangi Formula 1 bildirimlerinin gönderileceği"
+                },
+                "options": [
+                  {
+                    "type": 5,
+                    "name": "practice_start",
+                    "description": "Practice session started",
+                    "description_localizations": {
+                      "tr": "Antrenman başladı"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "practice_results",
+                    "description": "Practice classification",
+                    "description_localizations": {
+                      "tr": "Antrenman sınıflandırması"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "sprint_start",
+                    "description": "Sprint started",
+                    "description_localizations": {
+                      "tr": "Sprint başladı"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "sprint_results",
+                    "description": "Sprint result",
+                    "description_localizations": {
+                      "tr": "Sprint sonucu"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "race_start",
+                    "description": "Race started",
+                    "description_localizations": {
+                      "tr": "Yarış başladı"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "race_results",
+                    "description": "Race result",
+                    "description_localizations": {
+                      "tr": "Yarış sonucu"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "standings",
+                    "description": "Championship standings on sprint/race results",
+                    "description_localizations": {
+                      "tr": "Sprint/yarış sonuçlarında şampiyona puan durumu"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "qualifying_start",
+                    "description": "Qualifying started",
+                    "description_localizations": {
+                      "tr": "Sıralama başladı"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "qualifying_results",
+                    "description": "Qualifying classification",
+                    "description_localizations": {
+                      "tr": "Sıralama sınıflandırması"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "sprint_qualifying_start",
+                    "description": "Sprint qualifying started",
+                    "description_localizations": {
+                      "tr": "Sprint sıralaması başladı"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "sprint_qualifying_results",
+                    "description": "Sprint qualifying classification",
+                    "description_localizations": {
+                      "tr": "Sprint sıralaması sınıflandırması"
+                    },
+                    "required": false
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "role",
+                "description": "Optional role pinged by Formula 1 notifications (never @everyone)",
+                "description_localizations": {
+                  "tr": "Formula 1 bildirimlerinde pinglenecek isteğe bağlı rol (asla @everyone)"
+                },
+                "options": [
+                  {
+                    "type": 8,
+                    "name": "ping_role",
+                    "description": "Role to ping (leave empty to keep the current one)",
+                    "description_localizations": {
+                      "tr": "Pinglenecek rol (boş: mevcut rol korunur)"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "ping_starts",
+                    "description": "Ping on session starts",
+                    "description_localizations": {
+                      "tr": "Seans başlangıçlarında pingle"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "ping_results",
+                    "description": "Ping on results",
+                    "description_localizations": {
+                      "tr": "Sonuçlarda pingle"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "clear",
+                    "description": "Remove the notification role",
+                    "description_localizations": {
+                      "tr": "Bildirim rolünü kaldır"
+                    },
+                    "required": false
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "spoilers",
+                "description": "Hide classifications and standings behind spoilers",
+                "description_localizations": {
+                  "tr": "Sınıflandırma ve puan durumunu spoiler ile gizle"
+                },
+                "options": [
+                  {
+                    "type": 5,
+                    "name": "enabled",
+                    "description": "Spoiler mode",
+                    "description_localizations": {
+                      "tr": "Spoiler modu"
                     },
                     "required": true
                   }

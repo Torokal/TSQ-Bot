@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Esports.Persistence;
+using ToroSquad.Modules.Formula1.Persistence;
 
 namespace ToroSquad.Bot;
 
@@ -12,7 +13,7 @@ namespace ToroSquad.Bot;
 /// </summary>
 public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<ToroDbContext>
 {
-    public static IReadOnlyList<IModelContributor> AllContributors() => [new EsportsModelContributor()];
+    public static IReadOnlyList<IModelContributor> AllContributors() => [new EsportsModelContributor(), new Formula1ModelContributor()];
 
     public ToroDbContext CreateDbContext(string[] args)
     {
