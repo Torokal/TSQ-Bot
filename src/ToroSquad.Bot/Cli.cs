@@ -92,7 +92,7 @@ public static partial class Cli
               db migrate | db backup [--out DIR] | db restore FILE --yes
               simulate                                offline end-to-end demo (fixture data, fake Discord, temp DB)
               esports demo-cards --guild ID [--kind K] [--apply]  TEST/DEMO match cards (all, or one kind) for an authorized test guild
-              esports provider-check                  READ-ONLY live fetch summary of the match provider (sends nothing)
+              esports provider-check [--team NAME]    READ-ONLY live fetch summary / team key lookup (sends nothing)
             """);
         return Usage;
     }
@@ -131,7 +131,7 @@ public static partial class Cli
     private static async Task<int> EsportsAsync(string[] args)
     {
         if (args.Length > 0 && args[0] == "provider-check")
-            return await ProviderCheckAsync();
+            return await ProviderCheckAsync(ParseOptions(args.Skip(1).ToArray()));
         if (args.Length == 0 || args[0] != "demo-cards")
             return PrintUsage();
         var options = ParseOptions(args.Skip(1).ToArray());
@@ -200,7 +200,7 @@ public static partial class Cli
     /// poll window and events once and prints a summary. Nothing is planned, staged or sent; Discord and the bot database
     /// are not touched (fake transport, throw-away data directory); the token is never printed.
     /// </summary>
-    private static async Task<int> ProviderCheckAsync()
+    private static async Task<int> ProviderCheckAsync(Dictionary<string, string> options)
     {
         var temp = Path.Combine(Path.GetTempPath(), "tsq-provider-check-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(temp);
@@ -218,6 +218,8 @@ public static partial class Cli
             Console.WriteLine($"Provider: {provider.Id}; configured: {provider.IsConfigured}");
             if (!provider.IsConfigured)
                 return Blocked;
+            if (options.TryGetValue("team", out var teamName))
+                return await TeamLookupAsync(host.Services, teamName);
 
             var now = DateTimeOffset.UtcNow;
             var window = new MatchWindow(now - TimeSpan.FromHours(esports.PastWindowHours), now + TimeSpan.FromHours(esports.FutureWindowHours));
@@ -256,6 +258,65 @@ public static partial class Cli
             {
             }
         }
+    }
+
+    /// <summary>
+    /// READ-ONLY PandaScore team search (to pick the exact team key for a filter): candidates with id/name/acronym/location
+    /// and each candidate's scheduled matches in the next 30 days. Nothing is written or sent.
+    /// </summary>
+    private static async Task<int> TeamLookupAsync(IServiceProvider services, string name)
+    {
+        var client = services.GetRequiredService<ToroSquad.Modules.Esports.Providers.PandaScore.PandaScoreClient>();
+        var game = client.Options.Game;
+        var teams = await client.ListAsync($"{game}/teams", [new("search[name]", name)], CancellationToken.None);
+        Console.WriteLine($"Team search '{name}': {teams.Outcome}{(teams.Detail is null ? "" : " — " + teams.Detail)}");
+        if (!teams.HasData)
+            return Failed;
+        static string? Str(System.Text.Json.JsonElement e, string property) =>
+            e.TryGetProperty(property, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : null;
+
+        var now = DateTimeOffset.UtcNow;
+        foreach (var team in teams.Value!.Take(10))
+        {
+            var id = team.GetProperty("id").GetInt64();
+            Console.WriteLine($"  key ps-team:{id}  name '{Str(team, "name")}'  acronym '{Str(team, "acronym")}'  location {Str(team, "location") ?? "?"}  slug {Str(team, "slug")}");
+            var matches = await client.ListAsync($"{game}/matches",
+            [
+                new("filter[opponent_id]", id.ToString(CultureInfo.InvariantCulture)),
+                new("range[scheduled_at]", $"{now:yyyy-MM-ddTHH:mm:ssZ},{now.AddDays(30):yyyy-MM-ddTHH:mm:ssZ}"),
+                new("sort", "scheduled_at"),
+            ], CancellationToken.None);
+            if (!matches.HasData)
+            {
+                Console.WriteLine($"    matches: {matches.Outcome}");
+                continue;
+            }
+
+            Console.WriteLine($"    next 30 days: {matches.Value!.Count} match(es)");
+            foreach (var m in matches.Value!.Take(5))
+                Console.WriteLine($"    {Str(m, "scheduled_at")}  {Str(m, "name")}  [{(m.TryGetProperty("league", out var l) ? Str(l, "name") : null)}] status {Str(m, "status")}");
+
+            // Most recent past match (last 120 days) tells an active team from a renamed/disbanded one.
+            var past = await client.ListAsync($"{game}/matches",
+            [
+                new("filter[opponent_id]", id.ToString(CultureInfo.InvariantCulture)),
+                new("range[scheduled_at]", $"{now.AddDays(-120):yyyy-MM-ddTHH:mm:ssZ},{now:yyyy-MM-ddTHH:mm:ssZ}"),
+                new("sort", "-scheduled_at"),
+            ], CancellationToken.None);
+            if (past.HasData && past.Value!.Count > 0)
+            {
+                var last = past.Value![0];
+                Console.WriteLine($"    last 120 days: {past.Value!.Count} match(es); latest {Str(last, "scheduled_at")}  {Str(last, "name")}  [{(last.TryGetProperty("league", out var ll) ? Str(ll, "name") : null)}]");
+            }
+            else
+            {
+                Console.WriteLine($"    last 120 days: {(past.HasData ? "0 matches" : past.Outcome.ToString())}");
+            }
+        }
+
+        if (services.GetRequiredService<IEsportsDataProvider>() is ToroSquad.Modules.Esports.Providers.PandaScore.PandaScoreProvider)
+            Console.WriteLine($"PandaScore X-Rate-Limit-Remaining: {client.LastRateLimitRemaining?.ToString(CultureInfo.InvariantCulture) ?? "?"}");
+        return Ok;
     }
 
     private static async Task<int> CommandsAsync(string[] args)
