@@ -6,7 +6,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.401 AS build
 WORKDIR /src
 
 # Restore first for layer caching (central package versions + lock files, locked mode = reproducible).
-COPY global.json Directory.Build.props Directory.Packages.props ./
+# .editorconfig carries the analyzer settings: without it the Release build (warnings = errors) uses different rules.
+COPY .editorconfig global.json Directory.Build.props Directory.Packages.props ./
 COPY src/ToroSquad.Core/ToroSquad.Core.csproj src/ToroSquad.Core/packages.lock.json src/ToroSquad.Core/
 COPY src/ToroSquad.Infrastructure/ToroSquad.Infrastructure.csproj src/ToroSquad.Infrastructure/packages.lock.json src/ToroSquad.Infrastructure/
 COPY src/ToroSquad.Discord/ToroSquad.Discord.csproj src/ToroSquad.Discord/packages.lock.json src/ToroSquad.Discord/
