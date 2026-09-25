@@ -66,13 +66,15 @@ public sealed class PandaScoreClient(HttpClient http, IOptions<PandaScoreOptions
     /// <summary>Last X-Rate-Limit-Remaining value PandaScore reported (diagnostics only).</summary>
     public int? LastRateLimitRemaining { get; private set; }
 
-    public async Task<ProviderResult<IReadOnlyList<JsonElement>>> ListAsync(string path, IReadOnlyList<KeyValuePair<string, string>> query, CancellationToken cancellationToken)
+    public async Task<ProviderResult<IReadOnlyList<JsonElement>>> ListAsync(string path, IReadOnlyList<KeyValuePair<string, string>> query, CancellationToken cancellationToken,
+        int? maxPages = null)
     {
+        var pageLimit = Math.Max(1, maxPages ?? _options.MaxPages);
         var rows = new List<JsonElement>();
         var warnings = new List<string>();
         string? previousFirst = null;
 
-        for (var page = 1; page <= _options.MaxPages; page++)
+        for (var page = 1; page <= pageLimit; page++)
         {
             var parts = query.Select(q => $"{Uri.EscapeDataString(q.Key)}={Uri.EscapeDataString(q.Value)}")
                 .Append(string.Create(CultureInfo.InvariantCulture, $"page%5Bnumber%5D={page}"))
@@ -106,7 +108,7 @@ public sealed class PandaScoreClient(HttpClient http, IOptions<PandaScoreOptions
                 return ProviderResult<IReadOnlyList<JsonElement>>.Ok(rows, clock.GetUtcNow(), warnings);
         }
 
-        return ProviderResult<IReadOnlyList<JsonElement>>.PartialData(rows, $"stopped after {_options.MaxPages} pages (more data exists)", clock.GetUtcNow(), warnings);
+        return ProviderResult<IReadOnlyList<JsonElement>>.PartialData(rows, $"stopped after {pageLimit} pages (more data exists)", clock.GetUtcNow(), warnings);
     }
 
     private sealed record SendResult(JsonDocument? Document, int? Total, ProviderResult<IReadOnlyList<JsonElement>>? Failure);

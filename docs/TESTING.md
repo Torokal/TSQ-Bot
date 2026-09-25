@@ -104,6 +104,13 @@ değiştirmez ve yeni `rescheduled-*` satırı üretmez (düzeltmeden önce çal
 çalıştırıldı: Success, 163 maç, 35 etkinlik, kalan kota 994 (ayrıntı docs/PROVIDERS.md). Ağ gerektirdiği için otomatik test
 paketinde yok; test paketi ağ çağrısı yapmaz.
 
+## Takım kataloğu araması (2026-09-25)
+
+6 yeni test (`TeamDirectoryTests`): pencerede maçı olmayan takım bulunur ve aynı adlılar kısaltma/ülke ile ayrılır;
+bilinen takımlar önce gelir, 3 harften kısa girişte arama yok; önbellek ve daha kısa tam sonucun yeniden kullanımı, süre
+dolunca yeni arama; sağlayıcı hatası/zaman aşımında yalnızca bilinen takımlar (hata önbelleğe alınmaz); PandaScore
+`/csgo/teams` tek sayfa + ayrıştırma + 401; fixture modunda uçtan uca. Toplam: **349 test**.
+
 ## Bilinen gözlem
 
 - İlk tam koşulardan birinde `SetUpEsportsGuildAsync` sırasında bir kez `DbUpdateException` görüldü; iç hata mesajı

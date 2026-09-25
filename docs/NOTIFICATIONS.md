@@ -66,6 +66,14 @@ saat dilimiyle** gösterilir ("43 minutes ago" / "43 dakika önce"); TSQ Bot bun
 
 ## Sunucu filtreleri
 
+Takım seçimi (`/esports-admin filters team`, `roles map`, üyeler için `/esports follow`): otomatik tamamlama önce maç
+verisinde görülen takımları, **3+ harfte** ayrıca sağlayıcının takım kataloğunu (PandaScore `/teams?search[name]=`) gösterir —
+48 saatlik pencerede maçı olmayan takım da seçilebilir. Aynı adlı takımlar kısaltma ve ülkeyle ayrılır
+("Aurora Gaming (AUR · RU)" / "AURORA (AUR · IS)"). Arama tek sayfa, 2 sn zaman aşımlı, 1 saat önbellekli (daha kısa bir
+aramanın tam sonucu yeniden kullanılır) ve sağlayıcının istek bütçesini paylaşır; hata/zaman aşımında yalnızca bilinen
+takımlar listelenir. Sunucu filtresini yalnızca **Sunucuyu Yönet** yetkisi olanlar değiştirebilir (Discord'da komut bu
+izinle kayıtlı; bot her işlemde yetkiyi ayrıca doğrular); `/esports follow` kişiseldir ve filtreyi genişletmez.
+
 | Boyut | Geçme kuralı |
 |---|---|
 | Takım | İki takımdan **en az biri** seçili |

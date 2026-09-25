@@ -9,7 +9,7 @@ namespace ToroSquad.Modules.Esports.Providers.PandaScore;
 /// window (not started, running, finished, postponed, canceled), so lifecycle changes are seen without extra endpoints.
 /// PandaScore states <c>running</c> explicitly, hence <see cref="ProviderCapability.VerifiedLiveStatus"/>.
 /// </summary>
-public sealed class PandaScoreProvider(PandaScoreClient client, EsportsDataMode mode) : IEsportsDataProvider
+public sealed class PandaScoreProvider(PandaScoreClient client, EsportsDataMode mode) : IEsportsDataProvider, ITeamSearchProvider
 {
     public string Id => PandaScoreParser.Source;
 
@@ -65,6 +65,32 @@ public sealed class PandaScoreProvider(PandaScoreClient client, EsportsDataMode 
         return raw.Outcome == ProviderOutcome.Partial
             ? ProviderResult<IReadOnlyList<EsportsEvent>>.PartialData(events, raw.Detail!, raw.At, warnings)
             : ProviderResult<IReadOnlyList<EsportsEvent>>.Ok(events, raw.At, warnings);
+    }
+
+    /// <summary>
+    /// PandaScore team catalog search (<c>/csgo/teams?search[name]=…</c>), ONE page: lets admins and members pick a team
+    /// that has no match inside the poll window. Keys are the same <c>ps-team:&lt;id&gt;</c> as in match data.
+    /// </summary>
+    public async Task<ProviderResult<IReadOnlyList<TeamSearchHit>>> SearchTeamsAsync(string query, CancellationToken cancellationToken)
+    {
+        if (Problem() is { } problem)
+            return ProviderResult<IReadOnlyList<TeamSearchHit>>.Fail(ProviderOutcome.NotConfigured, problem, DateTimeOffset.MinValue);
+        var raw = await client.ListAsync($"{client.Options.Game}/teams", [new("search[name]", query)], cancellationToken, maxPages: 1);
+        if (!raw.HasData)
+            return raw.WithoutValue<IReadOnlyList<TeamSearchHit>>();
+
+        var hits = new List<TeamSearchHit>();
+        foreach (var e in raw.Value!)
+        {
+            if (e.ValueKind != System.Text.Json.JsonValueKind.Object || !e.TryGetProperty("id", out var id) || !id.TryGetInt64(out var teamId) ||
+                !e.TryGetProperty("name", out var name) || name.ValueKind != System.Text.Json.JsonValueKind.String || string.IsNullOrWhiteSpace(name.GetString()))
+                continue;
+            static string? Text(System.Text.Json.JsonElement o, string p) =>
+                o.TryGetProperty(p, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String && !string.IsNullOrWhiteSpace(v.GetString()) ? v.GetString()!.Trim() : null;
+            hits.Add(new TeamSearchHit(new TeamRef(Id, PandaScoreParser.TeamKey(teamId), name.GetString()!.Trim(), Text(e, "acronym")), Text(e, "location")));
+        }
+
+        return ProviderResult<IReadOnlyList<TeamSearchHit>>.Ok(hits, raw.At);
     }
 
     private string? Problem() => PandaScoreOptions.ConfigurationProblem(client.Options, requireToken: mode.Mode == ProviderMode.Live);

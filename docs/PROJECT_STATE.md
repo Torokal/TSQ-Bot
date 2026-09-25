@@ -6,7 +6,7 @@
 Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama **main'de** (PR #2, sahip onayıyla normal merge,
 `c54793a`; merge öncesi dal ucunda tam kapı 202/202 ×3). **PandaScore + yaşam döngüsü + sade kartlar**
 `feature/pandascore-notifications` dalında (PR #3, hedefi artık `main`, çakışma yok, merge edilmedi);
-çevrimdışı **343/343 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı **okuma** VERIFIED_LIVE (sahibin ücretsiz token'ı, 2026-09-25; bildirim henüz canlı veriyle açılmadı). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
+çevrimdışı **349/349 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı **okuma** VERIFIED_LIVE (sahibin ücretsiz token'ı, 2026-09-25; bildirim henüz canlı veriyle açılmadı). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
 yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esports:VerifiedMatchLinks` elle yedek.
 
 ## PandaScore / bildirim aşaması (2026-09-25)
@@ -24,6 +24,7 @@ yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esp
 | Sunucu takım filtresi canlıda | **VERIFIED_LIVE** (03:38Z ve 03:40Z taramaları: 162 maçın 160'ı elendi; geçen 2 maç Eternal Fire'ın; Aurora'nın 48 saatte maçı yok) |
 | Filtre yalnızca yönetici | `/esports-admin` Discord'a `default_member_permissions=32` (Sunucuyu Yönet) ile kayıtlı; sunucu tarafında her filtre işlemi `Authorize.Require(ManageGuild)` — TESTED_OFFLINE (`Regular_members_are_refused_every_admin_operation`); normal üye hesabıyla canlı sınama **BLOCKED** (ikinci hesap yok). `/esports follow` kişiseldir, sunucu filtresini genişletmez |
 | Etiketlenme (ping) isteğe bağlı | Kanal kartları ping'siz; ping yalnızca yöneticinin eşlediği role, üye rolü kendi seçimiyle alır (`/esports follow` / panel, self-service). Test guild'de gerçek takımlar için ping rolü **yok** (tek eşleme sahte Toro Wolves, ping kapalı) → şu an kimse etiketlenmez |
+| Maçı olmayan takımı seçebilme | Takım otomatik tamamlaması 3+ harfte PandaScore takım kataloğunu arar (tek sayfa, 2 sn, 1 saat önbellek; ad + kısaltma + ülke). TESTED_OFFLINE (6 test); Discord'da görsel/etkileşim **sahip denemesi bekliyor** |
 | İlk gerçek maç bildirimi | Bekleniyor: Eternal Fire vs WBT 2026-09-25 09:00Z (Stake Ranked), hatırlatma 08:40Z (20 dk önce). Kanalda görünene kadar TESTED_OFFLINE |
 | Başladı / bitti / ertelendi / saat değişti / iptal / hükmen kartları | TESTED_OFFLINE; Discord'da görünüm: demo kartlarıyla doğrulanacak |
 | Sade kart tasarımı (Greg referansı) | Uygulandı; Greg ekran görüntüsü bu turda paylaşılmadı → metin şablonuna göre |

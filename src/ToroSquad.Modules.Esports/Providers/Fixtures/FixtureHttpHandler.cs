@@ -74,6 +74,22 @@ public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSourc
             return response;
         }
 
+        if (uri.Host == "api.pandascore.co" && path.EndsWith("/teams", StringComparison.Ordinal))
+        {
+            // Team catalog search over the synthetic opponents (same ids as the fixture matches).
+            var search = (HttpUtility.ParseQueryString(uri.Query)["search[name]"] ?? "").Trim();
+            var teams = JsonNode.Parse(_source.Read("pandascore-matches.json"))!.AsArray()
+                .SelectMany(m => m?["opponents"]?.AsArray() ?? [])
+                .Select(o => o?["opponent"])
+                .Where(t => t is not null && t["name"] is not null)
+                .GroupBy(t => t!["id"]!.GetValue<long>())
+                .Select(g => g.First()!)
+                .Where(t => t["name"]!.GetValue<string>().Contains(search, StringComparison.OrdinalIgnoreCase))
+                .Select(t => (JsonNode)new JsonObject { ["id"] = t["id"]!.GetValue<long>(), ["name"] = t["name"]!.GetValue<string>(), ["acronym"] = t["acronym"]?.GetValue<string>(), ["location"] = null })
+                .ToArray();
+            return Json(new JsonArray(teams).ToJsonString());
+        }
+
         if (uri.Host == "api.github.com" && path.Contains("/contents/live/", StringComparison.Ordinal))
         {
             var year = path[(path.LastIndexOf('/') + 1)..];
