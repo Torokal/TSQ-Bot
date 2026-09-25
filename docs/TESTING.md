@@ -84,6 +84,13 @@ UA'sız ama anahtarlı → açık). Toplam: **319 test**.
 parmak izini koruduğunu doğrulayan test. Güncellenen: demo başlık/footer beklentileri (MatchCardTests, MessageSafetyTests),
 footer marker testi. Toplam: **335 test**. Gerçek Discord'da belirsiz timeout simüle edilemez → uzlaştırma TESTED_OFFLINE.
 
+## Görsel sonlandırma (2026-09-25)
+
+6 yeni test: `Demo_cards_link_only_to_the_reserved_test_domain` (example.com ve alt alanları evet; `example.com.evil.net`,
+başka alan, HLTV, http hayır) ve demo hükmen kartının tam hedef biçimi (başlık, 🏳️ satırı, Etkinlik/Format, en altta Maç
+Sayfası). Göreli zaman Discord'a ait olduğu için elle "… dakika önce" üreten test yoktur/eklenmedi; `<t:…:R>` biçimi ve doğru
+olay zamanı golden testlerde doğrulanır. Toplam: **341 test**, ×3 temiz (kilit hatası tekrarlanmadı).
+
 ## Bilinen gözlem
 
 - İlk tam koşulardan birinde `SetUpEsportsGuildAsync` sırasında bir kez `DbUpdateException` görüldü; iç hata mesajı

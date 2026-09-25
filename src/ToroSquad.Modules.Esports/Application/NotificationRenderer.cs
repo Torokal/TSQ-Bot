@@ -172,13 +172,20 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
     /// <summary>The "Match Page" target: verified HLTV → official → provider page → none. Demo data never links.</summary>
     public MatchPage? MatchPageFor(EsportsMatch match)
     {
+        // Demo data never links to a real site. The only exception is the IANA-reserved test domain (RFC 2606), which can
+        // never be a real match page: it lets a TEST/DEMO card show how the "Match Page" link renders.
         if (mode.IsDemo)
-            return null;
+            return MatchLinkPolicy.ValidGeneralUrl(match.Links?.OfficialMatchUrl, [ReservedTestHost]) is { } test
+                ? new MatchPage(MatchPageKind.Official, test)
+                : null;
         var links = match.Links ?? MatchLinks.None;
         if (links.ProviderMatchUrl is null && match.SourceUrl is not null)
             links = links with { ProviderMatchUrl = match.SourceUrl };
         return MatchLinkPolicy.Resolve(links, AllowedLinkHosts);
     }
+
+    /// <summary>Reserved for documentation/testing by RFC 2606; the only link a demo card may carry.</summary>
+    public const string ReservedTestHost = "example.com";
 
     public string Demo(string language) => mode.IsDemo ? L(language, "esports.demo_label") + " " : "";
 

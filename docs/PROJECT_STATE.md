@@ -5,7 +5,7 @@
 
 Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama PR #2'de (açık, merge edilmedi).
 **PandaScore + yaşam döngüsü + sade kartlar** `feature/pandascore-notifications` dalında (PR #2 üzerine yığılı);
-çevrimdışı **335/335 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı: BLOCKED (token yok). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
+çevrimdışı **341/341 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı: BLOCKED (token yok). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
 yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esports:VerifiedMatchLinks` elle yedek.
 
 ## PandaScore / bildirim aşaması (2026-09-25)
@@ -170,12 +170,15 @@ Send, sağlayıcı Fixture (TEST/DEMO), Example modülü kapalı (7 komut grubu)
 | Discord mesaj düzenleme/güncelleme teslimatı | **VERIFIED_LIVE** (2026-09-25: 7 demo kartı yeni render'a düzenlendi; Discord düzenlemeyi kabul etti — outbox Sent, EditPending=0, DeliveredPayloadHash=PayloadHash, hata yok) |
 | Mevcut demo kartları kopya üretmeden güncellendi | **VERIFIED_LIVE** (7 satır EditScheduled → aynı mesajlar düzenlendi; yeni outbox satırı/mesaj yok) |
 | Güncelleme rol/kullanıcı ping'i olmadan yapıldı | **VERIFIED_LIVE** (düzenlemeler her zaman allowed_mentions boş; demo kartların içeriği yok) |
-| **Güncel** Started kartı görünümü | TESTED_OFFLINE — görsel onay bekliyor |
-| **Güncel** Finished kartı görünümü | TESTED_OFFLINE — görsel onay bekliyor |
-| **Güncel** Postponed kartı görünümü | TESTED_OFFLINE — görsel onay bekliyor |
-| **Güncel** Rescheduled kartı görünümü | TESTED_OFFLINE — görsel onay bekliyor |
-| **Güncel** Canceled kartı görünümü | TESTED_OFFLINE — görsel onay bekliyor |
-| **Güncel** Forfeit kartı görünümü | TESTED_OFFLINE — görsel onay bekliyor |
+| **Güncel** Started kartı görünümü | **VERIFIED_LIVE** (sahip güncel kartı inceleyip onayladı, 2026-09-25; Discord'un yerel göreli zamanı `<t:…:R>` dahil — "43 minutes ago" gibi metni Discord kullanıcının diline/saat dilimine göre üretir, TSQ Bot çevirmez) |
+| **Güncel** Finished (normal) kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
+| **Güncel** Finished (spoiler) kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
+| **Güncel** Postponed kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
+| **Güncel** Rescheduled kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25; güncel render) |
+| **Güncel** Canceled kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
+| **Güncel** Forfeit kartı görünümü | TESTED_OFFLINE — önceki ekran görüntüsü kartın tamamını göstermedi; tam kart görsel onayı bekliyor |
+| Maç Sayfası bağlantısının görünümü | TESTED_OFFLINE — bağlantılı bir kart henüz görsel incelenmedi. Kontrollü test: demo hükmen kartı RFC 2606 ayrılmış test alanına (`https://example.com/tsq-bot-demo-match-page`) bağlanır; HLTV değil, sahte üretim bağlantısı değil, hiçbir şey indirilmez |
+| Zaman gösterimi | Kart göreli zamanı ve embed zaman damgası Discord'un yerel biçimlendirmesi (kullanıcının dili/saat dilimi); elle çeviri yok. "Yeni Saat" alanı onaylı mevcut biçim (sunucu saat dilimi, dd/MM/yyyy HH:mm) |
 | Parmak izi tabanlı belirsiz-gönderim uzlaştırması | TESTED_OFFLINE (canlı timeout tetiklenemez) |
 | Eski footer ref'i ile uzlaştırma (legacy) | TESTED_OFFLINE |
 | Aynı çalışmada tekrar taramada kopya yok (`new=0`) | **VERIFIED_LIVE** |
@@ -245,9 +248,10 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 1. **Sahip:** PR #2'yi (canlı doğrulama) incelemek/merge etmek; ardından PR #3 (PandaScore) `main`'e yönelir.
 2. **Sahip (isteğe bağlı):** test sunucusunda `/esports-admin roles unmap mapping:2` (ping'li test eşlemesi).
-3. **Ajan + sahip:** demo kartları yeni düzene düzenlendi → sahip her türü (başladı, bitti, ertelendi, iptal, hükmen) ayrı ayrı
-   görsel doğrular → o tür VERIFIED_LIVE. Güncel render'da **hiçbir tür** (Rescheduled dahil) henüz VERIFIED_LIVE değil. Eski adım: `esports demo-cards … --apply` → sahip kartların ekran
-   görüntüsünü paylaşır → "Discord kart görünümü" VERIFIED_LIVE (sağlayıcı değil).
+3. **Sahip:** kalan iki görsel kontrol — test kanalındaki **demo hükmen kartının tamamı** ve aynı karttaki **Maç Sayfası**
+   bağlantısı (başlık ve alt alan `example.com` test adresine gider). Yalnızca bu mesaj ping'siz düzenlendi
+   (`esports demo-cards --guild 618763184815472651 --kind demo-forfeit --apply`); onaylanan diğer kartlara dokunulmadı.
+   Onaylanınca: Forfeit görünümü ve Maç Sayfası görünümü VERIFIED_LIVE.
 4. **Sahip:** PandaScore token'ı (`dotnet user-secrets set "PandaScore:Token" …`) → ajan önce yalnızca okuma doğrulaması.
 
 ## NEXT ACTION (önceki kayıt)

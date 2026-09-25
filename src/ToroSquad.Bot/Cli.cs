@@ -91,7 +91,7 @@ public static partial class Cli
               doctor                                  configuration diagnosis
               db migrate | db backup [--out DIR] | db restore FILE --yes
               simulate                                offline end-to-end demo (fixture data, fake Discord, temp DB)
-              esports demo-cards --guild ID [--apply] TEST/DEMO match cards into the outbox of an authorized test guild
+              esports demo-cards --guild ID [--kind K] [--apply]  TEST/DEMO match cards (all, or one kind) for an authorized test guild
             """);
         return Usage;
     }
@@ -164,6 +164,17 @@ public static partial class Cli
             new EsportsDataMode(ProviderMode.Fixture));
         var now = sp.GetRequiredService<TimeProvider>().GetUtcNow();
         var cards = ToroSquad.Modules.Esports.Application.EsportsDemoCards.Build(renderer, settings.Language, zone, now);
+        if (options.TryGetValue("kind", out var only))
+        {
+            // Re-render just one card (e.g. demo-forfeit) so already approved demo messages are left untouched.
+            cards = cards.Where(c => string.Equals(c.Kind, only, StringComparison.Ordinal)).ToList();
+            if (cards.Count == 0)
+            {
+                await Console.Error.WriteLineAsync("Unknown --kind. Nothing was staged.");
+                return Usage;
+            }
+        }
+
         foreach (var (kind, message) in cards)
             Console.WriteLine($"  {kind,-20} {message.Embed!.Title} | {message.Embed.Description!.Split('\n')[0]}");
 

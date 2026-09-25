@@ -348,6 +348,22 @@ public sealed partial class MatchCardTests
         e.Fields.Should().NotContain(f => f.Name == NotificationRenderer.ZeroWidth, "no Match Page field without a link");
     }
 
+    [Theory]
+    [InlineData("https://example.com/tsq-bot-demo-match-page", true)]
+    [InlineData("https://www.example.com/x", true)]
+    [InlineData("https://example.com.evil.net/x", false)]
+    [InlineData("https://organizer.example/m/7", false)]
+    [InlineData("https://www.hltv.org/matches/2388888/x", false)]
+    [InlineData("http://example.com/x", false)]
+    public void Demo_cards_link_only_to_the_reserved_test_domain(string official, bool linked)
+    {
+        var demo = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture));
+        var e = demo.Result(Result(new MatchLinks(OfficialMatchUrl: official)), "tr", false, MentionPolicy.None, End).Embed!;
+        (e.Url is not null).Should().Be(linked);
+        e.Fields.Any(f => f.Name == NotificationRenderer.ZeroWidth).Should().Be(linked);
+        e.Footer.Should().Be("TEST/DEMO — sentetik veri, gerçek maç değil");
+    }
+
     [Fact]
     public void Curated_catalog_attaches_only_valid_links_and_reports_invalid_config()
     {
@@ -376,15 +392,27 @@ public sealed partial class MatchCardTests
         var demo = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture));
         var cards = EsportsDemoCards.Build(demo, "tr", Istanbul, End);
         cards.Select(c => c.Kind).Should().Equal("demo-started", "demo-result", "demo-result-spoiler", "demo-postponed", "demo-rescheduled", "demo-cancelled", "demo-forfeit");
-        foreach (var (_, message) in cards)
+        foreach (var (kind, message) in cards)
         {
             message.Embed!.Title.Should().NotContain("TEST").And.NotContain("DEMO");
             message.Embed.Footer.Should().Be("TEST/DEMO — sentetik veri, gerçek maç değil");
-            message.Embed.Url.Should().BeNull();
-            message.Embed.Fields.Should().NotContain(f => f.Value.Contains("](", StringComparison.Ordinal));
             message.Content.Should().BeNull();
             DiscordLimits.Validate(message).Should().BeEmpty();
+            if (kind == "demo-forfeit")
+                continue; // carries the reserved test-domain Match Page (below)
+            message.Embed.Url.Should().BeNull();
+            message.Embed.Fields.Should().NotContain(f => f.Value.Contains("](", StringComparison.Ordinal));
         }
+
+        // Forfeit demo: the full target shape, with the controlled RFC 2606 test link as its only link.
+        var forfeit = cards.Single(c => c.Kind == "demo-forfeit").Message.Embed!;
+        forfeit.Title.Should().Be("Toro Wolves vs Nordic Owls");
+        forfeit.Description.Should().Be("🏳️ Hükmen: Toro Wolves kazandı");
+        forfeit.Url.Should().Be(EsportsDemoCards.SafeTestMatchPageUrl);
+        forfeit.Fields.Select(f => (f.Name, f.Value, f.Inline)).Should().Equal(
+            ("Etkinlik", "Demo Masters 2026", true),
+            ("Format", "bo3", true),
+            (NotificationRenderer.ZeroWidth, "[Maç Sayfası](" + EsportsDemoCards.SafeTestMatchPageUrl + ")", false));
 
         FluentActions.Invoking(() => EsportsDemoCards.Build(Live(), "tr", Istanbul, End)).Should().Throw<InvalidOperationException>("demo cards must never look real");
     }

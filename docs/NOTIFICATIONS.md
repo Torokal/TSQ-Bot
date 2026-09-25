@@ -48,7 +48,12 @@ etiketlenmez. PandaScore HLTV kimliği vermediği için PandaScore maçlarının
 anahtarı olmadan bu kaynak kapalıdır (BLOCKED/OPTIONAL; başvuru yayın aşamasında, depo public olduktan sonra): bildirimler
 aynen çalışır, HLTV bağlantısı yalnızca elle eklenen `Esports:VerifiedMatchLinks` ile gelir. Liquipedia yanıtı 30 dakikalık
 aralıkla alınır ve veritabanında önbelleğe alınır (yeniden başlatma ek istek yapmaz).
-Demo kartları hiçbir yere bağlantı vermez.
+Demo kartları gerçek hiçbir siteye bağlantı vermez. Tek istisna RFC 2606 ile ayrılmış test alanı `example.com`: demo hükmen
+kartı Maç Sayfası görünümünü göstermek için `https://example.com/tsq-bot-demo-match-page` adresine bağlanır (HLTV değil,
+indirilmez, gerçek maç sayfası olamaz; footer TEST/DEMO der).
+
+Zaman: durum satırındaki göreli zaman (`<t:…:R>`) ve embed zaman damgası Discord tarafından **her kullanıcının kendi dili ve
+saat dilimiyle** gösterilir ("43 minutes ago" / "43 dakika önce"); TSQ Bot bunları çevirmez veya sabit metne dönüştürmez.
 
 ## Yeniden başlatma / ilk bağlantı / geri dönüş politikası
 

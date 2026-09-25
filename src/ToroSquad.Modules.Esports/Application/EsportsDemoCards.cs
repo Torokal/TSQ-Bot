@@ -8,12 +8,18 @@ namespace ToroSquad.Modules.Esports.Application;
 
 /// <summary>
 /// Controlled TEST/DEMO rendering of every match-card kind for an authorized test guild. Uses the production renderer in
-/// demo mode (so cards are labelled TEST/DEMO, link nowhere and name no real source) and the durable outbox (so running
+/// demo mode (so cards are labelled TEST/DEMO, link nowhere but the reserved test domain and name no real source) and the durable outbox (so running
 /// it twice sends nothing new). A successful demo proves Discord rendering only — never provider behaviour.
 /// </summary>
 public static class EsportsDemoCards
 {
     public const string SourceKey = "demo:match-cards";
+
+    /// <summary>
+    /// Controlled "Match Page" target for the forfeit demo card: the IANA-reserved test domain (RFC 2606) — never a real
+    /// match page, never HLTV, nothing is fetched. Lets the owner see how the link renders on a TEST/DEMO card.
+    /// </summary>
+    public const string SafeTestMatchPageUrl = "https://example.com/tsq-bot-demo-match-page";
 
     public static IReadOnlyList<(string Kind, OutgoingMessage Message)> Build(NotificationRenderer renderer, string language, TimeZoneInfo zone, DateTimeOffset now)
     {
@@ -24,13 +30,14 @@ public static class EsportsDemoCards
         // the outbox sees no change and neither sends nor edits). Found live: "now" made re-runs edit three messages.
         var start = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, 0, 0, TimeSpan.Zero);
         var tournament = new TournamentRef("demo", "demo:event", "Demo Masters 2026", "1", null, null, null);
-        EsportsMatch Match(string id, MatchStatus status, int? a = null, int? b = null, int? winner = null, bool forfeit = false) => new(
+        EsportsMatch Match(string id, MatchStatus status, int? a = null, int? b = null, int? winner = null, bool forfeit = false, MatchLinks? links = null) => new(
             new MatchKey("demo", id), tournament, start, true, 3, status, "demo",
             new MatchOpponent(OpponentKind.Team, new TeamRef("demo", "demo:1", "Toro Wolves", "TW"), a, OpponentResult.Scored),
             new MatchOpponent(OpponentKind.Team, new TeamRef("demo", "demo:2", "Nordic Owls", "NO"), b, OpponentResult.Scored),
             winner, false, forfeit, [], null, null, [],
             BeginAtUtc: status is MatchStatus.Live or MatchStatus.Finished ? start : null,
-            EndAtUtc: status == MatchStatus.Finished ? start.AddMinutes(106) : null);
+            EndAtUtc: status == MatchStatus.Finished ? start.AddMinutes(106) : null,
+            Links: links);
 
         return
         [
@@ -40,7 +47,8 @@ public static class EsportsDemoCards
             ("demo-postponed", renderer.Postponed(Match("4", MatchStatus.Postponed), language, start)),
             ("demo-rescheduled", renderer.Rescheduled(Match("5", MatchStatus.Scheduled), language, start.AddHours(2), zone, start)),
             ("demo-cancelled", renderer.Cancelled(Match("6", MatchStatus.Cancelled), language, start)),
-            ("demo-forfeit", renderer.Result(Match("7", MatchStatus.Finished, winner: 0, forfeit: true), language, spoiler: false, MentionPolicy.None, start)),
+            ("demo-forfeit", renderer.Result(Match("7", MatchStatus.Finished, winner: 0, forfeit: true, links: new MatchLinks(OfficialMatchUrl: SafeTestMatchPageUrl)),
+                language, spoiler: false, MentionPolicy.None, start)),
         ];
     }
 
