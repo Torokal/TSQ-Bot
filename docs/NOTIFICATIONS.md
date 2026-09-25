@@ -40,7 +40,9 @@ Liquipedia maç verisindeki `links.hltv` (Liquipedia sağlayıcısı seçiliyken
 etiketlenmez. PandaScore HLTV kimliği vermediği için PandaScore maçlarının HLTV bağlantısı Liquipedia'dan eşleştirilir: aynı iki takım
 (sıra önemsiz, ad normalizasyonu) + başlangıç farkı ≤ 90 dk + **tek** geçerli HLTV adresi; aksi hâlde bağlantı yok
 (yanlış bağlantı hiç olmamasından kötüdür). Bağlantı sonradan bulunursa gönderilmiş kart ping'siz düzenlenir. Liquipedia
-anahtarı olmadan bu kaynak kapalıdır (BLOCKED).
+anahtarı olmadan bu kaynak kapalıdır (BLOCKED/OPTIONAL; başvuru yayın aşamasında, depo public olduktan sonra): bildirimler
+aynen çalışır, HLTV bağlantısı yalnızca elle eklenen `Esports:VerifiedMatchLinks` ile gelir. Liquipedia yanıtı 30 dakikalık
+aralıkla alınır ve veritabanında önbelleğe alınır (yeniden başlatma ek istek yapmaz).
 Demo kartları hiçbir yere bağlantı vermez.
 
 ## Yeniden başlatma / ilk bağlantı / geri dönüş politikası

@@ -5,7 +5,8 @@
 
 Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama PR #2'de (açık, merge edilmedi).
 **PandaScore + yaşam döngüsü + sade kartlar** `feature/pandascore-notifications` dalında (PR #2 üzerine yığılı);
-çevrimdışı 290/290 ×3. PandaScore canlı: BLOCKED (token yok).
+çevrimdışı **319/319 ×3**. PandaScore canlı: BLOCKED (token yok). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
+yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esports:VerifiedMatchLinks` elle yedek.
 
 ## PandaScore / bildirim aşaması (2026-09-25)
 
@@ -17,7 +18,7 @@ Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulam
 | PandaScore gerçek API (yaklaşan/oynanan/biten/ertelenen/yeniden planlanan/iptal) | **BLOCKED** — token yok; ücretsiz planda sonuç alanları dolu mu: NOT_VERIFIED (resmî sayfalar çelişkili) |
 | Başladı / bitti / ertelendi / saat değişti / iptal / hükmen kartları | TESTED_OFFLINE; Discord'da görünüm: demo kartlarıyla doğrulanacak |
 | Sade kart tasarımı (Greg referansı) | Uygulandı; Greg ekran görüntüsü bu turda paylaşılmadı → metin şablonuna göre |
-| HLTV | Veri sağlayıcısı değil, **kazıma yok**. Araştırma: HLTV'nin resmî API'si yok; BOT Greg'in "Matchpage" bağlantısı Liquipedia maç verisindeki `links.hltv`'den geliyordu (Liquipedia Lua-Modules + upstream kodu). Sahip kararı (2026-09-25): veri PandaScore, HLTV bağlantısı Liquipedia'dan (aynı iki takım + ≤90 dk + tek aday). TESTED_OFFLINE; canlı **BLOCKED** (Liquipedia anahtarı yok) |
+| HLTV | Veri sağlayıcısı değil, **kazıma yok**. Araştırma: HLTV'nin resmî API'si yok; BOT Greg'in "Matchpage" bağlantısı Liquipedia maç verisindeki `links.hltv`'den geliyordu (Liquipedia Lua-Modules + upstream kodu). Sahip kararı (2026-09-25): veri PandaScore, HLTV bağlantısı Liquipedia'dan (aynı iki takım + ≤90 dk + tek aday). TESTED_OFFLINE; canlı **BLOCKED/OPTIONAL** (Liquipedia anahtarı yok); elle yedek `Esports:VerifiedMatchLinks` çalışır (TESTED_OFFLINE) |
 | Kart başlığı tıklanınca maç sayfası | Uygulandı (Greg gibi); gerçek HLTV bağlantısı Liquipedia anahtarı gelince görünür; demo kartları bilinçli olarak bağlantısız |
 | Yıldız (BOT Greg puanı) | DEFERRED — güvenilir kaynak yok, gösterilmez |
 | Test guild'deki rol eşleme #2 (tüm maçlar, hatırlatma ping'i açık) | Sahibin yapılandırması, dokunulmadı; demo hatırlatması test rolünü etiketleyebilir → `/esports-admin roles unmap mapping:2` |
@@ -141,7 +142,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 |---|---|---|---|
 | B1 | Discord uygulaması / bot token yok | Developer Portal'da uygulama oluştur, token'ı user-secrets'a koy (docs/WINDOWS_SETUP.md §3–4) | Hesap/yetkilendirme — sahip |
 | B2 | Test guild ve davet | Botu test sunucusuna davet et (izin 84992 / 268520448), `Discord:TestGuildIds` + `CommandSyncGuildIds` | Bot daveti — sahip |
-| B3 | Liquipedia API erişimi | Başvuru/plan seçimi (ücretli olabilir; ücretsiz yalnızca açık kaynak + ticari olmayan, onaylı) | Ücret/abonelik — sahip |
+| B3 | Liquipedia API erişimi (isteğe bağlı) | Basic/Premium geçici olarak kullanılamıyor, ticari: Enterprise; ücretsiz erişim başvuruyla (açık kaynak / ticari olmayan / topluluk, çoğu zaman süreli). **Sahip kararı:** depo public olduktan sonra, yayın aşamasında başvurulacak | Başvuru/ücret — sahip |
 | B7 | Discord ağ erişimi | **Çözüldü** (2026-09-25) — SplitWire AllowedApps, sahip onayıyla | — |
 | B5 | Upstream geliştiriciye mesaj | docs/drafts/upstream-contact.md taslağı gönderilmedi | Dış iletişim — sahip |
 
@@ -177,7 +178,7 @@ Send, sağlayıcı Fixture (TEST/DEMO), Example modülü kapalı (7 komut grubu)
 | Başarısız işlemlerin takip kodu log'da (`2e7f9bd`) | Uygulandı; canlıda bir hata vakasıyla henüz gözlenmedi |
 | Guild'ler arası izolasyon | TESTED_OFFLINE (tek gerçek guild) |
 | Bildirim çökme kurtarma, 429, belirsiz teslimat | TESTED_OFFLINE (canlıda yıkıcı test yok) |
-| Liquipedia canlı veri | **BLOCKED** (onaylı API anahtarı yok) |
+| Liquipedia canlı veri / HLTV bağlantı zenginleştirmesi | **BLOCKED/OPTIONAL** (onaylı API anahtarı yok; yayın aşamasında başvuru) |
 | VRS canlı veri | NOT_RUN — TESTED_OFFLINE |
 | Global komut kaydı, herkese açık bot | DEFERRED |
 | GitHub deposunun public olması | PRE-RELEASE REQUIREMENT |
@@ -204,6 +205,17 @@ izinleri View Channel + Send Messages + Embed Links, isteğe bağlı Read Messag
 (self-service); davet tamsayıları 84992 = 1024+2048+16384+65536 ve 268520448 = 84992+268435456 bu listeyle birebir
 eşleşiyor. Administrator istenmez; Mention Everyone önerilmez (rolü "bahsedilebilir" yapın).
 
+## Liquipedia resmî durumu ve karar (2026-09-25)
+
+| Konu | Durum |
+|---|---|
+| LPDB API Terms (canlı sayfa okundu, VERIFIED) | Tüm istekler için en fazla **60 istek/saat**; sonuçları mümkün olduğunca uzun önbelleğe al; anahtar paylaşılmaz |
+| User-Agent | İletişim bilgili UA şartı Terms'te açıkça **MediaWiki API** bölümünde; LPDB bölümünde ayrıca belirtilmiyor. TSQ Bot MediaWiki API kullanmaz → UA artık zorunlu değil (önerilir); her istekte özel UA gider (ayarlı değilse `TSQBot (https://github.com/Torokal/TSQ-Bot)`); upstream kimliği reddedilir |
+| Planlar (sahip bildirimi; plan sayfası araçlarımıza insan doğrulaması gösterdi, aşılmadı) | Basic/Premium **geçici olarak kullanılamıyor**; ticari: Enterprise; ücretsiz: başvuruyla, çoğu zaman süreli |
+| Bütçe | Kod artık tüm LPDB tabloları için **tek ortak** bütçe kullanıyor (önceden tablo başınaydı); bağlantı kaynağı 30 dk × ≤5 sayfa = en kötü ≈10 istek/saat |
+| Önbellek | HLTV bağlantı adayları veritabanında (`ProviderStates`: `liquipedia:hltv-links`); yeniden başlatma erken istek yapmaz — TESTED_OFFLINE |
+| Karar | Depo geliştirme boyunca PRIVATE; yalnızca Liquipedia için erken public yapılmaz; başvuru yayın aşamasında. O zamana kadar zenginleştirme BLOCKED/OPTIONAL, `Esports:VerifiedMatchLinks` elle yedek, PandaScore Liquipedia'dan bağımsız (TESTED_OFFLINE) |
+
 ## Yayın öncesi gereksinimler (PRE-RELEASE REQUIREMENT)
 
 Bunlar yerel geliştirme/test için blocker **değildir**; yalnızca bot herkese açılmadan önce ve sahip açıkça yayın
@@ -215,6 +227,7 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 | Tüm git geçmişinde secret taraması (bilinen sahte test token'ı hariç) | PRE-RELEASE REQUIREMENT — yayın anında tekrar |
 | İzlenen dosya + kaynak arşivi denetimi, lisans/provenance, README kamu incelemesi | PRE-RELEASE REQUIREMENT |
 | Global komut kaydı, herkese açık bot | DEFERRED (yayın aşaması) |
+| Depo public olduktan **sonra** Liquipedia ücretsiz API erişimine başvuru (depo bunun için erkenden public yapılmaz) | PRE-RELEASE REQUIREMENT — sahip kararı (2026-09-25) |
 
 ## NEXT ACTION (güncel)
 

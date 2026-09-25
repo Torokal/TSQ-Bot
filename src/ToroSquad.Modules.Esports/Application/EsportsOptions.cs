@@ -65,10 +65,12 @@ public sealed class EsportsOptions
             errors.Add("Esports:MatchPollMinutes must be >= 2");
         if (Provider.Name == MatchProviderName.Liquipedia)
         {
-            var budget = Math.Floor(liquipedia.RequestsPerHourPerTable * Math.Clamp(liquipedia.BudgetShare, 0.1, 1.0));
-            var worstCasePerHour = 60.0 / Math.Max(1, MatchPollMinutes) * Math.Max(1, liquipedia.MaxPages);
+            // The LPDB limit covers ALL requests of the key: matches and events share one budget.
+            var budget = Math.Floor(liquipedia.RequestsPerHour * Math.Clamp(liquipedia.BudgetShare, 0.1, 1.0));
+            var worstCasePerHour = (60.0 / Math.Max(1, MatchPollMinutes) * Math.Max(1, liquipedia.MaxPages)) +
+                                   (Math.Max(1, liquipedia.MaxPages) / (double)Math.Max(1, EventPollHours));
             if (worstCasePerHour > budget)
-                errors.Add($"Polling every {MatchPollMinutes} min with up to {liquipedia.MaxPages} pages needs {worstCasePerHour:0} req/h > budget {budget:0} (Esports:Liquipedia:RequestsPerHourPerTable x BudgetShare)");
+                errors.Add($"Polling every {MatchPollMinutes} min with up to {liquipedia.MaxPages} pages needs {worstCasePerHour:0} req/h > budget {budget:0} (Esports:Liquipedia:RequestsPerHour x BudgetShare)");
         }
         else
         {
@@ -83,7 +85,7 @@ public sealed class EsportsOptions
 
         if (Provider.Name != MatchProviderName.Liquipedia && HltvLinksFromLiquipedia)
         {
-            var linkBudget = Math.Floor(liquipedia.RequestsPerHourPerTable * Math.Clamp(liquipedia.BudgetShare, 0.1, 1.0));
+            var linkBudget = Math.Floor(liquipedia.RequestsPerHour * Math.Clamp(liquipedia.BudgetShare, 0.1, 1.0));
             var linkPerHour = 60.0 / Math.Max(5, LinkPollMinutes) * Math.Max(1, liquipedia.MaxPages);
             if (linkPerHour > linkBudget)
                 errors.Add($"HLTV link source: refreshing Liquipedia every {LinkPollMinutes} min with up to {liquipedia.MaxPages} pages needs {linkPerHour:0} req/h > budget {linkBudget:0} (raise Esports:LinkPollMinutes)");

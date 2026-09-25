@@ -93,10 +93,20 @@ public sealed class EsportsPoller(
         var previousFetch = cache.Matches.FetchedAt;
         var window = new MatchWindow(now - TimeSpan.FromHours(o.PastWindowHours), now + TimeSpan.FromHours(o.FutureWindowHours));
         var result = await SafeAsync(() => matchProvider.GetMatchesAsync(window, ct), now);
+        ProviderResult<IReadOnlyList<EsportsMatch>>? linkResult = null;
         if (result.HasData)
         {
             // External match pages: operator-curated first, then Liquipedia's HLTV links (unique match only). Never HLTV itself.
-            await hltvLinks.RefreshIfDueAsync(window, ct);
+            // The optional link source can never fail the match poll.
+            try
+            {
+                linkResult = await hltvLinks.RefreshIfDueAsync(window, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "HLTV link source refresh threw; keeping known links");
+            }
+
             result = result with { Value = result.Value!.Select(links.Apply).Select(hltvLinks.Apply).ToList() };
         }
         cache.UpdateMatches(result, now);
@@ -105,6 +115,8 @@ public sealed class EsportsPoller(
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ToroDbContext>();
         await SaveStateAsync(db, MatchesKey, result, null, ct);
+        if (linkResult is not null)
+            await SaveStateAsync(db, hltvLinks.StateKey, linkResult, linkResult.HasData ? MatchJson.SerializeList(hltvLinks.Candidates) : null, ct);
         if (!result.HasData)
         {
             logger.LogWarning("Esports matches fetch: {Outcome} {Detail}", result.Outcome, result.Detail);
@@ -162,6 +174,9 @@ public sealed class EsportsPoller(
         RankingSnapshot? rankings = null;
         if (states.TryGetValue(RankingsKey, out var rk) && rk.DataJson is not null)
             rankings = MatchJson.Deserialize<RankingSnapshot>(rk.DataJson);
+
+        if (states.TryGetValue(hltvLinks.StateKey, out var lk))
+            hltvLinks.Restore(lk.DataJson is null ? null : MatchJson.DeserializeList<EsportsMatch>(lk.DataJson), lk.LastAttemptAt);
 
         cache.Restore(matches.Count > 0 ? matches : null, states.GetValueOrDefault(MatchesKey)?.LastSuccessAt,
             events, ev?.LastSuccessAt, rankings,

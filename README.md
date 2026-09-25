@@ -140,10 +140,15 @@ then register commands with `Sync-Commands.ps1` (dry-run first). Only the non-pr
 - **PandaScore (default)** — create a token at app.pandascore.co (a free plan with 1,000 requests/hour exists; no paid plan
   is enabled automatically) and store it with `dotnet user-secrets set "PandaScore:Token" "<TOKEN>" --project src\ToroSquad.Bot`.
   Without a token live PandaScore data is **BLOCKED**. Every card says "Kaynak: PandaScore" as PandaScore's terms require.
-- **Liquipedia (legacy/optional)** — only if `Esports:Provider:Name=Liquipedia`; needs an approved LiquipediaDB API key
-  and a User-Agent with your contact. Content is CC BY-SA 3.0 and attributed in every message.
+- **Liquipedia (optional)** — optional HLTV match-page link enrichment for PandaScore matches, or the legacy match
+  provider if `Esports:Provider:Name=Liquipedia`. Needs an approved LiquipediaDB API key (60 requests/hour; Basic/Premium
+  currently unavailable, free access by application). **BLOCKED/OPTIONAL** until the owner applies after the repository
+  goes public at release; the bot runs normally without it. A custom User-Agent is sent (your own via
+  `Esports:Liquipedia:UserAgent` is recommended; the contact requirement in Liquipedia's terms is stated for the MediaWiki
+  API, not separately for LPDB). Content is CC BY-SA 3.0 and attributed in every message.
 - **Valve Regional Standings** — rankings for `/esports rankings` and VRS filters.
-- **HLTV** — not a data source; only verified match-page links.
+- **HLTV** — not a data source; only verified match-page links (from Liquipedia when available, or the manual
+  `Esports:VerifiedMatchLinks` list).
 
 Details, verified limits and terms: [docs/PROVIDERS.md](docs/PROVIDERS.md).
 

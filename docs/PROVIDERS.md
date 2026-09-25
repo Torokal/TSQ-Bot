@@ -1,6 +1,6 @@
 # Esports data providers — capabilities, terms, status
 
-Research dates: Liquipedia/Valve 2026-09-24, PandaScore 2026-09-25. Labels: **VERIFIED** (read at the primary/official source), **VERIFIED (archive)**
+Research dates: Liquipedia/Valve 2026-09-24 (Liquipedia terms re-checked 2026-09-25), PandaScore 2026-09-25. Labels: **VERIFIED** (read at the primary/official source), **VERIFIED (archive)**
 (official page read via Web Archive because the live page was behind a bot challenge), **VERIFIED (3rd-party)**
 (read in public third-party code/copies), **INFERRED**, **NOT_VERIFIED**.
 
@@ -9,7 +9,7 @@ Research dates: Liquipedia/Valve 2026-09-24, PandaScore 2026-09-25. Labels: **VE
 | Provider | Role | Mode today | Live access | Status |
 |---|---|---|---|---|
 | **PandaScore** (REST API) | **Default match provider** (`Esports:Provider:Name=PandaScore`) | Fixture (synthetic data through the real client/parser) | Needs a PandaScore token (free plan exists) — none configured | **BLOCKED** (live) / **TESTED_OFFLINE** (parser, lifecycle, pagination, error types) |
-| Liquipedia (LiquipediaDB API v3) | **Legacy / optional** match provider (only when selected) | Fixture | Requires an **approved API key** — none configured | **BLOCKED** (live) / **TESTED_OFFLINE** |
+| Liquipedia (LiquipediaDB API v3) | **Optional** HLTV-link enrichment; **legacy / optional** match provider (only when selected) | Fixture | Requires an **approved API key** — none configured; free access applied for only after the repo is public at release | **BLOCKED/OPTIONAL** (live) / **TESTED_OFFLINE** |
 | Valve Regional Standings (GitHub) | Rankings (VRS), independent of the match provider | Fixture | Public, no key | **TESTED_OFFLINE**; live fetch **NOT_RUN** |
 | HLTV | **Not a data provider.** Preferred *external match page* when a verified URL exists | — | No authorized access; **scraping prohibited by design** | Link policy **TESTED_OFFLINE**; data integration **DEFERRED** |
 
@@ -63,8 +63,8 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
 - TSQ Bot **does not** scrape HLTV HTML, bypass Cloudflare, automate a browser, use unofficial scraping libraries, call
   undocumented endpoints, guess match ids or construct HLTV URLs. PandaScore data is never presented as HLTV data.
 - A verified HLTV match URL may be the **preferred "Maç Sayfası"** target. It enters only from a trusted deterministic source:
-  today the operator-curated `Esports:VerifiedMatchLinks` list (match key → URL), validated at startup; later possibly an
-  authorized provider field or an admin command. Validation is syntactic only (`https://www.hltv.org/matches/<id>/<slug>`),
+  the operator-curated `Esports:VerifiedMatchLinks` list (match key → URL, validated at startup; the manual fallback that
+  always works) and, optionally, Liquipedia's editor-entered `links.hltv` (below; BLOCKED/OPTIONAL without a key). Validation is syntactic only (`https://www.hltv.org/matches/<id>/<slug>`),
   the page is never fetched.
 - Direct HLTV data integration requires authorized access → **DEFERRED**.
 
@@ -73,17 +73,24 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
 | Source | HLTV match link? | Access | Status |
 |---|---|---|---|
 | HLTV itself | — | **No official public API** found; every "HLTV API" found is an unofficial scraper | Not usable (scraping prohibited) |
-| **Liquipedia (LPDB match2 `links.hltv`)** | **Yes** — editors enter the HLTV match id; Liquipedia builds `https://www.hltv.org/matches/<id>/match` (VERIFIED: Liquipedia/Lua-Modules `Module:MatchExternalLinks` + `MatchGroup/Input/Custom.getLinks`, commit 23835da, 2026-09-09) and stores it with the match; upstream BOT-Greg-v2 reads `links.hltv["1"]["1"]` (VERIFIED) — this is how BOT Greg's "Matchpage" worked | Approved LPDB API key (free for approved open-source non-commercial projects, else paid) | Parser support **TESTED_OFFLINE**; live **BLOCKED** (no key) |
+| **Liquipedia (LPDB match2 `links.hltv`)** | **Yes** — editors enter the HLTV match id; Liquipedia builds `https://www.hltv.org/matches/<id>/match` (VERIFIED: Liquipedia/Lua-Modules `Module:MatchExternalLinks` + `MatchGroup/Input/Custom.getLinks`, commit 23835da, 2026-09-09) and stores it with the match; upstream BOT-Greg-v2 reads `links.hltv["1"]["1"]` (VERIFIED) — this is how BOT Greg's "Matchpage" worked | Approved LPDB API key (see "Access and plans" below: free access only by application, Basic/Premium currently unavailable) | Parser support **TESTED_OFFLINE**; live **BLOCKED/OPTIONAL** (no key) |
 | PandaScore | No HLTV id/URL in the match object (VERIFIED, OpenAPI) | — | Not available |
 | GRID | NOT_VERIFIED | All listed plans commercial, custom-priced (grid.gg, 2026-09-25) | Not evaluated further |
 
 With `Esports:Provider:Name=Liquipedia` the cards link to HLTV natively. With **PandaScore** as match provider (owner's
-choice, 2026-09-25), Liquipedia is used as a **link source only** (`Esports:HltvLinksFromLiquipedia=true`): its matches are
-refreshed every `Esports:LinkPollMinutes` (30) within Liquipedia's own 60 req/h budget, and a PandaScore match gets the HLTV
-URL only when **exactly one** distinct valid HLTV URL belongs to a Liquipedia match with the **same two teams**
-(order-insensitive, VRS name normalization) starting within `Esports:HltvLinkToleranceMinutes` (90). Zero or several
-candidates → no link; an existing link is never replaced; a Liquipedia outage keeps the known links and changes nothing
-else. Implemented and **TESTED_OFFLINE**; live needs an approved LPDB key (**BLOCKED**).
+choice, 2026-09-25), Liquipedia is an **optional enrichment / link source only** (`Esports:HltvLinksFromLiquipedia=true`):
+its matches are refreshed every `Esports:LinkPollMinutes` (30) — at most 2 refreshes × ≤5 pages = **≤10 req/h worst case**
+(typically 1 page → 2 req/h), far below the 60 req/h LPDB limit — and a PandaScore match gets the HLTV URL only when
+**exactly one** distinct valid HLTV URL belongs to a Liquipedia match with the **same two teams** (order-insensitive, VRS
+name normalization) starting within `Esports:HltvLinkToleranceMinutes` (90). Zero or several candidates → no link; an
+existing link is never replaced; a Liquipedia outage keeps the known links and changes nothing else. The response is
+**cached** in memory and in the database (`ProviderStates` key `liquipedia:hltv-links`, with its fetch time): a restart
+re-uses it and does not request again before the interval has passed. Implemented and **TESTED_OFFLINE**; live
+enrichment is **BLOCKED/OPTIONAL** until an approved LPDB key exists (see "Access and plans").
+
+**Without Liquipedia** nothing else changes: PandaScore match data, reminders, lifecycle cards and results never depend
+on Liquipedia (the link source is simply off, no error), and the manual fallback **`Esports:VerifiedMatchLinks`**
+(operator-verified HLTV/official URL per match, docs/NOTIFICATIONS.md) keeps working — both **TESTED_OFFLINE**.
 
 ## Capabilities (as implemented)
 
@@ -108,19 +115,37 @@ Normal operation does not need a Liquipedia key.
 
 ## Liquipedia (LiquipediaDB API v3)
 
-- **Access**: "Upon approved request" (VERIFIED, https://liquipedia.net/api-terms-of-use). Keys at https://api.liquipedia.net.
-- **Plans** (VERIFIED (archive) 2026-06-18 of https://liquipedia.net/api; live page returned a bot challenge): Basic
-  $49/mo per data type (1000 req/h), Premium $199/mo (5000 req/h), Enterprise custom. Free access "strictly reserved"
-  for educational / non-commercial / community-feature projects, **code must be open source**, usually time-limited.
-  Whether a Discord bot qualifies: **NOT_VERIFIED** (Liquipedia decides). A search snippet claiming only Enterprise is
-  currently served: NOT_VERIFIED. → Requesting access or paying is the owner's decision (approval gate).
-- **Rate limit**: "no more than 60 requests per 1 hour" baseline (VERIFIED, terms). Applies per key/wiki/table
-  (VERIFIED (3rd-party) via 429 message format). TSQ Bot enforces a local token bucket per table at
-  `RequestsPerHourPerTable × BudgetShare` (default 60 × 0.8 = 48/h; every HTTP attempt including retries spends a token) and validates the polling config against it at
-  startup (default: matches every 10 min, ≤5 pages → ≤30 req/h worst case; tournaments every 6 h).
-- **Headers**: `Authorization: Apikey <key>` (VERIFIED (3rd-party) OpenAPI copy); custom User-Agent **with contact
-  info** and gzip (VERIFIED for the wiki API; applied to LPDB as well). TSQ Bot refuses live mode without an operator
-  UA containing contact info and rejects the upstream developer's identity.
+### Access and plans — current official status (2026-09-25)
+
+- **Terms** (VERIFIED 2026-09-25, live page https://liquipedia.net/api-terms-of-use): LPDB access is granted "upon
+  approved request"; **rate limit all requests to no more than 60 requests per 1 hour**; follow the dashboard
+  documentation; do not share API keys. General section (both APIs): re-use / cache results for as long as possible,
+  attribute Liquipedia (CC BY-SA 3.0), no automated access to HTML pages.
+- **Plans** (owner-reported 2026-09-25 from the official Liquipedia API page; the live page returned a human-verification
+  challenge to our tools, which we do not bypass): **Basic and Premium are currently "temporarily unavailable"**; on the
+  commercial side **Enterprise** is offered. The older $49 / $199 prices (archive 2026-06-18) are **no longer current**.
+- **Free access**: by **application** only, for open-source educational / non-commercial public / community projects,
+  and in most cases **time-limited**. Liquipedia decides whether a project qualifies (NOT_VERIFIED for TSQ Bot).
+- **Owner decision (2026-09-25)**: the TSQ Bot repository stays **PRIVATE** during development and testing and is **not**
+  made public early just for Liquipedia access. At the release phase, **after** the repository is public (PRE-RELEASE
+  REQUIREMENT, docs/OPERATIONS.md), the owner applies for free API access. Until then Liquipedia enrichment is
+  **BLOCKED/OPTIONAL**, `Esports:VerifiedMatchLinks` is the manual fallback, and PandaScore runs without Liquipedia.
+  Requesting access or paying remains an owner decision (approval gate).
+
+### Technical notes
+
+- **Rate limit**: "no more than 60 requests per 1 hour" for all requests (VERIFIED, terms). A third-party 429 message
+  suggests per-table enforcement (VERIFIED (3rd-party)), but TSQ Bot budgets conservatively with **one shared bucket
+  for all LPDB requests** at `RequestsPerHour × BudgetShare` (default 60 × 0.8 = 48/h; every HTTP attempt including
+  retries spends a token) and validates the polling config against it at startup: as match provider, matches every
+  10 min × ≤5 pages (≤30 req/h) + tournaments every 6 h; as link source, ≤10 req/h (see above).
+- **Headers**: `Authorization: Apikey <key>` (VERIFIED (3rd-party) OpenAPI copy) and gzip. **User-Agent**: the current
+  terms require a custom User-Agent with contact information **explicitly in the MediaWiki API section** (VERIFIED
+  2026-09-25); the **LiquipediaDB section does not state it separately**. TSQ Bot does not use the MediaWiki API, so a
+  contact UA is **not** a requirement for LPDB here. TSQ Bot still always sends a custom UA: the operator's
+  `Esports:Liquipedia:UserAgent` if set (recommended, e.g. `TSQBot/0.1 (<your URL>; <your e-mail>)`; Doctor shows a
+  hint without contact), otherwise the product default `TSQBot (https://github.com/Torokal/TSQ-Bot)`. It rejects the
+  upstream developer's identity.
 - **Errors**: 403 invalid key, 404 no data, 429 over limit, body `{"error":[...]}` (VERIFIED (3rd-party)). TSQ Bot
   maps 401/403→AuthFailed, 429→QuotaExceeded(+Retry-After), 404→SchemaError (never "empty"), 5xx→bounded retry then
   TransportError, malformed JSON / missing `result`→SchemaError.
@@ -133,8 +158,9 @@ Normal operation does not need a Liquipedia key.
   match2games (map, scores, winner, status). VERIFIED against Help:LiquipediaDB/Match (rev 2026-09-03).
 - **License / attribution**: content CC BY-SA 3.0; attribute Liquipedia and link (VERIFIED). Every message has
   "Kaynak: Liquipedia (CC BY-SA 3.0)" and a link. Logos are not used.
-- **Caching**: "cache for as long as possible", no HTML scraping, don't share keys (VERIFIED). One shared fetch for
-  all guilds; last good data persisted and restored after restart with its original timestamp.
+- **Caching**: "re-use / cache your API results for as long as possible", no HTML scraping, don't share keys (VERIFIED
+  2026-09-25). One shared fetch for all guilds; last good data (match provider data and the HLTV link candidates) is
+  persisted and restored after restart with its original timestamp; a restart does not trigger an early request.
 
 ## Valve Regional Standings
 

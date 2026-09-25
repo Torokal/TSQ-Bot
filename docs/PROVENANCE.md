@@ -23,7 +23,7 @@ not a replacement bot, and nothing indicates the old bot's credentials, data or 
 | Parsing | `teamsNode[i]` for i=0..1, `GetProperty(...)!`, `GetString()!` | Crash on missing opponents/fields/nulls | Tolerant accessors, explicit TBD/Unknown opponents, warnings instead of exceptions |
 | Dates | `DateTime.Parse(date)` (local-culture, unspecified kind) | Timezone/culture bugs | `ParseExact` as UTC (LPDB dates are UTC), invalid → null + warning |
 | Scores | Map scores default `{0,0}`; forfeit mapped to "1-0" | Invented scores | Scores only when the source states them (`status=S`, ≥0); forfeit/draw/not-played explicit |
-| User-Agent | `BOT-Greg-v2/1.0 (julius.gmeinder@proton.me)` | Impersonates another operator | Operator-configured UA required; config validation rejects the upstream identity |
+| User-Agent | `BOT-Greg-v2/1.0 (julius.gmeinder@proton.me)` | Impersonates another operator | Own UA always sent (operator-configured recommended, product default `TSQBot (https://github.com/Torokal/TSQ-Bot)` otherwise); config validation rejects the upstream identity |
 | VRS | Latest file by string sort of whole tree path, column positions fixed | Wrong file / silent misparse | Date from file name, header-based columns, host allow-list, failure types |
 | Tier | `Convert.ToInt32(liquipediatier)` | Crash on empty/non-numeric | Kept as string, nullable |
 

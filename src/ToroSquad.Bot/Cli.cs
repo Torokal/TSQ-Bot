@@ -17,6 +17,7 @@ using ToroSquad.Infrastructure.Hosting;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Esports.Providers;
 using ToroSquad.Modules.Esports.Providers.Fixtures;
+using ToroSquad.Modules.Esports.Providers.Liquipedia;
 
 namespace ToroSquad.Bot;
 
@@ -289,13 +290,23 @@ public static partial class Cli
         var apiKeySet = !string.IsNullOrWhiteSpace(config["Esports:Liquipedia:ApiKey"]);
         var hltvLinks = config.GetValue("Esports:HltvLinksFromLiquipedia", true);
         Add(apiKeySet ? "OK" : liquipediaSelected || hltvLinks ? "BLOCKED" : "INFO", "Liquipedia API key: " + (apiKeySet ? "set (value hidden)" : "NOT SET" +
-            (liquipediaSelected ? " (live esports data NOT_CONFIGURED)" : hltvLinks ? " (needed for HLTV match-page links; match data comes from PandaScore)" : " (not needed)")));
+            (liquipediaSelected ? " (live esports data NOT_CONFIGURED)" : hltvLinks ? " (OPTIONAL: only for automatic HLTV match-page links; PandaScore does not need it)" : " (not needed)")));
+        var verifiedLinks = config.GetSection("Esports:VerifiedMatchLinks").GetChildren().Count();
         if (!liquipediaSelected)
+        {
             Add(!hltvLinks ? "INFO" : apiKeySet ? "OK" : "BLOCKED",
-                "HLTV match links via Liquipedia: " + (!hltvLinks ? "off" : apiKeySet ? "enabled (unique team+time match only)" : "waiting for an approved Liquipedia key"));
-        var ua = config["Esports:Liquipedia:UserAgent"];
-        if (liquipediaSelected)
-            Add(string.IsNullOrWhiteSpace(ua) ? "BLOCKED" : "OK", "Liquipedia User-Agent: " + (string.IsNullOrWhiteSpace(ua) ? "NOT SET (required for live)" : ua));
+                "HLTV match links via Liquipedia (optional): " + (!hltvLinks ? "off" : apiKeySet ? "enabled (unique team+time match only, cached)" : "waiting for an approved Liquipedia key"));
+            Add("OK", $"Manual match links (Esports:VerifiedMatchLinks): {verifiedLinks} entr{(verifiedLinks == 1 ? "y" : "ies")} (work without Liquipedia)");
+        }
+
+        if (liquipediaSelected || (hltvLinks && apiKeySet))
+        {
+            // The contact User-Agent is explicit in the MediaWiki API terms, not in the LiquipediaDB section: a hint, not a gate.
+            var ua = config["Esports:Liquipedia:UserAgent"];
+            Add(LiquipediaClient.UserAgentHasContact(ua) ? "OK" : "INFO", "Liquipedia User-Agent: " + (string.IsNullOrWhiteSpace(ua)
+                ? "default '" + LiquipediaClient.DefaultUserAgent + "' (recommended: your own with contact)"
+                : ua));
+        }
         var bot = config.GetSection(BotOptions.Section).Get<BotOptions>() ?? new BotOptions();
         Add(string.IsNullOrWhiteSpace(bot.SourceUrl) ? "WARN" : "OK", "Bot:SourceUrl (AGPL Corresponding Source): " + (bot.SourceUrl ?? "NOT SET"));
 

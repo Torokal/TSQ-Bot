@@ -156,8 +156,87 @@ public sealed class HltvLinkMatcherTests
         await using (var liquipedia = await TestHost.CreateAsync())
             liquipedia.Services.GetRequiredService<LiquipediaHltvLinkSource>().Enabled.Should().BeFalse("Liquipedia links are native then");
 
-        await using var noUa = await TestHost.CreateAsync(new() { ["Esports:Provider:Name"] = "PandaScore", ["Esports:Liquipedia:UserAgent"] = null });
-        noUa.Services.GetRequiredService<LiquipediaHltvLinkSource>().Enabled.Should().BeFalse("Liquipedia is not configured");
-        noUa.Services.GetRequiredService<IEsportsDataProvider>().Id.Should().Be("pandascore");
+        await using (var off = await TestHost.CreateAsync(new() { ["Esports:Provider:Name"] = "PandaScore", ["Esports:HltvLinksFromLiquipedia"] = "false" }))
+            off.Services.GetRequiredService<LiquipediaHltvLinkSource>().Enabled.Should().BeFalse("switched off by the operator");
+
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(Start);
+        LiquipediaHltvLinkSource Live(string? key, string? ua) => new(
+            new ToroSquad.Modules.Esports.Providers.Liquipedia.LiquipediaClient(new HttpClient(new StubHttpHandler((_, _) => throw new InvalidOperationException("no request expected"))),
+                Microsoft.Extensions.Options.Options.Create(new ToroSquad.Modules.Esports.Providers.Liquipedia.LiquipediaOptions { ApiKey = key, UserAgent = ua }),
+                new ToroSquad.Modules.Esports.Providers.Liquipedia.RequestBudget(clock), clock,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<ToroSquad.Modules.Esports.Providers.Liquipedia.LiquipediaClient>.Instance),
+            new FakeProvider(), new ToroSquad.Modules.Esports.Providers.Fixtures.EsportsDataMode(ToroSquad.Modules.Esports.Providers.Fixtures.ProviderMode.Live),
+            Microsoft.Extensions.Options.Options.Create(new EsportsOptions()), clock,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<LiquipediaHltvLinkSource>.Instance);
+
+        var noKey = Live(null, "TSQBot/0 (https://localhost)");
+        noKey.Enabled.Should().BeFalse("live Liquipedia needs an approved key: until then enrichment is BLOCKED/optional");
+        (await noKey.RefreshIfDueAsync(new MatchWindow(Start.AddHours(-12), Start.AddHours(48)), CancellationToken.None)).Should().BeNull("no request without a key");
+        Live("test-key-not-real", null).Enabled.Should().BeTrue("the contact User-Agent is not a LiquipediaDB requirement");
+    }
+
+    [Fact]
+    public async Task A_restart_reuses_the_persisted_links_without_an_extra_request()
+    {
+        await using var host = await TestHost.CreateAsync(new() { ["Esports:Provider:Name"] = "PandaScore" });
+        var poller = host.Services.GetRequiredService<EsportsPoller>();
+        var source = host.Services.GetRequiredService<LiquipediaHltvLinkSource>();
+        await poller.RefreshMatchesAsync(CancellationToken.None);
+
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ToroSquad.Infrastructure.Persistence.ToroDbContext>();
+            var row = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleAsync(
+                db.Set<ToroSquad.Modules.Esports.Persistence.ProviderStateEntity>(), s => s.Key == source.StateKey, TestContext.Current.CancellationToken);
+            source.StateKey.Should().Be("liquipedia-fixture:hltv-links", "fixture links never land in the live cache");
+            row.DataJson.Should().Contain("https://www.hltv.org/matches/1000001/demo-fixture-not-a-real-match");
+            row.LastAttemptAt.Should().NotBeNull();
+
+            // A fresh source (as after a restart) restored from that row has the links and waits for the normal interval.
+            var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(row.LastAttemptAt!.Value.AddMinutes(1));
+            var requests = 0;
+            var restarted = new LiquipediaHltvLinkSource(
+                new ToroSquad.Modules.Esports.Providers.Liquipedia.LiquipediaClient(new HttpClient(new StubHttpHandler((_, _) =>
+                    {
+                        requests++;
+                        return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable));
+                    }))
+                { BaseAddress = new Uri("https://api.liquipedia.test/api/v3/") },
+                    Microsoft.Extensions.Options.Options.Create(new ToroSquad.Modules.Esports.Providers.Liquipedia.LiquipediaOptions { ApiKey = "test-key-not-real", MaxRetries = 0 }),
+                    new ToroSquad.Modules.Esports.Providers.Liquipedia.RequestBudget(clock), clock,
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<ToroSquad.Modules.Esports.Providers.Liquipedia.LiquipediaClient>.Instance),
+                new FakeProvider(), new ToroSquad.Modules.Esports.Providers.Fixtures.EsportsDataMode(ToroSquad.Modules.Esports.Providers.Fixtures.ProviderMode.Live),
+                Microsoft.Extensions.Options.Options.Create(new EsportsOptions()), clock,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<LiquipediaHltvLinkSource>.Instance);
+            restarted.Restore(MatchJson.DeserializeList<EsportsMatch>(row.DataJson!), row.LastAttemptAt);
+            restarted.CandidateCount.Should().Be(source.CandidateCount).And.BeGreaterThan(0);
+
+            var window = new MatchWindow(clock.GetUtcNow().AddHours(-12), clock.GetUtcNow().AddHours(48));
+            (await restarted.RefreshIfDueAsync(window, CancellationToken.None)).Should().BeNull("cached: not due yet");
+            requests.Should().Be(0);
+            clock.Advance(TimeSpan.FromMinutes(30));
+            (await restarted.RefreshIfDueAsync(window, CancellationToken.None))!.Outcome.Should().NotBe(ProviderOutcome.Success);
+            requests.Should().Be(1, "exactly one request once the interval has passed");
+            restarted.CandidateCount.Should().Be(source.CandidateCount, "a failed refresh keeps the cached links");
+        }
+    }
+
+    [Fact]
+    public async Task Manual_verified_links_work_with_the_liquipedia_source_off()
+    {
+        await using var host = await TestHost.CreateAsync(new()
+        {
+            ["Esports:Provider:Name"] = "PandaScore",
+            ["Esports:HltvLinksFromLiquipedia"] = "false",
+            ["Esports:VerifiedMatchLinks:0:Match"] = "pandascore:910002",
+            ["Esports:VerifiedMatchLinks:0:Hltv"] = Url1,
+        });
+        host.Services.GetRequiredService<LiquipediaHltvLinkSource>().Enabled.Should().BeFalse();
+        await host.Services.GetRequiredService<EsportsPoller>().RefreshMatchesAsync(CancellationToken.None);
+
+        var matches = host.Services.GetRequiredService<EsportsCache>().Matches.Data!;
+        matches.Single(m => m.Key.Id == "910002").Links!.HltvMatchUrl.Should().Be(Url1);
+        matches.Where(m => m.Key.Id != "910002").Should().OnlyContain(m => m.Links == null || m.Links.HltvMatchUrl == null,
+            "no Liquipedia links when the source is off (910001 would otherwise get one)");
     }
 }

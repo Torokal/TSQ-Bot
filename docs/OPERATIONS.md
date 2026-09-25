@@ -69,3 +69,8 @@ açıkça "public release" aşamasına geçtiğinde yapılır. Durum: **henüz b
    geçiş planı gözden geçirildi, PandaScore planı/koşulları (atıf, ücretsiz planda sonuç alanları) ve gerekiyorsa Liquipedia erişimi teyitli, VRS canlı doğrulandı.
 7. **Yalnızca açık yayın onayıyla**: `gh repo edit Torokal/TSQ-Bot --visibility public --accept-visibility-change-consequences`
    → anonim erişimi doğrula → ancak ondan sonra herkese açık bot/global komut kaydı.
+8. **Depo public olduktan sonra (sahip kararı)**: Liquipedia ücretsiz LiquipediaDB API erişimine başvuru (açık kaynak /
+   ticari olmayan / topluluk projeleri için başvuruya bağlı, çoğu zaman süreli; Basic/Premium 2026-09-25 itibarıyla geçici
+   olarak kullanılamıyor). Depo **yalnızca** Liquipedia erişimi için erkenden public yapılmaz. Onaylanana kadar HLTV
+   bağlantı zenginleştirmesi BLOCKED/OPTIONAL kalır; `Esports:VerifiedMatchLinks` elle yedek olarak çalışır; PandaScore
+   Liquipedia'ya bağlı değildir. Ayrıntı: docs/PROVIDERS.md "Access and plans".

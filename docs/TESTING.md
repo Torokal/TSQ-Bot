@@ -65,6 +65,15 @@ harita yok") ve demo bağlantı testi yeni tasarıma göre güncellendi; canlıy
 Liquipedia anahtarını ayrı ayrı doğrular. Eski testler Liquipedia fixture'larıyla (`Esports:Provider:Name=Liquipedia`)
 çalışmaya devam eder. Toplam: **290 test**.
 
+
+## Liquipedia koşulları / önbellek aşaması (2026-09-25)
+
+8 yeni test: `Without_an_operator_user_agent_the_product_default_is_sent`, `All_tables_share_one_hourly_budget`,
+`A_contact_user_agent_is_only_detected_as_a_recommendation` (4 durum), `A_restart_reuses_the_persisted_links_without_an_extra_request`,
+`Manual_verified_links_work_with_the_liquipedia_source_off`. Değişen: UA doğrulama teorisi (iletişimsiz/boş UA artık
+sorun değil; upstream kimliği hâlâ reddedilir), bağlantı kaynağı kapalılık testi (anahtarsız canlı mod → kapalı, istek yok;
+UA'sız ama anahtarlı → açık). Toplam: **319 test**.
+
 ## Bilinen gözlem
 
 - İlk tam koşulardan birinde `SetUpEsportsGuildAsync` sırasında bir kez `DbUpdateException` görüldü; iç hata mesajı

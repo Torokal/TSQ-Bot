@@ -145,7 +145,7 @@ public sealed class ProviderOutcomeTests
     {
         var clock = new FakeTimeProvider(TestHost.T0);
         var (provider, handler) = Create((_, _) => Task.FromResult(StubHttpHandler.Json("{}", HttpStatusCode.BadGateway)),
-            o => { o.RequestsPerHourPerTable = 2; o.BudgetShare = 1; o.MaxRetries = 5; }, clock: clock);
+            o => { o.RequestsPerHour = 2; o.BudgetShare = 1; o.MaxRetries = 5; }, clock: clock);
         var task = provider.GetMatchesAsync(Window, CancellationToken.None);
         for (var i = 0; i < 20 && !task.IsCompleted; i++)
         {
@@ -201,7 +201,7 @@ public sealed class ProviderOutcomeTests
     {
         var clock = new FakeTimeProvider(TestHost.T0);
         var (provider, handler) = Create((_, _) => Task.FromResult(StubHttpHandler.Json("{\"result\":[]}")),
-            o => { o.RequestsPerHourPerTable = 3; o.BudgetShare = 1; }, clock: clock);
+            o => { o.RequestsPerHour = 3; o.BudgetShare = 1; }, clock: clock);
         for (var i = 0; i < 3; i++)
             (await provider.GetMatchesAsync(Window, CancellationToken.None)).Outcome.Should().Be(ProviderOutcome.Success);
 
@@ -214,16 +214,52 @@ public sealed class ProviderOutcomeTests
         (await provider.GetMatchesAsync(Window, CancellationToken.None)).Outcome.Should().Be(ProviderOutcome.Success);
     }
 
+    // The contact User-Agent is explicit in the MediaWiki API terms, not in the LiquipediaDB section: recommended, not a gate.
     [Theory]
     [InlineData(null, "ua (https://x)", true)]
-    [InlineData("key", null, true)]
-    [InlineData("key", "NoContactUA/1.0", true)]
+    [InlineData("key", null, false)]
+    [InlineData("key", "NoContactUA/1.0", false)]
     [InlineData("key", "BOT-Greg-v2/1.0 (julius.gmeinder@proton.me)", true)]
     [InlineData("key", "TSQBot/0.1 (https://example.org; ops@example.org)", false)]
-    public void Live_mode_requires_key_and_own_contact_user_agent(string? key, string? ua, bool problem)
+    public void Live_mode_requires_a_key_and_never_the_upstream_identity_but_no_contact_user_agent(string? key, string? ua, bool problem)
     {
         LiquipediaClient.ConfigurationProblem(new LiquipediaOptions { ApiKey = key, UserAgent = ua }, requireKey: true)
             .Should().Match(p => (p != null) == problem);
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("NoContactUA/1.0", false)]
+    [InlineData("TSQBot/0.1 (ops@example.org)", true)]
+    [InlineData("TSQBot/0.1 (https://example.org)", true)]
+    public void A_contact_user_agent_is_only_detected_as_a_recommendation(string? ua, bool hasContact) =>
+        LiquipediaClient.UserAgentHasContact(ua).Should().Be(hasContact);
+
+    [Fact]
+    public async Task Without_an_operator_user_agent_the_product_default_is_sent()
+    {
+        HttpRequestMessage? seen = null;
+        var (provider, _) = Create((r, _) =>
+        {
+            seen = r;
+            return Task.FromResult(StubHttpHandler.Json("{\"result\":[]}"));
+        }, o => o.UserAgent = null);
+        provider.IsConfigured.Should().BeTrue("the User-Agent is not required for LiquipediaDB");
+        (await provider.GetMatchesAsync(Window, CancellationToken.None)).Outcome.Should().Be(ProviderOutcome.Success);
+        seen!.Headers.UserAgent.ToString().Should().Be(LiquipediaClient.DefaultUserAgent);
+    }
+
+    [Fact]
+    public async Task All_tables_share_one_hourly_budget()
+    {
+        // LPDB terms: "no more than 60 requests per 1 hour" for all requests, not per table.
+        var clock = new FakeTimeProvider(TestHost.T0);
+        var (provider, handler) = Create((_, _) => Task.FromResult(StubHttpHandler.Json("{\"result\":[]}")),
+            o => { o.RequestsPerHour = 1; o.BudgetShare = 1; }, clock: clock);
+        (await provider.GetMatchesAsync(Window, CancellationToken.None)).Outcome.Should().Be(ProviderOutcome.Success);
+        var events = await provider.GetEventsAsync(DateOnly.FromDateTime(TestHost.T0.UtcDateTime), DateOnly.FromDateTime(TestHost.T0.UtcDateTime).AddDays(7), CancellationToken.None);
+        events.Outcome.Should().Be(ProviderOutcome.QuotaExceeded, "the match request already spent the shared budget");
+        handler.Requests.Should().ContainSingle();
     }
 
     [Fact]

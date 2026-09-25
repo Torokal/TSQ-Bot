@@ -3,7 +3,7 @@
 - Durum: Kabul edildi (2026-09-25)
 
 ## Bağlam
-Liquipedia canlı erişimi onaylı (çoğunlukla ücretli) anahtar gerektiriyor ve doğrulanmış "maç başladı" durumu sunmuyor.
+Liquipedia canlı erişimi onaylı anahtar gerektiriyor (2026-09-25: Basic/Premium geçici olarak kullanılamıyor, ücretsiz erişim başvuruyla) ve doğrulanmış "maç başladı" durumu sunmuyor.
 Sahip, bildirimlerin BOT Greg benzeri sade kartlar olmasını ve başladı / bitti / ertelendi / saat değişti / iptal
 bildirimlerini istedi. HLTV maç sayfası tercih edilen dış bağlantı, ancak HLTV kazınamaz.
 
