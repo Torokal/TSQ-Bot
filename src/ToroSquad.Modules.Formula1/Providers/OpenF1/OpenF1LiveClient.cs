@@ -65,7 +65,8 @@ public sealed class OpenF1LiveClient(OpenF1TokenProvider tokens, IOptions<OpenF1
         MqttClientConnectResult connect;
         try
         {
-            connect = await client.ConnectAsync(mqttOptions, cancellationToken);
+            // Bounded even if the network path stalls (e.g. a TLS handshake that never completes).
+            connect = await RunBoundedAsync(t => client.ConnectAsync(mqttOptions, t), OperationTimeout(o), cancellationToken);
         }
         catch (MQTTnet.Adapter.MqttConnectingFailedException ex) when (IsAuthRefusal(ex.Message))
         {
@@ -83,7 +84,8 @@ public sealed class OpenF1LiveClient(OpenF1TokenProvider tokens, IOptions<OpenF1
         if (connect.ResultCode != MqttClientConnectResultCode.Success)
             throw new InvalidOperationException("OpenF1 MQTT connect failed: " + connect.ResultCode);
 
-        await client.SubscribeAsync(factory.CreateSubscribeOptionsBuilder().WithTopicFilter(OpenF1Topics.RaceControl).Build(), cancellationToken);
+        await RunBoundedAsync(t => client.SubscribeAsync(factory.CreateSubscribeOptionsBuilder().WithTopicFilter(OpenF1Topics.RaceControl).Build(), t),
+            OperationTimeout(o), cancellationToken);
         onConnected();
 
         // Reconnect with a fresh token before the current one expires.
@@ -96,18 +98,70 @@ public sealed class OpenF1LiveClient(OpenF1TokenProvider tokens, IOptions<OpenF1
         await linked.CancelAsync();
         if (client.IsConnected)
         {
-            try
-            {
-                await client.DisconnectAsync(new MqttClientDisconnectOptionsBuilder().Build(), CancellationToken.None);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogDebug("OpenF1 MQTT disconnect: {Error}", ex.GetType().Name);
-            }
+            // Graceful disconnect is best effort and bounded: a stalled network never blocks stop or host shutdown.
+            // Disposing the client afterwards closes the socket regardless.
+            if (!await DisconnectBoundedAsync(t => client.DisconnectAsync(new MqttClientDisconnectOptionsBuilder().Build(), t), DisconnectTimeout))
+                logger.LogWarning("OpenF1 MQTT disconnect did not complete within {Timeout}; closing the socket", DisconnectTimeout);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
     }
+
+    /// <summary>Upper bound for a graceful MQTT disconnect.</summary>
+    public static readonly TimeSpan DisconnectTimeout = TimeSpan.FromSeconds(5);
+
+    private static TimeSpan OperationTimeout(OpenF1Options o) => TimeSpan.FromSeconds(Math.Max(1, o.TimeoutSeconds));
+
+    /// <summary>
+    /// Runs a network operation with a hard upper bound: its token is cancelled after <paramref name="timeout"/>, and even
+    /// an operation that ignores its token no longer blocks the caller (TimeoutException; the abandoned task is observed).
+    /// Caller cancellation is honoured immediately.
+    /// </summary>
+    public static async Task<T> RunBoundedAsync<T>(Func<CancellationToken, Task<T>> operation, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeout);
+        var task = operation(cts.Token);
+        using var guard = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var finished = await Task.WhenAny(task, Task.Delay(timeout + TimeSpan.FromSeconds(1), guard.Token));
+        if (finished != task)
+        {
+            Observe(task);
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException($"MQTT operation did not complete within {timeout.TotalSeconds:0} s");
+        }
+
+        await guard.CancelAsync();
+        try
+        {
+            return await task;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"MQTT operation cancelled after {timeout.TotalSeconds:0} s");
+        }
+    }
+
+    /// <summary>Bounded best-effort disconnect: true when it completed in time, false otherwise (never throws, never hangs).</summary>
+    public static async Task<bool> DisconnectBoundedAsync(Func<CancellationToken, Task> disconnect, TimeSpan timeout)
+    {
+        try
+        {
+            await RunBoundedAsync(async t =>
+            {
+                await disconnect(t);
+                return true;
+            }, timeout, CancellationToken.None);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;
+        }
+    }
+
+    private static void Observe(Task task) =>
+        _ = task.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
     private static bool IsAuthRefusal(string message) =>
         message.Contains(nameof(MqttClientConnectResultCode.NotAuthorized), StringComparison.OrdinalIgnoreCase) ||

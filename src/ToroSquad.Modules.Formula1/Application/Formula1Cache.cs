@@ -47,6 +47,9 @@ public enum F1LiveState
     Connected = 3,
     BackingOff = 4,
     AuthFailed = 5,
+
+    /// <summary>Stop requested but the previous connection has not finished closing yet (no new connection meanwhile).</summary>
+    Stopping = 6,
 }
 
 public sealed record F1LiveStatus(F1LiveState State, DateTimeOffset? LastConnectedAt, DateTimeOffset? LastDisconnectedAt, int Reconnects, string? LastError)

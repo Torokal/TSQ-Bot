@@ -117,7 +117,7 @@ public sealed class Formula1Doctor(
             var state = live.State switch
             {
                 F1LiveState.AuthFailed => F1CheckState.Problem,
-                F1LiveState.BackingOff => F1CheckState.Warning,
+                F1LiveState.BackingOff or F1LiveState.Stopping => F1CheckState.Warning,
                 _ => F1CheckState.Ok,
             };
             checks.Add(new("f1.doctor.lifecycle", state, "f1.doctor.lifecycle_state",
@@ -180,7 +180,7 @@ public sealed class Formula1HealthCheck(Formula1Cache cache, IF1LifecycleProvide
             : new HealthEntry("f1.health.lifecycle", cache.Live.State switch
             {
                 F1LiveState.AuthFailed => HealthState.Unavailable,
-                F1LiveState.BackingOff => HealthState.Degraded,
+                F1LiveState.BackingOff or F1LiveState.Stopping => HealthState.Degraded,
                 _ => HealthState.Healthy,
             }, "f1.health.lifecycle_state", [cache.Live.State.ToString()]));
         return Task.FromResult(new ModuleHealthReport(Module, entries));

@@ -10,6 +10,10 @@ namespace ToroSquad.Modules.Formula1.Application;
 /// afterwards; reconnects with bounded exponential backoff; authentication failures back off for a long time instead of
 /// hammering the provider; never throws into the host. It only queues normalized events — the poller applies them to
 /// persisted state, and only the planner + outbox ever lead to Discord messages.
+/// <para>At most one connection, always: the listener never forgets a loop that is still running. A stop that does not
+/// finish within <see cref="StopTimeout"/> leaves the loop registered in state <see cref="F1LiveState.Stopping"/> (visible in
+/// doctor/health); <see cref="EnsureRunning"/> refuses to start another connection until that loop has really ended.
+/// Stopping itself is bounded, so host shutdown never hangs on a stalled network path.</para>
 /// </summary>
 public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cache cache, TimeProvider clock, ILogger<Formula1LiveListener> logger) : IAsyncDisposable
 {
@@ -24,6 +28,7 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
     private readonly Queue<string> _seenOrder = new();
     private CancellationTokenSource? _cts;
     private Task? _loop;
+    private bool _stopRequested;
     private int _reconnected;
     private F1LiveStatus _status = Publish(cache, F1LiveStatus.Initial(transport.IsConfigured));
 
@@ -31,9 +36,19 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
 
     public bool IsConfigured => transport.IsConfigured;
 
+    /// <summary>How long <see cref="StopAsync"/> waits for the connection to close before reporting it as still stopping.</summary>
+    public TimeSpan StopTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>A connection loop is alive and not asked to stop.</summary>
     public bool IsRunning
     {
-        get { lock (_gate) return _loop is { IsCompleted: false }; }
+        get { lock (_gate) return _loop is { IsCompleted: false } && _cts is { IsCancellationRequested: false }; }
+    }
+
+    /// <summary>A stop was requested but the previous loop has not ended yet.</summary>
+    public bool IsStopping
+    {
+        get { lock (_gate) return _loop is { IsCompleted: false } && _cts is { IsCancellationRequested: true }; }
     }
 
     public F1LiveStatus Status
@@ -44,7 +59,10 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
     /// <summary>True once after every (re)connect: the caller then reconciles over REST to catch events missed while offline.</summary>
     public bool ConsumeReconnectSignal() => Interlocked.Exchange(ref _reconnected, 0) == 1;
 
-    /// <summary>Starts the connection loop if it is not running (never a second listener).</summary>
+    /// <summary>
+    /// Starts the connection loop if none is alive. Never a second listener: while a previous loop is still running — or
+    /// still stopping — nothing new is started.
+    /// </summary>
     public void EnsureRunning(CancellationToken hostStopping)
     {
         lock (_gate)
@@ -56,8 +74,14 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
             }
 
             if (_loop is { IsCompleted: false })
+            {
+                if (_cts is { IsCancellationRequested: true })
+                    logger.LogDebug("F1 live listener: previous connection still closing; not starting another one");
                 return;
+            }
+
             _cts?.Dispose();
+            _stopRequested = false;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(hostStopping);
             var token = _cts.Token;
             _loop = Task.Run(() => RunAsync(token), CancellationToken.None);
@@ -65,31 +89,60 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
         }
     }
 
+    /// <summary>
+    /// Requests the stop and waits at most <see cref="StopTimeout"/>. If the connection has not closed by then, the loop
+    /// stays registered (state <see cref="F1LiveState.Stopping"/>) and becomes Idle only when it really ends — so no second
+    /// connection can be opened meanwhile. Calling it again while stopping returns immediately (bounded shutdown).
+    /// </summary>
     public async Task StopAsync()
     {
         Task? loop;
+        bool alreadyStopping;
         lock (_gate)
         {
             loop = _loop;
+            if (loop is null || loop.IsCompleted)
+            {
+                SetStatus(_status with { State = transport.IsConfigured ? F1LiveState.Idle : F1LiveState.NotConfigured });
+                return;
+            }
+
+            // Host shutdown may already have cancelled the token; the first stop still waits (bounded) and reports.
+            alreadyStopping = _stopRequested;
+            _stopRequested = true;
             _cts?.Cancel();
         }
 
-        if (loop is not null)
-        {
-            try
-            {
-                await loop.WaitAsync(TimeSpan.FromSeconds(10));
-            }
-            catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
-            {
-                // cancelled or slow to close: the loop observes the cancellation on its own
-            }
+        if (alreadyStopping)
+            return; // the first stop is already waiting for (or has given up on) this loop
 
-            logger.LogInformation("F1 live listener stopped");
+        try
+        {
+            await loop.WaitAsync(StopTimeout);
+        }
+        catch (TimeoutException)
+        {
+            lock (_gate)
+                SetStatus(_status with { State = F1LiveState.Stopping, LastError = "connection still closing after stop timeout" });
+            logger.LogWarning("F1 live listener: connection did not close within {Timeout}; no new connection until it has", StopTimeout);
+            _ = loop.ContinueWith(_ => MarkStopped(loop), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            return;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException)
+        {
+            // the loop ended by cancellation
         }
 
+        MarkStopped(loop);
+        logger.LogInformation("F1 live listener stopped");
+    }
+
+    private void MarkStopped(Task loop)
+    {
         lock (_gate)
         {
+            if (!ReferenceEquals(_loop, loop))
+                return;
             _loop = null;
             SetStatus(_status with { State = transport.IsConfigured ? F1LiveState.Idle : F1LiveState.NotConfigured });
         }
@@ -200,7 +253,12 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
     public async ValueTask DisposeAsync()
     {
         await StopAsync();
-        _cts?.Dispose();
+        lock (_gate)
+        {
+            // A loop that is still closing keeps using its token: never dispose it underneath.
+            if (_loop is null or { IsCompleted: true })
+                _cts?.Dispose();
+        }
     }
 }
 
