@@ -101,12 +101,20 @@ Canlı dinleyici ve sağlayıcılar Discord'a **hiç** dokunmaz; outbox'a yalnı
   ScheduledStartUtc)`) **önce** çektiği son tablodur (kalıcı `f1_standings_snapshot.FetchedAt`). "Şu anki en son tablo" asla
   baseline olmaz — kesintiden sonra bu zaten yarış sonrası tablo olabilir. Kanıtlanabilir bir seans öncesi tablo yoksa
   baseline bilinmez kalır: tablo eklenmez, kart dürüstçe "/f1 standings …" önerisine döner (sonuç yine yayımlanır).
-- **Bir tablo ancak şu koşullarla "bu seanstan sonraki puan durumu" sayılır:** baseline'dan farklı; seansın kesim anından
-  sonra çekilmiş; sağlayıcı tablosu en az bu turu kapsıyor (`round ≥ seansın turu`, önceki turun geç düzeltmesi eklenmez);
+- **Bir tablo ancak şu koşullarla "bu seanstan sonraki puan durumu" sayılır:** baseline'dan farklı; seansın **bittiği
+  kanıtlandıktan sonra ilk kez ortaya çıkmış** (tamamlanma kanıtı = `FinishedObservedAt`, yoksa geçerli tam sınıflandırmanın
+  ilk kabul anı `FinalisedObservedAt`; kanıt yoksa atıf yok). Tablonun "ilk ortaya çıkışı", aynı kanonik hash'in ilk
+  çekildiği an (`FetchedAt`); sonraki doğrulamalar (`LastConfirmedAt`) seans sırasında zaten var olan bir tabloyu seans
+  sonrası güncellemeye çevirmez; sağlayıcı tablosu en az bu turu kapsıyor (`round ≥ seansın turu`, önceki turun geç düzeltmesi eklenmez);
   **sprint** için tablo aynı turun yarışı başlamadan önce çekilmiş (yoksa yarışı da içerebilir); **sprint haftasonu yarışı**
   için sprint sonrası tablo, sprint bitişiyle yarış başlangıcı arasında gözlemlenmiş olmalı (tur numarası sprint sonrası ile
   yarış sonrasını ayırt edemez). Bu kanıt yoksa (ör. bot iki seans boyunca kapalıydı) tablo eklenmez — fail closed.
   Pencere eklemeden kapanırsa kart "sağlayıcı henüz güncellemedi — /f1 standings …" olarak düzenlenir.
+- **Sonuç düzeltmesi puan durumunu yeniden açar:** sprint/yarış sınıflandırması gerçekten değişirse (kanonik hash) ve
+  `ResultCorrectionHours` içindeyse puan durumu kontrolü hemen yeniden başlar (en fazla `StandingsSettleWindowMinutes`, asla
+  düzeltme penceresinin ötesine değil). Karşılaştırma yine seans öncesi baseline'a göredir (baseline asla değişmez); yeni
+  yetkili tablo eklenmiş olanın yerini alır, tablo değişmezse eklenmiş olan kalır. Düzenlemeler ping atmaz. Antrenman/sıralama
+  düzeltmesi puan durumu yoklaması başlatmaz.
 - Kart boyutu: tam sınıflandırma tercih edilir (20–22 araç rahat sığar); açıklama 3000 karakter bütçesini aşarsa satır
   sınırında kesilir ve "kısaltıldı" notu eklenir. Puan durumu kartta ilk `CardStandingsRows` (vars. 10) satır +
   "tamamı: /f1 standings …".
@@ -147,6 +155,7 @@ Canlı dinleyici ve sağlayıcılar Discord'a **hiç** dokunmaz; outbox'a yalnı
 | Takvim | 6 saatte bir; 48 saat içinde seans varsa saatte bir. Mevcut sezon bitince (veya Aralık'ta) sonraki sezon da yüklenir — yıl kodda sabit değildir |
 | Puan durumu | 6 saatte bir + sprint/yarış sonrası sınırlı bekleme penceresi |
 | Yaşam döngüsü | Yalnızca seans penceresinde (başlangıçtan 35 dk önce → planlanan bitiş + 4 saat). Canlı akış (MQTT) açıkken REST yalnızca güvenlik ağı (2 dk) ve her yeniden bağlanmada; akış yoksa 60 sn |
+| Sıra (her tur) | Takvim → yaşam döngüsü (seans öncesi baseline'lar önceki turlarda saklanan tablolardan) → sonuçlar (tamamlanma kanıtı) → puan durumu → planlayıcı. Böylece kesintiden sonra ilk çekilen yarış sonrası tablo ancak sonuç seansın bittiğini kanıtladıktan sonra saklanır |
 | Sonuçlar | Sağlayıcı "bitti" dedikten sonra (kimlik bilgisi yoksa OpenF1 canlı penceresi + 5 dk sonra) 2→15 dk geri çekilmeyle en fazla 12 saat; sonra düzeltmeler için ilk 3 saat 20 dk'da bir, 24 saate kadar saatte bir |
 
 Hiçbir sunucuda modül açık değilse hiçbir sağlayıcı çağrılmaz. Komutlar asla sağlayıcı çağırmaz (yalnızca önbellek;
