@@ -1,8 +1,8 @@
 # Railway'e taşıma — özel test barındırma (PC kapatılabilsin)
 
 Amaç: TSQ Bot'u Windows PC'den Railway'e taşımak; bot **yalnızca test sunucusunda** (618763184815472651) 7/24 çalışsın,
-SQLite veritabanı kalıcı bir **Railway Volume**'de dursun. Bu **genel yayın değildir**: depo PRIVATE kalır, global komut
-kaydı yok, herkese açık davet yok.
+SQLite veritabanı kalıcı bir **Railway Volume**'de dursun. Bot **tek sunucuda** çalışır (`Discord:AllowedGuildIds`); global komut kaydı yok, herkese açık davet yok. Kaynak depo
+public'tir (bu, Discord erişimini değiştirmez).
 
 Resmî kaynaklar (okundu 2026-09-25): [Volumes](https://docs.railway.com/reference/volumes) ·
 [Using Volumes](https://docs.railway.com/guides/volumes) · [Backups](https://docs.railway.com/reference/backups) ·
@@ -45,7 +45,7 @@ kullanılamaz; servis başına tek volume.
 
 | Ayar | Değer |
 |---|---|
-| Source → Branch | `feature/railway-deployment` (şimdilik; ileride `main`) |
+| Source → Repo / Branch | `Torokal/TSQ-Bot` (public) / `main` |
 | Builder | Dockerfile (kökte Dockerfile varsa Railway onu kullanır) |
 | Region / Replicas | EU West (Amsterdam) önerisi; **1** replika (volume'lü serviste zaten tek) |
 | Networking → Public Networking | **Kapalı** — domain oluşturma (Discord botu HTTP'ye ihtiyaç duymaz) |

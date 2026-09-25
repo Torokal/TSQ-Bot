@@ -67,8 +67,10 @@ tutulurken (bot çalışıyorsa) reddeder. Yedekler kullanıcı verisi içerir: 
 
 ## Yayın öncesi güvenlik kapısı (PRE-RELEASE REQUIREMENT)
 
-Depo `Torokal/TSQ-Bot` geliştirme/test süresince **private**tir. Bot herkese açılmadan **hemen önce** ve yalnızca sahip
-açıkça "public release" aşamasına geçtiğinde yapılır. Durum: **henüz başlamadı / gerekli değil**.
+Depo `Torokal/TSQ-Bot` **public** (2026-09-25): tam geçmiş taraması (gerçek token değerleri + kalıplar + yasak dosya türleri)
+temiz; tek seferlik yetkili geçmiş temizliği yapıldı (kişisel e-posta ve eski sahte token literali kaldırıldı, güncel ağaç
+aynı). Orijinal geçmiş sahibe özel private arşivde. `main` korumalı (PR zorunlu, force push yok); **geçmiş yeniden yazma
+istisnası kapandı**. Discord tarafı bundan bağımsızdır: bot yalnızca tek sunucuda, global komut ve herkese açık davet yok.
 
 1. **Tüm git geçmişinde secret taraması** (tüm dallar, tüm commit'ler): Discord token, PandaScore token, Liquipedia anahtarı, GitHub
    kimlik bilgisi, webhook, bağlantı dizesi, parola, kimlik bilgisi içeren URL, yerel ortam değerleri. Bilinen tek
