@@ -93,7 +93,7 @@ gerçek API'de doğrulandı) · BLOCKED · DEFERRED.
 | Haber bildirimleri, eski Greg "yıldız puanı" | DEFERRED (doğrulanmış kaynak yok; VRS yeniden adlandırılmaz) |
 | Canlı maç durumu bildirimi | DEFERRED (Liquipedia doğrulanmış canlı durum sunmuyor) |
 | DM komutları/bildirimleri | Kapsam dışı (şartname) |
-| Docker dağıtımı, 7/24 barındırma | DEFERRED (seçilmedi, doğrulanmadı) |
+| Docker dağıtımı, 7/24 barındırma | Railway seçildi — bkz. "Barındırma: Railway" |
 
 ## Ortam (2026-09-24 doğrulandı)
 
@@ -246,6 +246,21 @@ eşleşiyor. Administrator istenmez; Mention Everyone önerilmez (rolü "bahsedi
 | Bütçe | Kod artık tüm LPDB tabloları için **tek ortak** bütçe kullanıyor (önceden tablo başınaydı); bağlantı kaynağı 30 dk × ≤5 sayfa = en kötü ≈10 istek/saat |
 | Önbellek | HLTV bağlantı adayları veritabanında (tablo `esports_provider_state`, anahtar `liquipedia:hltv-links`); yeniden başlatma erken istek yapmaz — TESTED_OFFLINE |
 | Karar | Depo geliştirme boyunca PRIVATE; yalnızca Liquipedia için erken public yapılmaz; başvuru yayın aşamasında. O zamana kadar zenginleştirme BLOCKED/OPTIONAL, `Esports:VerifiedMatchLinks` elle yedek, PandaScore Liquipedia'dan bağımsız (TESTED_OFFLINE) |
+
+## Barındırma: Railway (özel test, 2026-09-25)
+
+| Konu | Durum |
+|---|---|
+| Barındırma / ortam | Railway, geliştirme/test; depo **PRIVATE**; yalnızca test guild 618763184815472651; global komut yok |
+| Dal | `feature/railway-deployment` (PR #3 dalı `feature/pandascore-notifications` üzerine; PR #3'e bağımlı) |
+| Dockerfile (SDK 10.0.401 → runtime 10.0, secret yok, `/data`) | IMPLEMENTED; yerelde `docker build` **BLOCKED** (Docker kurulu değil) — Railway derlemesi doğrulayacak. Aynı `dotnet publish` komutu yerelde TESTED_OFFLINE (Release, 0 uyarı, linux-x64 SQLite native dahil, yerel veritabanı yok) |
+| Depolama korumaları (volume yok/dışında/yazılamaz → başlamaz; bütünlük kontrolü; bekleme modu) | TESTED_OFFLINE (birim testleri + yayınlanmış çıktıyla Railway benzeri smoke test: volume yok → çıkış 1; bekleme → DB açılmadı; normal → DB volume'de, migration, güvenli açılış logu) |
+| SIGTERM ile düzgün kapanma (konteyner) | BLOCKED yerelde (Docker yok); .NET Generic Host SIGTERM'i işler; yerelde Ctrl+C ile düzgün kapanma daha önce gözlendi |
+| Replika | 1 (railway.json; Railway volume'lü serviste replikaya izin vermez) |
+| Genel ağ | Kapalı (HTTP yok) |
+| Railway hesabı / plan / depo yetkisi | **BLOCKED — sahip adımı** (hesap, GitHub yetkisi, plan seçimi: Free'de "Always" yok ve $1 kredi yetmez → Hobby önerisi; satın alma sahibin kararı) |
+| Railway servis deploy / volume kalıcılığı / yeniden başlatma kalıcılığı / PC'siz çalışma | BLOCKED (henüz kurulmadı); gözlenene kadar VERIFIED_LIVE denmeyecek |
+| Yerel PC bağımlılığı | Hâlâ var (bot bu PC'de çalışıyor) |
 
 ## Yayın öncesi gereksinimler (PRE-RELEASE REQUIREMENT)
 
