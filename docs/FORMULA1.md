@@ -13,7 +13,7 @@ ve durum dürüstçe raporlanır (`/f1-admin doctor`, `/f1 now`).
 | Özellik | Kaynak | Not |
 |---|---|---|
 | Seans başladı kartı (Antrenman 1–3, Sprint, Yarış; Sıralama / Sprint Sıralaması modelli ama varsayılan kapalı) | **Canlı yaşam döngüsü** (OpenF1) | Program saati **asla** "başladı" demek değildir |
-| Sonuç kartı (antrenman: tur zamanı/fark; sprint/yarış: tam sınıflandırma, DNF/DNS/DSQ) | OpenF1 `session_result` + `drivers` | Seans bitti ≠ sonuç hazır; eksik/yarım sınıflandırma yayımlanmaz |
+| Sonuç kartı (antrenman: tur zamanı/fark; sprint/yarış: tam sınıflandırma, DNF/DNS/DSQ) | OpenF1 `session_result` + `drivers` | Seans bitti ≠ sonuç hazır; sınıflandırma ancak **seansın katılımcı listesini tamamen kapsıyorsa** yayımlanır |
 | Sonuç düzeltmeleri | aynı | 24 saat boyunca **aynı mesaj** pingsiz düzenlenir |
 | Şampiyona puan durumu (sürücüler / takımlar) | Jolpica | Bot puan **hesaplamaz**; sağlayıcı tablosu gösterilir |
 | Sprint/yarış kartına puan durumu ekleme | Jolpica | Tablo değişince aynı sonuç mesajı pingsiz düzenlenir (sınırlı bekleme penceresi) |
@@ -90,11 +90,23 @@ Canlı dinleyici ve sağlayıcılar Discord'a **hiç** dokunmaz; outbox'a yalnı
 
 - Düzeltme (ceza, DSQ, düzeltilmiş sınıflandırma) ve sonradan gelen puan durumu **aynı mesajı düzenler**; düzenlemeler asla
   ping atmaz (outbox kuralı). Kanonik sonuç hash'i sıralama/float gürültüsünden bağımsızdır.
+- **Sonuç tamlığı:** OpenF1 sınıflandırması, aynı seansın `/drivers` listesiyle (katılımcı roster'ı) karşılaştırılır.
+  Yayımlanabilir = roster'daki her sürücünün bir sonuç satırı var (DNF/DNS/DSQ satırları sayılır) ve roster dışı satır yok.
+  Kesintisiz 1..10 sıralama, 20 kişilik roster varken **tam değildir**. Eksik/kopya/yabancı numara, boş roster veya
+  sürücü listesi alınamaması (404) → yayımlanmaz, sınırlı geri çekilmeyle tekrar denenir. Grid boyutu sabitlenmez (18, 20,
+  22, 24… kod/ayar değişmeden); `MinResultEntries` yalnızca ek bir alt sınırdır, tamlığın tanımı değildir. Satır uydurulmaz.
 - Antrenman sonucu puan durumu iş akışını **tetiklemez**. Sprint/yarışta: sonuç hemen gönderilir ("puan durumu
-  bekleniyor" satırıyla); tablo `StandingsSettleWindowMinutes` (vars. 180) boyunca 5→30 dk aralıklarla kontrol edilir;
-  sürücü/takım tablosunun kanonik hash'i seans öncesi (baseline) hash'ten farklıysa **ve** sağlayıcı tablosu en az bu turun
-  sonrasını gösteriyorsa (`round ≥ seansın turu`) mesaj düzenlenir. Önceki bir turun geç düzeltmesi bu yarışa eklenmez.
-  Pencere değişiklik olmadan kapanırsa kart "sağlayıcı henüz güncellemedi — /f1 standings …" olarak düzenlenir.
+  bekleniyor" satırıyla); tablo `StandingsSettleWindowMinutes` (vars. 180) boyunca 5→30 dk aralıklarla kontrol edilir.
+- **Seans öncesi baseline kanıtlanabilir olmalı:** baseline, botun seansın kesim anından (`min(StartedObservedAt,
+  ScheduledStartUtc)`) **önce** çektiği son tablodur (kalıcı `f1_standings_snapshot.FetchedAt`). "Şu anki en son tablo" asla
+  baseline olmaz — kesintiden sonra bu zaten yarış sonrası tablo olabilir. Kanıtlanabilir bir seans öncesi tablo yoksa
+  baseline bilinmez kalır: tablo eklenmez, kart dürüstçe "/f1 standings …" önerisine döner (sonuç yine yayımlanır).
+- **Bir tablo ancak şu koşullarla "bu seanstan sonraki puan durumu" sayılır:** baseline'dan farklı; seansın kesim anından
+  sonra çekilmiş; sağlayıcı tablosu en az bu turu kapsıyor (`round ≥ seansın turu`, önceki turun geç düzeltmesi eklenmez);
+  **sprint** için tablo aynı turun yarışı başlamadan önce çekilmiş (yoksa yarışı da içerebilir); **sprint haftasonu yarışı**
+  için sprint sonrası tablo, sprint bitişiyle yarış başlangıcı arasında gözlemlenmiş olmalı (tur numarası sprint sonrası ile
+  yarış sonrasını ayırt edemez). Bu kanıt yoksa (ör. bot iki seans boyunca kapalıydı) tablo eklenmez — fail closed.
+  Pencere eklemeden kapanırsa kart "sağlayıcı henüz güncellemedi — /f1 standings …" olarak düzenlenir.
 - Kart boyutu: tam sınıflandırma tercih edilir (20–22 araç rahat sığar); açıklama 3000 karakter bütçesini aşarsa satır
   sınırında kesilir ve "kısaltıldı" notu eklenir. Puan durumu kartta ilk `CardStandingsRows` (vars. 10) satır +
   "tamamı: /f1 standings …".
@@ -105,8 +117,13 @@ Canlı dinleyici ve sağlayıcılar Discord'a **hiç** dokunmaz; outbox'a yalnı
 
 ### Bootstrap, watermark, kesinti
 
-- İlk kurulum / yeni sezon / sağlayıcı değişimi: ilk görüldüğünde başlangıcı geçmişte olan her seans **baseline** olur ve asla
-  duyurulmaz (sonucu `/f1 results` için yine çekilir).
+- İlk kurulum / yeni sezon / sağlayıcı değişimi: ilk görüldüğünde **planlanan bitişi geçmiş** her seans **baseline** olur ve
+  asla duyurulmaz — sonucu dahil (sonuç `/f1 results` için yine çekilir). Fail closed: planlanan bitişten sonra ilk kez
+  görülen seans hâlâ sürüyor olsa bile (uzun kırmızı bayrak) baseline'dır.
+- Planlanan başlangıçtan sonra ama planlanan bitişten önce ilk kez görülen seans (ertelenmiş veya sürmekte) baseline
+  **değildir**: canlı sağlayıcı ertelenmiş ilk başlangıcı sunucunun watermark'ından sonra ve taze olarak doğrularsa "başladı"
+  kartı gider; seans modül açılmadan önce başlamışsa başlangıç kartı gitmez (watermark + tazelik). **Karar:** sonucu sunucunun
+  watermark'ından sonra kesinleşen seansın sonucu yeni bilgidir ve gönderilir.
 - Sunucu watermark'ı: kurulum, modülü (yeniden) açma, pause'dan dönme, kanal değiştirme ve bir bildirim türünü yeniden
   açma watermark'ı "şimdi"ye taşır; öncesindeki hiçbir şey gönderilmez.
 - Kesinti sonrası: geç görülen başlangıç duyurulmaz (tazelik penceresi); sonuçlar yalnızca bitişi `ResultCatchUpHours`
@@ -142,7 +159,10 @@ mimari testli).
 token'ı (`POST https://api.openf1.org/token`, form `username`/`password`, 1 saat geçerli). Tek konu: `v1/race_control`.
 Tek bağlantı (asla ikinci dinleyici yok), yalnızca seans penceresinde açık; kopunca 2 sn → 5 dk'ya kadar üstel geri
 çekilme; kimlik reddinde 15 dk; token dolmadan temiz yeniden bağlanma; her bağlantıdan sonra REST uzlaştırması; kopya
-olaylar hem dinleyicide hem durum makinesinde elenir; host kapanışında temiz kapanır.
+olaylar hem dinleyicide hem durum makinesinde elenir. MQTT bağlanma/abone olma işlem zaman aşımıyla, nazik kopma 5 sn ile
+sınırlıdır (iptali dinlemeyen bir ağ yolu bile beklemeyi uzatamaz; sonra soket kapatılır). Durdurma en fazla 10 sn bekler;
+bağlantı hâlâ kapanmıyorsa dinleyici o döngüyü **unutmaz**: durum `Stopping` olur (doctor/sağlık uyarısı) ve eski döngü
+gerçekten bitene kadar yeni bağlantı açılmaz. Host kapanışı bu yüzden takılmaz.
 
 ## Komutlar
 
