@@ -91,6 +91,12 @@ başka alan, HLTV, http hayır) ve demo hükmen kartının tam hedef biçimi (ba
 Sayfası). Göreli zaman Discord'a ait olduğu için elle "… dakika önce" üreten test yoktur/eklenmedi; `<t:…:R>` biçimi ve doğru
 olay zamanı golden testlerde doğrulanır. Toplam: **341 test**, ×3 temiz (kilit hatası tekrarlanmadı).
 
+## Kalıcı fixture çıpası (2026-09-25)
+
+2 yeni test (`FixtureRestartTests`): aynı veritabanında 40 dk sonra "yeniden başlatılan" ikinci host demo saatlerini
+değiştirmez ve yeni `rescheduled-*` satırı üretmez (düzeltmeden önce çalıştırıldı ve **başarısız oldu**, sonra geçti); çıpa
+24 saat içinde yeniden kullanılır, sonra yenilenir, gelecekteki çıpaya güvenilmez. Toplam: **343 test**.
+
 ## Bilinen gözlem
 
 - İlk tam koşulardan birinde `SetUpEsportsGuildAsync` sırasında bir kez `DbUpdateException` görüldü; iç hata mesajı

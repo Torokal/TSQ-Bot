@@ -73,7 +73,8 @@ public sealed class EsportsModule : IToroModule
         }
         else
         {
-            // One anchor for the process: IHttpClientFactory recycles handlers, so it cannot live in the handler.
+            // One anchor for the process (kept across restarts): IHttpClientFactory recycles handlers, so it cannot live in the handler.
+            services.AddSingleton<IFixtureAnchorStore, ProviderStateFixtureAnchorStore>();
             services.AddSingleton<FixtureAnchor>();
             liquipedia.ConfigurePrimaryHttpMessageHandler(sp => new FixtureHttpHandler(sp.GetRequiredService<TimeProvider>(), anchor: sp.GetRequiredService<FixtureAnchor>()));
             panda.ConfigurePrimaryHttpMessageHandler(sp => new FixtureHttpHandler(sp.GetRequiredService<TimeProvider>(), anchor: sp.GetRequiredService<FixtureAnchor>()));

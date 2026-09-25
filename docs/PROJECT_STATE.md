@@ -5,7 +5,7 @@
 
 Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama PR #2'de (açık, merge edilmedi).
 **PandaScore + yaşam döngüsü + sade kartlar** `feature/pandascore-notifications` dalında (PR #2 üzerine yığılı);
-çevrimdışı **341/341 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı: BLOCKED (token yok). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
+çevrimdışı **343/343 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı: BLOCKED (token yok). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
 yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esports:VerifiedMatchLinks` elle yedek.
 
 ## PandaScore / bildirim aşaması (2026-09-25)
@@ -213,8 +213,11 @@ Test guild'de kalan yapılandırma: rol eşleme #2 (TSQ Test Bildirim → **tüm
 testi sırasında varsayılanla oluştu; ileride demo hatırlatmaları bu test rolünü etiketleyebilir. Kaldırma:
 `/esports-admin roles unmap mapping:2`.
 
-Bilinen demo yan etkisi: demo saatleri her süreç başlatmada yeniden hesaplanır; bu yüzden gönderilmiş demo hatırlatması
-yeniden başlatmada "başlangıç saati güncellendi" notuyla (ping'siz) düzenlenir. Gerçek veride bu davranış doğrudur.
+Demo saatleri (düzeltildi, 2026-09-25): fixture zaman çıpası artık veritabanında (`ProviderStates`: `fixture:anchor`) saklanır
+ve 24 saate kadar yeniden kullanılır. Önceden her yeniden başlatma demo saatlerini kaydırıyor, planlayıcı da bunu haklı olarak
+"saat değişti" sayıp test kanalına yeni bir TEST/DEMO kartı gönderiyordu. Artık yeniden başlatma yeni kart üretmez; 24 saatten
+sonra demo zaman çizelgesi bir kez yenilenir (aksi hâlde tüm demo maçlar geçmişte kalırdı). TESTED_OFFLINE; canlıda bir sonraki
+yeniden başlatmada gözlenecek (ilk yeniden başlatma çıpayı kaydeder, sonrakiler kart üretmemeli).
 
 Discord yapılandırması (koddan doğrulandı): gateway intent yalnızca **Guilds** (ayrıcalıklı intent yok); zorunlu kanal
 izinleri View Channel + Send Messages + Embed Links, isteğe bağlı Read Message History (uzlaştırma) ve Manage Roles
@@ -250,8 +253,8 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 1. **Sahip:** PR #2'yi (canlı doğrulama) incelemek/merge etmek; ardından PR #3 (PandaScore) `main`'e yönelir.
 2. **Sahip (isteğe bağlı):** test sunucusunda `/esports-admin roles unmap mapping:2` (ping'li test eşlemesi).
 3. Kart görselleri tamamlandı: tüm v2 türleri (Started 🔴, Finished normal/spoiler, Postponed, Rescheduled, Canceled,
-   Forfeit) ve Maç Sayfası görünümü **VERIFIED_LIVE** (2026-09-25). Açık küçük iş: fixture modunda her yeniden başlatma yeni
-   bir TEST/DEMO "saat değişti" kartı üretiyor (FixtureAnchor süreç başlangıcına bağlı) — ayrı görev olarak önerildi.
+   Forfeit) ve Maç Sayfası görünümü **VERIFIED_LIVE** (2026-09-25). Yeniden başlatmada yeni demo "saat değişti" kartı sorunu
+   düzeltildi (kalıcı fixture çıpası) — TESTED_OFFLINE, canlı gözlem bekliyor.
 4. **Sahip:** PandaScore token'ı (`dotnet user-secrets set "PandaScore:Token" …`) → ajan önce yalnızca okuma doğrulaması.
 
 ## NEXT ACTION (önceki kayıt)

@@ -32,7 +32,7 @@ public sealed record EsportsDataMode(ProviderMode Mode)
 /// <summary>
 /// Serves PandaScore-, LiquipediaDB- and GitHub-shaped responses from embedded fixture files so that fixture mode runs the
 /// real HTTP client, pagination and parsers. Placeholders like {{T+00:30}} / {{T-02:00}} / {{D+3}} are rebased on a
-/// <see cref="FixtureAnchor"/> (fixed for the process) when one is supplied, otherwise on the current clock.
+/// <see cref="FixtureAnchor"/> (kept across restarts for up to a day) when one is supplied, otherwise on the current clock.
 /// Synthetic data only — no copied third-party content.
 /// </summary>
 public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSource? source = null, FixtureAnchor? anchor = null) : HttpMessageHandler
@@ -41,10 +41,11 @@ public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSourc
 
     public int RequestCount { get; private set; }
 
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         RequestCount++;
+        var now = anchor is null ? clock.GetUtcNow() : await anchor.GetAsync(cancellationToken);
         var uri = request.RequestUri!;
         var path = uri.AbsolutePath;
 
@@ -54,7 +55,7 @@ public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSourc
             var query = HttpUtility.ParseQueryString(uri.Query);
             var offset = int.Parse(query["offset"] ?? "0", CultureInfo.InvariantCulture);
             var limit = int.Parse(query["limit"] ?? "20", CultureInfo.InvariantCulture);
-            var all = JsonNode.Parse(Rebase(_source.Read(table)))!.AsArray();
+            var all = JsonNode.Parse(Rebase(_source.Read(table), now))!.AsArray();
             var page = new JsonArray(all.Skip(offset).Take(limit).Select(n => n?.DeepClone()).ToArray());
             return Json(new JsonObject { ["result"] = page }.ToJsonString());
         }
@@ -66,11 +67,11 @@ public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSourc
             var query = HttpUtility.ParseQueryString(uri.Query);
             var number = int.Parse(query["page[number]"] ?? "1", CultureInfo.InvariantCulture);
             var size = int.Parse(query["page[size]"] ?? "50", CultureInfo.InvariantCulture);
-            var all = JsonNode.Parse(Rebase(_source.Read(file), iso: true))!.AsArray();
+            var all = JsonNode.Parse(Rebase(_source.Read(file), now, iso: true))!.AsArray();
             var page = new JsonArray(all.Skip((number - 1) * size).Take(size).Select(n => n?.DeepClone()).ToArray());
             var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(page.ToJsonString(), Encoding.UTF8, "application/json") };
             response.Headers.TryAddWithoutValidation("X-Total", all.Count.ToString(CultureInfo.InvariantCulture));
-            return Task.FromResult(response);
+            return response;
         }
 
         if (uri.Host == "api.github.com" && path.Contains("/contents/live/", StringComparison.Ordinal))
@@ -78,7 +79,7 @@ public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSourc
             var year = path[(path.LastIndexOf('/') + 1)..];
             var date = clock.GetUtcNow().AddDays(-10);
             if (year != date.Year.ToString(CultureInfo.InvariantCulture))
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
             var name = $"standings_global_{date:yyyy_MM_dd}.md";
             var listing = new JsonArray(new JsonObject
             {
@@ -92,13 +93,11 @@ public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSourc
         if (uri.Host == "raw.githubusercontent.com")
             return Text(_source.Read("vrs-global.md"));
 
-        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        return new HttpResponseMessage(HttpStatusCode.NotFound);
     }
 
-    private string Rebase(string json, bool iso = false)
-    {
-        var now = anchor?.Get() ?? clock.GetUtcNow();
-        return Placeholder().Replace(json, m =>
+    private static string Rebase(string json, DateTimeOffset now, bool iso = false) =>
+        Placeholder().Replace(json, m =>
         {
             var sign = m.Groups[2].Value == "-" ? -1 : 1;
             if (m.Groups[1].Value == "D")
@@ -108,33 +107,60 @@ public sealed partial class FixtureHttpHandler(TimeProvider clock, IFixtureSourc
             at = new DateTimeOffset(at.Year, at.Month, at.Day, at.Hour, at.Minute, 0, TimeSpan.Zero);
             return at.ToString(iso ? "yyyy-MM-dd'T'HH:mm:ss'Z'" : "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         });
-    }
 
-    private static Task<HttpResponseMessage> Json(string body) =>
-        Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
+    private static HttpResponseMessage Json(string body) =>
+        new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
-    private static Task<HttpResponseMessage> Text(string body) =>
-        Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "text/plain") });
+    private static HttpResponseMessage Text(string body) =>
+        new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "text/plain") };
 
     [GeneratedRegex(@"\{\{([TD])([+-])([0-9:]+)\}\}", RegexOptions.CultureInvariant)]
     private static partial Regex Placeholder();
 }
 
 /// <summary>
-/// The moment demo placeholders are rebased on: captured at the first fixture request and then kept for the process
-/// lifetime. Rebasing on "now" at every poll made the demo match always 20 minutes away, so a reminder never became
-/// due and its start time drifted on every poll (found in the first live test-guild run, 2026-09-25).
+/// The moment demo placeholders are rebased on. Rebasing on "now" at every poll made the demo match always 20 minutes
+/// away (a reminder never became due); anchoring to the process start moved every demo time on each restart, so the
+/// planner saw a new time and posted a new TEST/DEMO "time changed" card per restart (both found live, 2026-09-25).
+/// The anchor is therefore persisted (<see cref="IFixtureAnchorStore"/>) and reused for up to <see cref="MaxAge"/>;
+/// after that the demo timeline is renewed once, otherwise every demo match would lie in the past.
 /// </summary>
-public sealed class FixtureAnchor(TimeProvider clock)
+public sealed class FixtureAnchor(TimeProvider clock, IFixtureAnchorStore? store = null)
 {
-    private readonly Lock _gate = new();
-    private DateTimeOffset? _at;
+    public static readonly TimeSpan MaxAge = TimeSpan.FromHours(24);
 
-    public DateTimeOffset Get()
+    private readonly Lock _gate = new();
+    private Task<DateTimeOffset>? _anchor;
+
+    /// <summary>Resolved once per process (concurrent callers share the same task; a cancelled attempt is retried).</summary>
+    public Task<DateTimeOffset> GetAsync(CancellationToken cancellationToken)
     {
         lock (_gate)
-            return _at ??= clock.GetUtcNow();
+        {
+            if (_anchor is null || _anchor.IsFaulted || _anchor.IsCanceled)
+                _anchor = ResolveAsync(cancellationToken);
+            return _anchor;
+        }
     }
+
+    private async Task<DateTimeOffset> ResolveAsync(CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow();
+        var stored = store is null ? null : await store.LoadAsync(cancellationToken);
+        if (stored is { } s && s <= now && now - s < MaxAge)
+            return s;
+        if (store is not null)
+            await store.SaveAsync(now, cancellationToken);
+        return now;
+    }
+}
+
+/// <summary>Where the fixture anchor survives restarts. Implementations never throw (a failure means "no anchor").</summary>
+public interface IFixtureAnchorStore
+{
+    Task<DateTimeOffset?> LoadAsync(CancellationToken cancellationToken);
+
+    Task SaveAsync(DateTimeOffset anchor, CancellationToken cancellationToken);
 }
 
 public interface IFixtureSource
