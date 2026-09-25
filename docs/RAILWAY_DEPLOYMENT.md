@@ -1,8 +1,7 @@
-# Railway'e taşıma — özel test barındırma (PC kapatılabilsin)
+# Railway ile barındırma
 
-Amaç: TSQ Bot'u Windows PC'den Railway'e taşımak; bot **yalnızca test sunucusunda** (618763184815472651) 7/24 çalışsın,
-SQLite veritabanı kalıcı bir **Railway Volume**'de dursun. Bot **tek sunucuda** çalışır (`Discord:AllowedGuildIds`); global komut kaydı yok, herkese açık davet yok. Kaynak depo
-public'tir (bu, Discord erişimini değiştirmez).
+Amaç: TSQ Bot'u 7/24 bir Railway servisinde çalıştırmak; SQLite veritabanı kalıcı bir **Railway Volume**'de durur.
+Önerilen kurulum tek sunucudur (`Discord:AllowedGuildIds`): global komut kaydı ve herkese açık davet yoktur.
 
 Resmî kaynaklar (okundu 2026-09-25): [Volumes](https://docs.railway.com/reference/volumes) ·
 [Using Volumes](https://docs.railway.com/guides/volumes) · [Backups](https://docs.railway.com/reference/backups) ·
@@ -36,8 +35,8 @@ kullanılamaz; servis başına tek volume.
 ## 1. Hesap ve depo bağlantısı (tarayıcıda, senin hesabınla)
 
 1. https://railway.com → **Login** → GitHub ile giriş.
-2. **New Project → Deploy from GitHub repo** → GitHub izin ekranında **Torokal/TSQ-Bot** deposuna erişim ver
-   (depo private kalır; Railway'in GitHub uygulaması yalnızca seçtiğin depoyu okur).
+2. **New Project → Deploy from GitHub repo** → GitHub izin ekranında dağıtacağın depoya (kendi fork'un veya
+   **Torokal/TSQ-Bot**) erişim ver; Railway'in GitHub uygulaması yalnızca seçtiğin depoyu okur.
 3. Depoyu seç. Railway kökteki `Dockerfile`'ı bulur ve onunla derler. İlk otomatik deploy **başarısız olabilir**
    (henüz volume/değişken yok, bot bilerek başlamaz) — bu beklenen durumdur, Discord'a bağlanmaz.
 
@@ -45,7 +44,7 @@ kullanılamaz; servis başına tek volume.
 
 | Ayar | Değer |
 |---|---|
-| Source → Repo / Branch | `Torokal/TSQ-Bot` (public) / `main` |
+| Source → Repo / Branch | dağıtılan depo / `main` |
 | Builder | Dockerfile (kökte Dockerfile varsa Railway onu kullanır) |
 | Region / Replicas | EU West (Amsterdam) önerisi; **1** replika (volume'lü serviste zaten tek) |
 | Networking → Public Networking | **Kapalı** — domain oluşturma (Discord botu HTTP'ye ihtiyaç duymaz) |
@@ -65,10 +64,10 @@ Tek volume yeter. Veritabanı `/data/torosquad.db` olur (imaj `TOROSQUAD_Bot__Da
 |---|---|---|
 | `TOROSQUAD_Discord__Token` | Discord bot token'ı (Developer Portal) | **Evet** |
 | `TOROSQUAD_PandaScore__Token` | PandaScore token'ı | **Evet** |
-| `TOROSQUAD_Discord__ApplicationId` | `1552783366963863592` | hayır |
+| `TOROSQUAD_Discord__ApplicationId` | Discord uygulama kimliği (Application ID) | hayır |
 | `TOROSQUAD_Discord__Transport` | `Gateway` | hayır |
-| `TOROSQUAD_Discord__AllowedGuildIds__0` | ana sunucu `689812743242514448` — **tek sunucu koruması** (başka sunucudan gelen her etkileşim reddedilir, oraya bildirim planlanmaz/gönderilmez) | hayır |
-| `TOROSQUAD_Discord__CommandSyncGuildIds__0` | `689812743242514448` (izin listesinin içinde olmalı) | hayır |
+| `TOROSQUAD_Discord__AllowedGuildIds__0` | sunucu kimliği (`<GUILD_ID>`) — **tek sunucu koruması** (başka sunucudan gelen her etkileşim reddedilir, oraya bildirim planlanmaz/gönderilmez) | hayır |
+| `TOROSQUAD_Discord__CommandSyncGuildIds__0` | aynı `<GUILD_ID>` (izin listesinin içinde olmalı) | hayır |
 | `TOROSQUAD_Discord__TestGuildIds__0` | **tanımlama** (canlıda demo yok; izin listesi dışındaki değer başlatmayı engeller) | hayır |
 | `TOROSQUAD_Delivery__Mode` | `Send` | hayır |
 | `TOROSQUAD_Esports__Provider__Mode` | `Live` | hayır |
@@ -79,15 +78,15 @@ Tek volume yeter. Veritabanı `/data/torosquad.db` olur (imaj `TOROSQUAD_Bot__Da
 `TOROSQUAD_Esports__Liquipedia__UserAgent`, `TOROSQUAD_Bot__OperatorContact`. Gerekmeyenler: `DOTNET_ENVIRONMENT`
 (imajda `Production`), `TOROSQUAD_Bot__DataDirectory` (imajda `/data`), sağlayıcı adı (varsayılan PandaScore).
 **Global komut kaydı açılmaz** (`Discord:AllowGlobalCommandSync` varsayılanı `false`); bot açılışta komut kaydetmez,
-test sunucusundaki mevcut guild komutları olduğu gibi kalır.
+sunucudaki mevcut guild komutları olduğu gibi kalır (kayıt: `Sync-Commands.ps1`, önce dry-run).
 
 Değişkenleri kaydedip **Deploy**'a bas. Loglarda şu görünmeli:
 `STANDBY: TSQ Bot … — no Discord connection, no workers, database not opened. Database /data/torosquad.db: not present yet`.
 
-## 5. Mevcut test verisini taşı (önerilen: B) veya boş başla (A)
+## 5. Boş başla (A) veya mevcut yerel veritabanını taşı (B)
 
-**A) Boş veritabanı:** 6. adıma geç. Sonra Discord'da `/setup` (kanal + modül), `/esports-admin filters team` (Aurora
-Gaming, Eternal Fire) ve istersen rol eşlemesini yeniden yap. İlk canlı tarama "baseline" olur, geçmiş duyurulmaz.
+**A) Boş veritabanı:** 6. adıma geç. Sonra Discord'da `/setup` (kanal + modül), `/esports-admin filters team` ve istersen rol
+eşlemesini yap. İlk canlı tarama "baseline" olur, geçmiş duyurulmaz.
 
 **B) Yerel veritabanını taşı (ayarlar, filtreler, bildirim kayıtları korunur):**
 
@@ -104,7 +103,7 @@ Gaming, Eternal Fire) ve istersen rol eşlemesini yeniden yap. İlk canlı taram
 3. Railway CLI (bir kez): `npm i -g @railway/cli` → `railway login` (tarayıcıda onay) → depo klasöründe `railway link`
    (projeyi ve TSQ Bot servisini seç). **Not (2026-09-25):** `railway volume files …` SSH kullanır; bilgisayarda bir SSH
    anahtarı olmalı ve Railway hesabına kayıtlı olmalı (`railway ssh keys add`). Anahtar yoksa A yolunu (boş veritabanı)
-   seç — ilk kurulumda böyle yapıldı.
+   seç.
 4. Servis **bekleme modundayken** yükle ve doğrula:
    ```powershell
    railway volume files upload "$env:USERPROFILE\tsq-handoff\torosquad-<tarih>.db" /torosquad.db --overwrite
@@ -117,7 +116,7 @@ Gaming, Eternal Fire) ve istersen rol eşlemesini yeniden yap. İlk canlı taram
 1. Yerel bot kapalı olmalı (iki kopya aynı anda Discord'a bağlanırsa etkileşimler/bildirimler ikiye katlanır).
 2. `TOROSQUAD_Bot__Standby` → `false` (veya sil) → Deploy.
 3. Loglarda sırayla: `TSQ Bot <sürüm> (commit <sha>); environment Production; database /data/torosquad.db; Discord
-   transport Gateway, test guilds 618763184815472651, global commands allowed False; match provider PandaScore (Live);
+   transport Gateway, test guilds , global commands allowed False; match provider PandaScore (Live);
    delivery Send; host Railway` → `Database ready (migrations applied)` → `[Gateway] Ready` → `Esports poll: … filtered=…`.
 
 ## 7. Doğrulama
@@ -127,7 +126,7 @@ Gaming, Eternal Fire) ve istersen rol eşlemesini yeniden yap. İlk canlı taram
 - **Yeniden başlatma testi:** Service → ⋮ → **Restart** → bot yeniden bağlanır; ayarlar/filtreler duruyor; yeni kopya
   mesaj yok (loglarda `new=0`).
 - **PC'yi kapat:** bot çalışmaya devam etmeli (Discord'da komut yanıtlıyor, Railway loglarında taramalar sürüyor).
-  SplitWire/VPN artık bot için gerekmez (Railway sunucuları Discord'a doğrudan erişir).
+  Yerel ağda Discord için VPN gerekiyorsa bile barındırılan bot için gerekmez.
 
 ## 8. Yedekler
 

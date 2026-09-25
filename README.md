@@ -1,78 +1,105 @@
 # TSQ Bot
 
-Modular Discord bot with esports match tracking and extensible server modules.
+A modular, self-hostable Discord bot. Its first module tracks **Counter-Strike 2 esports**: it posts compact match
+cards (reminder, match started, result and schedule changes) into a server channel and answers esports slash commands.
 
-> **Status (2026-09-25): early development — not production-ready, not publicly launched.**
-> Core Discord behaviour is verified live in one private **test guild**, now with **live PandaScore data** and an
-> admin team filter (Liquipedia: optional, BLOCKED without an approved key).
-> Up-to-date state (in Turkish): [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
+TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
+**BOT Greg** and reuses adapted portions of the open-source
+[BOT-Greg-v2_API](https://github.com/julius-gmeinder/BOT-Greg-v2_API) (AGPL-3.0). It is **not** an official
+continuation of BOT Greg, is not affiliated with or endorsed by its developer, and uses none of its branding.
+See [docs/PROVENANCE.md](docs/PROVENANCE.md).
 
-## What is TSQ Bot?
-
-TSQ Bot is an independent, self-hostable Discord bot built as a **modular monolith**: a small core (modules, per-server
-settings, permissions, localization, durable message delivery, privacy) plus feature modules that plug into it.
-The first feature module tracks **Counter-Strike 2 esports** — upcoming matches, results, tournaments, Valve Regional
-Standings (VRS) — and posts notifications into a server channel. Future modules (moderation, welcome, stream alerts,
-polls, …) can be added without changing the core or the esports module.
-
-The esports module is inspired by the user experience of the discontinued **BOT Greg** and reuses adapted portions of
-the open-source [BOT-Greg-v2_API](https://github.com/julius-gmeinder/BOT-Greg-v2_API) (AGPL-3.0). TSQ Bot is **not** an
-official continuation of BOT Greg, is not affiliated with or endorsed by its developer, and uses none of its branding.
-Details: [docs/PROVENANCE.md](docs/PROVENANCE.md).
-
-## Current Status
-
-Status words: **TESTED_OFFLINE** = proven by automated tests locally · **VERIFIED_LIVE** = observed against real Discord /
-real APIs · **BLOCKED** = waiting on an owner action · **DEFERRED** = intentionally not built yet ·
-**PRE-RELEASE REQUIREMENT** = must happen before public launch.
-
-| Area | Status |
-|---|---|
-| Discord gateway, guild-only command registration (no global commands), minimum permissions, no privileged intents | **VERIFIED_LIVE** (test guild) |
-| `/help`, `/bot`, `/modules`, `/setup`, `/esports …`, `/esports-admin configure\|doctor\|roles map`, team autocomplete, `/privacy export\|delete` | **VERIFIED_LIVE** (test guild) |
-| TEST/DEMO notification delivery, no duplicate on re-scan or restart, settings survive restarts | **VERIFIED_LIVE** (test guild) |
-| Compact match cards (started / result / spoiler / postponed / rescheduled / cancelled / forfeit, Match Page link) | **VERIFIED_LIVE** (Discord rendering, test guild) |
-| PandaScore provider (default): live read, results on the free plan, team catalog search, admin team filter | **VERIFIED_LIVE** (read + filter); lifecycle transitions TESTED_OFFLINE until observed |
-| Liquipedia provider (legacy/optional) | TESTED_OFFLINE — live BLOCKED (no approved key) |
-| Valve VRS rankings | TESTED_OFFLINE — live fetch not run |
-| Verified external match links (HLTV/official/provider), URL safety | TESTED_OFFLINE |
-| Admin/member permission separation with a second account, role grant/removal, cross-guild isolation, crash recovery | TESTED_OFFLINE |
-| Docker image + Railway private test hosting (persistent SQLite volume) | IMPLEMENTED / TESTED_OFFLINE — Railway deploy BLOCKED (owner account step) |
-| HLTV as a data provider, BOT Greg "stars", news, global commands, public launch | DEFERRED |
-| GitHub repository public visibility | **Public** (2026-09-25) — the Discord bot itself stays single-guild (no public invite, no global commands) |
+**Status:** early but running in production for a single Discord server. There is no public invite and there are no
+global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 
 ## Features
 
-- **Real Discord slash commands** only (no prefix/message commands; Message Content intent is not used).
-- **Modules**: each server enables/disables modules; disabling stops delivery but keeps data.
-- **Esports (CS2)**: upcoming matches, results, events, VRS rankings, team lookup, follow/unfollow teams,
-  per-server filters (team / tournament / tier / VRS top-N).
-- **Match notifications as compact cards**: planned-start reminder, **match started** (only when the provider states
-  `running`), **result** (score in the title, winner line), **postponed**, **time changed** (provider-flagged, shown in
-  Europe/Istanbul), **cancelled**, **forfeit** — each sent once, never duplicated by re-scans or restarts.
-- **"Maç Sayfası" link**: a verified HLTV match page is preferred, then an official or provider page, otherwise no link.
-  HLTV is **never scraped** and HLTV URLs are never guessed.
-- **Honest data**: provider errors are never shown as "no matches" or turned into match states; a passed start time is
-  never called "started"; live mode never falls back to demo data; unknown stays unknown.
-- **Durable delivery**: persistent outbox with de-duplication, crash recovery and ambiguous-delivery reconciliation;
-  corrections edit the existing message without pinging. No "exactly once" claim.
-- **Safe roles**: only roles that grant no permissions and sit below the approver can be self-service; the bot never
-  removes a role it cannot prove it granted.
-- **Spoiler mode**, `allowed_mentions` locked down by default, provider text cannot create links or mentions.
-- **Privacy**: `/privacy export` and `/privacy delete` (confirmed, single-use), retention after the bot leaves a server.
+- **Real slash commands only** (no prefix commands; the Message Content intent is not used).
+- **Modules** that each server can enable or disable; disabling stops delivery but keeps data.
+- **Esports (CS2)**: upcoming matches, results, events, Valve Regional Standings (VRS), team lookup, personal team
+  follows, and server filters (team / tournament / tier / VRS top-N) set by server admins.
+- **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
+  (optional spoiler mode), postponed, time changed, cancelled, forfeit. Each is sent once; later corrections edit
+  the same message without pinging again.
+- **Opt-in pings**: role mentions only for roles an admin explicitly mapped; `allowed_mentions` is locked down.
+- **Honest data**: provider errors are never shown as "no matches", a passed start time is never "started", and
+  HLTV is never scraped (only verified match-page links are shown).
+- **Durable delivery**: persistent outbox with de-duplication, crash recovery and ambiguous-delivery reconciliation.
+- **Privacy**: `/privacy export` and `/privacy delete`, data retention after the bot leaves a server.
 - Turkish by default with English fallback; Europe/Istanbul default time zone.
 
-## Slash Commands
+## Discord Commands
 
 | Group | Commands | Who |
 |---|---|---|
 | General | `/help`, `/bot status\|about\|source`, `/privacy export\|delete` | everyone |
 | Admin | `/setup`, `/modules list\|enable\|disable` | Manage Server |
 | Esports | `/esports matches\|results\|events\|rankings\|team\|follow\|unfollow\|subscriptions` | everyone (module on) |
-| Esports admin | `/esports-admin configure\|filters …\|roles …\|panel\|preview\|pause\|resume\|doctor` | Manage Server (+ Manage Roles for roles) |
+| Esports admin | `/esports-admin configure\|filters\|roles\|panel\|preview\|pause\|resume\|doctor` | Manage Server (+ Manage Roles for roles) |
 
-Full list, permissions, intents and invite scopes: [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md).
-Generated, test-checked schema: [docs/commands.manifest.json](docs/commands.manifest.json).
+Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
+[docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md). The generated, test-checked schema is
+[docs/commands.manifest.json](docs/commands.manifest.json).
+
+## Esports Providers
+
+| Provider | Role |
+|---|---|
+| **PandaScore** | Default match data (fixtures, live state, results). A free plan exists; a token is required. |
+| **Valve Regional Standings** | Rankings for `/esports rankings` and VRS filters. |
+| **Liquipedia** (optional) | Only used to find verified HLTV match-page links; needs an approved LiquipediaDB key. |
+| **HLTV** | Never scraped. Only verified match-page links are displayed. |
+
+Operators can also add verified match links manually (`Esports:VerifiedMatchLinks`). Limits, terms and attribution:
+[docs/PROVIDERS.md](docs/PROVIDERS.md).
+
+## Installation / Development
+
+Requirements: Windows 10/11, .NET SDK 10.0.401+ (pinned by `global.json`) and Git. The PowerShell scripts work on
+Windows PowerShell 5.1 and PowerShell 7.
+
+```powershell
+.\scripts\Doctor.ps1                 # environment + configuration diagnosis (never prints secrets)
+.\scripts\Test.ps1                   # build (warnings = errors) + format + manifest check + all tests
+.\scripts\Start-Dev.ps1              # run locally in safe mode (no Discord connection)
+.\scripts\Start-Dev.ps1 -Simulate    # offline end-to-end run with synthetic data and a fake Discord
+.\scripts\Sync-Commands.ps1 -GuildId <id>   # slash command registration, dry-run by default
+.\scripts\Export-Source.ps1          # source archive of the running commit (AGPL Corresponding Source)
+```
+
+Step-by-step setup (Turkish): [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md). Adding a module:
+[docs/ADDING_A_MODULE.md](docs/ADDING_A_MODULE.md).
+
+## Configuration
+
+`src/ToroSquad.Bot/appsettings.json` ships **safe defaults**:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `Discord:Transport` | `Fake` | no Discord connection; messages stay in-process |
+| `Delivery:Mode` | `DryRun` | notifications are planned and logged, not sent |
+| `Esports:Provider:Name` | `PandaScore` | match data provider |
+| `Esports:Provider:Mode` | `Fixture` | synthetic data through the real client/parser, labelled TEST/DEMO |
+| `Discord:AllowedGuildIds` | `[]` | when set, the bot only serves these servers (enforced server-side) |
+| `Discord:AllowGlobalCommandSync` | `false` | global command registration is a separate, explicit step |
+| `Bot:SourceUrl` | `https://github.com/Torokal/TSQ-Bot` | shown by `/bot source` |
+
+Secrets are read **only** from `dotnet user-secrets` or environment variables with the `TOROSQUAD_` prefix
+(`:` → `__`, e.g. `TOROSQUAD_Discord__Token`, `TOROSQUAD_PandaScore__Token`). There is no `.env` support, and secrets
+never belong in the repository. The `ToroSquad.*` project names and the `TOROSQUAD_` prefix are internal identifiers
+kept from the project's former working name.
+
+## Deployment
+
+TSQ Bot runs as a single container with a persistent volume for its SQLite database (one replica, no public HTTP).
+A Railway guide is in [docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md) (Turkish); backups, restore and the
+release checklist are in [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+## Testing
+
+`.\scripts\Test.ps1 -Repeat 3` runs the full gate three times. Tests use a real SQLite file per test, real
+migrations, the production DI registration, a fake clock and a fake Discord transport; they make **no network
+calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 
 ## Architecture
 
@@ -87,116 +114,28 @@ Generated, test-checked schema: [docs/commands.manifest.json](docs/commands.mani
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |
 
-The `ToroSquad.*` project/namespace names are internal identifiers kept from the project's former working
-name; the product name is TSQ Bot. Dependency rules are enforced by architecture tests.
-Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/adr/](docs/adr/), [docs/ADDING_A_MODULE.md](docs/ADDING_A_MODULE.md).
+Dependency rules are enforced by architecture tests. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[docs/adr/](docs/adr/). Notification behaviour: [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md).
 
-## Development
-
-Requirements: Windows 10/11, .NET SDK 10.0.401+ (pinned by `global.json`), Git. PowerShell scripts work on Windows
-PowerShell 5.1 and PowerShell 7.
-
-```powershell
-.\scripts\Doctor.ps1                 # environment + configuration diagnosis (never prints secrets)
-.\scripts\Test.ps1                   # build (warnings = errors) + format + manifest check + all tests
-.\scripts\Start-Dev.ps1              # run locally in safe mode (NO Discord connection)
-.\scripts\Start-Dev.ps1 -Simulate    # offline end-to-end: fixture data -> planner -> outbox -> fake Discord
-.\scripts\Sync-Commands.ps1 -GuildId <id>   # slash command registration, DRY-RUN by default
-.\scripts\Export-Source.ps1          # source archive of the running commit (AGPL Corresponding Source)
-```
-
-## Windows Setup
-
-Step-by-step (Turkish): [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md) — SDK install, secrets, Discord application,
-test server, going live.
-
-## Configuration
-
-`src/ToroSquad.Bot/appsettings.json` ships **safe defaults**:
-
-| Setting | Default | Meaning |
-|---|---|---|
-| `Discord:Transport` | `Fake` | no Discord connection; messages stay in-process |
-| `Delivery:Mode` | `DryRun` | notifications are planned and logged, not sent |
-| `Esports:Provider:Name` | `PandaScore` | match data provider (`Liquipedia` = legacy/optional) |
-| `Esports:Provider:Mode` | `Fixture` | synthetic data through the real client/parser, labelled TEST/DEMO |
-| `Esports:MatchPollMinutes` | `5` | validated against the provider's request budget at startup |
-| `Esports:VerifiedMatchLinks` | `[]` | operator-curated verified HLTV/official match pages |
-| `Discord:AllowGlobalCommandSync` | `false` | global command registration is a separate approval gate |
-| `Bot:SourceUrl` | `https://github.com/Torokal/TSQ-Bot` | shown by `/bot source` (see [Source Code](#source-code)) |
-
-Secrets are read **only** from `dotnet user-secrets` or environment variables with the `TOROSQUAD_` prefix
-(`:` → `__`, e.g. `TOROSQUAD_Discord__Token`, `TOROSQUAD_PandaScore__Token`). There is no `.env` file support, and secrets never belong in the repository.
-
-## Discord Setup
-
-The Discord application **"TSQ Bot"** exists and is verified in a private test guild. To run your own: create the
-application and bot in the Discord Developer Portal, store the token with
-`dotnet user-secrets set "Discord:Token" "<token>" --project src\ToroSquad.Bot`, invite the bot to a **test** server
-(scopes `bot applications.commands`; permissions integer 84992, or 268520448 with self-service roles; no Administrator),
-then register commands with `Sync-Commands.ps1` (dry-run first). Only the non-privileged **Guilds** gateway intent is used.
-
-## Data Providers
-
-- **PandaScore (default)** — create a token at app.pandascore.co (a free plan with 1,000 requests/hour exists; no paid plan
-  is enabled automatically) and store it with `dotnet user-secrets set "PandaScore:Token" "<TOKEN>" --project src\ToroSquad.Bot`.
-  Without a token live PandaScore data is **BLOCKED**. Every card says "Kaynak: PandaScore" as PandaScore's terms require.
-- **Liquipedia (optional)** — optional HLTV match-page link enrichment for PandaScore matches, or the legacy match
-  provider if `Esports:Provider:Name=Liquipedia`. Needs an approved LiquipediaDB API key (60 requests/hour; Basic/Premium
-  currently unavailable, free access by application). **BLOCKED/OPTIONAL** until the owner applies after the repository
-  goes public at release; the bot runs normally without it. A custom User-Agent is sent (your own via
-  `Esports:Liquipedia:UserAgent` is recommended; the contact requirement in Liquipedia's terms is stated for the MediaWiki
-  API, not separately for LPDB). Content is CC BY-SA 3.0 and attributed in every message.
-- **Valve Regional Standings** — rankings for `/esports rankings` and VRS filters.
-- **HLTV** — not a data source; only verified match-page links (from Liquipedia when available, or the manual
-  `Esports:VerifiedMatchLinks` list).
-
-Details, verified limits and terms: [docs/PROVIDERS.md](docs/PROVIDERS.md).
-
-## Hosting
-
-Private test hosting on Railway (Dockerfile + persistent volume for SQLite, one replica, no public HTTP):
-[docs/RAILWAY_DEPLOYMENT.md](docs/RAILWAY_DEPLOYMENT.md). Not a public launch.
-
-## Testing
-
-`.\scripts\Test.ps1 -Repeat 3` runs the full gate three times. Tests use a real SQLite file per test, real migrations,
-the production DI registration, a fake clock and a fake Discord transport; they make **no network calls**.
-Latest result and the acceptance-criteria mapping: [docs/TESTING.md](docs/TESTING.md),
-[docs/PROJECT_STATE.md](docs/PROJECT_STATE.md).
-
-## Privacy
+## Privacy / Security
 
 TSQ Bot does not read message content and does not download member lists. It stores per-server settings, follows,
-notification state and minimal user preferences. Users can export or delete their data with `/privacy`.
-Details: [docs/PRIVACY_AND_DATA.md](docs/PRIVACY_AND_DATA.md); draft policies: [docs/policies/](docs/policies/).
+notification state and minimal user preferences. Details: [docs/PRIVACY_AND_DATA.md](docs/PRIVACY_AND_DATA.md);
+draft policies: [docs/policies/](docs/policies/). To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-**AGPL-3.0-only** — see [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Portions of the
-data-access code are adapted from BOT-Greg-v2_API (AGPL-3.0); provenance and attributions are in
-[docs/PROVENANCE.md](docs/PROVENANCE.md).
+**AGPL-3.0-only**: see [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). `/bot source` shows
+this repository together with the running version and commit. If you run a **modified** version for other users,
+AGPL-3.0 §13 requires you to offer your modified source: set `Bot:SourceUrl` to your own repository (or publish an
+`Export-Source.ps1` archive).
 
-## Source Code
+## Attribution
 
-Canonical repository: **https://github.com/Torokal/TSQ-Bot**. `/bot source` shows this URL together with the running
-version and commit.
-
-Release approach: the repository is **private during development and testing** (TSQ Bot is not publicly launched, so
-the link only works for authorized GitHub users for now). **Before public bot launch the repository will be made
-public**, and the same URL becomes the public Corresponding Source location; the published source must match the
-deployed version. This is the project's compliance approach, not legal advice.
-
-If you run a **modified** version for other users, AGPL-3.0 §13 requires you to offer *your* modified source: set
-`Bot:SourceUrl` to your own repository (or publish an `Export-Source.ps1` archive).
-
-## Current Limitations
-
-- Live match data is not verified yet (no PandaScore token); cards were verified with synthetic TEST/DEMO data only.
-- Whether PandaScore's free plan fills result fields (`winner_id`, scores) is unverified (official pages conflict).
-- Not publicly launched; the source repository is private until the pre-release step makes it public.
-- "Match started" needs a provider that states it (PandaScore); with Liquipedia only planned-start reminders exist.
-- PandaScore offers no public match page; a "Maç Sayfası" link appears only for operator-verified links.
-- Single instance only (SQLite, in-process scheduler); no horizontal scaling.
-- No DM commands or DM notifications (by design).
-- Policies in `docs/policies/` are drafts, not legal advice.
+Match data by PandaScore ("Kaynak: PandaScore" on every card). Rankings from Valve's public regional standings.
+Optional link data from Liquipedia (CC BY-SA 3.0). Portions of the data-access code adapted from BOT-Greg-v2_API
+(AGPL-3.0). Details: [docs/PROVENANCE.md](docs/PROVENANCE.md).

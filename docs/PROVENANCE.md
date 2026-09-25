@@ -50,16 +50,14 @@ GNU AGPL v3 text, identical to upstream `LICENSE.txt`, SHA-256 prefix `6f1e622c8
 
 - `/bot about` lists attributions (upstream repo, Liquipedia CC BY-SA 3.0, Valve VRS, Discord.Net MIT).
 - Canonical source repository: **https://github.com/Torokal/TSQ-Bot** — the shipped default of `Bot:SourceUrl`.
-  Release approach: private during development/testing; **made public before public bot launch** (pre-release
-  requirement, see docs/OPERATIONS.md), so remote users then reach the Corresponding Source of the deployed version
-  through that same URL.
+  The repository is public, so remote users reach the Corresponding Source of the deployed version through that URL.
 - `/bot source` points users of the running instance to its **Corresponding Source** via `Bot:SourceUrl`; startup in
   Gateway mode is refused without it unless `Bot:AllowMissingSourceUrlForPrivateTesting=true`.
 - `scripts/Export-Source.ps1` produces the source archive of the exact committed version (with build instructions,
   without secrets/user data). A link to the *upstream* repository alone does **not** satisfy this.
 - The running build embeds its git commit in the informational version (`/bot about`).
 
-If the owner prefers a different license, the two derived files above must be rewritten from scratch first. This is a
+If a different license is ever wanted, the two derived files above must be rewritten from scratch first. This is a
 technical record, not legal advice.
 
 ## Third-party data
@@ -67,12 +65,11 @@ technical record, not legal advice.
 | Source | Terms (see docs/PROVIDERS.md) | How TSQ Bot complies |
 |---|---|---|
 | PandaScore (REST API) — default | pandascore.co terms: art. 6.4 "Source: PandaScore" on any medium reproducing the data; no raw-data redistribution; no direct API access/URLs for end users (6.3); free plan 1,000 req/h | Footer "Kaynak: PandaScore" on every card, PandaScore in `/bot about`; only processed cards, never raw JSON or API URLs; local request budget (50% of the plan) |
-| Liquipedia (LiquipediaDB API) — legacy/optional | CC BY-SA 3.0; attribution + link required; API key by approval; 60 req/h baseline | Footer "Kaynak: Liquipedia (CC BY-SA 3.0)" + source link on every message; per-table request budget |
+| Liquipedia (LiquipediaDB API) — legacy/optional | CC BY-SA 3.0; attribution + link required; API key by approval; 60 req/h baseline | Footer "Kaynak: Liquipedia (CC BY-SA 3.0)" + source link on every message; shared request budget |
 | HLTV | Not used as a data source (no scraping, no unofficial endpoints) | Only operator-verified match-page URLs are linked (`Esports:VerifiedMatchLinks`); pages are never fetched |
 | Valve regional standings | Public GitHub repo, **no license file**; data credits HLTV.org | Displayed with source, date and attribution only; no bulk redistribution; synthetic fixtures in tests |
 
 ## Contact with the upstream developer
 
-A short English draft asking about the V2 plan and asset/collaboration permission is in
-`docs/drafts/upstream-contact.md`. **It has not been sent** (sending requires the owner's explicit approval). Local work
-does not depend on a reply.
+No contact has been made with the upstream developer. TSQ Bot does not depend on any permission or reply beyond the
+AGPL-3.0 license of the reused code; no assets from the unlicensed BOT-Greg-Policies repository are used.

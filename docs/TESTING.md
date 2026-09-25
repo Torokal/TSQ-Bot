@@ -9,8 +9,6 @@ scope doğrulaması açıktır. Ağ erişimi yoktur.
 
 ## Test sınıfları (Windows 11, .NET SDK 10.0.401 / runtime 10.0.12)
 
-Güncel sayı ve sonuç her zaman `docs/PROJECT_STATE.md` → "Çalıştırılan testler" bölümündedir.
-
 | Sınıf | Kapsam |
 |---|---|
 | `Architecture.ArchitectureTests` | Bağımlılık yönleri; esports iş kodunda Discord SDK yok; her interaction sınıfında `[ToroModule]`; registry kopya reddi |
@@ -28,7 +26,7 @@ Güncel sayı ve sonuç her zaman `docs/PROJECT_STATE.md` → "Çalıştırılan
 | `Unit.MatchCardTests` | Sade kartlar için birebir (golden) sonuç/başladı/ertelendi/saat değişti kartları, iptal/hükmen (kazanan yoksa yazılmaz); kartlarda harita, yayın, aşama, kimlik, "son veri", yıldız yok; spoiler: başlık/açıklama/alan/footer'da skor-kazanan-hükmen sızmaz, düzen kazanandan bağımsız; Discord sınırları (500 karakterlik adlarla); sağlayıcı metni ping/bağlantı/markdown üretemez; HLTV URL doğrulama (geçerli/normalize; javascript/data/discord/file/http/benzer host/yol-sorgu hilesi/kimlik bilgisi/port/takım sayfası/yol atlatma/localhost reddi); HLTV → resmî → sağlayıcı → yok önceliği, "HLTV" etiketi yalnızca HLTV'de; demo kartları bağlantısız; küratörlü liste doğrulaması; demo kartları her türü kapsar |
 | `Unit.MessageSafetyTests` | Spoiler modunda skor/kazanan/harita/renk sızıntısı yok (tr/en, normal/hükmen); normal sonuç içeriği; eksik harita notu; demo etiketi; allowed_mentions kapalı varsayılan; yalnızca açık roller; düzenleme/önizleme ping'siz; mention enjeksiyonu ve spoiler kırma engellenir; URL allow-list; embed limitleri |
 
-## Kabul ölçütleri eşlemesi (şartname §13)
+## Kabul ölçütleri eşlemesi
 
 | # | Ölçüt | Kanıt | Durum |
 |---|---|---|---|
@@ -47,69 +45,15 @@ Güncel sayı ve sonuç her zaman `docs/PROJECT_STATE.md` → "Çalıştırılan
 | 13 | Spoiler + allowed_mentions; önizleme ping atmaz | MessageSafetyTests | TESTED_OFFLINE |
 | 14 | Kaynak/lisans, secret redaction, export/delete | OperationsTests, RolesAndPrivacyTests | TESTED_OFFLINE |
 | 15 | Boş/hatalı manifest komut silmez; varsayılanlar canlıya geçmez | CommandManifestTests (sync), Shipped_defaults…, Going_live_without… | TESTED_OFFLINE |
-| — | Gerçek test guild'inde: seçicide görünme, autocomplete, defer, yetki ayrımı, rol paneli, test bildirimi | — | **BLOCKED** (bot token / test guild yok) |
+| — | Gerçek Discord'da: seçicide görünme, autocomplete, defer, bildirim kartları | — | VERIFIED_LIVE (bkz. docs/STATUS.md); ikinci hesapla yetki ayrımı ve rol paneli yalnızca TESTED_OFFLINE |
 
-## Bağımsız inceleme sonrası eklenen regresyon testleri
+## Diğer kapsam
 
-`Changing_the_channel_or_re_enabling_results…`, `Correction_dropped_while_paused…`, `Catch_up_after_a_gap…` (genişletildi),
-`Verified_absence_allows_only_a_single_resend`, `Unfollow_after_a_failed_grant…`, `Role_approved_for_self_service_later…`,
-`Admin_without_mention_everyone…`, `Spoiler_result_hides_winner_width_and_map_count`,
-`Provider_text_cannot_create_clickable_links…`, `Retries_spend_request_budget_too`,
-`Prune_never_deletes_a_same_named_command_with_a_different_id`. Toplam: **193 test**.
-
-## PandaScore / yaşam döngüsü / sade kart aşaması (2026-09-25)
-
-88 yeni test (28 sağlayıcı sözleşmesi, 20 yaşam döngüsü, 41 kart/bağlantı; bazıları teori). Değişen eski testler: harita
-skoru ve yayın bağlantısı artık kartta olmadığı için `Non_spoiler_result…`, `Incomplete_maps…` (→ "varsayılan kartta
-harita yok") ve demo bağlantı testi yeni tasarıma göre güncellendi; canlıya geçiş testi PandaScore token'ını ve
-Liquipedia anahtarını ayrı ayrı doğrular. Eski testler Liquipedia fixture'larıyla (`Esports:Provider:Name=Liquipedia`)
-çalışmaya devam eder. Toplam: **290 test**.
-
-
-## Liquipedia koşulları / önbellek aşaması (2026-09-25)
-
-8 yeni test: `Without_an_operator_user_agent_the_product_default_is_sent`, `All_tables_share_one_hourly_budget`,
-`A_contact_user_agent_is_only_detected_as_a_recommendation` (4 durum), `A_restart_reuses_the_persisted_links_without_an_extra_request`,
-`Manual_verified_links_work_with_the_liquipedia_source_off`. Değişen: UA doğrulama teorisi (iletişimsiz/boş UA artık
-sorun değil; upstream kimliği hâlâ reddedilir), bağlantı kaynağı kapalılık testi (anahtarsız canlı mod → kapalı, istek yok;
-UA'sız ama anahtarlı → açık). Toplam: **319 test**.
-
-## Kart UI temizliği + görünmez uzlaştırma (2026-09-25)
-
-16 yeni test: 6 tür × gerçek mod (`Every_kind_has_a_plain_title_compact_fields_match_page_last_and_an_attribution_only_footer`:
-önekisiz başlık, Etkinlik/Format(/Yeni Saat) satır içi, Maç Sayfası en altta ve yalnızca bağlantı varsa, footer tam olarak
-"Kaynak: PandaScore"), 6 tür × demo modu (footer tam olarak TEST/DEMO metni, bağlantı yok), 4 outbox testi
-(`Sent_messages_show_no_internal_reference…`, `A_payload_replaced_while_delivery_is_unknown…`,
-`An_identical_message_owned_by_another_delivery…`, `Messages_sent_before_the_change…`) ve Discord.Net `Embed` dönüşümünün
-parmak izini koruduğunu doğrulayan test. Güncellenen: demo başlık/footer beklentileri (MatchCardTests, MessageSafetyTests),
-footer marker testi. Toplam: **335 test**. Gerçek Discord'da belirsiz timeout simüle edilemez → uzlaştırma TESTED_OFFLINE.
-
-## Görsel sonlandırma (2026-09-25)
-
-6 yeni test: `Demo_cards_link_only_to_the_reserved_test_domain` (example.com ve alt alanları evet; `example.com.evil.net`,
-başka alan, HLTV, http hayır) ve demo hükmen kartının tam hedef biçimi (başlık, 🏳️ satırı, Etkinlik/Format, en altta Maç
-Sayfası). Göreli zaman Discord'a ait olduğu için elle "… dakika önce" üreten test yoktur/eklenmedi; `<t:…:R>` biçimi ve doğru
-olay zamanı golden testlerde doğrulanır. Toplam: **341 test**, ×3 temiz (kilit hatası tekrarlanmadı).
-
-## Kalıcı fixture çıpası (2026-09-25)
-
-2 yeni test (`FixtureRestartTests`): aynı veritabanında 40 dk sonra "yeniden başlatılan" ikinci host demo saatlerini
-değiştirmez ve yeni `rescheduled-*` satırı üretmez (düzeltmeden önce çalıştırıldı ve **başarısız oldu**, sonra geçti); çıpa
-24 saat içinde yeniden kullanılır, sonra yenilenir, gelecekteki çıpaya güvenilmez. Toplam: **343 test**.
-
-## Canlı okuma kontrolü (2026-09-25)
-
-`esports provider-check` (yeni CLI komutu): yapılandırılmış sağlayıcıdan normal pencereyi ve etkinlikleri **bir kez** okur,
-özet yazdırır; Discord'a bağlanmaz (Fake taşıyıcı), DryRun, atılabilir veri klasörü, token yazdırılmaz. PandaScore ile
-çalıştırıldı: Success, 163 maç, 35 etkinlik, kalan kota 994 (ayrıntı docs/PROVIDERS.md). Ağ gerektirdiği için otomatik test
-paketinde yok; test paketi ağ çağrısı yapmaz.
-
-## Takım kataloğu araması (2026-09-25)
-
-6 yeni test (`TeamDirectoryTests`): pencerede maçı olmayan takım bulunur ve aynı adlılar kısaltma/ülke ile ayrılır;
-bilinen takımlar önce gelir, 3 harften kısa girişte arama yok; önbellek ve daha kısa tam sonucun yeniden kullanımı, süre
-dolunca yeni arama; sağlayıcı hatası/zaman aşımında yalnızca bilinen takımlar (hata önbelleğe alınmaz); PandaScore
-`/csgo/teams` tek sayfa + ayrıştırma + 401; fixture modunda uçtan uca. Toplam: **349 test**.
+Yukarıdaki sınıflara ek olarak: PandaScore sözleşme ve yaşam döngüsü testleri, kart düzeni (golden) ve demo bağlantı
+kuralları, kalıcı fixture çıpası (`FixtureRestartTests`), takım kataloğu araması (`TeamDirectoryTests`), tek sunucu
+koruması (`SingleGuildTests`), barındırma korumaları (`HostingChecksTests`) ve uygulama içi yedekleme
+(`DatabaseBackupServiceTests`). `esports provider-check` gibi canlı okuma kontrolleri ağ gerektirdiği için elle çalıştırılır;
+otomatik test paketi ağ çağrısı yapmaz.
 
 ## Bilinen gözlem
 
