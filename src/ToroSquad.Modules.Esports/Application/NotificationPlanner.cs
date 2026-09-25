@@ -163,7 +163,7 @@ public sealed class NotificationPlanner(
                     {
                         var pings = Pings(mappings, match, reminder: true, guild);
                         var message = renderer.Reminder(match, language, pings, snapshot.LastChangedAt,
-                            snapshot.StartChangedAt is not null ? snapshot.PreviousStartUtc : null);
+                            snapshot.StartChangedAt is not null ? snapshot.PreviousStartUtc : null, filters.TeamKeys);
                         var outcome = await outbox.StageAsync(new NotificationRequest(guild, EsportsModule.ModuleIdTyped, match.Key.ToString(), channel,
                             KindReminder, message, start + TimeSpan.FromMinutes(o.ReminderGraceMinutes), dryRun), cancellationToken);
                         Count(outcome, ref created, ref updated);
@@ -184,7 +184,7 @@ public sealed class NotificationPlanner(
                     {
                         // Over the catch-up limit after downtime: record it as already expired so it is never sent
                         // later either (otherwise the next normal poll would deliver the whole backlog).
-                        var skipped = renderer.Result(match, language, config.SpoilerMode, MentionPolicy.None, snapshot.LastChangedAt);
+                        var skipped = renderer.Result(match, language, config.SpoilerMode, MentionPolicy.None, snapshot.LastChangedAt, filters.TeamKeys);
                         await outbox.StageAsync(new NotificationRequest(guild, EsportsModule.ModuleIdTyped, match.Key.ToString(), channel,
                             KindResult, skipped, now - TimeSpan.FromSeconds(1), dryRun), cancellationToken);
                         suppressed++;
@@ -192,7 +192,7 @@ public sealed class NotificationPlanner(
                     else if ((exists && inCorrectionWindow) || due)
                     {
                         var pings = Pings(mappings, match, reminder: false, guild);
-                        var message = renderer.Result(match, language, config.SpoilerMode, pings, snapshot.LastChangedAt);
+                        var message = renderer.Result(match, language, config.SpoilerMode, pings, snapshot.LastChangedAt, filters.TeamKeys);
                         var outcome = await outbox.StageAsync(new NotificationRequest(guild, EsportsModule.ModuleIdTyped, match.Key.ToString(), channel,
                             KindResult, message, observed + TimeSpan.FromHours(6), dryRun), cancellationToken);
                         Count(outcome, ref created, ref updated);
@@ -203,7 +203,7 @@ public sealed class NotificationPlanner(
 
                 if (config.NotifyReminders)
                 {
-                    var lifecycle = await StageLifecycleAsync(match, snapshot, config, guild, channel, language, zone, mappings, existingKeys, dryRun, now, cancellationToken);
+                    var lifecycle = await StageLifecycleAsync(match, snapshot, config, guild, channel, language, zone, mappings, filters.TeamKeys, existingKeys, dryRun, now, cancellationToken);
                     created += lifecycle.Created;
                     updated += lifecycle.Updated;
                 }
@@ -222,7 +222,7 @@ public sealed class NotificationPlanner(
     /// the freshness window. Only "started" may ping (reminder role mappings); schedule changes never ping.
     /// </summary>
     private async Task<Staged> StageLifecycleAsync(EsportsMatch match, MatchSnapshotEntity snapshot, EsportsGuildConfigEntity config, GuildId guild,
-        ChannelId channel, string language, TimeZoneInfo zone, IReadOnlyList<RoleMappingEntity> mappings, HashSet<string> existingKeys, bool dryRun,
+        ChannelId channel, string language, TimeZoneInfo zone, IReadOnlyList<RoleMappingEntity> mappings, IReadOnlySet<string> followedTeams, HashSet<string> existingKeys, bool dryRun,
         DateTimeOffset now, CancellationToken ct)
     {
         int created = 0, updated = 0;
@@ -245,16 +245,16 @@ public sealed class NotificationPlanner(
         }
 
         await StageAsync(KindStarted, snapshot.StartedObservedAt, match.Status == MatchStatus.Live,
-            () => renderer.Started(match, language, Pings(mappings, match, reminder: true, guild), snapshot.StartedObservedAt!.Value));
+            () => renderer.Started(match, language, Pings(mappings, match, reminder: true, guild), snapshot.StartedObservedAt!.Value, followedTeams));
         await StageAsync(KindPostponed, snapshot.PostponedObservedAt, match.Status == MatchStatus.Postponed,
-            () => renderer.Postponed(match, language, snapshot.PostponedObservedAt!.Value));
+            () => renderer.Postponed(match, language, snapshot.PostponedObservedAt!.Value, followedTeams));
         await StageAsync(KindCancelled, snapshot.CancelledObservedAt, match.Status == MatchStatus.Cancelled,
-            () => renderer.Cancelled(match, language, snapshot.CancelledObservedAt!.Value));
+            () => renderer.Cancelled(match, language, snapshot.CancelledObservedAt!.Value, followedTeams));
         if (snapshot.RescheduledToUtc is { } to)
         {
             await StageAsync(KindRescheduled(to), snapshot.RescheduledObservedAt,
                 match.Status == MatchStatus.Scheduled && match.ScheduledStartUtc == to,
-                () => renderer.Rescheduled(match, language, to, zone, snapshot.RescheduledObservedAt!.Value));
+                () => renderer.Rescheduled(match, language, to, zone, snapshot.RescheduledObservedAt!.Value, followedTeams));
         }
 
         return new Staged(created, updated);

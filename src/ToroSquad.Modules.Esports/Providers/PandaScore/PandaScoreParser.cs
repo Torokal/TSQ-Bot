@@ -54,7 +54,7 @@ public static class PandaScoreParser
         var original = Date(e, "original_scheduled_at", matchId, warnings);
         var rescheduled = Bool(e, "rescheduled") == true;
 
-        var opponents = Opponents(e);
+        var opponents = Opponents(e, matchId, warnings);
         var teamA = opponents.Count > 0 ? opponents[0] : null;
         var teamB = opponents.Count > 1 ? opponents[1] : null;
         var winnerId = Long(e, "winner_id");
@@ -80,7 +80,7 @@ public static class PandaScoreParser
                 : winnerIndex == index ? OpponentResult.Win
                 : forfeit ? OpponentResult.Forfeit : OpponentResult.Loss;
             int? score = scores.TryGetValue(team.Id, out var s) ? s : null;
-            return new MatchOpponent(OpponentKind.Team, new TeamRef(Source, TeamKey(team.Id), team.Name, team.Acronym), score, result);
+            return new MatchOpponent(OpponentKind.Team, new TeamRef(Source, TeamKey(team.Id), team.Name, team.Acronym, team.LogoUrl), score, result);
         }
 
         var a = Opponent(teamA, 0);
@@ -160,9 +160,10 @@ public static class PandaScoreParser
         _ => null,
     };
 
-    private sealed record Team(long Id, string Name, string? Acronym, bool IsTeam);
+    private sealed record Team(long Id, string Name, string? Acronym, bool IsTeam, string? LogoUrl);
 
-    private static List<Team?> Opponents(JsonElement e)
+    /// <summary>Logo: <c>dark_mode_image_url</c>, then <c>image_url</c>, only if <see cref="TeamLogoPolicy"/> accepts it.</summary>
+    private static List<Team?> Opponents(JsonElement e, string matchId, List<string> warnings)
     {
         var list = new List<Team?>();
         foreach (var o in Arr(e, "opponents"))
@@ -174,7 +175,10 @@ public static class PandaScoreParser
                 continue;
             }
 
-            list.Add(new Team(oid, name, NonEmpty(Str(opponent, "acronym")), Str(o, "type") == "Team"));
+            var logo = TeamLogoPolicy.Choose(Str(opponent, "dark_mode_image_url"), Str(opponent, "image_url"), out var rejected);
+            if (rejected && logo is null)
+                warnings.Add($"match {matchId}: team {oid} logo URL rejected (not a safe provider image); shown without logo");
+            list.Add(new Team(oid, name, NonEmpty(Str(opponent, "acronym")), Str(o, "type") == "Team", logo));
         }
 
         return list;
