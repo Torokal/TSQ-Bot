@@ -93,10 +93,14 @@ public sealed class F1ReviewRegressionTests
         first.Transport.Messages.Should().ContainSingle("one result message");
         var card = first.Transport.Messages.Single();
         card.Pinged.Should().BeFalse("results do not ping by default");
-        var edit = card.Edits.Should().ContainSingle("the change is recognized and attached to the SAME message").Subject;
-        edit.Mentions.Roles.Should().BeEmpty();
-        edit.Embed!.Fields.Single(f => f.Name == "🏆 Sürücüler").Value.Should().Contain("Driver a — 118 puan");
-        edit.Embed.Fields.Single(f => f.Name == "🏭 Takımlar").Value.Should().Contain("233");
+        // Results are processed before standings, so the post-race table (first fetched after the result proved the race
+        // over) may already be on the card when it is first sent; otherwise it arrives as an edit. Either way: ONE message.
+        card.Edits.Should().HaveCountLessThanOrEqualTo(1);
+        card.Edits.Should().OnlyContain(e => e.Mentions.Roles.Count == 0, "edits never ping");
+        var current = card.Edits.Count > 0 ? card.Edits[^1] : card.Message;
+        current.Embed!.Fields.Single(f => f.Name == "🏆 Sürücüler").Value.Should().Contain("Driver a — 118 puan", "the change is recognized on the SAME message");
+        current.Embed.Fields.Single(f => f.Name == "🏭 Takımlar").Value.Should().Contain("233");
+        (await SnapshotAsync(second, race.Key)).StandingsDriversSnapshotId.Should().NotBeNull();
     }
 
     [Fact]
