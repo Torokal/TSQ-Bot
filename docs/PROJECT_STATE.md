@@ -277,6 +277,11 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 ## NEXT ACTION (güncel)
 
+0. **Sahip — Railway (PC'siz çalışma):** railway.com'da GitHub ile giriş, plan seçimi (Hobby önerisi; Free'de "Always" yok ve
+   $1 kredi yetmez), **New Project → Deploy from GitHub repo → Torokal/TSQ-Bot**, dal `feature/railway-deployment`,
+   volume `/data`, değişkenler (`TOROSQUAD_Bot__Standby=true` ile) — adım adım: docs/RAILWAY_DEPLOYMENT.md §0–4. Loglarda
+   `STANDBY` görününce ajan: yerel botu kapatır, veritabanı yedeği + `db check`, sahip `railway login`/`link` sonrası
+   yükleme (§5B), `Standby=false` (§6), canlı doğrulama (§7). PR #4 (hedef: PR #3 dalı).
 1. **Sahip + ajan:** 08:40Z'de (TR 11:40) Eternal Fire – WBT hatırlatma kartı kanala düşmeli (ping'siz); maç bitince sonuç kartı.
    Sahip görünce: ilk gerçek hatırlatma/sonuç kartı VERIFIED_LIVE. İsteğe bağlı: opt-in ping rolü (Discord'da rol oluştur →
    `/esports-admin roles map` → `roles selfservice` → üyeler `/esports follow` veya panel).
