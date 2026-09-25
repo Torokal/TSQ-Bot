@@ -49,7 +49,7 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
   "Maç Sayfası" only from a verified external link (see HLTV below).
 - **Plans** (VERIFIED, pricing page): free plan 0 €, 1K req/h, "no credit card"; stats plans "restricted to non-betting-
   related usage". The official pages conflicted on whether the free plan fills result fields; **resolved by live read
-  (VERIFIED_LIVE, 2026-09-25, owner's free-plan token)**: of 32 finished matches in the window all 32 had a winner, 27 a
+  (VERIFIED_LIVE, 2026-09-25, free-plan token)**: of 32 finished matches in the window all 32 had a winner, 27 a
   series score, 5 were forfeits (winner, no score — as the lifecycle docs describe).
 - **Live read check** (2026-09-25, `esports provider-check`, read-only, nothing sent): window −12 h … +48 h → **163 matches**
   in 2 pages (Scheduled 131, Finished 32, none running at 01:23Z), 28 with `rescheduled=true`, 56 with a TBD opponent,
@@ -81,8 +81,8 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
 | PandaScore | No HLTV id/URL in the match object (VERIFIED, OpenAPI) | — | Not available |
 | GRID | NOT_VERIFIED | All listed plans commercial, custom-priced (grid.gg, 2026-09-25) | Not evaluated further |
 
-With `Esports:Provider:Name=Liquipedia` the cards link to HLTV natively. With **PandaScore** as match provider (owner's
-choice, 2026-09-25), Liquipedia is an **optional enrichment / link source only** (`Esports:HltvLinksFromLiquipedia=true`):
+With `Esports:Provider:Name=Liquipedia` the cards link to HLTV natively. With **PandaScore** as match provider (the
+default), Liquipedia is an **optional enrichment / link source only** (`Esports:HltvLinksFromLiquipedia=true`):
 its matches are refreshed every `Esports:LinkPollMinutes` (30) — at most 2 refreshes × ≤5 pages = **≤10 req/h worst case**
 (typically 1 page → 2 req/h), far below the 60 req/h LPDB limit — and a PandaScore match gets the HLTV URL only when
 **exactly one** distinct valid HLTV URL belongs to a Liquipedia match with the **same two teams** (order-insensitive, VRS
@@ -125,16 +125,13 @@ Normal operation does not need a Liquipedia key.
   approved request"; **rate limit all requests to no more than 60 requests per 1 hour**; follow the dashboard
   documentation; do not share API keys. General section (both APIs): re-use / cache results for as long as possible,
   attribute Liquipedia (CC BY-SA 3.0), no automated access to HTML pages.
-- **Plans** (owner-reported 2026-09-25 from the official Liquipedia API page; the live page returned a human-verification
-  challenge to our tools, which we do not bypass): **Basic and Premium are currently "temporarily unavailable"**; on the
+- **Plans** (as shown on the official Liquipedia API page, 2026-09-25): **Basic and Premium are currently "temporarily unavailable"**; on the
   commercial side **Enterprise** is offered. The older $49 / $199 prices (archive 2026-06-18) are **no longer current**.
 - **Free access**: by **application** only, for open-source educational / non-commercial public / community projects,
   and in most cases **time-limited**. Liquipedia decides whether a project qualifies (NOT_VERIFIED for TSQ Bot).
-- **Owner decision (2026-09-25)**: the repository was kept private during development (not made public early just for
-  Liquipedia access) and is **public since 2026-09-25** (https://github.com/Torokal/TSQ-Bot). The owner may now apply for
-  free API access. Until then Liquipedia enrichment is
-  **BLOCKED/OPTIONAL**, `Esports:VerifiedMatchLinks` is the manual fallback, and PandaScore runs without Liquipedia.
-  Requesting access or paying remains an owner decision (approval gate).
+- **TSQ Bot**: the source is public (https://github.com/Torokal/TSQ-Bot), so free access can be requested. Without an
+  approved key Liquipedia enrichment stays off, `Esports:VerifiedMatchLinks` is the manual fallback, and PandaScore runs
+  without Liquipedia.
 
 ### Technical notes
 

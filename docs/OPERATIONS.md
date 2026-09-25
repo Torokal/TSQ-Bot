@@ -6,13 +6,13 @@
 - Başlangıç sırası (`run`): yapılandırma doğrulaması → depolama kontrolleri (Railway'de volume zorunlu, klasör yazılabilir)
   → instance kilidi → **bütünlük kontrolü** (`PRAGMA integrity_check`; hata → başlamaz, hiçbir şey silinmez) → migration
   → Discord + işçiler. Elle: `db migrate`, `db check [DOSYA]` (salt okunur bütünlük).
-- **Tek sunucu (canlı, 2026-09-25):** `Discord:AllowedGuildIds` = ana sunucu. Her etkileşim (komut, düğme, modal, otomatik
+- **Tek sunucu:** `Discord:AllowedGuildIds` = izin verilen sunucu(lar). Her etkileşim (komut, düğme, modal, otomatik
   tamamlama) işlenmeden önce sunucu kontrolü yapılır; liste dışı sunucu kısa bir retle geri çevrilir, hiçbir şey okunmaz/
   yazılmaz. Planlayıcı liste dışı sunucuyu görmez; teslimat da son anda iptal eder (`guild_not_allowed`). Liste varken
   `TestGuildIds`/`CommandSyncGuildIds` listenin dışına çıkamaz ve global komut izni açılamaz (başlangıç doğrulaması).
-  **Canlı bot yalnızca Railway'de çalışır; yerel ortam geliştirme/test içindir — üretim botunu yerelde başlatmayın.**
+  **Aynı bot token'ıyla asla iki kopya çalıştırmayın** (ör. barındırılan üretim botu çalışırken yerelde üretim botu).
 - **Bekleme modu** `Bot:Standby=true`: doğrular ve bekler; Discord yok, işçi yok, veritabanı açılmaz (dağıtım/bakım).
-- **7/24 barındırma: Railway** (özel test barındırma, sahip kararı 2026-09-25) — kurulum, değişkenler, volume, veritabanı
+- **7/24 barındırma: Railway** — kurulum, değişkenler, volume, veritabanı
   taşıma, yedek ve geri dönüş: **[RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md)**. Depoda `Dockerfile` (SDK 10.0.401 →
   .NET 10 runtime), `.dockerignore`; servis ayarları Railway panelinde (1 replika, Serverless kapalı, Restart Always, volume `/data`) — Railway Config as Code kullanımdan kalktığı için `railway.json` yok.
   **Replika = 1 zorunludur** (SQLite + tek zamanlayıcı/outbox; Railway volume'lü serviste replikaya zaten izin vermez).
@@ -58,39 +58,26 @@ tutulurken (bot çalışıyorsa) reddeder. Yedekler kullanıcı verisi içerir: 
 ## Sürüm kontrol listesi
 1. `git status` temiz; `.\scripts\Test.ps1 -Repeat 3` yeşil.
 2. `commands export --out docs/commands.manifest.json` (Production ortamı) → değişiklik varsa commit.
-3. `docs/PROJECT_STATE.md` güncel; `VersionPrefix` (Directory.Build.props) artırıldı.
-4. `Bot:SourceUrl` = https://github.com/Torokal/TSQ-Bot ve dağıtılan commit o depoda. İlk herkese açık yayından önce
-   aşağıdaki **yayın öncesi güvenlik kapısı** tamamlanmış ve depo public yapılmış olmalı.
+3. `docs/STATUS.md` güncel; `VersionPrefix` (Directory.Build.props) artırıldı.
+4. `Bot:SourceUrl` = https://github.com/Torokal/TSQ-Bot ve dağıtılan commit o depoda (AGPL Corresponding Source).
 5. Yedek al → yeni sürümü dağıt → migration log'unu kontrol et → `/bot about` sürüm+commit doğru.
 6. Komut şeması değiştiyse: test guild'de `Sync-Commands.ps1` dry-run → `-Apply` → doğrula → (onaylıysa) global.
 7. Geri alma: önceki sürüm ikilisi + `db restore` (şema geri alınamaz; yedek şart).
 
-## Yayın öncesi güvenlik kapısı (PRE-RELEASE REQUIREMENT)
+## Herkese açık yayın kontrol listesi
 
-Depo `Torokal/TSQ-Bot` **public** (2026-09-25): tam geçmiş taraması (gerçek token değerleri + kalıplar + yasak dosya türleri)
-temiz; tek seferlik yetkili geçmiş temizliği yapıldı (kişisel e-posta ve eski sahte token literali kaldırıldı, güncel ağaç
-aynı). Orijinal geçmiş sahibe özel private arşivde. `main` korumalı (PR zorunlu, force push yok); **geçmiş yeniden yazma
-istisnası kapandı**. Discord tarafı bundan bağımsızdır: bot yalnızca tek sunucuda, global komut ve herkese açık davet yok.
+Bot şu an tek sunucuda çalışır (global komut ve herkese açık davet yok). Birden çok sunucuya açılmadan önce:
 
-1. **Tüm git geçmişinde secret taraması** (tüm dallar, tüm commit'ler): Discord token, PandaScore token, Liquipedia anahtarı, GitHub
-   kimlik bilgisi, webhook, bağlantı dizesi, parola, kimlik bilgisi içeren URL, yerel ortam değerleri. Bilinen tek
-   istisna: `6c4b696`/`5570842` içindeki `OperationsTests.cs:86` **sahte** test token'ı (GitHub'da "used in tests"
-   olarak izinli; gerçek değil). Gerçeğe benzeyen herhangi bir şey yayından önce çözülür.
-2. **İzlenen dosya denetimi**: `.env`, `*.db`/`*.sqlite`, `bin/`, `obj/`, `TestResults/`, `artifacts/`, loglar, dışa
-   aktarımlar, kullanıcı verisi, yedekler, IDE yerel dosyaları, secret yapılandırması izlenmiyor olmalı.
-3. **Kaynak arşivi denetimi**: `.\scripts\Export-Source.ps1` → arşiv derlemeye yetecek her şeyi içerir; veritabanı,
-   kimlik bilgisi, kullanıcı verisi, build/cache çıktısı ve makineye özgü veri içermez.
-4. **Lisans/provenance**: `LICENSE` (AGPL-3.0) mevcut; upstream atıfları doğru; BOT Greg'in resmî devamı gibi
-   sunulmuyor; bağımlılık bildirimleri (`THIRD_PARTY_NOTICES.md`) güncel.
-5. **README/kamuya dönük metin**: özellikler, dağıtım durumu, komutlar, kurulum, test, lisans, kaynak, sınırlamalar,
-   sağlayıcı gereksinimleri, ertelenen özellikler; VERIFIED_LIVE olmayan hiçbir şey canlı test edilmiş gibi sunulmaz.
-6. Kod/Discord/sağlayıcı kontrolleri: dağıtılacak commit = güncel `main`, temiz build ve tam testler, sabit test guild
-   ID'si veya makine yolu yok, izinler asgari, ayrıcalıklı intent yok (ya da gerekçeli), davet URL'si doğru, global komut
-   geçiş planı gözden geçirildi, PandaScore planı/koşulları (atıf, ücretsiz planda sonuç alanları) ve gerekiyorsa Liquipedia erişimi teyitli, VRS canlı doğrulandı.
-7. **Yalnızca açık yayın onayıyla**: `gh repo edit Torokal/TSQ-Bot --visibility public --accept-visibility-change-consequences`
-   → anonim erişimi doğrula → ancak ondan sonra herkese açık bot/global komut kaydı.
-8. **Depo public olduktan sonra (sahip kararı)**: Liquipedia ücretsiz LiquipediaDB API erişimine başvuru (açık kaynak /
-   ticari olmayan / topluluk projeleri için başvuruya bağlı, çoğu zaman süreli; Basic/Premium 2026-09-25 itibarıyla geçici
-   olarak kullanılamıyor). Depo **yalnızca** Liquipedia erişimi için erkenden public yapılmaz. Onaylanana kadar HLTV
-   bağlantı zenginleştirmesi BLOCKED/OPTIONAL kalır; `Esports:VerifiedMatchLinks` elle yedek olarak çalışır; PandaScore
-   Liquipedia'ya bağlı değildir. Ayrıntı: docs/PROVIDERS.md "Access and plans".
+1. **Secret taraması**: izlenen dosyalarda ve geçmişte token, API anahtarı, webhook, bağlantı dizesi, kimlik bilgisi
+   içeren URL yok (GitHub secret scanning + push protection açık).
+2. **İzlenen dosya denetimi**: `.env`, `*.db`/`*.sqlite`, `bin/`, `obj/`, `TestResults/`, loglar, yedekler, kullanıcı
+   verisi ve IDE yerel dosyaları izlenmiyor.
+3. **Kaynak arşivi**: `.\scripts\Export-Source.ps1` derlemeye yeten her şeyi içerir; veritabanı, kimlik bilgisi, kullanıcı
+   verisi ve makineye özgü veri içermez.
+4. **Lisans/provenance**: `LICENSE` (AGPL-3.0), upstream atıfları ve `THIRD_PARTY_NOTICES.md` güncel; BOT Greg'in resmî
+   devamı gibi sunulmuyor.
+5. **Kod/Discord/sağlayıcı**: dağıtılacak commit = güncel `main`, tam testler yeşil, izinler asgari, ayrıcalıklı intent
+   yok, davet URL'si doğru, global komut geçişi (dry-run → uygulama) gözden geçirildi, sağlayıcı koşulları (atıf,
+   kota) teyitli, VRS canlı doğrulandı.
+6. Liquipedia ile HLTV bağlantı zenginleştirmesi isteğe bağlıdır; onaylı anahtar yoksa kapalı kalır,
+   `Esports:VerifiedMatchLinks` elle yedek olarak çalışır. Ayrıntı: docs/PROVIDERS.md "Access and plans".

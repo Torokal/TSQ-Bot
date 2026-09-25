@@ -80,8 +80,7 @@ secret) varsa PandaScore maçlarının HLTV bağlantıları Liquipedia'dan eşle
 Güncel durum (2026-09-25): LPDB en fazla **60 istek/saat**; TSQ Bot bağlantı kaynağı için 30 dakikada bir sorgular (en kötü
 ≈10 istek/saat) ve yanıtı veritabanında önbelleğe alır. Basic/Premium planlar **geçici olarak kullanılamıyor**; ticari
 tarafta Enterprise sunuluyor. Ücretsiz erişim açık kaynak eğitim / ticari olmayan kamu / topluluk projeleri için
-**başvuruya** bağlı ve çoğu zaman süreli. Depo geliştirme boyunca **private** kalır; ücretsiz erişim başvurusu yayın
-aşamasında depo public olduktan **sonra** yapılacak. O zamana kadar bu zenginleştirme **BLOCKED/OPTIONAL**'dır.
+**başvuruya** bağlı ve çoğu zaman süreli. Depo public olduğu için başvuru yapılabilir; onaylı anahtar olmadan bu zenginleştirme **kapalıdır** (isteğe bağlı).
 User-Agent: Liquipedia koşullarında iletişim bilgili User-Agent şartı açıkça **MediaWiki API** bölümünde yer alır; LPDB
 bölümünde ayrıca belirtilmez. TSQ Bot yine de her istekte özel bir User-Agent gönderir (ayarlanmamışsa
 `TSQBot (https://github.com/Torokal/TSQ-Bot)`); kendi iletişiminizi eklemeniz **önerilir**, zorunlu değildir:
