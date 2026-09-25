@@ -17,9 +17,10 @@ Resmî kaynaklar (okundu 2026-09-25): [Volumes](https://docs.railway.com/referen
 |---|---|
 | `Dockerfile` | SDK 10.0.401 ile derler (`global.json` ile aynı), yalnızca .NET 10 **runtime** imajında çalışır (ASP.NET yok, HTTP portu yok). Secret içermez; veri klasörü `/data` |
 | `.dockerignore` | `.git`, `bin/obj`, testler, veritabanları (`*.db`, `-wal`, `-shm`), yedekler, `.env`, arşivler derlemeye gönderilmez |
-| `railway.json` | Dockerfile ile derleme, **1 replika**, uyku yok, `/data` mount zorunlu, eski/yeni sürüm çakışması yok (`overlapSeconds: 0`), SIGTERM'den sonra 30 sn düzgün kapanma süresi |
 | Uygulama korumaları | Railway'de volume yoksa veya veritabanı volume dışındaysa **başlamaz**; klasör yazılamıyorsa başlamaz (ipucu: `RAILWAY_RUN_UID=0`); veritabanı bütünlük kontrolü başarısızsa başlamaz (asla silmez/yeniden oluşturmaz); migration'lar Discord ve işçilerden **önce** çalışır |
 | **Bekleme modu** (`TOROSQUAD_Bot__Standby=true`) | Yapılandırmayı ve volume'ü doğrular, sonra bekler: Discord'a **bağlanmaz**, işçi çalıştırmaz, veritabanı dosyasını **açmaz** → güvenli ilk kurulum ve veritabanı yükleme |
+
+Railway **Config as Code (`railway.json`) kullanımdan kalkıyor**: panel (2026-09-25) "2026-08-28'den beri Config as Code'u hiç kullanmamış servisler bunu açamaz" diyor → ayarlar **panelden** yapılır, depoda `railway.json` yok.
 
 Railway kuralları (resmî): volume çalışma anında bağlanır (derleme/pre-deploy sırasında değil); volume'ler root ile
 bağlanır → imaj root olmayan kullanıcıyla çalıştığı için `RAILWAY_RUN_UID=0` gerekir; volume'lü serviste replika
@@ -37,7 +38,7 @@ kullanılamaz; servis başına tek volume.
 1. https://railway.com → **Login** → GitHub ile giriş.
 2. **New Project → Deploy from GitHub repo** → GitHub izin ekranında **Torokal/TSQ-Bot** deposuna erişim ver
    (depo private kalır; Railway'in GitHub uygulaması yalnızca seçtiğin depoyu okur).
-3. Depoyu seç. Railway kökteki `Dockerfile` ve `railway.json`'u bulur. İlk otomatik deploy **başarısız olabilir**
+3. Depoyu seç. Railway kökteki `Dockerfile`'ı bulur ve onunla derler. İlk otomatik deploy **başarısız olabilir**
    (henüz volume/değişken yok, bot bilerek başlamaz) — bu beklenen durumdur, Discord'a bağlanmaz.
 
 ## 2. Servis ayarları (Service → Settings)
@@ -45,11 +46,11 @@ kullanılamaz; servis başına tek volume.
 | Ayar | Değer |
 |---|---|
 | Source → Branch | `feature/railway-deployment` (şimdilik; ileride `main`) |
-| Builder | Dockerfile (railway.json zaten söyler) |
-| Replicas | **1** (railway.json; volume'lü serviste zaten tek) |
+| Builder | Dockerfile (kökte Dockerfile varsa Railway onu kullanır) |
+| Region / Replicas | EU West (Amsterdam) önerisi; **1** replika (volume'lü serviste zaten tek) |
 | Networking → Public Networking | **Kapalı** — domain oluşturma (Discord botu HTTP'ye ihtiyaç duymaz) |
 | Deploy → Restart Policy | Hobby/Pro: **Always**. Free/Trial: On Failure (en fazla 10) — plan sınırı |
-| Serverless / App Sleeping | **Kapalı** (railway.json `sleepApplication: false`) |
+| Serverless | **Kapalı** (uyuyan konteyner Discord bağlantısını koparır) |
 
 ## 3. Volume (kalıcı veritabanı)
 

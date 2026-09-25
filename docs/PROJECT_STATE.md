@@ -256,7 +256,7 @@ eşleşiyor. Administrator istenmez; Mention Everyone önerilmez (rolü "bahsedi
 | Dockerfile (SDK 10.0.401 → runtime 10.0, secret yok, `/data`) | IMPLEMENTED; yerelde `docker build` **BLOCKED** (Docker kurulu değil) — Railway derlemesi doğrulayacak. Aynı `dotnet publish` komutu yerelde TESTED_OFFLINE (Release, 0 uyarı, linux-x64 SQLite native dahil, yerel veritabanı yok) |
 | Depolama korumaları (volume yok/dışında/yazılamaz → başlamaz; bütünlük kontrolü; bekleme modu) | TESTED_OFFLINE (birim testleri + yayınlanmış çıktıyla Railway benzeri smoke test: volume yok → çıkış 1; bekleme → DB açılmadı; normal → DB volume'de, migration, güvenli açılış logu) |
 | SIGTERM ile düzgün kapanma (konteyner) | BLOCKED yerelde (Docker yok); .NET Generic Host SIGTERM'i işler; yerelde Ctrl+C ile düzgün kapanma daha önce gözlendi |
-| Replika | 1 (railway.json; Railway volume'lü serviste replikaya izin vermez) |
+| Replika | 1 (panel ayarı; Railway volume'lü serviste replikaya izin vermez). Config as Code (`railway.json`) yeni servislerde kullanılamadığı için kaldırıldı |
 | Genel ağ | Kapalı (HTTP yok) |
 | Railway hesabı / plan / depo yetkisi | **BLOCKED — sahip adımı** (hesap, GitHub yetkisi, plan seçimi: Free'de "Always" yok ve $1 kredi yetmez → Hobby önerisi; satın alma sahibin kararı) |
 | Railway servis deploy / volume kalıcılığı / yeniden başlatma kalıcılığı / PC'siz çalışma | BLOCKED (henüz kurulmadı); gözlenene kadar VERIFIED_LIVE denmeyecek |

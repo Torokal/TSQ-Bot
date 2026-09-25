@@ -9,7 +9,7 @@
 - **Bekleme modu** `Bot:Standby=true`: doğrular ve bekler; Discord yok, işçi yok, veritabanı açılmaz (dağıtım/bakım).
 - **7/24 barındırma: Railway** (özel test barındırma, sahip kararı 2026-09-25) — kurulum, değişkenler, volume, veritabanı
   taşıma, yedek ve geri dönüş: **[RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md)**. Depoda `Dockerfile` (SDK 10.0.401 →
-  .NET 10 runtime), `.dockerignore`, `railway.json` (1 replika, uyku yok, `/data` mount zorunlu, çakışma yok).
+  .NET 10 runtime), `.dockerignore`; servis ayarları Railway panelinde (1 replika, Serverless kapalı, Restart Always, volume `/data`) — Railway Config as Code kullanımdan kalktığı için `railway.json` yok.
   **Replika = 1 zorunludur** (SQLite + tek zamanlayıcı/outbox; Railway volume'lü serviste replikaya zaten izin vermez).
   Genel HTTP/domain yok. Resmî kaynaklar (okundu 2026-09-25): https://docs.railway.com/reference/volumes ·
   https://docs.railway.com/guides/volumes · https://docs.railway.com/reference/backups ·
