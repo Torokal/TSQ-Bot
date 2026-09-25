@@ -23,6 +23,31 @@ public static class DatabaseMaintenance
         await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
     }
 
+    /// <summary>
+    /// <c>PRAGMA integrity_check</c> on an existing database file (unpooled, so no handle stays open). Returns null when
+    /// the file does not exist yet or is healthy, otherwise the first problem reported by SQLite. Never modifies data.
+    /// </summary>
+    public static string? IntegrityProblem(string databasePath)
+    {
+        if (!File.Exists(databasePath))
+            return null;
+        var builder = new SqliteConnectionStringBuilder(ConnectionString(databasePath)) { Mode = SqliteOpenMode.ReadOnly, Pooling = false };
+        try
+        {
+            using var connection = new SqliteConnection(builder.ToString());
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA integrity_check;";
+            var result = cmd.ExecuteScalar() as string;
+            return string.Equals(result, "ok", StringComparison.OrdinalIgnoreCase) ? null : result ?? "no result";
+        }
+        catch (SqliteException ex)
+        {
+            // "file is not a database", "database disk image is malformed", …
+            return $"SQLite error {ex.SqliteErrorCode}: {ex.Message}";
+        }
+    }
+
     /// <summary>Consistent online copy using SQLite's backup API (safe while the bot runs).</summary>
     public static string Backup(string databasePath, string backupDirectory, TimeProvider clock)
     {
