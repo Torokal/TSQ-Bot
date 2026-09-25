@@ -8,7 +8,7 @@ using ToroSquad.Modules.Esports.Providers.Fixtures;
 namespace ToroSquad.Modules.Esports.Application;
 
 /// <summary>
-/// Keeps the fixture (TEST/DEMO) anchor in ProviderStates so a restart re-uses the same demo timeline. Fixture mode only;
+/// Keeps the fixture (TEST/DEMO) anchor in the provider-state table (esports_provider_state) so a restart re-uses the same demo timeline. Fixture mode only;
 /// a storage problem means "no stored anchor" (the demo timeline is then simply renewed), never a crash.
 /// </summary>
 public sealed class ProviderStateFixtureAnchorStore(IServiceScopeFactory scopes, ILogger<ProviderStateFixtureAnchorStore> logger) : IFixtureAnchorStore

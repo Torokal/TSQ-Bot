@@ -84,7 +84,7 @@ its matches are refreshed every `Esports:LinkPollMinutes` (30) — at most 2 ref
 **exactly one** distinct valid HLTV URL belongs to a Liquipedia match with the **same two teams** (order-insensitive, VRS
 name normalization) starting within `Esports:HltvLinkToleranceMinutes` (90). Zero or several candidates → no link; an
 existing link is never replaced; a Liquipedia outage keeps the known links and changes nothing else. The response is
-**cached** in memory and in the database (`ProviderStates` key `liquipedia:hltv-links`, with its fetch time): a restart
+**cached** in memory and in the database (table `esports_provider_state`, key `liquipedia:hltv-links`, with its fetch time): a restart
 re-uses it and does not request again before the interval has passed. Implemented and **TESTED_OFFLINE**; live
 enrichment is **BLOCKED/OPTIONAL** until an approved LPDB key exists (see "Access and plans").
 

@@ -213,7 +213,7 @@ Test guild'de kalan yapılandırma: rol eşleme #2 (TSQ Test Bildirim → **tüm
 testi sırasında varsayılanla oluştu; ileride demo hatırlatmaları bu test rolünü etiketleyebilir. Kaldırma:
 `/esports-admin roles unmap mapping:2`.
 
-Demo saatleri (düzeltildi, 2026-09-25): fixture zaman çıpası artık veritabanında (`ProviderStates`: `fixture:anchor`) saklanır
+Demo saatleri (düzeltildi, 2026-09-25): fixture zaman çıpası artık veritabanında (tablo `esports_provider_state`, anahtar `fixture:anchor`) saklanır
 ve 24 saate kadar yeniden kullanılır. Önceden her yeniden başlatma demo saatlerini kaydırıyor, planlayıcı da bunu haklı olarak
 "saat değişti" sayıp test kanalına yeni bir TEST/DEMO kartı gönderiyordu. Artık yeniden başlatma yeni kart üretmez; 24 saatten
 sonra demo zaman çizelgesi bir kez yenilenir (aksi hâlde tüm demo maçlar geçmişte kalırdı). TESTED_OFFLINE; canlıda bir sonraki
@@ -232,7 +232,7 @@ eşleşiyor. Administrator istenmez; Mention Everyone önerilmez (rolü "bahsedi
 | User-Agent | İletişim bilgili UA şartı Terms'te açıkça **MediaWiki API** bölümünde; LPDB bölümünde ayrıca belirtilmiyor. TSQ Bot MediaWiki API kullanmaz → UA artık zorunlu değil (önerilir); her istekte özel UA gider (ayarlı değilse `TSQBot (https://github.com/Torokal/TSQ-Bot)`); upstream kimliği reddedilir |
 | Planlar (sahip bildirimi; plan sayfası araçlarımıza insan doğrulaması gösterdi, aşılmadı) | Basic/Premium **geçici olarak kullanılamıyor**; ticari: Enterprise; ücretsiz: başvuruyla, çoğu zaman süreli |
 | Bütçe | Kod artık tüm LPDB tabloları için **tek ortak** bütçe kullanıyor (önceden tablo başınaydı); bağlantı kaynağı 30 dk × ≤5 sayfa = en kötü ≈10 istek/saat |
-| Önbellek | HLTV bağlantı adayları veritabanında (`ProviderStates`: `liquipedia:hltv-links`); yeniden başlatma erken istek yapmaz — TESTED_OFFLINE |
+| Önbellek | HLTV bağlantı adayları veritabanında (tablo `esports_provider_state`, anahtar `liquipedia:hltv-links`); yeniden başlatma erken istek yapmaz — TESTED_OFFLINE |
 | Karar | Depo geliştirme boyunca PRIVATE; yalnızca Liquipedia için erken public yapılmaz; başvuru yayın aşamasında. O zamana kadar zenginleştirme BLOCKED/OPTIONAL, `Esports:VerifiedMatchLinks` elle yedek, PandaScore Liquipedia'dan bağımsız (TESTED_OFFLINE) |
 
 ## Yayın öncesi gereksinimler (PRE-RELEASE REQUIREMENT)
