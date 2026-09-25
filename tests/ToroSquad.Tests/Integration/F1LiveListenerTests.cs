@@ -138,6 +138,62 @@ public sealed class F1LiveListenerTests
     }
 
     [Fact]
+    public async Task A_stop_that_times_out_never_allows_a_second_connection_until_the_old_one_has_ended()
+    {
+        var (listener, transport, _, cache) = Create();
+        listener.StopTimeout = TimeSpan.FromMilliseconds(200);
+        transport.IgnoreCancellation = true; // stalled network path: the connection ignores the stop
+        listener.EnsureRunning(CancellationToken.None);
+        await WaitUntilAsync(() => transport.Active == 1);
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await listener.StopAsync();
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "stop is bounded");
+        listener.IsStopping.Should().BeTrue("the still-running loop is not forgotten");
+        listener.IsRunning.Should().BeFalse();
+        cache.Live.State.Should().Be(F1LiveState.Stopping, "doctor/health see the stuck connection");
+
+        listener.EnsureRunning(CancellationToken.None);
+        listener.EnsureRunning(CancellationToken.None);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        transport.Connections.Should().Be(1, "no second connection while the old one is still alive");
+        transport.Active.Should().Be(1);
+
+        watch.Restart();
+        await listener.StopAsync(); // repeated stop while stopping returns at once
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(1));
+
+        // The old connection finally ends → the listener becomes idle and may connect again normally.
+        transport.IgnoreCancellation = false;
+        transport.Drop();
+        await WaitUntilAsync(() => transport.Active == 0 && !listener.IsStopping);
+        await WaitUntilAsync(() => cache.Live.State == F1LiveState.Idle);
+        listener.EnsureRunning(CancellationToken.None);
+        await WaitUntilAsync(() => transport.Active == 1);
+        transport.Connections.Should().Be(2);
+        await listener.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Host_shutdown_stays_bounded_while_a_connection_ignores_cancellation()
+    {
+        var (listener, transport, _, _) = Create();
+        listener.StopTimeout = TimeSpan.FromMilliseconds(200);
+        using var host = new CancellationTokenSource();
+        transport.IgnoreCancellation = true;
+        listener.EnsureRunning(host.Token);
+        await WaitUntilAsync(() => transport.Active == 1);
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await host.CancelAsync();
+        await listener.DisposeAsync();
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "shutdown never hangs on a stalled network path");
+        listener.IsStopping.Should().BeTrue();
+        transport.Drop(); // let the orphaned connection finish so the test leaves nothing behind
+        await WaitUntilAsync(() => transport.Active == 0);
+    }
+
+    [Fact]
     public async Task Without_live_credentials_nothing_connects()
     {
         var (listener, transport, _, cache) = Create(configured: false);

@@ -124,7 +124,8 @@ public sealed class F1FakeProviders(TimeProvider clock) : IF1ScheduleProvider, I
         return Task.FromResult(F1ProviderResult<F1StandingsSnapshot>.Ok(value, clock.GetUtcNow()));
     }
 
-    public static F1SessionResult Result(F1Session session, int entries = 20, int swapFirstTwo = 0)
+    /// <summary>A classification of <paramref name="entries"/> drivers; the session roster has <paramref name="roster"/> drivers (default: the same).</summary>
+    public static F1SessionResult Result(F1Session session, int entries = 20, int swapFirstTwo = 0, int? roster = null)
     {
         var practice = F1SessionTypes.IsPractice(session.Type);
         var rows = Enumerable.Range(1, entries).Select(i => new F1DriverResult(i, i, "Driver " + i, "D" + i, "Team " + ((i + 1) / 2), F1ResultStatus.Classified, 50,
@@ -136,7 +137,7 @@ public sealed class F1FakeProviders(TimeProvider clock) : IF1ScheduleProvider, I
             rows[1] = rows[1] with { Position = 1, GapSeconds = 0 };
         }
 
-        return new F1SessionResult(session.Key, session.Type, ResultsId, rows);
+        return new F1SessionResult(session.Key, session.Type, ResultsId, rows, Enumerable.Range(1, roster ?? entries).ToList());
     }
 
     public static F1StandingsSnapshot DriverTable(int season, int? round, params (string Id, decimal Points)[] rows) =>
@@ -159,6 +160,9 @@ public sealed class FakeLiveTransport : IF1LiveTransport
     public bool IsConfigured { get; set; } = true;
     public int Connections { get; private set; }
     public int Active { get; private set; }
+
+    /// <summary>Simulates a stalled network path: the connection ignores cancellation until <see cref="Drop"/> is called.</summary>
+    public bool IgnoreCancellation { get; set; }
     public Queue<Exception> ConnectFailures { get; } = new();
 
     public async Task RunConnectionAsync(Func<F1LifecycleEvent, CancellationToken, Task> onEvent, Action onConnected, CancellationToken cancellationToken)
@@ -176,7 +180,10 @@ public sealed class FakeLiveTransport : IF1LiveTransport
         try
         {
             onConnected();
-            await _drop.Task.WaitAsync(cancellationToken);
+            if (IgnoreCancellation)
+                await _drop.Task;
+            else
+                await _drop.Task.WaitAsync(cancellationToken);
         }
         finally
         {

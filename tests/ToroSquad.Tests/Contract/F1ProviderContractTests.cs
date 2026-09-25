@@ -200,7 +200,8 @@ public sealed class F1ProviderContractTests
     public void OpenF1_result_without_driver_list_is_not_publishable()
     {
         var result = OpenF1Parser.ParseSessionResult(Load("openf1-session-result-race.json"), null, Session(F1SessionType.Race));
-        F1ResultValidator.Problem(result, 10).Should().Contain("name");
+        // Without the session roster completeness cannot be proven (checked before the missing names).
+        F1ResultValidator.Problem(result, 10).Should().Contain("empty participant roster");
     }
 
     [Fact]
