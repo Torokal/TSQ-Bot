@@ -97,6 +97,13 @@ olay zamanı golden testlerde doğrulanır. Toplam: **341 test**, ×3 temiz (kil
 değiştirmez ve yeni `rescheduled-*` satırı üretmez (düzeltmeden önce çalıştırıldı ve **başarısız oldu**, sonra geçti); çıpa
 24 saat içinde yeniden kullanılır, sonra yenilenir, gelecekteki çıpaya güvenilmez. Toplam: **343 test**.
 
+## Canlı okuma kontrolü (2026-09-25)
+
+`esports provider-check` (yeni CLI komutu): yapılandırılmış sağlayıcıdan normal pencereyi ve etkinlikleri **bir kez** okur,
+özet yazdırır; Discord'a bağlanmaz (Fake taşıyıcı), DryRun, atılabilir veri klasörü, token yazdırılmaz. PandaScore ile
+çalıştırıldı: Success, 163 maç, 35 etkinlik, kalan kota 994 (ayrıntı docs/PROVIDERS.md). Ağ gerektirdiği için otomatik test
+paketinde yok; test paketi ağ çağrısı yapmaz.
+
 ## Bilinen gözlem
 
 - İlk tam koşulardan birinde `SetUpEsportsGuildAsync` sırasında bir kez `DbUpdateException` görüldü; iç hata mesajı

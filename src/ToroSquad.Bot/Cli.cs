@@ -92,6 +92,7 @@ public static partial class Cli
               db migrate | db backup [--out DIR] | db restore FILE --yes
               simulate                                offline end-to-end demo (fixture data, fake Discord, temp DB)
               esports demo-cards --guild ID [--kind K] [--apply]  TEST/DEMO match cards (all, or one kind) for an authorized test guild
+              esports provider-check                  READ-ONLY live fetch summary of the match provider (sends nothing)
             """);
         return Usage;
     }
@@ -129,6 +130,8 @@ public static partial class Cli
     /// </summary>
     private static async Task<int> EsportsAsync(string[] args)
     {
+        if (args.Length > 0 && args[0] == "provider-check")
+            return await ProviderCheckAsync();
         if (args.Length == 0 || args[0] != "demo-cards")
             return PrintUsage();
         var options = ParseOptions(args.Skip(1).ToArray());
@@ -190,6 +193,69 @@ public static partial class Cli
         await db.SaveChangesAsync();
         Console.WriteLine($"Staged for guild {guildId}, channel {channelId}. Delivery needs the running bot with Delivery:Mode=Send.");
         return Ok;
+    }
+
+    /// <summary>
+    /// READ-ONLY live check of the configured match provider through the real client and parser: fetches the normal
+    /// poll window and events once and prints a summary. Nothing is planned, staged or sent; Discord and the bot database
+    /// are not touched (fake transport, throw-away data directory); the token is never printed.
+    /// </summary>
+    private static async Task<int> ProviderCheckAsync()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "tsq-provider-check-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(temp);
+        Environment.SetEnvironmentVariable("TOROSQUAD_Bot__DataDirectory", temp);
+        Environment.SetEnvironmentVariable("TOROSQUAD_Discord__Transport", "Fake");
+        Environment.SetEnvironmentVariable("TOROSQUAD_Delivery__Mode", "DryRun");
+        Environment.SetEnvironmentVariable("TOROSQUAD_Esports__Provider__Mode", "Live");
+        try
+        {
+            var builder = ToroHost.CreateBuilder([], longRunning: false);
+            using var host = builder.Build();
+            var provider = host.Services.GetRequiredService<IEsportsDataProvider>();
+            var esports = host.Services.GetRequiredService<IOptions<ToroSquad.Modules.Esports.Application.EsportsOptions>>().Value;
+            Console.WriteLine($"{ProductInfo.ProductName} — READ-ONLY provider check (no notifications, no Discord, no bot database)");
+            Console.WriteLine($"Provider: {provider.Id}; configured: {provider.IsConfigured}");
+            if (!provider.IsConfigured)
+                return Blocked;
+
+            var now = DateTimeOffset.UtcNow;
+            var window = new MatchWindow(now - TimeSpan.FromHours(esports.PastWindowHours), now + TimeSpan.FromHours(esports.FutureWindowHours));
+            var matches = await provider.GetMatchesAsync(window, CancellationToken.None);
+            Console.WriteLine($"Matches {window.FromUtc:yyyy-MM-dd HH:mm}Z .. {window.ToUtc:yyyy-MM-dd HH:mm}Z: {matches.Outcome}{(matches.Detail is null ? "" : " — " + matches.Detail)}");
+            foreach (var w in matches.Warnings ?? [])
+                Console.WriteLine("  warning: " + w);
+            if (matches.HasData)
+            {
+                var list = matches.Value!;
+                Console.WriteLine($"  total {list.Count}; by status: {string.Join(", ", list.GroupBy(m => m.Status).OrderBy(g => g.Key).Select(g => $"{g.Key}={g.Count()}"))}");
+                var finished = list.Where(m => m.Status == ToroSquad.Modules.Esports.Domain.MatchStatus.Finished).ToList();
+                Console.WriteLine($"  finished: {finished.Count}; with winner {finished.Count(m => m.WinnerIndex is not null)}; with series score {finished.Count(m => m.SeriesScoreKnown)}; forfeit {finished.Count(m => m.IsForfeit)}; draw {finished.Count(m => m.IsDraw)}");
+                Console.WriteLine($"  rescheduled flag: {list.Count(m => m.Rescheduled)}; running with begin time: {list.Count(m => m.Status == ToroSquad.Modules.Esports.Domain.MatchStatus.Live && m.BeginAtUtc is not null)}; TBD opponent: {list.Count(m => !m.A.IsTeam || !m.B.IsTeam)}");
+                Console.WriteLine($"  tiers: {string.Join(", ", list.GroupBy(m => m.Tournament.Tier ?? "?").OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key}={g.Count()}"))}");
+                foreach (var m in list.Where(m => m.ScheduledStartUtc >= now).OrderBy(m => m.ScheduledStartUtc).Take(5))
+                    Console.WriteLine($"  next: {m.ScheduledStartUtc:yyyy-MM-dd HH:mm}Z  {m.A.Team?.Name ?? "TBD"} vs {m.B.Team?.Name ?? "TBD"}  bo{m.BestOf}  [{m.Tournament.Name}] tier {m.Tournament.Tier ?? "?"}");
+                foreach (var m in finished.OrderByDescending(m => m.EndAtUtc ?? m.ScheduledStartUtc).Take(3))
+                    Console.WriteLine($"  recent result: {m.A.Team?.Name ?? "TBD"} {m.A.Score?.ToString(CultureInfo.InvariantCulture) ?? "?"}-{m.B.Score?.ToString(CultureInfo.InvariantCulture) ?? "?"} {m.B.Team?.Name ?? "TBD"}  winner: {m.WinnerName ?? "(not stated)"}");
+            }
+
+            var today = DateOnly.FromDateTime(now.UtcDateTime);
+            var events = await provider.GetEventsAsync(today.AddDays(-7), today.AddDays(45), CancellationToken.None);
+            Console.WriteLine($"Events: {events.Outcome}{(events.Detail is null ? "" : " — " + events.Detail)}; count {(events.HasData ? events.Value!.Count : 0)}");
+            if (provider is ToroSquad.Modules.Esports.Providers.PandaScore.PandaScoreProvider { RateLimitRemaining: { } remaining })
+                Console.WriteLine($"PandaScore X-Rate-Limit-Remaining after this check: {remaining}");
+            return matches.HasData ? Ok : Failed;
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
     }
 
     private static async Task<int> CommandsAsync(string[] args)

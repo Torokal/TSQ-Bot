@@ -18,6 +18,9 @@ public sealed class PandaScoreProvider(PandaScoreClient client, EsportsDataMode 
 
     public bool IsConfigured => Problem() is null;
 
+    /// <summary>Last X-Rate-Limit-Remaining seen by this provider's client (diagnostics only).</summary>
+    public int? RateLimitRemaining => client.LastRateLimitRemaining;
+
     public async Task<ProviderResult<IReadOnlyList<EsportsMatch>>> GetMatchesAsync(MatchWindow window, CancellationToken cancellationToken)
     {
         if (Problem() is { } problem)

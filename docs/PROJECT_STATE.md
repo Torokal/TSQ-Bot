@@ -6,7 +6,7 @@
 Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama **main'de** (PR #2, sahip onayıyla normal merge,
 `c54793a`; merge öncesi dal ucunda tam kapı 202/202 ×3). **PandaScore + yaşam döngüsü + sade kartlar**
 `feature/pandascore-notifications` dalında (PR #3, hedefi artık `main`, çakışma yok, merge edilmedi);
-çevrimdışı **343/343 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı: BLOCKED (token yok). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
+çevrimdışı **343/343 ×3**. Kart UI temizliği (başlıkta önek yok, TEST/DEMO yalnızca footer'da, footer'da ref yok) uygulandı. PandaScore canlı **okuma** VERIFIED_LIVE (sahibin ücretsiz token'ı, 2026-09-25; bildirim henüz canlı veriyle açılmadı). Liquipedia: **BLOCKED/OPTIONAL** (anahtar yok; başvuru
 yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esports:VerifiedMatchLinks` elle yedek.
 
 ## PandaScore / bildirim aşaması (2026-09-25)
@@ -16,7 +16,10 @@ yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esp
 | Varsayılan maç sağlayıcısı | **PandaScore** (`Esports:Provider:Name`), Liquipedia eski/isteğe bağlı; normal çalışma Liquipedia gerektirmez |
 | PandaScore resmî doküman doğrulaması | Yapıldı (2026-09-25): uçlar, Bearer auth, 1.000 istek/saat (ücretsiz), sayfalama ≤100, durumlar, rescheduled/forfeit, "Source: PandaScore" atfı (docs/PROVIDERS.md) |
 | PandaScore ayrıştırma, yaşam döngüsü, sayfalama, hata türleri, bütçe | TESTED_OFFLINE (sentetik) |
-| PandaScore gerçek API (yaklaşan/oynanan/biten/ertelenen/yeniden planlanan/iptal) | **BLOCKED** — token yok; ücretsiz planda sonuç alanları dolu mu: NOT_VERIFIED (resmî sayfalar çelişkili) |
+| PandaScore gerçek API — okuma (yaklaşan/biten, sayfalama, kota, etkinlikler) | **VERIFIED_LIVE** (2026-09-25, `esports provider-check`, yalnızca okuma, hiçbir şey gönderilmedi): 163 maç / 2 sayfa (Scheduled 131, Finished 32), 35 etkinlik, kalan kota 994/1000 |
+| PandaScore ücretsiz planda sonuç alanları | **VERIFIED_LIVE** — 32 bitmiş maçın 32'sinde kazanan, 27'sinde seri skoru, 5 hükmen (kazanan var, skor yok). Resmî sayfalardaki çelişki çözüldü |
+| PandaScore canlı "oynanıyor" / ertelendi / iptal geçişleri | Okumada o an oynanan maç yoktu → **TESTED_OFFLINE**; canlı bildirim açıldığında gözlenecek |
+| Canlı veriyle bildirim (test guild) | **DEFERRED — sahip kararı**: filtre olmadan pencere içindeki tüm maçlar (163) duyurulur; önce sunucu filtresi (ör. takım, seviye veya VRS Top-N) seçilmeli |
 | Başladı / bitti / ertelendi / saat değişti / iptal / hükmen kartları | TESTED_OFFLINE; Discord'da görünüm: demo kartlarıyla doğrulanacak |
 | Sade kart tasarımı (Greg referansı) | Uygulandı; Greg ekran görüntüsü bu turda paylaşılmadı → metin şablonuna göre |
 | HLTV | Veri sağlayıcısı değil, **kazıma yok**. Araştırma: HLTV'nin resmî API'si yok; BOT Greg'in "Matchpage" bağlantısı Liquipedia maç verisindeki `links.hltv`'den geliyordu (Liquipedia Lua-Modules + upstream kodu). Sahip kararı (2026-09-25): veri PandaScore, HLTV bağlantısı Liquipedia'dan (aynı iki takım + ≤90 dk + tek aday). TESTED_OFFLINE; canlı **BLOCKED/OPTIONAL** (Liquipedia anahtarı yok); elle yedek `Esports:VerifiedMatchLinks` çalışır (TESTED_OFFLINE) |
@@ -252,9 +255,9 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 ## NEXT ACTION (güncel)
 
-1. **Sahip:** PandaScore token'ı (`dotnet user-secrets set "PandaScore:Token" "<TOKEN>" --project src\ToroSquad.Bot`; sohbete
-   yazılmaz). Doctor 2026-09-25: "PandaScore token: NOT SET". Sonra ajan önce **yalnızca okuma** doğrulaması (bildirim yok):
-   gerçek maçlar, sayfalama, kota başlıkları, ücretsiz planda sonuç alanlarının dolu olup olmadığı.
+1. **Sahip:** test sunucusunda canlı veriyle bildirim açılsın mı ve hangi filtreyle? (Token kayıtlı; canlı okuma VERIFIED_LIVE.
+   Filtresiz açılırsa 48 saatlik pencerede ~130 yaklaşan maç duyurulur.) Karar sonrası ajan: filtreyi ayarla → `Esports:Provider:Mode=Live`
+   → önce DryRun gözlemi → sonra Send.
 2. **Sahip:** PR #3'ü incelemek; merge kararı sahibin (PR #2 merge edildi, PR #3 artık `main`'e yönelik).
 3. Tamamlananlar: tüm v2 kart görselleri + Maç Sayfası **VERIFIED_LIVE**; yeniden başlatmada demo kart sorunu düzeltildi ve
    canlıda doğrulandı. (Rol eşleme #2 sahip tarafından daha önce kaldırıldı.)

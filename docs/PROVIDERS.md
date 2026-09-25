@@ -8,7 +8,7 @@ Research dates: Liquipedia/Valve 2026-09-24 (Liquipedia terms re-checked 2026-09
 
 | Provider | Role | Mode today | Live access | Status |
 |---|---|---|---|---|
-| **PandaScore** (REST API) | **Default match provider** (`Esports:Provider:Name=PandaScore`) | Fixture (synthetic data through the real client/parser) | Needs a PandaScore token (free plan exists) — none configured | **BLOCKED** (live) / **TESTED_OFFLINE** (parser, lifecycle, pagination, error types) |
+| **PandaScore** (REST API) | **Default match provider** (`Esports:Provider:Name=PandaScore`) | Fixture in the running test bot; live **read** checked with `esports provider-check` | Owner's free-plan token configured (user-secrets, 2026-09-25) | Live **read** **VERIFIED_LIVE** (2026-09-25); live notifications not enabled yet / **TESTED_OFFLINE** (lifecycle transitions, error types) |
 | Liquipedia (LiquipediaDB API v3) | **Optional** HLTV-link enrichment; **legacy / optional** match provider (only when selected) | Fixture | Requires an **approved API key** — none configured; free access applied for only after the repo is public at release | **BLOCKED/OPTIONAL** (live) / **TESTED_OFFLINE** |
 | Valve Regional Standings (GitHub) | Rankings (VRS), independent of the match provider | Fixture | Public, no key | **TESTED_OFFLINE**; live fetch **NOT_RUN** |
 | HLTV | **Not a data provider.** Preferred *external match page* when a verified URL exists | — | No authorized access; **scraping prohibited by design** | Link policy **TESTED_OFFLINE**; data integration **DEFERRED** |
@@ -48,9 +48,13 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
 - **Public match page**: **none** in the match object (`league.url` is the league website). So PandaScore matches get a
   "Maç Sayfası" only from a verified external link (see HLTV below).
 - **Plans** (VERIFIED, pricing page): free plan 0 €, 1K req/h, "no credit card"; stats plans "restricted to non-betting-
-  related usage". **Conflict** (NOT_VERIFIED): the developer overview says the free plan includes "schedules and results",
-  while the pricing page lists "No post-match results or historical statistics" for it. Whether `winner_id`/`results` are
-  populated on the free plan must be checked with a real token before result cards are called VERIFIED_LIVE.
+  related usage". The official pages conflicted on whether the free plan fills result fields; **resolved by live read
+  (VERIFIED_LIVE, 2026-09-25, owner's free-plan token)**: of 32 finished matches in the window all 32 had a winner, 27 a
+  series score, 5 were forfeits (winner, no score — as the lifecycle docs describe).
+- **Live read check** (2026-09-25, `esports provider-check`, read-only, nothing sent): window −12 h … +48 h → **163 matches**
+  in 2 pages (Scheduled 131, Finished 32, none running at 01:23Z), 28 with `rescheduled=true`, 56 with a TBD opponent,
+  tiers b/c/d only (3/4/5 = 20/82/61); events 35; `X-Rate-Limit-Remaining` 994 after the check (≈6 requests).
+  Note: with no guild filter every one of these matches would be announced — set filters before live notifications.
 - **Terms** (VERIFIED, pandascore.co/terms-and-condition): art. 6.4 requires the source line **"Source: PandaScore"** on any
   medium reproducing the data → every card footer says "Kaynak: PandaScore" and `/bot about` lists PandaScore. Raw data
   must not be redistributed as-is and direct API access/URLs must not be given to end users (art. 6.3/6.4) → TSQ Bot shows
