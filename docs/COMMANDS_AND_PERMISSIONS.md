@@ -21,6 +21,30 @@ bağlamında (`contexts=[0]`, `integration_types=[0]`); DM komutu ve DM bildirim
 | `/setup` | Dil → zaman dilimi (Europe/Istanbul varsayılan) → modül adımları (esports: kanal, pingsiz önizleme, etkinleştir). Düğmeler yalnızca sihirbazı açan kişi için ve her tıklamada yeniden yetki kontrolü |
 | `/modules list \| enable module: \| disable module:` | Modül durumları; kapatmak veri silmez; çekirdek kapatılamaz |
 
+## Formula 1 (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/f1 next` | Sıradaki (veya süren) Grand Prix: tur, pist, yarış saati, tüm seanslar (Discord zaman damgaları) |
+| `/f1 schedule [round]` | Hafta sonu programı ve seans durumları; canlı durum yoksa bunu açıkça yazar |
+| `/f1 results [session] [spoiler]` | Önbellekteki son sınıflandırma (latest, race, sprint, qualifying, sprint-qualifying, fp1–fp3) |
+| `/f1 now` | Canlı sağlayıcıya göre süren seans; bilinmiyorsa "kullanılamıyor" (programdan tahmin yok) |
+| `/f1 standings drivers` / `/f1 standings constructors` | Sağlayıcının puan tablosu, tur, güncellik |
+
+Hepsi yalnızca botun önbelleğinden okur (etkileşim yolunda sağlayıcı çağrısı yok; mimari testli) ve ephemeral yanıt verir.
+
+## Formula 1 yönetici (`/f1-admin`, ManageGuild + sunucu tarafı `Authorize.Require`)
+
+| Komut | Ne yapar |
+|---|---|
+| `/f1-admin configure channel` | Bildirim kanalı (bu sunucudan; eksik izinler uyarılır, başka kanala otomatik geçiş yok) |
+| `/f1-admin configure notifications` | Antrenman/sprint/yarış başlangıç ve sonuç, puan durumu; sıralama türleri (vars. kapalı) |
+| `/f1-admin configure role` | İsteğe bağlı ping rolü (`ping_role`; asla @everyone), başlangıç/sonuç ping anahtarları, `clear` |
+| `/f1-admin configure spoilers` | Spoiler modu |
+| `/f1-admin preview` · `status` · `doctor` · `pause` · `resume` | TEST/DEMO pingsiz önizleme · ayarlar · tanı · duraklat/devam |
+
+Ayrıntı: [FORMULA1.md](FORMULA1.md).
+
 ## Esports (modül açıkken)
 
 | Komut | Seçenekler |

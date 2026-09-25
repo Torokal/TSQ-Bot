@@ -1,5 +1,8 @@
 # Esports data providers — capabilities, terms, status
 
+> Formula 1 providers (Jolpica F1 for schedule/standings, OpenF1 for live lifecycle/results) — verified contracts, limits,
+> usage terms and production limitations — are documented in [FORMULA1.md](FORMULA1.md).
+
 Research dates: Liquipedia/Valve 2026-09-24 (Liquipedia terms re-checked 2026-09-25), PandaScore 2026-09-25. Labels: **VERIFIED** (read at the primary/official source), **VERIFIED (archive)**
 (official page read via Web Archive because the live page was behind a bot challenge), **VERIFIED (3rd-party)**
 (read in public third-party code/copies), **INFERRED**, **NOT_VERIFIED**.
