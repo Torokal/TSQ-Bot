@@ -22,7 +22,7 @@ public sealed class CommandManifestTests
         var (manifest, admin) = await BuildAsync();
         CommandManifestValidator.Validate(manifest, admin).Should().BeEmpty();
         manifest.LoadErrors.Should().BeEmpty();
-        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "esports-admin");
+        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "esports-admin", "f1", "f1-admin");
 
         string[] Sub(string name) => manifest.Find(name)!.Options.Select(o => o.Name).ToArray();
         Sub("bot").Should().BeEquivalentTo("status", "about", "source");
@@ -30,6 +30,8 @@ public sealed class CommandManifestTests
         Sub("modules").Should().BeEquivalentTo("list", "enable", "disable");
         Sub("esports").Should().BeEquivalentTo("matches", "results", "events", "rankings", "team", "follow", "unfollow", "subscriptions");
         Sub("esports-admin").Should().BeEquivalentTo("configure", "filters", "roles", "panel", "preview", "pause", "resume", "doctor");
+        Sub("f1").Should().BeEquivalentTo("next", "schedule", "results", "now", "standings");
+        Sub("f1-admin").Should().BeEquivalentTo("configure", "preview", "status", "doctor", "pause", "resume");
     }
 
     [Fact]
@@ -37,9 +39,9 @@ public sealed class CommandManifestTests
     {
         var (manifest, _) = await BuildAsync();
         const string manageGuild = "32"; // 1 << 5
-        foreach (var name in new[] { "setup", "modules", "esports-admin" })
+        foreach (var name in new[] { "setup", "modules", "esports-admin", "f1-admin" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().Be(manageGuild, $"/{name} is admin-only");
-        foreach (var name in new[] { "help", "bot", "privacy", "esports" })
+        foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().BeNull($"/{name} is for everyone");
     }
 
@@ -67,7 +69,7 @@ public sealed class CommandManifestTests
         var all = manifest.Commands.SelectMany(c => Flatten(c.Options).Select(o => (Command: c.Name, Option: o))).ToList();
         all.Where(x => x.Option.Type is not (OptionType.SubCommand or OptionType.SubCommandGroup) && x.Option.Name is "team" or "tournament" or "module" or "mapping").Should().OnlyContain(x => x.Option.Autocomplete);
         all.Single(x => x.Command == "esports-admin" && x.Option.Name == "channel").Option.Type.Should().Be(OptionType.Channel);
-        all.Single(x => x.Option.Name == "role").Option.Type.Should().Be(OptionType.Role);
+        all.Single(x => x.Option.Name == "role" && x.Option.Type != OptionType.SubCommand).Option.Type.Should().Be(OptionType.Role);
     }
 
     [Fact]

@@ -14,6 +14,7 @@
     <ProjectReference Include="..\..\src\ToroSquad.Discord\ToroSquad.Discord.csproj" />
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Esports\ToroSquad.Modules.Esports.csproj" />
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Example\ToroSquad.Modules.Example.csproj" />
+    <ProjectReference Include="..\..\src\ToroSquad.Modules.Formula1\ToroSquad.Modules.Formula1.csproj" />
   </ItemGroup>
 
   <ItemGroup>

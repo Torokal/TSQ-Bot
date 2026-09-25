@@ -1,0 +1,103 @@
+{
+  "MRData": {
+    "xmlns": "",
+    "series": "f1",
+    "url": "https://api.jolpi.ca/ergast/f1/2030/races/",
+    "limit": "100",
+    "offset": "0",
+    "total": "3",
+    "RaceTable": {
+      "season": "2030",
+      "Races": [
+        {
+          "season": "2030",
+          "round": "8",
+          "url": "https://example.com/2030_valley_gp",
+          "raceName": "Valley Grand Prix",
+          "Circuit": {
+            "circuitId": "valley",
+            "url": "https://example.com/valley",
+            "circuitName": "Valley Ring",
+            "Location": {
+              "lat": "0",
+              "long": "0",
+              "locality": "Valley Town",
+              "country": "Otherland"
+            }
+          },
+          "date": "2030-06-09",
+          "time": "07:00:00Z",
+          "FirstPractice": {
+            "date": "2030-06-07",
+            "time": "03:30:00Z"
+          },
+          "Qualifying": {
+            "date": "2030-06-08",
+            "time": "07:00:00Z"
+          },
+          "Sprint": {
+            "date": "2030-06-08",
+            "time": "03:00:00Z"
+          },
+          "SprintQualifying": {
+            "date": "2030-06-07",
+            "time": "07:30:00Z"
+          }
+        },
+        {
+          "season": "2030",
+          "round": "9",
+          "url": "https://example.com/2030_old_format_gp",
+          "raceName": "Old Format Grand Prix",
+          "Circuit": {
+            "circuitId": "oldformat",
+            "url": "https://example.com/oldformat",
+            "circuitName": "Legacy Circuit",
+            "Location": {
+              "lat": "0",
+              "long": "0",
+              "locality": "Legacy",
+              "country": "Testland"
+            }
+          },
+          "date": "2030-06-23",
+          "time": "12:00:00Z",
+          "FirstPractice": {
+            "date": "2030-06-21",
+            "time": "09:30:00Z"
+          },
+          "Qualifying": {
+            "date": "2030-06-21",
+            "time": "13:00:00Z"
+          },
+          "SprintShootout": {
+            "date": "2030-06-22",
+            "time": "08:30:00Z"
+          },
+          "Sprint": {
+            "date": "2030-06-22",
+            "time": "13:00:00Z"
+          }
+        },
+        {
+          "season": "2030",
+          "round": "10",
+          "url": "https://example.com/2030_tbc_gp",
+          "raceName": "TBC Grand Prix",
+          "Circuit": {
+            "circuitId": "tbc",
+            "url": "https://example.com/tbc",
+            "circuitName": "TBC Circuit",
+            "Location": {
+              "lat": "0",
+              "long": "0",
+              "locality": "TBC",
+              "country": "Testland"
+            }
+          },
+          "date": "2030-07-07"
+        }
+      ]
+    }
+  }
+}
