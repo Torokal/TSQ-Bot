@@ -1,0 +1,54 @@
+# Docker build context for TSQ Bot: only what the Dockerfile needs (global.json, Directory.*.props, src/).
+# Never send secrets, local databases, backups, build output or VCS metadata to the builder.
+
+# VCS / CI / IDE
+.git
+.gitignore
+.gitattributes
+.github
+.vs
+.vscode
+.idea
+*.user
+*.suo
+
+# Build and test output
+**/bin
+**/obj
+**/TestResults
+artifacts
+coverage*
+tests
+
+# Local runtime data, databases, backups, logs
+data
+backups
+logs
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite3
+**/*.lock
+**/*.bak
+**/*.pre-restore
+
+# Secrets / local configuration (user-secrets live outside the repository, listed for safety)
+.env
+.env.*
+**/secrets*.json
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+**/UserSecrets
+
+# Source export archives and other archives
+**/*.zip
+**/*.tar
+**/*.tar.gz
+
+# Not needed in the image
+docs
+scripts
+upstream
+*.md
+LICENSE
