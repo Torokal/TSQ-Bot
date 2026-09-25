@@ -170,7 +170,7 @@ Send, sağlayıcı Fixture (TEST/DEMO), Example modülü kapalı (7 komut grubu)
 | Discord mesaj düzenleme/güncelleme teslimatı | **VERIFIED_LIVE** (2026-09-25: 7 demo kartı yeni render'a düzenlendi; Discord düzenlemeyi kabul etti — outbox Sent, EditPending=0, DeliveredPayloadHash=PayloadHash, hata yok) |
 | Mevcut demo kartları kopya üretmeden güncellendi | **VERIFIED_LIVE** (7 satır EditScheduled → aynı mesajlar düzenlendi; yeni outbox satırı/mesaj yok) |
 | Güncelleme rol/kullanıcı ping'i olmadan yapıldı | **VERIFIED_LIVE** (düzenlemeler her zaman allowed_mentions boş; demo kartların içeriği yok) |
-| **Güncel** Started kartı görünümü (🔴 sürümü) | TESTED_OFFLINE — sahip isteğiyle (2026-09-25) durum emojisi ▶️ → 🔴 oldu ("🔴 Maç başladı · <göreli zaman>"); yalnızca demo başladı mesajı ping'siz düzenlendi, bu sürüm henüz görülmedi |
+| **Güncel** Started kartı görünümü (🔴 sürümü) | **VERIFIED_LIVE** (sahip 🔴 sürümünü Discord'da görüp onayladı, 2026-09-25; "🔴 Maç başladı · <Discord yerel göreli zaman>") |
 | Started kartı görünümü (▶️ sürümü, düzen aynı) | **VERIFIED_LIVE** (sahip güncel kartı inceleyip onayladı, 2026-09-25; Discord'un yerel göreli zamanı `<t:…:R>` dahil — "43 minutes ago" gibi metni Discord kullanıcının diline/saat dilimine göre üretir, TSQ Bot çevirmez) |
 | **Güncel** Finished (normal) kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
 | **Güncel** Finished (spoiler) kartı görünümü | **VERIFIED_LIVE** (sahip onayı, 2026-09-25) |
@@ -249,9 +249,9 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 
 1. **Sahip:** PR #2'yi (canlı doğrulama) incelemek/merge etmek; ardından PR #3 (PandaScore) `main`'e yönelir.
 2. **Sahip (isteğe bağlı):** test sunucusunda `/esports-admin roles unmap mapping:2` (ping'li test eşlemesi).
-3. **Sahip:** test kanalındaki demo **başladı** kartının 🔴 sürümüne bakmak (yalnızca o mesaj ping'siz düzenlendi:
-   `esports demo-cards --guild 618763184815472651 --kind demo-started --apply`). Onaylanınca Started (🔴) VERIFIED_LIVE.
-   Forfeit ve Maç Sayfası görünümü onaylandı (VERIFIED_LIVE).
+3. Kart görselleri tamamlandı: tüm v2 türleri (Started 🔴, Finished normal/spoiler, Postponed, Rescheduled, Canceled,
+   Forfeit) ve Maç Sayfası görünümü **VERIFIED_LIVE** (2026-09-25). Açık küçük iş: fixture modunda her yeniden başlatma yeni
+   bir TEST/DEMO "saat değişti" kartı üretiyor (FixtureAnchor süreç başlangıcına bağlı) — ayrı görev olarak önerildi.
 4. **Sahip:** PandaScore token'ı (`dotnet user-secrets set "PandaScore:Token" …`) → ajan önce yalnızca okuma doğrulaması.
 
 ## NEXT ACTION (önceki kayıt)
