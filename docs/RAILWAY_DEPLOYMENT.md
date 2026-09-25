@@ -101,7 +101,9 @@ Gaming, Eternal Fire) ve istersen rol eşlemesini yeniden yap. İlk canlı taram
    ```
    Çıkan dosya tek `.db` dosyasıdır; `-wal`/`-shm` **yüklenmez**.
 3. Railway CLI (bir kez): `npm i -g @railway/cli` → `railway login` (tarayıcıda onay) → depo klasöründe `railway link`
-   (projeyi ve TSQ Bot servisini seç).
+   (projeyi ve TSQ Bot servisini seç). **Not (2026-09-25):** `railway volume files …` SSH kullanır; bilgisayarda bir SSH
+   anahtarı olmalı ve Railway hesabına kayıtlı olmalı (`railway ssh keys add`). Anahtar yoksa A yolunu (boş veritabanı)
+   seç — ilk kurulumda böyle yapıldı.
 4. Servis **bekleme modundayken** yükle ve doğrula:
    ```powershell
    railway volume files upload "$env:USERPROFILE\tsq-handoff\torosquad-<tarih>.db" /torosquad.db --overwrite

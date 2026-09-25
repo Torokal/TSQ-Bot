@@ -253,14 +253,20 @@ eşleşiyor. Administrator istenmez; Mention Everyone önerilmez (rolü "bahsedi
 |---|---|
 | Barındırma / ortam | Railway, geliştirme/test; depo **PRIVATE**; yalnızca test guild 618763184815472651; global komut yok |
 | Dal | `feature/railway-deployment` (PR #3 dalı `feature/pandascore-notifications` üzerine; PR #3'e bağımlı) |
-| Dockerfile (SDK 10.0.401 → runtime 10.0, secret yok, `/data`) | IMPLEMENTED; yerelde `docker build` **BLOCKED** (Docker kurulu değil) — Railway derlemesi doğrulayacak. Aynı `dotnet publish` komutu yerelde TESTED_OFFLINE (Release, 0 uyarı, linux-x64 SQLite native dahil, yerel veritabanı yok) |
+| Dockerfile (SDK 10.0.401 → runtime 10.0, secret yok, `/data`) | **VERIFIED_LIVE** — Railway derledi (commit `3afdd17`). İlk Railway derlemesi `.editorconfig` imaja kopyalanmadığı için analizör hatasıyla düştü → düzeltildi. Yerelde `docker build` BLOCKED (Docker yok) |
 | Depolama korumaları (volume yok/dışında/yazılamaz → başlamaz; bütünlük kontrolü; bekleme modu) | TESTED_OFFLINE (birim testleri + yayınlanmış çıktıyla Railway benzeri smoke test: volume yok → çıkış 1; bekleme → DB açılmadı; normal → DB volume'de, migration, güvenli açılış logu) |
-| SIGTERM ile düzgün kapanma (konteyner) | BLOCKED yerelde (Docker yok); .NET Generic Host SIGTERM'i işler; yerelde Ctrl+C ile düzgün kapanma daha önce gözlendi |
+| SIGTERM ile düzgün kapanma (konteyner) | **VERIFIED_LIVE** — Railway yeniden başlatması 04:53:06Z: "Application is shutting down → [Gateway] Disconnected", 1 sn sonra yeni süreç |
 | Replika | 1 (panel ayarı; Railway volume'lü serviste replikaya izin vermez). Config as Code (`railway.json`) yeni servislerde kullanılamadığı için kaldırıldı |
 | Genel ağ | Kapalı (HTTP yok) |
-| Railway hesabı / plan / depo yetkisi | **BLOCKED — sahip adımı** (hesap, GitHub yetkisi, plan seçimi: Free'de "Always" yok ve $1 kredi yetmez → Hobby önerisi; satın alma sahibin kararı) |
-| Railway servis deploy / volume kalıcılığı / yeniden başlatma kalıcılığı / PC'siz çalışma | BLOCKED (henüz kurulmadı); gözlenene kadar VERIFIED_LIVE denmeyecek |
-| Yerel PC bağımlılığı | Hâlâ var (bot bu PC'de çalışıyor) |
+| Railway hesabı / plan / proje | Sahip: Hobby ($5/ay), GitHub uygulaması yalnızca Torokal/TSQ-Bot. Proje `thriving-luck`, servis `TSQ-Bot`, ortam `production`, bölge **EU West (Amsterdam)**, 1 replika, Restart **Always**, Serverless kapalı, domain yok, dal `feature/railway-deployment`. Config as Code (`railway.json`) yeni servislerde açılamıyor → ayarlar panelde |
+| Değişkenler | 10 servis değişkeni (2 secret'ı sahip girdi: Discord token, PandaScore token); `RAILWAY_RUN_UID=0`; `TOROSQUAD_Bot__Standby` önce `true` (bekleme doğrulandı), sonra `false` |
+| Railway servis deploy + Discord bağlantısı | **VERIFIED_LIVE** (04:46:55Z): `[Gateway] Ready — TSQ Bot in 1 guild(s)`; veritabanı `/data/torosquad.db`; Production; test guild 618763184815472651; global komut izni kapalı; PandaScore Live; Send |
+| Volume + yazılabilirlik + bekleme modu | **VERIFIED_LIVE** — bekleme: "database not opened … not present yet"; normal açılışta DB volume'de oluştu, migration'lar uygulandı |
+| Veritabanı taşıma | Sahip kararı: **boş veritabanı** (volume'e dosya yüklemek için Railway'e SSH anahtarı kaydı gerekiyordu). Sahip `/setup` + iki takım filtresini (Aurora Gaming, Eternal Fire) Railway botunda yeniden yaptı → 04:51:57Z `guilds=1 filtered=154` (**VERIFIED_LIVE**). İlk tarama 155 maçı baseline aldı (geçmiş duyurulmadı) |
+| Yeniden başlatma kalıcılığı / kopya yok | **VERIFIED_LIVE** — `railway restart` sonrası 04:53:09Z `guilds=1 new=0 updated=0 filtered=154`, bootstrap tekrarlanmadı |
+| Tek kopya | Yerel bot 04:46:17Z düzgün kapatıldı (`[Gateway] Disconnected`), yerelde `ToroSquad.Bot` süreci yok; Railway'de 1 replika |
+| PC'siz çalışma | Yerel süreç yok, bot Railway'de; **PC kapalıyken** Discord'dan yanıt vermesi sahip tarafından doğrulanınca VERIFIED_LIVE — bekliyor |
+| Yedek | Railway Backups: günlük zamanlama önerildi (sahip panelden açar); henüz ayarlanmadı |
 
 ## Yayın öncesi gereksinimler (PRE-RELEASE REQUIREMENT)
 
