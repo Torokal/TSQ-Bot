@@ -104,8 +104,7 @@ Yalnızca `Discord:TestGuildIds` içindeki sunucuya, TEST/DEMO etiketli ve ping'
 ## 7. Herkese açık kullanım (production)
 
 `Bot:SourceUrl` zorunludur (AGPL-3.0). Varsayılanı kanonik depodur: https://github.com/Torokal/TSQ-Bot (`/bot source`
-sürüm ve commit ile birlikte gösterir). Depo geliştirme/test süresince **private**tir; **PRE-RELEASE REQUIREMENT:** bot
-herkese açılmadan önce depo public yapılır ve yayımlanan kaynak dağıtılan commit ile eşleşmelidir (bkz. docs/OPERATIONS.md
+sürüm ve commit ile birlikte gösterir). Depo **public**tir (2026-09-25); yayımlanan kaynak dağıtılan commit ile eşleşmelidir (bkz. docs/OPERATIONS.md
 "Yayın öncesi güvenlik kapısı"). **Değiştirilmiş** bir sürüm işletiyorsanız `Bot:SourceUrl` kendi deponuzu göstermeli ya da
 `.\scripts\Export-Source.ps1` arşivini yayımlamalısınız. `Bot:OperatorContact` ayarlayın. Global komut kaydı `Discord:AllowGlobalCommandSync=true`
 gerektiren ayrı bir karardır. 7/24 barındırma: Railway — bkz. docs/RAILWAY_DEPLOYMENT.md.

@@ -3,6 +3,19 @@
 > Tek doğruluk kaynağı: gerçek durum, kararlar, çalıştırılan testler, blocker'lar ve tek NEXT ACTION.
 > Yeni oturumda önce bu dosyayı, sonra `git status` / `git log --oneline -10` çıktısını doğrula.
 
+## Güncel özet (2026-09-25, en üstteki bu bölüm geçerlidir)
+
+| Konu | Durum |
+|---|---|
+| Kaynak | **Public**: https://github.com/Torokal/TSQ-Bot (AGPL-3.0). PR #2–#5 `main`'de (normal merge), sonra tek seferlik yetkili **geçmiş temizliği**: sahibin kişisel e-postası tüm commit meta verisinden kaldırıldı (GitHub noreply ile değiştirildi), eski sahte "Discord token" test literali geçmişten silindi. Doğrulama: 1.029 nesnede kişisel e-posta **0**, sahte literal **0**, gerçek secret **0**; güncel ağaç birebir aynı (`b8c93cc…`). Public depoya yalnızca temiz `main` gönderildi (eski dallar/PR referansları yok) |
+| Orijinal geçmiş | Sahibe özel **private arşiv** (GitHub) + yerel yedek (bundle) — public belgelerde bağlantı verilmez, deploy edilmez |
+| GitHub güvenliği | Secret scanning + push protection açık (0 uyarı), Dependabot uyarıları açık (otomatik PR yok), `main` korumalı: PR zorunlu, force push/silme kapalı. Tek seferlik geçmiş yeniden yazma istisnası **kapandı** |
+| Commit kimliği | Bu depoda (yerel config): `Torokal <68400310+Torokal@users.noreply.github.com>` |
+| Tek sunucu | Ana sunucu 689812743242514448; `Discord:AllowedGuildIds` = yalnızca ana sunucu (sunucu tarafı koruma: etkileşim girişinde ret, planlayıcı ve teslimatta iptal) — TESTED_OFFLINE (6 test) + Railway'de etkin (`main`, eski test sunucusu için `guilds=0`). Global komut yok |
+| Railway | `main` dalından deploy (EU West, 1 replika, Always, /data volume, genel ağ kapalı); kaynak deponun yeni public depoya bağlanması: aşağıdaki NEXT ACTION |
+| Yedek | Railway volume yedekleri Pro plan gerektiriyor (BLOCKED, yükseltme yok); uygulama içi günlük yedek `/data/backups` VERIFIED_LIVE |
+| Yerel üretim botu | **KAPALI** — canlı Discord bağlantısı yalnızca Railway'de; yerel ortam geliştirme/test içindir |
+
 Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulama **main'de** (PR #2, sahip onayıyla normal merge,
 `c54793a`; merge öncesi dal ucunda tam kapı 202/202 ×3). **PandaScore + yaşam döngüsü + sade kartlar**
 `feature/pandascore-notifications` dalında (PR #3, hedefi artık `main`, çakışma yok, merge edilmedi);
@@ -39,9 +52,9 @@ yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esp
 | | |
 |---|---|
 | Ürün adı | **TSQ Bot** (eski adı ToroSquad Bot — 2026-09-24'te değiştirildi) |
-| Kanonik depo | `Torokal/TSQ-Bot` → https://github.com/Torokal/TSQ-Bot (**PRIVATE** geliştirme/test süresince — sahip kararı, 2026-09-24; bot herkese açılmadan önce **public** yapılacak: PRE-RELEASE REQUIREMENT) |
+| Kanonik depo | `Torokal/TSQ-Bot` → https://github.com/Torokal/TSQ-Bot (**PUBLIC**, 2026-09-25; temizlenmiş geçmiş — yukarıdaki özet) |
 | Rename | **Tamamlandı** (yerel) — commit `671e7cc` `refactor(branding): rename product to TSQ Bot` |
-| GitHub push | Depo **oluşturuldu** (Torokal hesabı, 2026-09-24; önce public, ardından sahip isteğiyle **private**). `main` (`177b5f7`) ve `feature/foundation` (`4912596`) **push edildi**, force/squash yok. İlk `feature/foundation` push'u GitHub push protection'a takıldı: `6c4b696`/`5570842` içindeki `tests/ToroSquad.Tests/Integration/OperationsTests.cs:86` **sahte** test dizesi "Discord Bot Token" sanıldı; sahip GitHub'da "used in tests" izni verdi. Geçmiş yeniden yazılmadı; `671e7cc` dizeyi çalışma anında birleştiriyor |
+| GitHub push | Depo **oluşturuldu** (Torokal hesabı, 2026-09-24; önce public, ardından sahip isteğiyle **private**). `main` (`177b5f7`) ve `feature/foundation` (`4912596`) **push edildi**, force/squash yok. İlk `feature/foundation` push'u GitHub push protection'a takıldı: `6c4b696`/`5570842` içindeki `tests/ToroSquad.Tests/Integration/OperationsTests.cs:86` **sahte** test dizesi "Discord Bot Token" sanıldı; sahip GitHub'da "used in tests" izni verdi. `671e7cc` dizeyi çalışma anında birleştiriyor. 2026-09-25: public yayından önce sahip onayıyla geçmiş temizlendi; bu satırdaki eski SHA'lar yalnızca private arşivde var |
 | GitHub'daki dallar | `main`, `feature/foundation` |
 | Pull request | https://github.com/Torokal/TSQ-Bot/pull/1 — "Foundation: modular TSQ Bot core and esports module"; **MERGED** 2026-09-24T20:42:13Z, normal merge commit (squash/force/rebase yok). Merge öncesi inceleme: 10 commit, 159 dosya (158 eklenen + 1 yeniden adlandırılan), binary/veritabanı/runtime/`bin`/`obj`/`TestResults`/arşiv yok, makine yolu yok; tüm geçmişte secret taraması: yalnızca bilinen sahte test dizesi. GitHub PR diff'i 20.000 satır sınırını aştığı için inceleme aynı SHA üzerinde yerel `git diff` ile yapıldı. CI yok |
 | Merge SHA | `27e7ab3290ca3dc739fe3d42b21a5128e209ea04` (ebeveynler `177b5f7` + `bd52f74`); `main` ağacı = `feature/foundation` ağacı |
@@ -251,8 +264,8 @@ eşleşiyor. Administrator istenmez; Mention Everyone önerilmez (rolü "bahsedi
 
 | Konu | Durum |
 |---|---|
-| Barındırma / ortam | Railway, geliştirme/test; depo **PRIVATE**; yalnızca test guild 618763184815472651; global komut yok |
-| Dal | `feature/railway-deployment` (PR #3 dalı `feature/pandascore-notifications` üzerine; PR #3'e bağımlı) |
+| Barındırma / ortam | Railway; tek sunucu (ana sunucu); depo **public**; global komut yok |
+| Dal | `main` (PR #3/#4/#5 merge edildi) |
 | Dockerfile (SDK 10.0.401 → runtime 10.0, secret yok, `/data`) | **VERIFIED_LIVE** — Railway derledi (commit `3afdd17`). İlk Railway derlemesi `.editorconfig` imaja kopyalanmadığı için analizör hatasıyla düştü → düzeltildi. Yerelde `docker build` BLOCKED (Docker yok) |
 | Depolama korumaları (volume yok/dışında/yazılamaz → başlamaz; bütünlük kontrolü; bekleme modu) | TESTED_OFFLINE (birim testleri + yayınlanmış çıktıyla Railway benzeri smoke test: volume yok → çıkış 1; bekleme → DB açılmadı; normal → DB volume'de, migration, güvenli açılış logu) |
 | SIGTERM ile düzgün kapanma (konteyner) | **VERIFIED_LIVE** — Railway yeniden başlatması 04:53:06Z: "Application is shutting down → [Gateway] Disconnected", 1 sn sonra yeni süreç |
@@ -283,6 +296,13 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 | Depo public olduktan **sonra** Liquipedia ücretsiz API erişimine başvuru (depo bunun için erkenden public yapılmaz) | PRE-RELEASE REQUIREMENT — sahip kararı (2026-09-25) |
 
 ## NEXT ACTION (güncel)
+
+A. **Sahip:** GitHub → Settings → Applications → Railway → Configure → yeni **Torokal/TSQ-Bot**'a erişim ver → ajan Railway
+   kaynağını yeni public depo `main`'e bağlar (tek kontrollü deploy) ve doğrular.
+B. **Sahip:** botu ana sunucuya davet (en az yetki 84992, rol yönetimi yok) → ajan komutları yalnızca ana sunucuya kaydeder
+   (önce önizleme) → sahip `/setup` + filtreler → canlı doğrulama → Railway yeniden başlatma testi → eski test sunucusundan
+   botu çıkarma.
+C. **Sahip:** Railway → Workspace → Usage → **$10** kullanım limiti.
 
 0. **Sahip — Railway (PC'siz çalışma):** railway.com'da GitHub ile giriş, plan seçimi (Hobby önerisi; Free'de "Always" yok ve
    $1 kredi yetmez), **New Project → Deploy from GitHub repo → Torokal/TSQ-Bot**, dal `feature/railway-deployment`,

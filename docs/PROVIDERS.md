@@ -130,9 +130,9 @@ Normal operation does not need a Liquipedia key.
   commercial side **Enterprise** is offered. The older $49 / $199 prices (archive 2026-06-18) are **no longer current**.
 - **Free access**: by **application** only, for open-source educational / non-commercial public / community projects,
   and in most cases **time-limited**. Liquipedia decides whether a project qualifies (NOT_VERIFIED for TSQ Bot).
-- **Owner decision (2026-09-25)**: the TSQ Bot repository stays **PRIVATE** during development and testing and is **not**
-  made public early just for Liquipedia access. At the release phase, **after** the repository is public (PRE-RELEASE
-  REQUIREMENT, docs/OPERATIONS.md), the owner applies for free API access. Until then Liquipedia enrichment is
+- **Owner decision (2026-09-25)**: the repository was kept private during development (not made public early just for
+  Liquipedia access) and is **public since 2026-09-25** (https://github.com/Torokal/TSQ-Bot). The owner may now apply for
+  free API access. Until then Liquipedia enrichment is
   **BLOCKED/OPTIONAL**, `Esports:VerifiedMatchLinks` is the manual fallback, and PandaScore runs without Liquipedia.
   Requesting access or paying remains an owner decision (approval gate).
 

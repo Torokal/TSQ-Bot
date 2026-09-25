@@ -39,7 +39,7 @@ real APIs · **BLOCKED** = waiting on an owner action · **DEFERRED** = intentio
 | Admin/member permission separation with a second account, role grant/removal, cross-guild isolation, crash recovery | TESTED_OFFLINE |
 | Docker image + Railway private test hosting (persistent SQLite volume) | IMPLEMENTED / TESTED_OFFLINE — Railway deploy BLOCKED (owner account step) |
 | HLTV as a data provider, BOT Greg "stars", news, global commands, public launch | DEFERRED |
-| GitHub repository public visibility | **PRE-RELEASE REQUIREMENT** — private during development/testing, made public before public bot launch |
+| GitHub repository public visibility | **Public** (2026-09-25) — the Discord bot itself stays single-guild (no public invite, no global commands) |
 
 ## Features
 
