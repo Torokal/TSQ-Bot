@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace ToroSquad.Modules.Esports.Domain;
 
 /// <summary>
@@ -57,8 +59,13 @@ public enum GameStatus
     NotPlayed = 2,
 }
 
-/// <summary>Team reference as the source identifies it. <see cref="Key"/> is the source page/id, not a display name.</summary>
-public sealed record TeamRef(string Source, string Key, string Name, string? ShortName)
+/// <summary>
+/// Team reference as the source identifies it. <see cref="Key"/> is the source page/id, not a display name.
+/// <see cref="LogoUrl"/> is an already validated provider logo (<see cref="TeamLogoPolicy"/>) or null. It is purely
+/// decorative, so it is not stored in match snapshots and never makes a match count as "changed".
+/// </summary>
+public sealed record TeamRef(string Source, string Key, string Name, string? ShortName,
+    [property: JsonIgnore] string? LogoUrl = null)
 {
     public string Display => Name;
 }

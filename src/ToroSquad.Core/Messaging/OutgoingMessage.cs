@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace ToroSquad.Core.Messaging;
@@ -17,6 +18,11 @@ public sealed record MentionPolicy(IReadOnlyList<RoleId> Roles)
 
 public sealed record EmbedField(string Name, string Value, bool Inline = false);
 
+/// <summary>
+/// <see cref="ThumbnailUrl"/> is a small image in the embed's corner (e.g. a team logo). It is omitted from the stored
+/// payload when absent, so messages without a thumbnail keep their previous payload hash, and it is not part of
+/// <see cref="MessageFingerprint"/> (like <see cref="Url"/>).
+/// </summary>
 public sealed record MessageEmbed(
     string? Title,
     string? Description,
@@ -24,7 +30,8 @@ public sealed record MessageEmbed(
     IReadOnlyList<EmbedField> Fields,
     string? Footer,
     DateTimeOffset? Timestamp,
-    uint? Color);
+    uint? Color,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ThumbnailUrl = null);
 
 public sealed record MessageButton(string Label, string? CustomId, string? Url, bool Disabled = false);
 
@@ -49,6 +56,7 @@ public static class DiscordLimits
     public const int EmbedFieldValueMax = 1024;
     public const int EmbedFooterMax = 2048;
     public const int EmbedTotalMax = 6000;
+    public const int EmbedUrlMax = 2048;
     public const int AutocompleteChoicesMax = 25;
 
     public static IReadOnlyList<string> Validate(OutgoingMessage message)
@@ -64,6 +72,9 @@ public static class DiscordLimits
             if (e.Fields.Any(f => f.Name.Length is 0 or > EmbedFieldNameMax || f.Value.Length is 0 or > EmbedFieldValueMax))
                 errors.Add("embed field size invalid");
             if (e.Footer is { Length: > EmbedFooterMax }) errors.Add("embed footer too long");
+            if (e.ThumbnailUrl is { } thumbnail &&
+                (thumbnail.Length > EmbedUrlMax || !Uri.TryCreate(thumbnail, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps))
+                errors.Add("embed thumbnail url invalid");
             var total = (e.Title?.Length ?? 0) + (e.Description?.Length ?? 0) + (e.Footer?.Length ?? 0) +
                         e.Fields.Sum(f => f.Name.Length + f.Value.Length);
             if (total > EmbedTotalMax) errors.Add("embed total too long");

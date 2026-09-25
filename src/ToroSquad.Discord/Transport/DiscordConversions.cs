@@ -40,6 +40,8 @@ public static class DiscordConversions
             builder.WithTimestamp(ts);
         if (model.Color is { } color)
             builder.WithColor(new Color(color));
+        if (!string.IsNullOrEmpty(model.ThumbnailUrl))
+            builder.WithThumbnailUrl(model.ThumbnailUrl);
         return builder.Build();
     }
 

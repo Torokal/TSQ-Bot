@@ -21,6 +21,8 @@ namespace ToroSquad.Modules.Esports.Application;
 /// <item>Nothing the source did not state is shown (no invented winner, score, time or stars).</item>
 /// <item>Demo data is labelled TEST/DEMO in the footer only (the title is just the match), never links anywhere and never
 /// claims a real source. Real cards carry only the source attribution in the footer (no internal ids).</item>
+/// <item>Team logo (small thumbnail, <see cref="LogoFor"/>): accuracy over decoration — shown only when it cannot mislead,
+/// otherwise the card has no thumbnail.</item>
 /// </list>
 /// </summary>
 public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode mode, IEsportsDataProvider? provider = null)
@@ -46,21 +48,27 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
     }
 
     /// <summary>Sent only on a provider-stated scheduled → running transition (never because the clock passed).</summary>
-    public OutgoingMessage Started(EsportsMatch match, string language, MentionPolicy pings, DateTimeOffset observedAt) =>
+    public OutgoingMessage Started(EsportsMatch match, string language, MentionPolicy pings, DateTimeOffset observedAt,
+        IReadOnlySet<string>? followedTeamKeys = null) =>
         Card(match, language, Title(match, language), [L(language, "esports.card.started", DiscordText.Timestamp(match.BeginAtUtc ?? observedAt, 'R'))], [],
-            match.BeginAtUtc ?? observedAt, StartedColor, pings);
+            match.BeginAtUtc ?? observedAt, StartedColor, pings, LogoFor(match, followedTeamKeys, showWinner: false));
 
-    public OutgoingMessage Postponed(EsportsMatch match, string language, DateTimeOffset observedAt) =>
-        Card(match, language, Title(match, language), [L(language, "esports.card.postponed")], [], observedAt, ChangeColor, MentionPolicy.None);
+    public OutgoingMessage Postponed(EsportsMatch match, string language, DateTimeOffset observedAt, IReadOnlySet<string>? followedTeamKeys = null) =>
+        Card(match, language, Title(match, language), [L(language, "esports.card.postponed")], [], observedAt, ChangeColor, MentionPolicy.None,
+            LogoFor(match, followedTeamKeys, showWinner: false));
 
-    public OutgoingMessage Rescheduled(EsportsMatch match, string language, DateTimeOffset newStartUtc, TimeZoneInfo zone, DateTimeOffset observedAt) =>
+    public OutgoingMessage Rescheduled(EsportsMatch match, string language, DateTimeOffset newStartUtc, TimeZoneInfo zone, DateTimeOffset observedAt,
+        IReadOnlySet<string>? followedTeamKeys = null) =>
         Card(match, language, Title(match, language), [L(language, "esports.card.rescheduled")],
-            [new EmbedField(L(language, "esports.field.new_time"), LocalTime(newStartUtc, zone), true)], observedAt, ChangeColor, MentionPolicy.None);
+            [new EmbedField(L(language, "esports.field.new_time"), LocalTime(newStartUtc, zone), true)], observedAt, ChangeColor, MentionPolicy.None,
+            LogoFor(match, followedTeamKeys, showWinner: false));
 
-    public OutgoingMessage Cancelled(EsportsMatch match, string language, DateTimeOffset observedAt) =>
-        Card(match, language, Title(match, language), [L(language, "esports.card.cancelled")], [], observedAt, CancelledColor, MentionPolicy.None);
+    public OutgoingMessage Cancelled(EsportsMatch match, string language, DateTimeOffset observedAt, IReadOnlySet<string>? followedTeamKeys = null) =>
+        Card(match, language, Title(match, language), [L(language, "esports.card.cancelled")], [], observedAt, CancelledColor, MentionPolicy.None,
+            LogoFor(match, followedTeamKeys, showWinner: false));
 
-    public OutgoingMessage Result(EsportsMatch match, string language, bool spoiler, MentionPolicy pings, DateTimeOffset fetchedAt)
+    public OutgoingMessage Result(EsportsMatch match, string language, bool spoiler, MentionPolicy pings, DateTimeOffset fetchedAt,
+        IReadOnlySet<string>? followedTeamKeys = null)
     {
         string title;
         List<string> lines;
@@ -78,7 +86,43 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
             lines = ResultLines(match, language);
         }
 
-        return Card(match, language, title, lines, [], match.EndAtUtc ?? fetchedAt, ResultColor, pings);
+        // Spoiler mode must not reveal the winner through the logo either: only the followed-team rule applies there.
+        return Card(match, language, title, lines, [], match.EndAtUtc ?? fetchedAt, ResultColor, pings, LogoFor(match, followedTeamKeys, showWinner: !spoiler));
+    }
+
+    /// <summary>
+    /// The team logo for a card, or null (no thumbnail). Rules, in order:
+    /// <list type="number">
+    /// <item>Demo data never shows a logo (it never points at real sites).</item>
+    /// <item><paramref name="showWinner"/> (non-spoiler results, incl. forfeits): the provider-stated winner's logo; a draw,
+    /// an unknown winner or a winner without a logo means no logo — never the loser's or a followed team's.</item>
+    /// <item>Otherwise: the logo of the single team the server follows (server team filter) in this match. No followed
+    /// team, or both teams followed, means no logo.</item>
+    /// </list>
+    /// </summary>
+    public string? LogoFor(EsportsMatch match, IReadOnlySet<string>? followedTeamKeys, bool showWinner)
+    {
+        if (mode.IsDemo)
+            return null;
+        TeamRef? team;
+        if (showWinner)
+        {
+            team = match.IsDraw ? null : match.WinnerIndex switch
+            {
+                0 => match.A.Team,
+                1 => match.B.Team,
+                _ => null,
+            };
+        }
+        else
+        {
+            var followed = followedTeamKeys is { Count: > 0 }
+                ? match.Opponents.Where(o => o.IsTeam && followedTeamKeys.Contains(o.Team!.Key)).Select(o => o.Team!).ToList()
+                : [];
+            team = followed.Count == 1 ? followed[0] : null;
+        }
+
+        return TeamLogoPolicy.Validate(team?.LogoUrl);
     }
 
     /// <summary>Result as one line whose visible length does not depend on who won (spoiler content).</summary>
@@ -197,7 +241,8 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
     private string Title(EsportsMatch match, string language) =>
         L(language, "esports.card.vs", Name(match.A, language), Name(match.B, language));
 
-    private OutgoingMessage Card(EsportsMatch match, string language, string title, List<string> lines, List<EmbedField> extraFields, DateTimeOffset timestamp, uint color, MentionPolicy pings)
+    private OutgoingMessage Card(EsportsMatch match, string language, string title, List<string> lines, List<EmbedField> extraFields, DateTimeOffset timestamp, uint color, MentionPolicy pings,
+        string? logoUrl = null)
     {
         var fields = new List<EmbedField>
         {
@@ -215,7 +260,7 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
         return new OutgoingMessage(
             Content(pings),
             // The title is only the match; demo cards say TEST/DEMO in the footer (no prefix, no link, no real source).
-            new MessageEmbed(title, string.Join("\n", lines), page?.Url, fields, CardFooter(language, match.Key.Source), timestamp, color),
+            new MessageEmbed(title, string.Join("\n", lines), page?.Url, fields, CardFooter(language, match.Key.Source), timestamp, color, logoUrl),
             pings);
     }
 
