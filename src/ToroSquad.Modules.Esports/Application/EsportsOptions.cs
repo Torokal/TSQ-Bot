@@ -35,6 +35,15 @@ public sealed class EsportsOptions
     /// <summary>Operator-curated external match pages (verified HLTV / official). See <see cref="MatchLinkCatalog"/>.</summary>
     public List<VerifiedMatchLink> VerifiedMatchLinks { get; set; } = [];
 
+    /// <summary>Use Liquipedia as the HLTV match-page link source when another provider supplies the match data.</summary>
+    public bool HltvLinksFromLiquipedia { get; set; } = true;
+
+    /// <summary>How often the Liquipedia link source is refreshed (its own 60 req/h budget).</summary>
+    public int LinkPollMinutes { get; set; } = 30;
+
+    /// <summary>Max start-time difference between a match and its Liquipedia counterpart for an HLTV link.</summary>
+    public int HltvLinkToleranceMinutes { get; set; } = 90;
+
     /// <summary>A start-time move smaller than this is treated as noise, not as a reschedule announcement.</summary>
     public int RescheduleThresholdMinutes { get; set; } = 15;
 
@@ -70,6 +79,16 @@ public sealed class EsportsOptions
                 errors.Add($"Polling every {MatchPollMinutes} min with up to {pandaScore.MaxPages} pages needs {worstCasePerHour:0} req/h > budget {pandaScore.PlannedRequestsPerHour} (PandaScore:RequestsPerHour x BudgetShare)");
             if (PandaScoreOptions.ConfigurationProblem(pandaScore, requireToken: false) is { } problem)
                 errors.Add(problem);
+        }
+
+        if (Provider.Name != MatchProviderName.Liquipedia && HltvLinksFromLiquipedia)
+        {
+            var linkBudget = Math.Floor(liquipedia.RequestsPerHourPerTable * Math.Clamp(liquipedia.BudgetShare, 0.1, 1.0));
+            var linkPerHour = 60.0 / Math.Max(5, LinkPollMinutes) * Math.Max(1, liquipedia.MaxPages);
+            if (linkPerHour > linkBudget)
+                errors.Add($"HLTV link source: refreshing Liquipedia every {LinkPollMinutes} min with up to {liquipedia.MaxPages} pages needs {linkPerHour:0} req/h > budget {linkBudget:0} (raise Esports:LinkPollMinutes)");
+            if (HltvLinkToleranceMinutes is < 1 or > 360)
+                errors.Add("Esports:HltvLinkToleranceMinutes must be 1..360");
         }
 
         errors.AddRange(MatchLinkCatalog.Problems(VerifiedMatchLinks));

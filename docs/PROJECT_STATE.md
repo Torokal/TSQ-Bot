@@ -17,7 +17,8 @@ Son güncelleme: **2026-09-25** — Foundation main'de (PR #1). Canlı doğrulam
 | PandaScore gerçek API (yaklaşan/oynanan/biten/ertelenen/yeniden planlanan/iptal) | **BLOCKED** — token yok; ücretsiz planda sonuç alanları dolu mu: NOT_VERIFIED (resmî sayfalar çelişkili) |
 | Başladı / bitti / ertelendi / saat değişti / iptal / hükmen kartları | TESTED_OFFLINE; Discord'da görünüm: demo kartlarıyla doğrulanacak |
 | Sade kart tasarımı (Greg referansı) | Uygulandı; Greg ekran görüntüsü bu turda paylaşılmadı → metin şablonuna göre |
-| HLTV | Veri sağlayıcısı değil, **kazıma yok**; doğrulanmış maç sayfası bağlantısı (küratörlü liste) TESTED_OFFLINE |
+| HLTV | Veri sağlayıcısı değil, **kazıma yok**. Araştırma: HLTV'nin resmî API'si yok; BOT Greg'in "Matchpage" bağlantısı Liquipedia maç verisindeki `links.hltv`'den geliyordu (Liquipedia Lua-Modules + upstream kodu). Sahip kararı (2026-09-25): veri PandaScore, HLTV bağlantısı Liquipedia'dan (aynı iki takım + ≤90 dk + tek aday). TESTED_OFFLINE; canlı **BLOCKED** (Liquipedia anahtarı yok) |
+| Kart başlığı tıklanınca maç sayfası | Uygulandı (Greg gibi); gerçek HLTV bağlantısı Liquipedia anahtarı gelince görünür; demo kartları bilinçli olarak bağlantısız |
 | Yıldız (BOT Greg puanı) | DEFERRED — güvenilir kaynak yok, gösterilmez |
 | Test guild'deki rol eşleme #2 (tüm maçlar, hatırlatma ping'i açık) | Sahibin yapılandırması, dokunulmadı; demo hatırlatması test rolünü etiketleyebilir → `/esports-admin roles unmap mapping:2` |
 

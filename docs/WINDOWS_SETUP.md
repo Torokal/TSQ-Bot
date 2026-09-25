@@ -74,7 +74,9 @@ dotnet user-secrets set "Esports:Provider:Mode" "Live" --project src\ToroSquad.B
 Önce yalnızca okuma doğrulaması yapılır (gerçek bildirim göndermeden): `.\scripts\Doctor.ps1` → "PandaScore token: set".
 Token yoksa canlı PandaScore **BLOCKED** olur; fixture modu ve testler token gerektirmez.
 
-**Liquipedia (eski/isteğe bağlı).** `Esports:Provider:Name=Liquipedia` seçilirse onaylı anahtar gerekir (başvuru, çoğu
+**Liquipedia (HLTV maç sayfası bağlantıları için).** Maç verisi PandaScore'dan gelse de kartlardaki HLTV bağlantıları
+Liquipedia'dan eşleştirilir; bunun için aşağıdaki anahtar ve User-Agent gerekir (Doctor: "HLTV match links via Liquipedia").
+**Liquipedia'yı maç sağlayıcısı yapmak (eski/isteğe bağlı).** `Esports:Provider:Name=Liquipedia` seçilirse onaylı anahtar gerekir (başvuru, çoğu
 planda ücretli): `Esports:Liquipedia:ApiKey` (secret) ve `Esports:Liquipedia:UserAgent`
 = `TSQBot/0.1 (<sizin URL'niz>; <iletişim e-postanız>)`; `Esports:MatchPollMinutes` ≥ 10.
 

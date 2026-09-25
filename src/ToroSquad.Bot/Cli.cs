@@ -287,7 +287,12 @@ public static partial class Cli
         Add(pandaTokenSet ? "OK" : liquipediaSelected ? "INFO" : "BLOCKED",
             "PandaScore token: " + (pandaTokenSet ? "set (value hidden)" : "NOT SET (live PandaScore data BLOCKED)"));
         var apiKeySet = !string.IsNullOrWhiteSpace(config["Esports:Liquipedia:ApiKey"]);
-        Add(apiKeySet ? "OK" : liquipediaSelected ? "BLOCKED" : "INFO", "Liquipedia API key: " + (apiKeySet ? "set (value hidden)" : "NOT SET" + (liquipediaSelected ? " (live esports data NOT_CONFIGURED)" : " (not needed: provider is PandaScore)")));
+        var hltvLinks = config.GetValue("Esports:HltvLinksFromLiquipedia", true);
+        Add(apiKeySet ? "OK" : liquipediaSelected || hltvLinks ? "BLOCKED" : "INFO", "Liquipedia API key: " + (apiKeySet ? "set (value hidden)" : "NOT SET" +
+            (liquipediaSelected ? " (live esports data NOT_CONFIGURED)" : hltvLinks ? " (needed for HLTV match-page links; match data comes from PandaScore)" : " (not needed)")));
+        if (!liquipediaSelected)
+            Add(!hltvLinks ? "INFO" : apiKeySet ? "OK" : "BLOCKED",
+                "HLTV match links via Liquipedia: " + (!hltvLinks ? "off" : apiKeySet ? "enabled (unique team+time match only)" : "waiting for an approved Liquipedia key"));
         var ua = config["Esports:Liquipedia:UserAgent"];
         if (liquipediaSelected)
             Add(string.IsNullOrWhiteSpace(ua) ? "BLOCKED" : "OK", "Liquipedia User-Agent: " + (string.IsNullOrWhiteSpace(ua) ? "NOT SET (required for live)" : ua));

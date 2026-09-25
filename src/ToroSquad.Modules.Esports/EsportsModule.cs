@@ -86,6 +86,7 @@ public sealed class EsportsModule : IToroModule
         else
             services.AddSingleton<IEsportsDataProvider>(sp => new PandaScoreProvider(sp.GetRequiredService<PandaScoreClient>(), sp.GetRequiredService<EsportsDataMode>()));
         services.AddSingleton<MatchLinkCatalog>();
+        services.AddSingleton<LiquipediaHltvLinkSource>();
 
         services.AddSingleton<EsportsCache>();
         services.AddSingleton<NotificationRenderer>();

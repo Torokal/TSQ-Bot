@@ -77,8 +77,13 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
 | PandaScore | No HLTV id/URL in the match object (VERIFIED, OpenAPI) | — | Not available |
 | GRID | NOT_VERIFIED | All listed plans commercial, custom-priced (grid.gg, 2026-09-25) | Not evaluated further |
 
-With `Esports:Provider:Name=Liquipedia` the cards link to HLTV automatically. With PandaScore as match provider, HLTV links
-would need a second source (Liquipedia) and a cross-provider match mapping — not implemented (owner decision pending).
+With `Esports:Provider:Name=Liquipedia` the cards link to HLTV natively. With **PandaScore** as match provider (owner's
+choice, 2026-09-25), Liquipedia is used as a **link source only** (`Esports:HltvLinksFromLiquipedia=true`): its matches are
+refreshed every `Esports:LinkPollMinutes` (30) within Liquipedia's own 60 req/h budget, and a PandaScore match gets the HLTV
+URL only when **exactly one** distinct valid HLTV URL belongs to a Liquipedia match with the **same two teams**
+(order-insensitive, VRS name normalization) starting within `Esports:HltvLinkToleranceMinutes` (90). Zero or several
+candidates → no link; an existing link is never replaced; a Liquipedia outage keeps the known links and changes nothing
+else. Implemented and **TESTED_OFFLINE**; live needs an approved LPDB key (**BLOCKED**).
 
 ## Capabilities (as implemented)
 

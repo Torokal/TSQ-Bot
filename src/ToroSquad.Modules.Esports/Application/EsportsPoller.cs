@@ -21,6 +21,7 @@ public sealed class EsportsPoller(
     IRankingsProvider rankingsProvider,
     EsportsCache cache,
     MatchLinkCatalog links,
+    LiquipediaHltvLinkSource hltvLinks,
     IOptions<EsportsOptions> options,
     TimeProvider clock,
     ILogger<EsportsPoller> logger) : BackgroundService
@@ -93,7 +94,11 @@ public sealed class EsportsPoller(
         var window = new MatchWindow(now - TimeSpan.FromHours(o.PastWindowHours), now + TimeSpan.FromHours(o.FutureWindowHours));
         var result = await SafeAsync(() => matchProvider.GetMatchesAsync(window, ct), now);
         if (result.HasData)
-            result = result with { Value = result.Value!.Select(links.Apply).ToList() }; // curated verified links only
+        {
+            // External match pages: operator-curated first, then Liquipedia's HLTV links (unique match only). Never HLTV itself.
+            await hltvLinks.RefreshIfDueAsync(window, ct);
+            result = result with { Value = result.Value!.Select(links.Apply).Select(hltvLinks.Apply).ToList() };
+        }
         cache.UpdateMatches(result, now);
         _nextMatches = NextAttempt(result, TimeSpan.FromMinutes(o.MatchPollMinutes), cache.Matches.ConsecutiveFailures);
 
