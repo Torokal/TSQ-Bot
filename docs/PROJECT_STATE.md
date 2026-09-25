@@ -19,6 +19,7 @@
 | Yeniden başlatma (ana sunucu kurulumundan sonra) | **VERIFIED_LIVE** — 06:04:48Z düzgün kapanma → 06:04:49Z açılış; `guilds=1 new=0 updated=0 filtered=143` (kurulum + filtreler korundu, kopya yok, test sunucusuna hiçbir şey yok) |
 | Kullanım limiti | Railway workspace **hard limit $10** (sahip kararı, `railway usage limit` ile ayarlandı ve doğrulandı) |
 | PandaScore takım kapsamı | Türk "BBL Esports" PandaScore CS2 kataloğunda **yok** (58 TR takımı tarandı; "BBL" = Danimarkalı kadro, eklenmedi). Sağlayıcı eklerse otomatik tamamlamada çıkar |
+| İlk gerçek bildirimler (ana sunucu, Eternal Fire – WBT) | **VERIFIED_LIVE** (Railway kaydı + sahibin görsel onayı): hatırlatma 08:49:42Z teslim; PandaScore başlangıcı 12:00 → 12:10 (TR) kaydırınca aynı mesaj ping'siz düzenlendi ("Başlangıç saati güncellendi", 09:09:38Z `updated=1`; <15 dk olduğundan ayrı "yeniden planlandı" kartı yok); "🔴 Maç başladı" 09:14:43Z (planlandı → canlı, yaklaşık 4 dk sonra, 5 dk yoklama aralığında); sonuç kartı 11:44:50Z. Kopya yok, ping yok (rol eşlemesi yok) |
 | Yedek | Railway volume yedekleri Pro plan gerektiriyor (BLOCKED, yükseltme yok); uygulama içi günlük yedek `/data/backups` VERIFIED_LIVE |
 | Yerel üretim botu | **KAPALI** — canlı Discord bağlantısı yalnızca Railway'de; yerel ortam geliştirme/test içindir |
 
@@ -37,7 +38,7 @@ yayın aşamasında depo public olduktan sonra) — bot ona bağlı değil, `Esp
 | PandaScore ayrıştırma, yaşam döngüsü, sayfalama, hata türleri, bütçe | TESTED_OFFLINE (sentetik) |
 | PandaScore gerçek API — okuma (yaklaşan/biten, sayfalama, kota, etkinlikler) | **VERIFIED_LIVE** (2026-09-25, `esports provider-check`, yalnızca okuma, hiçbir şey gönderilmedi): 163 maç / 2 sayfa (Scheduled 131, Finished 32), 35 etkinlik, kalan kota 994/1000 |
 | PandaScore ücretsiz planda sonuç alanları | **VERIFIED_LIVE** — 32 bitmiş maçın 32'sinde kazanan, 27'sinde seri skoru, 5 hükmen (kazanan var, skor yok). Resmî sayfalardaki çelişki çözüldü |
-| PandaScore canlı "oynanıyor" / ertelendi / iptal geçişleri | Okumada o an oynanan maç yoktu → **TESTED_OFFLINE**; canlı bildirim açıldığında gözlenecek |
+| PandaScore canlı "oynanıyor" / ertelendi / iptal geçişleri | Planlandı → oynanıyor → bitti: **VERIFIED_LIVE** (2026-09-25, ana sunucu, yukarıdaki "İlk gerçek bildirimler"). Ertelendi / iptal / saatinden önce başlama: canlıda henüz gözlenmedi → **TESTED_OFFLINE** |
 | Canlı veriyle bildirim (test guild) | **AÇIK** (sahip onayı, 2026-09-25 03:40Z): `Esports:Provider:Mode=Live`, `Delivery:Mode=Send`, Gateway. Sunucu takım filtresi (sahip `/esports-admin filters team` ile ekledi): Aurora Gaming `ps-team:131505` + Eternal Fire `ps-team:129413` (akademiler hariç; takım kimlikleri `esports provider-check --team` ile seçildi) |
 | Filtresiz ilk canlı tarama (DryRun) | 03:33Z: filtre eklenmeden önce 5 alakasız sonuç kartı **yalnızca simüle edildi**, gönderilmedi (Simulated, terminal) — önce DryRun kararının doğrulaması |
 | Sunucu takım filtresi canlıda | **VERIFIED_LIVE** (03:38Z ve 03:40Z taramaları: 162 maçın 160'ı elendi; geçen 2 maç Eternal Fire'ın; Aurora'nın 48 saatte maçı yok) |
@@ -304,7 +305,8 @@ aşamasına geçtiğinde yapılır. Ayrıntılı kontrol listesi: docs/OPERATION
 ## NEXT ACTION (güncel)
 
 Tek sunucuya geçiş ve public kaynak **tamamlandı** (2026-09-25). Açık kalanlar:
-- Ana sunucuda ilk gerçek hatırlatma/sonuç kartı kanala düştüğünde görsel onay (sahip).
+- ~~Ana sunucuda ilk gerçek hatırlatma/sonuç kartı görsel onayı~~ — **tamamlandı** (hatırlatma, saat düzenlemesi, başladı,
+  sonuç: VERIFIED_LIVE). Canlıda henüz görülmeyenler: ertelendi / iptal / saatinden önce başlama kartları.
 - İsteğe bağlı: Liquipedia ücretsiz API başvurusu (depo artık public) → HLTV bağlantı zenginleştirmesi.
 - Railway volume yedekleri için Pro plan kararı (sahip); o zamana kadar uygulama içi günlük yedek.
 - Canlı bot yalnızca Railway'de; yerel ortam geliştirme/test içindir. Değişiklikler PR ile `main`'e (korumalı).
@@ -314,8 +316,7 @@ Tek sunucuya geçiş ve public kaynak **tamamlandı** (2026-09-25). Açık kalan
    volume `/data`, değişkenler (`TOROSQUAD_Bot__Standby=true` ile) — adım adım: docs/RAILWAY_DEPLOYMENT.md §0–4. Loglarda
    `STANDBY` görününce ajan: yerel botu kapatır, veritabanı yedeği + `db check`, sahip `railway login`/`link` sonrası
    yükleme (§5B), `Standby=false` (§6), canlı doğrulama (§7). PR #4 (hedef: PR #3 dalı).
-1. **Sahip + ajan:** 08:40Z'de (TR 11:40) Eternal Fire – WBT hatırlatma kartı kanala düşmeli (ping'siz); maç bitince sonuç kartı.
-   Sahip görünce: ilk gerçek hatırlatma/sonuç kartı VERIFIED_LIVE. İsteğe bağlı: opt-in ping rolü (Discord'da rol oluştur →
+1. ~~Eternal Fire – WBT hatırlatma + sonuç kartı~~ — **VERIFIED_LIVE** (2026-09-25, bkz. "İlk gerçek bildirimler"). İsteğe bağlı: opt-in ping rolü (Discord'da rol oluştur →
    `/esports-admin roles map` → `roles selfservice` → üyeler `/esports follow` veya panel).
 2. **Sahip:** PR #3'ü incelemek; merge kararı sahibin (PR #2 merge edildi, PR #3 artık `main`'e yönelik).
 3. Tamamlananlar: tüm v2 kart görselleri + Maç Sayfası **VERIFIED_LIVE**; yeniden başlatmada demo kart sorunu düzeltildi ve
