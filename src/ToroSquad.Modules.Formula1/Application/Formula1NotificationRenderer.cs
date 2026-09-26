@@ -28,7 +28,8 @@ public sealed record F1StandingsAttachment(F1StandingsSection Section, F1Standin
 
 /// <summary>
 /// Formula 1 cards in TSQ's compact style. Rules (tested): all provider text is untrusted (mentions, markdown and links
-/// defused); nothing the provider did not state is shown (no invented times, gaps or winners); spoiler mode hides the whole
+/// defused); nothing the provider did not state is shown (no invented times, gaps or winners); cards carry no provider
+/// attribution (sources stay internal: logs, /f1-admin doctor, provider state); spoiler mode hides the whole
 /// classification and standings in fixed-layout spoilers, and title, colour and thumbnail never depend on the outcome;
 /// demo data is labelled TEST/DEMO and names no real source; everything is sized under Discord's embed limits.
 /// Rendering is a pure function of persisted state, so an unchanged state never causes an edit.
@@ -66,7 +67,7 @@ public sealed class Formula1NotificationRenderer(ILocalizer localizer, F1DataMod
         };
         return new OutgoingMessage(
             Content(pings),
-            new MessageEmbed(Title(view, language, "f1.card.title"), string.Join("\n", lines), null, [], Footer(language, lifecycleSourceKey, null), at, StartedColor,
+            new MessageEmbed(Title(view, language, "f1.card.title"), string.Join("\n", lines), null, [], CardFooter(language), at, StartedColor,
                 Asset(StartLightsAsset)),
             pings);
     }
@@ -87,7 +88,7 @@ public sealed class Formula1NotificationRenderer(ILocalizer localizer, F1DataMod
             DiscordText.Timestamp(v.Session.ScheduledStartUtc, 'F'), DiscordText.Timestamp(v.Session.ScheduledStartUtc, 'R'))));
         var title = Clip(Demo(language) + L(language, "f1.card.weekend_title", MeetingName(first)), DiscordLimits.EmbedTitleMax);
         return new OutgoingMessage(null,
-            new MessageEmbed(title, string.Join("\n", lines), null, [], Footer(language, scheduleSourceKey, null), null, InfoColor, Asset(WeekendScheduleAsset)),
+            new MessageEmbed(title, string.Join("\n", lines), null, [], CardFooter(language), null, InfoColor, Asset(WeekendScheduleAsset)),
             MentionPolicy.None);
     }
 
@@ -101,7 +102,7 @@ public sealed class Formula1NotificationRenderer(ILocalizer localizer, F1DataMod
             "📍 " + Place(race),
         };
         return new OutgoingMessage(null,
-            new MessageEmbed(Title(race, language, "f1.card.title"), string.Join("\n", lines), null, [], Footer(language, scheduleSourceKey, null), null, ReminderColor,
+            new MessageEmbed(Title(race, language, "f1.card.title"), string.Join("\n", lines), null, [], CardFooter(language), null, ReminderColor,
                 Asset(StartLightsAsset)),
             MentionPolicy.None);
     }
@@ -135,7 +136,7 @@ public sealed class Formula1NotificationRenderer(ILocalizer localizer, F1DataMod
             ? L(language, "f1.card.incident_lap", lap, DiscordText.Timestamp(incident.OccurredAt, 'T'))
             : "🕒 " + DiscordText.Timestamp(incident.OccurredAt, 'T'));
         return new OutgoingMessage(null,
-            new MessageEmbed(Title(view, language, "f1.card.title"), string.Join("\n", lines), null, [], Footer(language, sourceKey, null), incident.OccurredAt, color,
+            new MessageEmbed(Title(view, language, "f1.card.title"), string.Join("\n", lines), null, [], CardFooter(language), incident.OccurredAt, color,
                 asset is null ? null : Asset(asset)),
             MentionPolicy.None);
     }
@@ -161,7 +162,7 @@ public sealed class Formula1NotificationRenderer(ILocalizer localizer, F1DataMod
         return new OutgoingMessage(
             Content(pings),
             new MessageEmbed(Title(view, language, titleKey), description.ToString(), null, fields,
-                Footer(language, resultsSourceKey, standings.Section == F1StandingsSection.Attached ? standings.SourceKey : null),
+                CardFooter(language),
                 result.FirstAvailableAt, ResultColor),
             pings);
     }
@@ -274,7 +275,13 @@ public sealed class Formula1NotificationRenderer(ILocalizer localizer, F1DataMod
         return string.Join(" · ", parts);
     }
 
-    /// <summary>Attribution footer. Demo data is synthetic and names no real source.</summary>
+    /// <summary>
+    /// Footer of automatic notification cards (and previews): no provider attribution is shown on cards. The source keys
+    /// passed to the card methods stay internal metadata (logs, doctor, provider state). Demo data keeps its TEST/DEMO label.
+    /// </summary>
+    public string? CardFooter(string language) => mode.IsDemo ? L(language, "f1.demo_footer") : null;
+
+    /// <summary>Attribution footer of /f1 command answers (with the data freshness). Demo data is synthetic and names no real source.</summary>
     public string Footer(string language, string primarySourceKey, string? secondarySourceKey)
     {
         if (mode.IsDemo)

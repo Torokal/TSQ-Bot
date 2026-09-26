@@ -263,8 +263,9 @@ gönderilmez; modül zaten varsayılan kapalıdır.
 | **Jolpica F1** (`api.jolpi.ca/ergast/f1/`) | Takvim, sürücüler/takımlar puan durumu | yakın-gerçek zamanlı + tarihsel | Yok | TERMS.md (2025-08-27): **yalnızca ticari olmayan kullanım**, veri **CC BY-NC-SA 4.0**; ticari kullanım için admin@jolpi.ca. 4 istek/sn, 500 istek/saat; özel User-Agent zorunlu; gönüllü projedir, doğruluk/erişilebilirlik garantisi yok |
 | **OpenF1** (`api.openf1.org`) | Canlı seans yaşam döngüsü (MQTT/REST), sonuçlar | canlı (**ücretli sponsor erişimi**) + tarihsel (2023+, ücretsiz) | Canlı için hesap (kullanıcı adı/parola → OAuth2 token) | Veri **CC BY-NC-SA 4.0**, "eğitim, kişisel proje, araştırma ve **ticari olmayan** hayran etkileşimi" için; resmî değildir, Formula 1 şirketleriyle bağlantısı yoktur. Ücretsiz: 3 istek/sn, 30 istek/dk; sponsor: 6/sn, 60/dk, 10 eşzamanlı MQTT |
 
-- Her kartın altbilgisinde kaynak yazar ("Kaynak: OpenF1", puan durumu eklendiyse "· Puan durumu: Jolpica F1"); komutlar
-  kaynağı ve güncelliği gösterir. Bot hiçbir yerde "resmî Formula 1 API" iddiasında bulunmaz. `/bot about` Jolpica F1,
+- Otomatik bildirim kartları ve önizlemeler sağlayıcı adı/"Kaynak" altbilgisi göstermez (sahip kararı; TEST/DEMO etiketi kalır).
+  Kaynak bilgisi içeride korunur: loglar, sağlayıcı durumu, `/f1-admin doctor`. `/f1` komutları kaynağı ve güncelliği göstermeye
+  devam eder. Bot hiçbir yerde "resmî Formula 1 API" iddiasında bulunmaz. `/bot about` Jolpica F1,
   OpenF1 (CC BY-NC-SA 4.0) ve MQTTnet (MIT) atıflarını listeler.
 - TSQ Bot'un mevcut kullanımı (tek sunuculu, ücretsiz, reklamsız hayran botu) ticari olmayan kullanım olarak
   değerlendirilmiştir. **İşletmeci sorumluluğu:** kullanım ticari hale gelirse (ücretli bot, reklam, sponsorluk) önce

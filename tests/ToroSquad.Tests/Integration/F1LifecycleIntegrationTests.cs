@@ -84,7 +84,7 @@ public sealed class F1LifecycleIntegrationTests
         start.Pinged.Should().BeTrue();
         start.Message.Mentions.Roles.Should().Equal(Role);
         start.Message.Embed!.Title.Should().Contain("Yarış");
-        start.Message.Embed.Footer.Should().Contain("OpenF1");
+        start.Message.Embed.Footer.Should().BeNull("cards show no provider attribution");
 
         // Red flag, then the session is started again — a RESUME: no new start item, no edit.
         fake.AddEvent(reference, F1LifecycleSignal.Suspended, T0.AddMinutes(50));
@@ -129,7 +129,7 @@ public sealed class F1LifecycleIntegrationTests
         edit.Mentions.Roles.Should().BeEmpty("edits never ping");
         edit.Embed!.Fields.Select(f => f.Name).Should().Contain(["🏆 Sürücüler", "🏭 Takımlar"]);
         edit.Embed.Fields.Should().Contain(f => f.Value.Contains("Driver a", StringComparison.Ordinal) && f.Value.Contains("118", StringComparison.Ordinal));
-        edit.Embed.Footer.Should().Contain("Jolpica F1").And.Contain("OpenF1");
+        edit.Embed.Footer.Should().BeNull("cards show no provider attribution, also after the standings edit");
     }
 
     [Fact]
