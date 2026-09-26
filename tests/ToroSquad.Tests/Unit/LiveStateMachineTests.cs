@@ -98,6 +98,39 @@ public sealed class LiveStateMachineTests
     }
 
     [Fact]
+    public void A_tracked_platform_in_unknown_state_blocks_the_end_until_it_is_confirmed_offline()
+    {
+        var w = new World();
+        w.See(LivePlatform.Twitch, false, T0); // Kick is tracked but never described (malformed answer, unknown channel)
+        w.See(LivePlatform.Twitch, true, At(30), At(20));
+        w.See(LivePlatform.Twitch, false, At(60));
+        w.See(LivePlatform.Twitch, false, At(200)); // confirmed after the deadline (180 s)
+        w.Kick.Status.Should().Be(PlatformStatus.Unknown);
+
+        w.Tick(At(200)).Should().NotContain(e => e.Kind == LiveEffectKind.SessionEnded, "UNKNOWN is not OFFLINE");
+        w.Tick(At(3600)).Should().NotContain(e => e.Kind == LiveEffectKind.SessionEnded);
+        w.Creator.Phase.Should().Be(CreatorPhase.ReconnectGrace);
+
+        // A later explicit Kick offline statement after the deadline permits the end.
+        w.See(LivePlatform.Kick, false, At(3610));
+        w.Tick(At(3610)).Should().ContainSingle(e => e.Kind == LiveEffectKind.SessionEnded);
+        w.Creator.Phase.Should().Be(CreatorPhase.Offline);
+    }
+
+    [Fact]
+    public void Without_any_tracked_platform_a_grace_session_never_ends_by_itself()
+    {
+        var w = World.Watching();
+        w.See(LivePlatform.Twitch, true, At(30), At(20));
+        w.See(LivePlatform.Twitch, false, At(60));
+        w.See(LivePlatform.Twitch, false, At(200));
+        w.See(LivePlatform.Kick, false, At(200));
+
+        LiveStateMachine.Tick(w.Creator, w.Platforms, [], Rules, At(200)).Should().BeEmpty("no evidence at all is not evidence of an end");
+        w.Creator.Phase.Should().Be(CreatorPhase.ReconnectGrace);
+    }
+
+    [Fact]
     public void A_comeback_that_started_inside_the_grace_is_the_same_session()
     {
         var w = World.Watching();

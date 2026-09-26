@@ -133,8 +133,13 @@ public static class LiveStateMachine
         if (creator.Phase == CreatorPhase.ReconnectGrace && creator.GraceSince is { } since)
         {
             var deadline = since + rules.ReconnectGrace;
-            var relevant = platforms.Where(p => tracked.Contains(p.Platform) && p.Status != PlatformStatus.Unknown).ToList();
-            if (now >= deadline && relevant.All(p => p.Status == PlatformStatus.Offline && p.StatusObservedAt >= deadline))
+            // Every TRACKED platform must have confirmed "offline" after the deadline; an unknown one (never described,
+            // malformed answer, provider failure) is no evidence that the creator stopped streaming. No tracked platform at
+            // all proves nothing either (no vacuous end). Untracked platforms (no credentials) are not required.
+            var required = platforms.Where(p => tracked.Contains(p.Platform)).ToList();
+            var allConfirmedOffline = required.Count > 0 &&
+                                      required.All(p => p.Status == PlatformStatus.Offline && p.StatusObservedAt is { } observed && observed >= deadline);
+            if (now >= deadline && allConfirmedOffline)
             {
                 EndSession(creator, since, now);
                 effects.Add(new(LiveEffectKind.SessionEnded, creator.CreatorKey, null));

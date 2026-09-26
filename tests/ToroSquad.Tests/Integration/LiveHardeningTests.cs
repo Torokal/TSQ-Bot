@@ -105,6 +105,30 @@ public sealed class LiveHardeningTests
     }
 
     [Fact]
+    public async Task A_tracked_platform_that_stays_unknown_never_lets_the_session_end()
+    {
+        await using var bed = await CreateAsync();
+        bed.Kick.Undescribed.Add(Toro); // Kick answers never describe LORDTORO (malformed / unknown channel) → UNKNOWN
+        await bed.PollAsync();
+        bed.Twitch.GoLive(Toro, Stream("t1", bed.Now, "Twitch yayını"));
+        await bed.StepAsync(Poll);
+        bed.Twitch.GoOffline(Toro);
+        for (var i = 0; i < 20; i++)
+            await bed.StepAsync(Poll); // grace long over, Twitch confirmed offline many times
+
+        (await bed.PlatformAsync(Toro, LivePlatform.Kick)).Status.Should().Be(PlatformStatus.Unknown);
+        (await bed.CreatorAsync(Toro)).Phase.Should().Be(CreatorPhase.ReconnectGrace);
+        bed.Messages.Should().ContainSingle().Which.Edits.Should().BeEmpty("no '⚫ yayını sona erdi' while Kick is UNKNOWN");
+
+        // Kick explicitly confirms offline: the session ends normally.
+        bed.Kick.Undescribed.Remove(Toro);
+        await bed.StepAsync(Poll);
+        (await bed.CreatorAsync(Toro)).Phase.Should().Be(CreatorPhase.Offline);
+        bed.Messages[0].Edits.Should().ContainSingle().Which.Content.Should().Be("⚫ **LORDTORO** yayını sona erdi.");
+        bed.EveryonePings.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Doctor_reports_every_required_discord_permission_and_fails_without_mention_everyone()
     {
         await using var bed = await CreateAsync();
