@@ -44,8 +44,8 @@ invite link and no global command registration. The source code is public under 
   restart safety, provider-failure isolation, deleted-card replacement without mentions, doctor/health, migration
   `LiveModule`.
 - **NOT VERIFIED_LIVE**: no real Twitch/Kick call (credentials not configured), no real Discord delivery, no real `@everyone`.
-- **BLOCKED / DEFERRED**: webhooks (Kick, Twitch EventSub webhook) need public ingress; EventSub WebSocket needs a stored
-  user refresh token (owner decision).
+- **DEFERRED**: webhooks (Kick, Twitch EventSub webhook) — the current deployment exposes no HTTP callback endpoint (not a
+  Railway limitation); EventSub WebSocket requires a user access token + refresh-token lifecycle (owner decision).
 - Off by default (`Live:Enabled=false`, module gate off); no production change without owner approval.
 
 ## What has been verified against real Discord / real APIs

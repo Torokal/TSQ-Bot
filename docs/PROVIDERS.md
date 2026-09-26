@@ -8,8 +8,9 @@
 > [volleyball/PROVIDER_RESEARCH.md](volleyball/PROVIDER_RESEARCH.md).
 >
 > TSQ Live (Twitch + Kick streams): official Twitch Helix (`streams`, `users`, app token) and Kick Public API
-> (`channels`, `users`, app token) reconciliation; EventSub/webhooks are not used (no public ingress; EventSub WebSocket
-> needs a stored user refresh token). Contracts and limits: [live/TSQ_LIVE.md](live/TSQ_LIVE.md).
+> (`channels`, `users`, app token) reconciliation; EventSub/webhooks are deferred for V1 (the current deployment exposes no HTTP
+> callback endpoint — not a Railway limitation; EventSub WebSocket subscriptions require a user access token and V1 avoids a
+> refresh-token lifecycle for TSQ Live). Contracts and limits: [live/TSQ_LIVE.md](live/TSQ_LIVE.md).
 
 Research dates: Liquipedia/Valve 2026-09-24 (Liquipedia terms re-checked 2026-09-25), PandaScore 2026-09-25. Labels: **VERIFIED** (read at the primary/official source), **VERIFIED (archive)**
 (official page read via Web Archive because the live page was behind a bot challenge), **VERIFIED (3rd-party)**

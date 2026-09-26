@@ -29,13 +29,34 @@ kanal adı yönetimi, kullanıcıların kendi yayınlarını eklemesi.
 - Oturum bitince kart "⚫ yayını sona erdi" olarak düzenlenir (süre, kullanılan platformlar; buton yok, ping yok).
 - **İlk açılış (bootstrap):** bir kanal ilk kez gözlemlendiğinde zaten canlıysa baseline kaydedilir, duyurulmaz
   (`AnnounceExistingLiveOnBootstrap=false`, varsayılan).
-- **Kesinti sonrası:** gözlem sürekli değilse (`Continuity` = en az 4 uzlaştırma / 3 dk; restart, sağlayıcı kesintisi,
-  modül kapalıyken) yalnızca en fazla `LateAnnounceMinutes` (10 dk) önce başlamış bir yayın duyurulur; daha eskisi
-  baseline'dır. Modül/gönderim kapalıyken başlayan oturum sonradan asla duyurulmaz.
+- **Kesinti sonrası (restart, deploy, sağlayıcı kesintisi):** zaman sınırı yoktur, karar kalıcı durum geçişine dayanır.
+  Kanal en son güvenilir gözlemde **kapalı** görüldüyse ve sağlayıcının `started_at` değeri o gözlemden **sonraysa**, yayın
+  bot bakmıyorken başlamış gerçek yeni bir oturumdur → duyurulur (ör. bot 20 dk kapalı, yayın 18 dk önce başladı → tek
+  `@everyone`). `started_at` yoksa veya son kapalı gözlemden önceyse baseline'dır.
+- **Bilinçli kapatma:** modül kapısı kapalıyken başlayan oturum sonradan asla duyurulmaz (izleme sürer, oturum
+  `delivery_off` olarak kaydedilir). `Live:Enabled=false` ile açılış, bilinen tüm kanal durumlarını "hiç gözlemlenmedi"ye
+  döndürür ve açık oturumları kapatır → tekrar açıldığında ilk gözlem yeniden baseline'dır (bayat duyuru yok).
 - **Silinen kart:** bir düzenleme mesajı silinmiş bulursa (outbox `edit_target_deleted`) ve oturum sürüyorsa oturum başına
   **en fazla bir kez**, mention'sız (`@everyone` metni de yok) yedek kart gönderilir; yeni mesaj kimliği saklanır.
-- **Geç teslim yok:** ilk duyuru `AnnouncementMaxDelayMinutes` (15 dk) içinde teslim edilemezse süresi dolar; geç bir
-  `@everyone` atılmaz. Biten oturumun kartı hiçbir zaman yeni mesaj olarak gönderilmez (yalnızca düzenleme).
+- **Geç teslim yok:** ilk duyuru algılandıktan sonra `AnnouncementMaxDelayMinutes` (15 dk) içinde teslim edilemezse
+  (ör. Discord kesintisi) süresi dolar; geç bir `@everyone` atılmaz. Biten oturumun kartı hiçbir zaman yeni mesaj olarak
+  gönderilmez (yalnızca düzenleme).
+
+## @everyone en fazla bir kez (oturum başına)
+
+- `@everyone` yalnızca oturumun **ilk** outbox satırının (`announce`) ilk gönderiminde olabilir; yedek kartlar
+  (`announce-r1`), düzenlemeler, restart, uzlaştırma ve başlık/platform değişiklikleri asla mention üretmez.
+- Kesin başarısız olduğu bilinen denemeler (429, bağlantı yokken, 4xx) normal şekilde tekrar denenir.
+- Discord'a ulaşmış olabilecek belirsiz denemeler (zaman aşımı, yanıt kaybı, **her** 5xx, gönderim sırasında çökme →
+  restart'ta `DeliveryUnknown`) mesaj içerik parmak iziyle son mesajlarda aranır (uzlaştırma). Bulunursa o mesaj
+  benimsenir; bulunamazsa **tek** yeniden gönderim `@everyone`'sız yapılır — outbox, uzlaştırmadan geçmiş bir satırda
+  `@everyone`'ı her zaman kaldırır (kesin garanti), planlayıcı ayrıca `@everyone` metnini de çıkarır. Çok nadir bir
+  durumda ping'in hiç gitmemesi, ikinci bir ping'den daha iyidir.
+- Discord'un `nonce` + `enforce_nonce` özelliği kullanılmıyor: kullanılan Discord.Net 3.20.1 `enforce_nonce`'u hiç
+  desteklemiyor (`nonce` yalnızca kütüphanenin iç istek modelinde var, public `SendMessageAsync` ile ayarlanamıyor) ve
+  kütüphaneyi atlayan ikinci bir Discord REST istemcisi yazılmadı. Nonce zaten yalnızca birkaç dakikalık bir pencere
+  sağlar; değişmez (invariant) kural yukarıdaki "belirsizlikten sonra asla mention" kuralıyla sağlanır.
+- DryRun ↔ Send geçişi sırasında devam eden oturum ikinci kez duyurulmaz.
 
 ## Durum makinesi
 
@@ -51,17 +72,22 @@ Platform: `Unknown → Offline ⇄ Live`. Yayıncı: `Offline → Live ⇄ Recon
 | Tolerans içinde yeniden canlı (`started_at` < tolerans sonu) | aynı oturum, ping yok |
 | Tolerans sonrasında başlamış yayın | eski oturum biter, yeni oturum (duyurulabilir) |
 | İki gözlem arasında görülmeden yeniden başlama (`started_at` > önceki gözlem) | toleranstan kısa → aynı oturum; uzun → yeni oturum |
+| Sağlayıcının aynı yayın kimliği (Twitch stream id) geri geldi | her zaman aynı oturum; oturum bitmişse yeniden açılır (aynı mesaj canlıya döner, ping yok) |
+| Kesinti sonrası ilk gözlem: canlı, `started_at` son "kapalı" gözlemden sonra | bot bakmıyorken başlamış gerçek yeni oturum → duyurulur (yaş sınırı yok) |
 | Aynı olay kimliği / daha eski zaman damgası | yok sayılır (`DuplicateIgnored` / `StaleIgnored`); durum ve başlık ayrı sıralanır |
 
 ## Sağlayıcılar (resmî API, 2026-09-26 doğrulandı)
 
-**Push/webhook yok — bilinçli karar.** Bot Railway'de public ağ girişi olmadan ve web sunucusu olmadan çalışır:
+**V1'de push/webhook yok — bilinçli karar (DEFERRED).**
 
 - Twitch EventSub **webhook** ve Kick webhook'ları (`livestream.status.updated`, `livestream.metadata.updated`) herkese
-  açık bir HTTPS callback ister → bu dağıtımda **BLOCKED** (ikinci bir web sunucusu açılmadı).
-- Twitch EventSub **WebSocket** kullanıcı erişim token'ı ister (app token ile abonelik başarısız olur); refresh token
-  değişebilir ve saklanması gerekir → veritabanında dönen bir secret saklamak güvenlik kararıdır, sahip onayı olmadan
-  yapılmadı (**DEFERRED**). Kick'in resmî WebSocket'i yoktur.
+  açık bir HTTPS callback endpoint'i ister. Mevcut TSQ Bot dağıtımı şu anda bir HTTP callback endpoint'i sunmuyor (generic
+  host worker, web sunucusu yok). Bu yüzden webhook aktarımı V1 için ertelendi; bu **bir Railway platform kısıtı değildir**
+  (Railway public HTTPS networking/domain destekler). Sırf bunun için bot HTTP sunucusuna dönüştürülmedi.
+- Twitch EventSub **WebSocket**: resmî gereksinim olarak abonelik oluşturmak **kullanıcı erişim token'ı (user access
+  token)** ister; app token ile WebSocket abonelikleri başarısız olur. Refresh token değişebilir ve saklanması gerekir.
+  V1, yalnızca TSQ Live için bir refresh-token yaşam döngüsü ve kalıcılığı eklemekten bilinçli olarak kaçınır; bu yüzden
+  V1 mekanizması Helix polling'dir. Kick'in resmî WebSocket'i yoktur.
 
 Bu yüzden her iki platformda da **resmî API uzlaştırması (reconciliation)** hem tetikleyici hem doğruluk kaynağıdır:
 `ReconciliationIntervalSeconds` (30 sn) başına sağlayıcı başına **tek toplu istek**; kaçan online/offline ve başlık
@@ -85,7 +111,8 @@ doctor'a veya veritabanına yazılmaz.
 
 Ek (additive) migration `LiveModule`: `live_creator_state` (oturum no, faz, tolerans, başlangıç/bitiş, duyuru kararı,
 duyuru türü, guild/kanal/mesaj kimliği, duyuru zamanı, yedek sayısı), `live_platform_state` (durum, yayın kimliği,
-`started_at`, başlık + değişim zamanı, kategori, avatar, durum/metadata gözlem filigranları, son olay kimliği),
+`started_at`, başlık + değişim zamanı, kategori, avatar, durum/metadata gözlem filigranları — kesinti sonrası kararın
+dayandığı son güvenilir gözlem zamanı —, son olay kimliği),
 `live_provider_state` (son deneme/başarı/sonuç/hata). Diğer modüllerin tablolarına dokunulmaz.
 
 Oturum durumu ve outbox satırı **tek SQLite işleminde** yazılır. Duyuru mesajı outbox'ın tekil mantıksal anahtarıyla
@@ -103,7 +130,6 @@ yayın aynı oturum olarak devam eder → yeni mesaj yok, `@everyone` yok.
 | `Live:ReconciliationIntervalSeconds` | `30` | 15..300 |
 | `Live:ReconnectGraceSeconds` | `120` | 30..1800 |
 | `Live:AnnounceExistingLiveOnBootstrap` | `false` | |
-| `Live:LateAnnounceMinutes` | `10` | 0..60 |
 | `Live:AnnouncementMaxDelayMinutes` | `15` | 2..120 |
 | `Live:Creators:<key>:DisplayName` / `:Twitch` / `:Kick` | V1 listesi | |
 | `Live:Twitch:ClientId` / `:ClientSecret` | — | **secret**, yalnızca ortam değişkeni / user-secrets |
