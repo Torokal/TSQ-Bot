@@ -24,6 +24,18 @@ invite link and no global command registration. The source code is public under 
 - **BLOCKED**: OpenF1 live access needs a paid sponsor account (owner decision); until then start notifications are
   honestly `NOT_CONFIGURED`. Details and usage terms: [FORMULA1.md](FORMULA1.md).
 
+## Volleyball module — Filenin Sultanları (new, 2026-09-26, branch `feat/volleyball-turkey-women`)
+
+- Scope: **Türkiye women's senior national team only** ([volleyball/VOLLEYBALL.md](volleyball/VOLLEYBALL.md)).
+- **VERIFIED_LIVE (provider read only)**: FIVB VIS returned real 2026 Türkiye women's matches (VNL 2026 + EuroVolley 2026,
+  24 matches, set points, UTC times) to anonymous requests; recordings are the contract test fixtures
+  ([volleyball/PROVIDER_RESEARCH.md](volleyball/PROVIDER_RESEARCH.md)).
+- **IMPLEMENTED / TESTED_OFFLINE**: identity filter, match state machine, reminder / started / set / final cards, dedupe,
+  restart/outage safety, shared fetch, doctor/health, commands, migration `VolleyballModule`.
+- **NOT verified**: live in-match updates from VIS for a Türkiye match (next match not published yet), real Discord delivery.
+- **BLOCKED**: API-Sports Free (no 2026 access). **NOT_VERIFIED**: live-volleyball-api.com (would need an account).
+- Module off by default; no production change without owner approval.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

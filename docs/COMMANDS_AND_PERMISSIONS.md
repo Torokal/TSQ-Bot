@@ -45,6 +45,17 @@ Hepsi yalnızca botun önbelleğinden okur (etkileşim yolunda sağlayıcı ça�
 
 Ayrıntı: [FORMULA1.md](FORMULA1.md).
 
+## Voleybol — Filenin Sultanları (modül açıkken; yalnızca Türkiye Kadın A Milli Takımı)
+
+| Komut | Ne yapar |
+|---|---|
+| `/volleyball next` | Sıradaki (veya sağlayıcıya göre süren) maç: rakip, saat, turnuva, salon, güncellik |
+| `/volleyball schedule` | Yaklaşan maçlar ve son sonuçlar |
+| `/volleyball-admin configure channel \| notifications \| role` | Yönetici (ManageGuild + `Authorize.Require`): kanal; `match_reminder_15m`, `match_started`, `set_finished`, `match_finished`, `match_postponed_cancelled`; isteğe bağlı `ping_role` (asla @everyone) |
+| `/volleyball-admin preview` · `status` · `doctor` · `pause` · `resume` | TEST/DEMO pingsiz önizleme · ayarlar · tanı · duraklat/devam |
+
+Başka takım seçtiren komut yoktur. Ayrıntı: [volleyball/VOLLEYBALL.md](volleyball/VOLLEYBALL.md).
+
 ## Esports (modül açıkken)
 
 | Komut | Seçenekler |

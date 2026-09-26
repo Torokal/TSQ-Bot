@@ -2,6 +2,10 @@
 
 > Formula 1 providers (Jolpica F1 for schedule/standings, OpenF1 for live lifecycle/results) — verified contracts, limits,
 > usage terms and production limitations — are documented in [FORMULA1.md](FORMULA1.md).
+>
+> Volleyball (Türkiye women's senior national team only): **FIVB VIS** is the provider — real 2026 data verified,
+> API-Sports Free refused the 2026 season, CEV/TVF are HTML only. Research, evidence and decision:
+> [volleyball/PROVIDER_RESEARCH.md](volleyball/PROVIDER_RESEARCH.md).
 
 Research dates: Liquipedia/Valve 2026-09-24 (Liquipedia terms re-checked 2026-09-25), PandaScore 2026-09-25. Labels: **VERIFIED** (read at the primary/official source), **VERIFIED (archive)**
 (official page read via Web Archive because the live page was behind a bot challenge), **VERIFIED (3rd-party)**

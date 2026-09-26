@@ -29,6 +29,7 @@ ToroSquad.Modules.Esports   ToroSquad.Modules.Example  (her modül yalnızca pla
 | `ToroSquad.Modules.Esports` | CS2 alan modeli, sağlayıcılar, planlayıcı, servisler, komutlar | Example modülü; `Domain/Providers/Application/Persistence` ad alanları Discord SDK kullanamaz |
 | `ToroSquad.Modules.Example` | Referans modül (üretimde kayıtlı değil) | Esports, Infrastructure |
 | `ToroSquad.Modules.Formula1` | F1 alan modeli (yaşam döngüsü durum makinesi), yetenek bazlı sağlayıcılar (Jolpica, OpenF1), iş akışı, planlayıcı, komutlar ([FORMULA1.md](FORMULA1.md)) | Esports ve diğer modüller; `Domain/Providers/Application/Persistence` Discord SDK kullanamaz; `Commands` sağlayıcılara/HTTP'ye erişemez; sağlayıcılar ve canlı dinleyici outbox'a/Discord'a erişemez |
+| `ToroSquad.Modules.Volleyball` | Yalnızca Türkiye Kadın A Milli Takımı: normalize alan modeli, takım kimliği filtresi, maç durum makinesi, `IVolleyballDataProvider` (FIVB VIS), paylaşılan tek fetch, planlayıcı, komutlar ([volleyball/VOLLEYBALL.md](volleyball/VOLLEYBALL.md)) | Diğer modüller; `Domain/Providers/Application/Persistence` Discord SDK kullanamaz; `Commands` sağlayıcıya/HTTP'ye erişemez; yalnızca planlayıcı outbox'a yazar (`VbArchitectureTests`) |
 | `ToroSquad.Bot` | Modül listesi, DI, yapılandırma doğrulama, CLI fiilleri, EF migration'ları | — |
 
 Bu yönler `tests/ToroSquad.Tests/Architecture/ArchitectureTests.cs` ve `F1ArchitectureTests.cs` ile (assembly referansları + ArchUnitNET tip
