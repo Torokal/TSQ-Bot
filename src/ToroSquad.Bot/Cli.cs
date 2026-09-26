@@ -485,19 +485,22 @@ public static partial class Cli
             "PandaScore token: " + (pandaTokenSet ? "set (value hidden)" : "NOT SET (live PandaScore data BLOCKED)"));
         var apiKeySet = !string.IsNullOrWhiteSpace(config["Esports:Liquipedia:ApiKey"]);
         var hltvLinks = config.GetValue("Esports:HltvLinksFromLiquipedia", true);
-        Add(apiKeySet ? "OK" : liquipediaSelected || hltvLinks ? "BLOCKED" : "INFO", "Liquipedia API key: " + (apiKeySet ? "set (value hidden)" : "NOT SET" +
-            (liquipediaSelected ? " (live esports data NOT_CONFIGURED)" : hltvLinks ? " (OPTIONAL: only for automatic HLTV match-page links; PandaScore does not need it)" : " (not needed)")));
-        var verifiedLinks = config.GetSection("Esports:VerifiedMatchLinks").GetChildren().Count();
+        var wikiFallback = config.GetValue("Esports:HltvLinksFromWikiApi", true);
+        Add(apiKeySet ? "OK" : liquipediaSelected ? "BLOCKED" : "INFO", "Liquipedia API key: " + (apiKeySet ? "set (value hidden)" : "NOT SET" +
+            (liquipediaSelected ? " (live esports data NOT_CONFIGURED)" : hltvLinks && wikiFallback ? " (HLTV links use the free MediaWiki API fallback)" : hltvLinks ? " (no automatic HLTV match-page links)" : " (not needed)")));
         if (!liquipediaSelected)
         {
-            Add(!hltvLinks ? "INFO" : apiKeySet ? "OK" : "BLOCKED",
-                "HLTV match links via Liquipedia (optional): " + (!hltvLinks ? "off" : apiKeySet ? "enabled (unique team+time match only, cached)" : "waiting for an approved Liquipedia key"));
-            Add("OK", $"Manual match links (Esports:VerifiedMatchLinks): {verifiedLinks} entr{(verifiedLinks == 1 ? "y" : "ies")} (work without Liquipedia)");
+            // HLTV match links are fully automatic: LiquipediaDB (key) first, else the free MediaWiki API. No manual workflow.
+            Add(!hltvLinks ? "INFO" : apiKeySet || wikiFallback ? "OK" : "INFO",
+                "HLTV match links (automatic): " + (!hltvLinks ? "off"
+                    : apiKeySet ? "LiquipediaDB (unique team+time match only, cached)" + (wikiFallback ? "; MediaWiki API fallback if LPDB fails" : "")
+                    : wikiFallback ? "Liquipedia MediaWiki API fallback (followed teams only, unique team+time match, cached, <= 1 request / 2 s)"
+                    : "off (no LiquipediaDB key, MediaWiki fallback disabled)"));
         }
 
-        if (liquipediaSelected || (hltvLinks && apiKeySet))
+        if (liquipediaSelected || (hltvLinks && (apiKeySet || wikiFallback)))
         {
-            // The contact User-Agent is explicit in the MediaWiki API terms, not in the LiquipediaDB section: a hint, not a gate.
+            // The MediaWiki API terms require a contact User-Agent; the default names the public repository (add your e-mail for a direct contact).
             var ua = config["Esports:Liquipedia:UserAgent"];
             Add(LiquipediaClient.UserAgentHasContact(ua) ? "OK" : "INFO", "Liquipedia User-Agent: " + (string.IsNullOrWhiteSpace(ua)
                 ? "default '" + LiquipediaClient.DefaultUserAgent + "' (recommended: your own with contact)"

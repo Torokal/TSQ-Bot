@@ -89,8 +89,12 @@ public sealed record StreamLink(string Platform, string Url);
 /// deterministic source (curated mapping, authorized provider/API) and must pass <see cref="MatchLinkPolicy"/> — TSQ Bot
 /// never scrapes HLTV and never builds an HLTV URL from a guessed id.
 /// </summary>
-public sealed record MatchLinks(string? HltvMatchUrl = null, string? OfficialMatchUrl = null, string? ProviderMatchUrl = null)
+public sealed record MatchLinks(string? HltvMatchUrl = null, string? OfficialMatchUrl = null, string? ProviderMatchUrl = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? HltvVia = null)
 {
+    /// <summary><see cref="HltvVia"/> value: the HLTV link was found automatically in Liquipedia data (credited in the card footer).</summary>
+    public const string ViaLiquipedia = "liquipedia";
+
     public static MatchLinks None { get; } = new();
 }
 

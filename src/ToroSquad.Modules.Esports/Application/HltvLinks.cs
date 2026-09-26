@@ -123,6 +123,6 @@ public sealed class LiquipediaHltvLinkSource(
         if (!Enabled || match.Links?.HltvMatchUrl is not null || _candidates.Count == 0)
             return match;
         var url = HltvLinkMatcher.Find(match, _candidates, TimeSpan.FromMinutes(options.Value.HltvLinkToleranceMinutes));
-        return url is null ? match : match with { Links = (match.Links ?? MatchLinks.None) with { HltvMatchUrl = url } };
+        return url is null ? match : match with { Links = (match.Links ?? MatchLinks.None) with { HltvMatchUrl = url, HltvVia = MatchLinks.ViaLiquipedia } };
     }
 }
