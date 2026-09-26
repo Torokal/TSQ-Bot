@@ -58,10 +58,10 @@ Commands are registered per server (guild commands) with a dry-run first. Permis
 |---|---|
 | **PandaScore** | Default match data (fixtures, live state, results). A free plan exists; a token is required. |
 | **Valve Regional Standings** | Rankings for `/esports rankings` and VRS filters. |
-| **Liquipedia** (optional) | Only used to find verified HLTV match-page links; needs an approved LiquipediaDB key. |
-| **HLTV** | Never scraped. Only verified match-page links are displayed. |
+| **Liquipedia** | Only used to find the editor-entered HLTV match id for a match page: LiquipediaDB with an approved key, otherwise the free MediaWiki API (API only, rate-limited, cached). |
+| **HLTV** | Never scraped or contacted. A "Maç Sayfası" link appears only when Liquipedia has the match's HLTV id. |
 
-Operators can also add verified match links manually (`Esports:VerifiedMatchLinks`). Limits, terms and attribution:
+HLTV links are fully automatic; there is no manual link workflow. Limits, terms and attribution:
 [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
 ## Formula 1 Providers

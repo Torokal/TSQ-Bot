@@ -267,6 +267,7 @@
   "esports.card.cancelled": "❌ Maç iptal edildi",
   "esports.card.reminder": "⏰ Planlanan başlangıç: {0}",
   "esports.card.reminder_estimated": "⏰ Tahmini başlangıç: {0} (saat kesinleşmemiş)",
+  "esports.footer_link_liquipedia": "Link: Liquipedia",
   "esports.card.match_page": "Maç Sayfası",
   "esports.field.event": "Etkinlik",
   "esports.status.postponed": "ertelendi",

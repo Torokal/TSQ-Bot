@@ -66,7 +66,8 @@ technical record, not legal advice.
 |---|---|---|
 | PandaScore (REST API) — default | pandascore.co terms: art. 6.4 "Source: PandaScore" on any medium reproducing the data; no raw-data redistribution; no direct API access/URLs for end users (6.3); free plan 1,000 req/h | Footer "Kaynak: PandaScore" on every card, PandaScore in `/bot about`; only processed cards, never raw JSON or API URLs; local request budget (50% of the plan) |
 | Liquipedia (LiquipediaDB API) — legacy/optional | CC BY-SA 3.0; attribution + link required; API key by approval; 60 req/h baseline | Footer "Kaynak: Liquipedia (CC BY-SA 3.0)" + source link on every message; shared request budget |
-| HLTV | Not used as a data source (no scraping, no unofficial endpoints) | Only operator-verified match-page URLs are linked (`Esports:VerifiedMatchLinks`); pages are never fetched |
+| Liquipedia (MediaWiki API) — automatic HLTV-link fallback | API terms: ≤ 1 request / 2 s, contact User-Agent, gzip, no automated HTML access; CC BY-SA 3.0 | Only `action=query` (search + revisions) for followed-team matches, cached; cards with a Liquipedia-sourced link say "Link: Liquipedia" in the footer |
+| HLTV | Not used as a data source (no scraping, no unofficial endpoints, no requests at all) | Only match-page URLs built from Liquipedia's editor-entered HLTV match id are linked; pages are never fetched |
 | Valve regional standings | Public GitHub repo, **no license file**; data credits HLTV.org | Displayed with source, date and attribution only; no bulk redistribution; synthetic fixtures in tests |
 
 ## Contact with the upstream developer

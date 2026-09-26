@@ -44,6 +44,23 @@ public sealed class EsportsOptions
     /// <summary>Max start-time difference between a match and its Liquipedia counterpart for an HLTV link.</summary>
     public int HltvLinkToleranceMinutes { get; set; } = 90;
 
+    /// <summary>Automatic fallback while LiquipediaDB is not usable: the free Liquipedia MediaWiki API (<see cref="LiquipediaWikiLinkSource"/>).</summary>
+    public bool HltvLinksFromWikiApi { get; set; } = true;
+
+    /// <summary>MediaWiki lookups cover followed-team matches that started at most this long ago …</summary>
+    public int WikiLinkLookbackHours { get; set; } = 12;
+
+    /// <summary>… or start within this many hours.</summary>
+    public int WikiLinkLookaheadHours { get; set; } = 2;
+
+    /// <summary>At most this many match lookups per poll (each ≈ 2 requests, spaced ≥ 2 s).</summary>
+    public int WikiLinkMaxLookupsPerPoll { get; set; } = 2;
+
+    /// <summary>A miss is re-checked after this long, doubling per miss up to <see cref="WikiLinkMaxRecheckMinutes"/>.</summary>
+    public int WikiLinkRecheckMinutes { get; set; } = 30;
+
+    public int WikiLinkMaxRecheckMinutes { get; set; } = 240;
+
     /// <summary>A start-time move smaller than this is treated as noise, not as a reschedule announcement.</summary>
     public int RescheduleThresholdMinutes { get; set; } = 15;
 
@@ -91,6 +108,17 @@ public sealed class EsportsOptions
                 errors.Add($"HLTV link source: refreshing Liquipedia every {LinkPollMinutes} min with up to {liquipedia.MaxPages} pages needs {linkPerHour:0} req/h > budget {linkBudget:0} (raise Esports:LinkPollMinutes)");
             if (HltvLinkToleranceMinutes is < 1 or > 360)
                 errors.Add("Esports:HltvLinkToleranceMinutes must be 1..360");
+            if (HltvLinksFromWikiApi)
+            {
+                if (LiquipediaWikiClient.ConfigurationProblem(liquipedia) is { } wikiProblem)
+                    errors.Add(wikiProblem);
+                if (WikiLinkLookbackHours is < 1 or > 48 || WikiLinkLookaheadHours is < 0 or > 48)
+                    errors.Add("Esports:WikiLinkLookbackHours must be 1..48 and WikiLinkLookaheadHours 0..48");
+                if (WikiLinkMaxLookupsPerPoll is < 1 or > 5)
+                    errors.Add("Esports:WikiLinkMaxLookupsPerPoll must be 1..5");
+                if (WikiLinkRecheckMinutes < 10 || WikiLinkMaxRecheckMinutes < WikiLinkRecheckMinutes)
+                    errors.Add("Esports:WikiLinkRecheckMinutes must be >= 10 and <= WikiLinkMaxRecheckMinutes");
+            }
         }
 
         errors.AddRange(MatchLinkCatalog.Problems(VerifiedMatchLinks));

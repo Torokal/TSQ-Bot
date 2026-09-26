@@ -267,6 +267,7 @@
   "esports.card.cancelled": "❌ Match cancelled",
   "esports.card.reminder": "⏰ Planned start: {0}",
   "esports.card.reminder_estimated": "⏰ Estimated start: {0} (time not confirmed)",
+  "esports.footer_link_liquipedia": "Link: Liquipedia",
   "esports.card.match_page": "Match Page",
   "esports.field.event": "Event",
   "esports.status.postponed": "postponed",

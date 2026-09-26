@@ -22,6 +22,7 @@ public sealed class EsportsPoller(
     EsportsCache cache,
     MatchLinkCatalog links,
     LiquipediaHltvLinkSource hltvLinks,
+    LiquipediaWikiLinkSource wikiLinks,
     IOptions<EsportsOptions> options,
     TimeProvider clock,
     ILogger<EsportsPoller> logger) : BackgroundService
@@ -94,10 +95,11 @@ public sealed class EsportsPoller(
         var window = new MatchWindow(now - TimeSpan.FromHours(o.PastWindowHours), now + TimeSpan.FromHours(o.FutureWindowHours));
         var result = await SafeAsync(() => matchProvider.GetMatchesAsync(window, ct), now);
         ProviderResult<IReadOnlyList<EsportsMatch>>? linkResult = null;
+        var wikiChanged = false;
         if (result.HasData)
         {
-            // External match pages: operator-curated first, then Liquipedia's HLTV links (unique match only). Never HLTV itself.
-            // The optional link source can never fail the match poll.
+            // External match pages, all automatic: LiquipediaDB's HLTV links (approved key), otherwise the free Liquipedia
+            // MediaWiki API for followed teams (unique match only). Never HLTV itself. Link sources can never fail the poll.
             try
             {
                 linkResult = await hltvLinks.RefreshIfDueAsync(window, ct);
@@ -107,7 +109,18 @@ public sealed class EsportsPoller(
                 logger.LogError(ex, "HLTV link source refresh threw; keeping known links");
             }
 
-            result = result with { Value = result.Value!.Select(links.Apply).Select(hltvLinks.Apply).ToList() };
+            var enriched = result.Value!.Select(links.Apply).Select(hltvLinks.Apply).ToList();
+            try
+            {
+                if (wikiLinks.Enabled)
+                    wikiChanged = await wikiLinks.RefreshAsync(enriched, await FollowedTeamKeysAsync(ct), ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "HLTV link lookup (Liquipedia MediaWiki) threw; keeping known links");
+            }
+
+            result = result with { Value = enriched.Select(wikiLinks.Apply).ToList() };
         }
         cache.UpdateMatches(result, now);
         _nextMatches = NextAttempt(result, TimeSpan.FromMinutes(o.MatchPollMinutes), cache.Matches.ConsecutiveFailures);
@@ -117,6 +130,14 @@ public sealed class EsportsPoller(
         await SaveStateAsync(db, MatchesKey, result, null, ct);
         if (linkResult is not null)
             await SaveStateAsync(db, hltvLinks.StateKey, linkResult, linkResult.HasData ? MatchJson.SerializeList(hltvLinks.Candidates) : null, ct);
+        if (wikiChanged)
+        {
+            var outcome = wikiLinks.LastOutcome ?? ProviderOutcome.Success;
+            var wikiResult = outcome is ProviderOutcome.Success or ProviderOutcome.Partial
+                ? ProviderResult<string>.Ok("", now)
+                : ProviderResult<string>.Fail(outcome, "lookup failed", now);
+            await SaveStateAsync(db, LiquipediaWikiLinkSource.StateKey, wikiResult, wikiLinks.Export(), ct, alwaysWriteData: true);
+        }
         if (!result.HasData)
         {
             logger.LogWarning("Esports matches fetch: {Outcome} {Detail}", result.Outcome, result.Detail);
@@ -177,10 +198,26 @@ public sealed class EsportsPoller(
 
         if (states.TryGetValue(hltvLinks.StateKey, out var lk))
             hltvLinks.Restore(lk.DataJson is null ? null : MatchJson.DeserializeList<EsportsMatch>(lk.DataJson), lk.LastAttemptAt);
+        if (states.TryGetValue(LiquipediaWikiLinkSource.StateKey, out var wk))
+            wikiLinks.Restore(wk.DataJson);
 
         cache.Restore(matches.Count > 0 ? matches : null, states.GetValueOrDefault(MatchesKey)?.LastSuccessAt,
             events, ev?.LastSuccessAt, rankings,
             teams.Where(t => IsProviderTeam(t.TeamKey)).Select(t => new TeamRef(matchProvider.Id, t.TeamKey, t.Name, t.ShortName)).ToList());
+    }
+
+    /// <summary>Teams in the team filter of servers that receive esports notifications (the only matches worth a link lookup).</summary>
+    private async Task<IReadOnlySet<string>> FollowedTeamKeysAsync(CancellationToken ct)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ToroDbContext>();
+        var active = db.Set<EsportsGuildConfigEntity>().Where(c => c.ChannelId != null && !c.Paused).Select(c => c.GuildId);
+        var keys = await db.Set<EsportsFilterEntity>()
+            .Where(f => f.Dimension == (int)FilterDimension.Team && active.Contains(f.GuildId))
+            .Select(f => f.Value)
+            .Distinct()
+            .ToListAsync(ct);
+        return keys.ToHashSet(StringComparer.Ordinal);
     }
 
     private bool IsProviderTeam(string teamKey)
@@ -225,7 +262,7 @@ public sealed class EsportsPoller(
         return now + (result.RetryAfter is { } ra && ra > backoff ? ra : backoff);
     }
 
-    private async Task SaveStateAsync<T>(ToroDbContext db, string key, ProviderResult<T> result, string? dataJson, CancellationToken ct)
+    private async Task SaveStateAsync<T>(ToroDbContext db, string key, ProviderResult<T> result, string? dataJson, CancellationToken ct, bool alwaysWriteData = false)
     {
         var set = db.Set<ProviderStateEntity>();
         var row = await set.FirstOrDefaultAsync(s => s.Key == key, ct);
@@ -249,6 +286,8 @@ public sealed class EsportsPoller(
         else
         {
             row.ConsecutiveFailures++;
+            if (alwaysWriteData && dataJson is not null)
+                row.DataJson = dataJson; // a cache (misses included) is kept even when the last attempt failed
         }
 
         await db.SaveChangesAsync(ct);

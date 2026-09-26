@@ -52,7 +52,8 @@ invite link and no global command registration. The source code is public under 
 - Postponed / cancelled / early-start transitions with real provider data.
 - Admin vs. regular member separation with a second real account, self-service role grant/removal.
 - Crash recovery, rate limiting, ambiguous delivery.
-- Valve VRS live fetch; Liquipedia HLTV-link enrichment (needs an approved API key).
+- Valve VRS live fetch; automatic HLTV links from Liquipedia (LiquipediaDB with a key, otherwise the free MediaWiki API —
+  its page format was checked once against a real page on 2026-09-26; no link has been observed on a live card yet).
 
 ## Known limitations
 

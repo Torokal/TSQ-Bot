@@ -204,6 +204,12 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
     public string CardFooter(string language, string? source) =>
         mode.IsDemo ? L(language, "esports.card.demo_footer") : Footer(language, source);
 
+    /// <summary>Card footer plus " · Link: Liquipedia" when the shown Match Page is an HLTV link found via Liquipedia (CC BY-SA credit).</summary>
+    public string CardFooter(string language, string? source, MatchPage? page, MatchLinks? links) =>
+        !mode.IsDemo && page?.Kind == MatchPageKind.Hltv && links?.HltvVia == MatchLinks.ViaLiquipedia
+            ? CardFooter(language, source) + " · " + L(language, "esports.footer_link_liquipedia")
+            : CardFooter(language, source);
+
     /// <summary>Invisible field name for the "Match Page" field (Discord requires a non-empty name).</summary>
     public const string ZeroWidth = "\u200B";
 
@@ -254,7 +260,7 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
         return new OutgoingMessage(
             Content(pings),
             // The title is only the match; demo cards say TEST/DEMO in the footer (no prefix, no link, no real source).
-            new MessageEmbed(title, string.Join("\n", lines), page?.Url, fields, CardFooter(language, match.Key.Source), timestamp, color, logoUrl),
+            new MessageEmbed(title, string.Join("\n", lines), page?.Url, fields, CardFooter(language, match.Key.Source, page, match.Links), timestamp, color, logoUrl),
             pings);
     }
 
