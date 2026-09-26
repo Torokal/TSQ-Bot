@@ -76,9 +76,24 @@ file carries its exact request).
 ### Live state — observation (not a Türkiye match)
 
 To check live behaviour, the CEV EuroVolley **men's** match FIN–SLO (VIS `no 28975`, scheduled 2026-09-26 15:00 UTC) was
-polled every 2 minutes with the exact live request TSQ uses (`NoMatches` + alternating `Version`):
+polled every 2 minutes (2026-09-26) with the live request TSQ uses (`NoMatches`; full and `Version` requests alternating):
 
-<!-- LIVE-OBSERVATION -->
+| UTC | Request | VIS answer (match 28975) |
+|---|---|---|
+| 14:48–15:08 | full / `Version` alternating | `status 1` (Scheduled), no score; "no changes" answers to `Version` worked |
+| 15:10–15:18 | versioned | item returned whenever its `version` moved (57446013 → 57446021), still `status 1` — the match started later than 15:00 |
+| 15:20:50 | full | `status 5` (in set 1), `nbSets 1`, `0-0`, set 1 **15-14** |
+| 15:22:50, 15:24:50 | versioned, full | **`status 1`, no score again** (newer `version` 57446023) — a live answer followed by "scheduled" |
+| ≈15:28 | full | `status 5`, set 1 19-17 |
+| ≈15:38 | full | `status 5` ("in set 1") but `matchPoints 1-0` and set 1 **25-23**, no set 2 points — the status lags the score |
+
+What this proves (and what not):
+
+- VIS **does** carry in-match set points for a CEV-run match, updated every few minutes (not per rally in this sample).
+- VIS answers can **go backwards** (live → scheduled) and the status field can **lag** the set count. The module therefore
+  (a) derives set transitions from set counts + set points, never from the status field, (b) never lowers a recorded state,
+  and (c) announces a new state only after **two consecutive consistent observations**.
+- This was a men's CEV match, not a Türkiye women's FIVB match: live cards for Filenin Sultanları remain **NOT_VERIFIED**.
 
 Conclusion for notifications: "match started" and set cards depend on VIS status/set points changing **during** the match.
 Until that is observed for a Türkiye women's (FIVB-run) match, live cards are **NOT_VERIFIED**; the module is fail-safe
