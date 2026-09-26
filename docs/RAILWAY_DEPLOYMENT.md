@@ -82,6 +82,11 @@ Tek volume yeter. Veritabanı `/data/torosquad.db` olur (imaj `TOROSQUAD_Bot__Da
 | `TOROSQUAD_Bot__Standby` | **`true`** (ilk kurulum) → sonra `false` | hayır |
 | `RAILWAY_RUN_UID` | `0` (volume root ile bağlanır) | hayır |
 
+TSQ Live (isteğe bağlı, [live/TSQ_LIVE.md](live/TSQ_LIVE.md)): `TOROSQUAD_Live__Enabled=true`,
+`TOROSQUAD_Live__DiscordChannelId`, `TOROSQUAD_Live__Twitch__ClientId` + `TOROSQUAD_Live__Twitch__ClientSecret` (**secret**),
+`TOROSQUAD_Live__Kick__ClientId` + `TOROSQUAD_Live__Kick__ClientSecret` (**secret**); `TOROSQUAD_Live__GuildId` yalnızca
+`Discord:AllowedGuildIds` tek sunucu değilse. Ayrıca sunucuda `/modules enable live` ve kanalda Mention Everyone izni.
+
 İsteğe bağlı: `TOROSQUAD_Esports__Liquipedia__ApiKey` (secret, yoksa HLTV zenginleştirme kapalı kalır),
 `TOROSQUAD_Esports__Liquipedia__UserAgent`, `TOROSQUAD_Bot__OperatorContact`. Gerekmeyenler: `DOTNET_ENVIRONMENT`
 (imajda `Production`), `TOROSQUAD_Bot__DataDirectory` (imajda `/data`), sağlayıcı adı (varsayılan PandaScore).

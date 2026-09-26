@@ -6,6 +6,10 @@
 > Volleyball (Türkiye women's senior national team only): **FIVB VIS** is the provider — real 2026 data verified,
 > API-Sports Free refused the 2026 season, CEV/TVF are HTML only. Research, evidence and decision:
 > [volleyball/PROVIDER_RESEARCH.md](volleyball/PROVIDER_RESEARCH.md).
+>
+> TSQ Live (Twitch + Kick streams): official Twitch Helix (`streams`, `users`, app token) and Kick Public API
+> (`channels`, `users`, app token) reconciliation; EventSub/webhooks are not used (no public ingress; EventSub WebSocket
+> needs a stored user refresh token). Contracts and limits: [live/TSQ_LIVE.md](live/TSQ_LIVE.md).
 
 Research dates: Liquipedia/Valve 2026-09-24 (Liquipedia terms re-checked 2026-09-25), PandaScore 2026-09-25. Labels: **VERIFIED** (read at the primary/official source), **VERIFIED (archive)**
 (official page read via Web Archive because the live page was behind a bot challenge), **VERIFIED (3rd-party)**

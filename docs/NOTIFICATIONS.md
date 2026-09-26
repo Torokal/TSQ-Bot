@@ -155,8 +155,10 @@ adı) → 3) "team/esports/gaming/clan/club/gg" ayıklanmış ad **tek adaya** d
 
 ## Mesaj güvenliği
 
-- `allowed_mentions = { parse: [], roles: [izinli roller] }`; kullanıcı ve @everyone/@here ping'i asla. Önizleme,
-  düzenleme ve tekrar denemeler ping atmaz.
+- `allowed_mentions = { parse: [], roles: [izinli roller] }`; kullanıcı ve @here ping'i asla. @everyone yalnızca tek bir
+  yerde: TSQ Live'ın yeni yayın oturumu için ilk duyurusu (`MentionPolicy.EveryoneOnly`, yalnızca `LiveCardRenderer`;
+  mimari test) — [live/TSQ_LIVE.md](live/TSQ_LIVE.md). Önizleme, düzenleme ve tekrar denemeler ping atmaz (teslim
+  edilmediği kanıtlanan ilk duyurunun tek yeniden gönderimi hariç).
 - Sağlayıcı metinleri güvenilmez kabul edilir: mention sözdizimi etkisizleştirilir, markdown kaçışlanır, spoiler sınırları
   kırılamaz, metindeki `scheme://` tıklanabilir bağlantıya dönüşemez; bağlantılar yalnızca doğrulanmış **https** adreslere (Maç Sayfası kuralları yukarıda; sağlayıcı bağlantıları izinli host listesiyle).
 - **Spoiler modu**: başlık yalnızca iki takımı kaynak sırasıyla yazar ("A vs B", skor yok); kazanan, skor ve hükmen bilgisi
