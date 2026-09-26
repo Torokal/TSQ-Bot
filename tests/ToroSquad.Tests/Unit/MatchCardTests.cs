@@ -22,7 +22,6 @@ public sealed partial class MatchCardTests
         new LocalizationSource(typeof(EsportsModule).Assembly, "ToroSquad.Modules.Esports.Localization"),
     ]);
 
-    private static readonly TimeZoneInfo Istanbul = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
     private static readonly DateTimeOffset Start = new(2026, 9, 17, 17, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset End = new(2026, 9, 17, 17, 46, 0, TimeSpan.Zero);
     private const string HltvUrl = "https://www.hltv.org/matches/2388888/natus-vincere-vs-aurora-starladder-starseries-fall-2026";
@@ -87,17 +86,6 @@ public sealed partial class MatchCardTests
     }
 
     [Fact]
-    public void Rescheduled_card_golden_shows_the_new_time_in_istanbul()
-    {
-        var newStart = new DateTimeOffset(2026, 9, 25, 19, 0, 0, TimeSpan.Zero);
-        var e = Live().Rescheduled(Match(), "tr", newStart, Istanbul, newStart.AddHours(-5)).Embed!;
-        e.Title.Should().Be("Natus Vincere vs Aurora");
-        e.Description.Should().Be("🕒 Maçın saati değişti");
-        e.Fields.Select(f => (f.Name, f.Value)).Should().Equal(("Etkinlik", "StarLadder StarSeries Fall 2026"), ("Format", "bo3"), ("Yeni Saat", "25/09/2026 22:00"));
-        e.Color.Should().Be(NotificationRenderer.ChangeColor);
-    }
-
-    [Fact]
     public void Cancelled_and_forfeit_cards()
     {
         var cancelled = Live().Cancelled(Match(MatchStatus.Cancelled), "tr", Start).Embed!;
@@ -113,14 +101,13 @@ public sealed partial class MatchCardTests
     }
 
     /// <summary>Every v2 kind, real mode: plain match title, compact inline fields, Match Page last, attribution-only footer.</summary>
-    public static TheoryData<string> Kinds => ["started", "finished", "postponed", "rescheduled", "cancelled", "forfeit"];
+    public static TheoryData<string> Kinds => ["started", "finished", "postponed", "cancelled", "forfeit"];
 
     private static OutgoingMessage Kind(NotificationRenderer r, string kind, MatchLinks? links) => kind switch
     {
         "started" => r.Started(Match(MatchStatus.Live, 0, 0, links: links), "tr", MentionPolicy.None, Start.AddMinutes(3)),
         "finished" => r.Result(Result(links), "tr", false, MentionPolicy.None, End),
         "postponed" => r.Postponed(Match(MatchStatus.Postponed, links: links), "tr", Start),
-        "rescheduled" => r.Rescheduled(Match(links: links), "tr", Start.AddHours(2), Istanbul, Start),
         "cancelled" => r.Cancelled(Match(MatchStatus.Cancelled, links: links), "tr", Start),
         "forfeit" => r.Result(Match(MatchStatus.Finished, winner: 1, forfeit: true, links: links), "tr", false, MentionPolicy.None, End),
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
@@ -135,11 +122,8 @@ public sealed partial class MatchCardTests
         e.Footer.Should().Be("Kaynak: PandaScore", "production cards: attribution only, no TEST/DEMO, no internal ref");
         e.Url.Should().Be(HltvUrl);
 
-        var expected = new List<(string, bool)> { ("Etkinlik", true), ("Format", true) };
-        if (kind == "rescheduled")
-            expected.Add(("Yeni Saat", true));
-        expected.Add((NotificationRenderer.ZeroWidth, false));
-        e.Fields.Select(f => (f.Name, f.Inline)).Should().Equal(expected, "Etkinlik / Format (/ Yeni Saat) inline, Match Page under them");
+        var expected = new List<(string, bool)> { ("Etkinlik", true), ("Format", true), (NotificationRenderer.ZeroWidth, false) };
+        e.Fields.Select(f => (f.Name, f.Inline)).Should().Equal(expected, "Etkinlik / Format inline, Match Page under them");
         e.Fields[^1].Value.Should().Be("[Maç Sayfası](" + HltvUrl + ")");
 
         var noLink = Kind(Live(), kind, null).Embed!;
@@ -170,7 +154,6 @@ public sealed partial class MatchCardTests
             renderer.Result(Result(), "tr", false, MentionPolicy.None, End).Embed!,
             renderer.Started(Match(MatchStatus.Live), "tr", MentionPolicy.None, Start).Embed!,
             renderer.Postponed(Match(MatchStatus.Postponed), "tr", Start).Embed!,
-            renderer.Rescheduled(Match(), "tr", Start.AddDays(1), Istanbul, Start).Embed!,
             renderer.Reminder(Match(), "tr", MentionPolicy.None, Start, null).Embed!,
         };
         foreach (var e in cards)
@@ -235,7 +218,6 @@ public sealed partial class MatchCardTests
                      renderer.Result(match, "tr", true, MentionPolicy.None, End),
                      renderer.Started(match, "tr", MentionPolicy.None, Start),
                      renderer.Postponed(match, "tr", Start),
-                     renderer.Rescheduled(match, "tr", Start, Istanbul, Start),
                      renderer.Cancelled(match, "tr", Start),
                      renderer.Reminder(match, "tr", MentionPolicy.None, Start, Start.AddHours(-1)),
                  })
@@ -390,8 +372,8 @@ public sealed partial class MatchCardTests
     public void Demo_cards_cover_every_kind_are_labelled_link_free_and_inside_limits()
     {
         var demo = new NotificationRenderer(Localizer, new EsportsDataMode(ProviderMode.Fixture));
-        var cards = EsportsDemoCards.Build(demo, "tr", Istanbul, End);
-        cards.Select(c => c.Kind).Should().Equal("demo-started", "demo-result", "demo-result-spoiler", "demo-postponed", "demo-rescheduled", "demo-cancelled", "demo-forfeit");
+        var cards = EsportsDemoCards.Build(demo, "tr", End);
+        cards.Select(c => c.Kind).Should().Equal("demo-started", "demo-result", "demo-result-spoiler", "demo-postponed", "demo-cancelled", "demo-forfeit");
         foreach (var (kind, message) in cards)
         {
             message.Embed!.Title.Should().NotContain("TEST").And.NotContain("DEMO");
@@ -414,7 +396,7 @@ public sealed partial class MatchCardTests
             ("Format", "bo3", true),
             (NotificationRenderer.ZeroWidth, "[Maç Sayfası](" + EsportsDemoCards.SafeTestMatchPageUrl + ")", false));
 
-        FluentActions.Invoking(() => EsportsDemoCards.Build(Live(), "tr", Istanbul, End)).Should().Throw<InvalidOperationException>("demo cards must never look real");
+        FluentActions.Invoking(() => EsportsDemoCards.Build(Live(), "tr", End)).Should().Throw<InvalidOperationException>("demo cards must never look real");
     }
 
     [GeneratedRegex(@"\|\|.*?\|\|", RegexOptions.Singleline)]

@@ -21,7 +21,7 @@ namespace ToroSquad.Tests.Integration;
 
 /// <summary>
 /// Match lifecycle notifications on a real SQLite DB with the real planner and outbox: started / finished / postponed /
-/// rescheduled / cancelled are each sent exactly once, survive restarts without duplicates, are never inferred from the
+/// cancelled are each sent exactly once (a changed start time is never a card of its own), survive restarts without duplicates, are never inferred from the
 /// clock, first sight or Unknown, and never come from a provider outage.
 /// </summary>
 public sealed class LifecycleNotificationTests : IAsyncLifetime
@@ -140,19 +140,15 @@ public sealed class LifecycleNotificationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Provider_flagged_reschedule_creates_one_card_per_new_time_and_small_or_unflagged_moves_none()
+    public async Task A_changed_start_time_is_never_a_separate_card_whatever_the_flag_or_the_size_of_the_move()
     {
-        var start = _host.Clock.GetUtcNow().AddHours(4);
+        var start = _host.Clock.GetUtcNow().AddHours(4); // far away: no reminder exists yet
         await PlanAsync([M("R1", MatchStatus.Scheduled, start)]);
 
         Advance(5);
         await PlanAsync([M("R1", MatchStatus.Scheduled, start.AddMinutes(10), rescheduled: true)]);
-        (await OutboxAsync("rescheduled")).Should().BeEmpty("a 10-minute move is below the threshold");
-
         Advance(5);
         await PlanAsync([M("R1", MatchStatus.Scheduled, start.AddHours(1))]);
-        (await OutboxAsync("rescheduled")).Should().BeEmpty("without the provider's rescheduled flag a delay is not an announcement");
-
         Advance(5);
         var moved = M("R1", MatchStatus.Scheduled, start.AddHours(3), rescheduled: true);
         await PlanAsync([moved]);
@@ -160,24 +156,37 @@ public sealed class LifecycleNotificationTests : IAsyncLifetime
         await RestartAsync();
         await PlanAsync([moved]);
 
-        var cards = await OutboxAsync("rescheduled");
-        cards.Should().ContainSingle();
-        Text(cards[0]).Should().Contain("Maçın saati değişti").And.Contain("Yeni Saat").And.NotContain("<@&");
-        Text(cards[0]).Should().Contain(NotificationRenderer.LocalTime(start.AddHours(3), TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul")),
-            "shown in the guild's Europe/Istanbul time zone");
+        (await OutboxAsync()).Should().BeEmpty("the new time is only match state until the reminder for it is due");
+        var snapshot = await _host.InScopeAsync(sp => sp.GetRequiredService<ToroDbContext>().Set<MatchSnapshotEntity>().AsNoTracking()
+            .SingleAsync(s => s.MatchKey == "pandascore:R1"));
+        snapshot.RescheduledToUtc.Should().Be(start.AddHours(3), "the provider-flagged move is still recorded as internal state");
+        snapshot.PreviousStartUtc.Should().Be(start.AddHours(1), "the last known official time before the latest change");
     }
 
     [Fact]
-    public async Task Postponed_match_getting_a_new_date_is_one_rescheduled_card()
+    public async Task Postponed_match_getting_a_new_date_keeps_one_postponed_card_and_is_reminded_at_the_new_time()
     {
         var start = _host.Clock.GetUtcNow().AddHours(2);
         await PlanAsync([M("PR", MatchStatus.Scheduled, start)]);
         Advance(5);
         await PlanAsync([M("PR", MatchStatus.Postponed, start)]);
         Advance(5);
-        await PlanAsync([M("PR", MatchStatus.Scheduled, start.AddDays(1), rescheduled: true)]);
-        (await OutboxAsync("rescheduled")).Should().ContainSingle();
-        (await OutboxAsync(NotificationPlanner.KindPostponed)).Should().ContainSingle();
+        var newDate = M("PR", MatchStatus.Scheduled, start.AddDays(1), rescheduled: true);
+        await PlanAsync([newDate]);
+        await PlanAsync([newDate]);
+        await RestartAsync();
+        await PlanAsync([newDate]);
+
+        (await OutboxAsync(NotificationPlanner.KindPostponed)).Should().ContainSingle("postponed behaviour is unchanged");
+        (await OutboxAsync("rescheduled")).Should().BeEmpty();
+        (await OutboxAsync()).Should().ContainSingle("no reminder existed, so the new date waits for the normal reminder");
+
+        Advance((int)(start.AddDays(1).AddMinutes(-10) - _host.Clock.GetUtcNow()).TotalMinutes);
+        await PlanAsync([newDate]);
+        await PlanAsync([newDate]);
+        var reminders = await OutboxAsync(NotificationPlanner.KindReminder);
+        reminders.Should().ContainSingle("the normal reminder, once, for the new time");
+        Text(reminders[0]).Should().Contain("<t:" + start.AddDays(1).ToUnixTimeSeconds() + ":R>").And.NotContain("saati değişti");
     }
 
     [Theory]
@@ -310,7 +319,7 @@ public sealed class LifecycleNotificationTests : IAsyncLifetime
         {
             var renderer = new NotificationRenderer(sp.GetRequiredService<ILocalizer>(), new EsportsDataMode(ProviderMode.Fixture));
             var now = _host.Clock.GetUtcNow();
-            var cards = EsportsDemoCards.Build(renderer, "tr", TimeZoneInfo.Utc, now);
+            var cards = EsportsDemoCards.Build(renderer, "tr", now);
             var outbox = sp.GetRequiredService<INotificationOutbox>();
             var outcomes = new List<StageOutcome>();
             foreach (var request in EsportsDemoCards.Requests(Guild, Channel, cards, now))
@@ -322,14 +331,14 @@ public sealed class LifecycleNotificationTests : IAsyncLifetime
         (await StageAsync()).Should().AllBeEquivalentTo(StageOutcome.Created);
         Advance(7); // a later re-run within the same hour
         (await StageAsync()).Should().AllBeEquivalentTo(StageOutcome.Unchanged, "re-running neither sends nor edits");
-        (await OutboxAsync()).Count(o => o.SourceKey == EsportsDemoCards.SourceKey).Should().Be(7);
+        (await OutboxAsync()).Count(o => o.SourceKey == EsportsDemoCards.SourceKey).Should().Be(6);
     }
 
     [Theory]
     [InlineData(NotificationPlanner.KindStarted)]
     [InlineData(NotificationPlanner.KindPostponed)]
     [InlineData(NotificationPlanner.KindCancelled)]
-    [InlineData("rescheduled-202609251900")]
+    [InlineData("rescheduled-202609251900")] // legacy kind: rows staged before 2026-09-26 still follow the switch
     public async Task Lifecycle_cards_follow_the_reminders_switch_at_delivery_time(string kind)
     {
         var decision = await _host.InScopeAsync(async sp =>

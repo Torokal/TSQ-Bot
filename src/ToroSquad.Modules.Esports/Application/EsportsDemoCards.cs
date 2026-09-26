@@ -21,7 +21,7 @@ public static class EsportsDemoCards
     /// </summary>
     public const string SafeTestMatchPageUrl = "https://example.com/tsq-bot-demo-match-page";
 
-    public static IReadOnlyList<(string Kind, OutgoingMessage Message)> Build(NotificationRenderer renderer, string language, TimeZoneInfo zone, DateTimeOffset now)
+    public static IReadOnlyList<(string Kind, OutgoingMessage Message)> Build(NotificationRenderer renderer, string language, DateTimeOffset now)
     {
         if (!renderer.IsDemo)
             throw new InvalidOperationException("Demo cards require the demo (fixture) renderer so they are labelled TEST/DEMO.");
@@ -45,7 +45,6 @@ public static class EsportsDemoCards
             ("demo-result", renderer.Result(Match("2", MatchStatus.Finished, 0, 2, 1), language, spoiler: false, MentionPolicy.None, start)),
             ("demo-result-spoiler", renderer.Result(Match("3", MatchStatus.Finished, 2, 1, 0), language, spoiler: true, MentionPolicy.None, start)),
             ("demo-postponed", renderer.Postponed(Match("4", MatchStatus.Postponed), language, start)),
-            ("demo-rescheduled", renderer.Rescheduled(Match("5", MatchStatus.Scheduled), language, start.AddHours(2), zone, start)),
             ("demo-cancelled", renderer.Cancelled(Match("6", MatchStatus.Cancelled), language, start)),
             ("demo-forfeit", renderer.Result(Match("7", MatchStatus.Finished, winner: 0, forfeit: true, links: new MatchLinks(OfficialMatchUrl: SafeTestMatchPageUrl)),
                 language, spoiler: false, MentionPolicy.None, start)),

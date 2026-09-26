@@ -26,8 +26,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 - **Volleyball — Filenin Sultanları** (separate module, off by default): Türkiye women's senior national team only;
   15-minute reminder, match started, each set, final result (low spam, no point-by-point updates), `/volleyball next|schedule`.
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
-  (optional spoiler mode), postponed, time changed, cancelled, forfeit. Each is sent once; later corrections edit
-  the same message without pinging again.
+  (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
+  without pinging again — a changed start time updates the existing reminder instead of posting a new card.
 - **Opt-in pings**: role mentions only for roles an admin explicitly mapped; `allowed_mentions` is locked down.
 - **Honest data**: provider errors are never shown as "no matches", a passed start time is never "started", and
   HLTV is never scraped (only verified match-page links are shown).

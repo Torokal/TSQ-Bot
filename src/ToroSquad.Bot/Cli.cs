@@ -217,13 +217,11 @@ public static partial class Cli
 
         var guild = new ToroSquad.Core.GuildId(guildId);
         var settings = await sp.GetRequiredService<ToroSquad.Core.Guilds.IGuildSettingsStore>().GetAsync(guild, CancellationToken.None);
-        if (!ToroSquad.Core.Guilds.GuildTime.TryResolve(settings.TimeZoneId, out var zone))
-            ToroSquad.Core.Guilds.GuildTime.TryResolve(ToroSquad.Core.Guilds.GuildSettings.DefaultTimeZoneId, out zone);
         // Always the demo renderer: cards are labelled TEST/DEMO whatever the configured provider mode is.
         var renderer = new ToroSquad.Modules.Esports.Application.NotificationRenderer(sp.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>(),
             new EsportsDataMode(ProviderMode.Fixture));
         var now = sp.GetRequiredService<TimeProvider>().GetUtcNow();
-        var cards = ToroSquad.Modules.Esports.Application.EsportsDemoCards.Build(renderer, settings.Language, zone, now);
+        var cards = ToroSquad.Modules.Esports.Application.EsportsDemoCards.Build(renderer, settings.Language, now);
         if (options.TryGetValue("kind", out var only))
         {
             // Re-render just one card (e.g. demo-forfeit) so already approved demo messages are left untouched.
