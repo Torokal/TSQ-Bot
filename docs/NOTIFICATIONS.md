@@ -11,30 +11,46 @@
 
 | Tür (outbox) | Ne zaman | Ping | Not |
 |---|---|---|---|
-| `reminder` | Planlanan başlangıçtan `ReminderLeadMinutes` önce, başlangıç + 10 dk'ya kadar | hatırlatma rolleri | "Planlanan saattir; maçın başladığı doğrulanmamıştır." Saat değişirse **aynı mesaj** ping'siz düzenlenir |
+| `reminder` | Planlanan başlangıçtan `ReminderLeadMinutes` önce, başlangıç + 10 dk'ya kadar | hatırlatma rolleri | "Planlanan saattir; maçın başladığı doğrulanmamıştır." Saat değişirse **aynı mesaj** ping'siz düzenlenir (aşağıdaki "Saat değişikliği") |
 | `started` | Sağlayıcı maçı **running** bildirdiğinde, daha önce planlandı/ertelendi olarak **görülmüşse** | hatırlatma rolleri | Saatin gelmesi başlama değildir. Liquipedia hiç "running" vermez → bu kart yalnızca PandaScore ile |
 | `result` | Maç bitti (ilk görülme `FinishedObservedAt`) veya hükmen | sonuç rolleri | Düzeltmeler 24 saat aynı mesajı ping'siz düzenler; iptal (oynanmadı) sonuç değildir |
 | `postponed` | Planlandı → ertelendi (yeni tarih bilinmiyor) | **yok** | "Yeni tarih henüz açıklanmadı." |
-| `rescheduled-<yyyyMMddHHmm>` | Sağlayıcı `rescheduled=true` ve saat ≥ `RescheduleThresholdMinutes` (vars. 15) kaydı; ya da ertelenmiş maça yeni tarih | **yok** | Yeni saat başına bir kart; "Yeni Saat" sunucunun saat diliminde (vars. Europe/Istanbul) |
 | `cancelled` | Planlandı/ertelendi/oynanıyor → iptal (hükmen değil) | **yok** | Sağlayıcı hatası asla iptal sayılmaz |
 
-Başladı/ertelendi/saat değişti/iptal kartları **hatırlatma anahtarına** bağlıdır (`/esports-admin configure reminders`),
+Başladı/ertelendi/iptal kartları **hatırlatma anahtarına** bağlıdır (`/esports-admin configure reminders`),
 hem planlamada hem gönderimden hemen önce. Bu kartlar yalnızca geçiş **iki bilinen sağlayıcı durumu arasında gözlendiğinde**
 ve `LifecycleFreshMinutes` (vars. 90) içinde gönderilir. `Unknown` durum son bilinen durumu silmez, geçiş üretmez.
 Ayrıntı: [adr/0006-pandascore-lifecycle-and-match-links.md](adr/0006-pandascore-lifecycle-and-match-links.md).
+
+### Saat değişikliği (ayrı kart yok — 2026-09-26)
+
+Bir maçın planlanan başlangıcı değişince (sağlayıcının `rescheduled` bayrağı olsun ya da olmasın, kayma küçük ya da büyük):
+
+1. O maç için **hatırlatma mesajı varsa** aynı mesaj **ping'siz düzenlenir**: yeni planlanan başlangıç Discord'un göreli
+   zamanıyla, altında "🕒 Başlangıç saati güncellendi (önceki: …)". Ayrı bir kart gönderilmez.
+2. Saat **tekrar** değişirse yine aynı mesaj düzenlenir; "önceki" her zaman son bilinen bir önceki resmi saattir.
+3. Aynı veri yeniden tarandığında ya da bot yeniden başladığında yeni mesaj, gereksiz düzenleme ve ping olmaz.
+4. **Hatırlatma henüz yoksa** hiçbir şey gönderilmez: yeni saat maç durumu olarak kaydedilir; zamanı gelince normal
+   hatırlatma yeni saate göre gider.
+5. Ertelenme (`postponed`, yeni tarih bilinmiyor) ayrı bir olaydır ve kartı korunur; ertelenmiş maça yeni tarih gelince
+   yine yukarıdaki kural işler. Başladı / bitti / iptal / hükmen kartları değişmez.
+
+Sağlayıcının bayrağı anlık görüntüde (`RescheduledObservedAt`/`RescheduledToUtc`) iç durum olarak tutulmaya devam eder;
+bildirim üretmez. 2026-09-26'dan önce gönderilmiş ayrı "Maçın saati değişti" kartlarına ve eski `rescheduled-*` outbox
+satırlarına dokunulmaz (silinmez, düzenlenmez).
 
 ## Kart düzeni (sahibin BOT Greg ekran görüntüsüne göre)
 
 ```
 Natus Vincere [0] - [2] Aurora          ← başlık; doğrulanmış maç sayfası varsa başlık ona bağlanır
-🏆 Aurora maçı kazandı                  ← TEK durum satırı (🔴 Maç başladı · 3 dakika önce / ⏸️ / 🕒 / ❌ / 🏳️ / ⏰)
-Etkinlik                     Format      (Yeni Saat)   ← satır içi alanlar
+🏆 Aurora maçı kazandı                  ← TEK durum satırı (🔴 Maç başladı · 3 dakika önce / ⏸️ / ❌ / 🏳️ / ⏰)
+Etkinlik                     Format                    ← satır içi alanlar
 StarLadder StarSeries Fall 2026   bo3
 Maç Sayfası                             ← alanların altında, yalnızca güvenli bağlantı varsa
 Kaynak: PandaScore · 17/09/2026 20:46   ← zorunlu atıf + zaman damgası (iç referans/ref YOK)
 ```
 
-Tüm v2 türlerinde aynı düzen: başladı, bitti, ertelendi, saat değişti, iptal, hükmen. TEST/DEMO kartlarında başlık yine
+Tüm v2 türlerinde aynı düzen: başladı, bitti, ertelendi, iptal, hükmen. TEST/DEMO kartlarında başlık yine
 yalnızca maçtır ("Nordic Owls vs Crimson Esports"); demo olduğu **yalnızca footer'da** yazar: "TEST/DEMO — sentetik veri,
 gerçek maç değil" (bağlantı yok, gerçek kaynak adı yok). Gerçek (production) kartlarda TEST/DEMO footer'ı yoktur. Teslimat
 referansı (`ref`) kullanıcıya gösterilmez; yalnızca veritabanı ve loglarda durur.
@@ -42,7 +58,7 @@ referansı (`ref`) kullanıcıya gösterilmez; yalnızca veritabanı ve loglarda
 Bilinçli farklar: "hltv.org" başlık satırı yok (veri HLTV'den gelmiyor), "Stars" yok (güvenilir kaynak yok → DEFERRED).
 
 Yok: harita skorları, yayın listesi, aşama, "son veri" satırı, iç kimlikler, "yıldız" (güvenilir kaynak yok → DEFERRED).
-Renkler: başladı/hatırlatma mavi, sonuç yeşil (kazanana göre değişmez), ertelendi/saat değişti amber, iptal kırmızı.
+Renkler: başladı/hatırlatma mavi, sonuç yeşil (kazanana göre değişmez), ertelendi amber, iptal kırmızı.
 
 ## Maç Sayfası bağlantısı
 
@@ -71,7 +87,7 @@ arka plan yok. Kural: **doğruluk süsten önce gelir** — yanıltabilecek her 
 |---|---|
 | Sonuç (normal) ve hükmen | Sağlayıcının belirttiği **kazananın** logosu. Beraberlik, bilinmeyen kazanan veya kazananın logosu yoksa **yok** (kaybedenin logosu kazanan gibi görünmesin) |
 | Sonuç (spoiler) | Kazanan logosu **asla** (sonucu sızdırır). Yalnızca aşağıdaki "takip edilen takım" kuralı |
-| Hatırlatma, başladı, ertelendi, saat değişti, iptal | Sunucunun takım filtresinde (`/esports-admin filters team`) bu maçtaki **tek** takım varsa onun logosu; hiç yoksa veya iki takım da takipteyse **yok** |
+| Hatırlatma, başladı, ertelendi, iptal | Sunucunun takım filtresinde (`/esports-admin filters team`) bu maçtaki **tek** takım varsa onun logosu; hiç yoksa veya iki takım da takipteyse **yok** |
 | TEST/DEMO kartları | Yok |
 
 Kaynak yalnızca maç sağlayıcısının kendi takım verisidir: PandaScore `dark_mode_image_url` (Discord çoğunlukla koyu temada

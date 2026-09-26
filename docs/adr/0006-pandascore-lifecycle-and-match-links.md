@@ -33,3 +33,12 @@ bildirimlerini istedi. HLTV maç sayfası tercih edilen dış bağlantı, ancak 
 - HLTV'yi veri sağlayıcısı olarak kullanmak (kazıma, Cloudflare aşma, gizli uçlar) proje tasarımı gereği **yasak**; yetkili
   erişim olmadan **DEFERRED**.
 - "Yıldız" (eski BOT Greg puanı) güvenilir, belgelenmiş bir kaynak olmadan gösterilmez (**DEFERRED**).
+
+## Değişiklik (2026-09-26): ayrı "saat değişti" kartı kaldırıldı
+
+Sahip, canlı görsel incelemede ayrı "Maçın saati değişti" kartından vazgeçti. 3. maddedeki geçiş anlık görüntüde iç durum
+olarak kaydedilmeye devam eder ama **kart üretmez**: saat değişince mevcut hatırlatma mesajı ping'siz düzenlenir (yeni saat
+Discord'un göreli zamanıyla + "Başlangıç saati güncellendi (önceki: …)"); hatırlatma yoksa yeni saat yalnızca maç durumudur
+ve zamanı gelince normal hatırlatma gider. 4. maddedeki "(saat değişikliği: yeni saat başına)" ve 5. maddedeki "(+ Yeni
+Saat)" artık geçersizdir. Ertelendi kartı korunur. Eski `rescheduled-*` outbox satırları ve gönderilmiş kartlar silinmez,
+düzenlenmez. Ayrıntı: docs/NOTIFICATIONS.md "Saat değişikliği".

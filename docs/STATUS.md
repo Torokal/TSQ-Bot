@@ -43,7 +43,9 @@ invite link and no global command registration. The source code is public under 
 - PandaScore live data: team search, admin team filters, match reminders, time-change edits, "match started" and
   result cards; no duplicates after re-scans or restarts.
 - Persistence across container restarts; in-app daily database backups.
-- All card types rendered in Discord (including spoiler, postponed, rescheduled, cancelled and forfeit variants).
+- All card types rendered in Discord (including spoiler, postponed, cancelled and forfeit variants). A changed start
+  time edits the existing reminder (verified live 2026-09-25); the former separate "time changed" card was removed on
+  2026-09-26 by owner decision.
 
 ## Covered by automated tests only (not yet observed live)
 
