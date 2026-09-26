@@ -4,7 +4,8 @@ A modular, self-hostable Discord bot. Its first module tracks **Counter-Strike 2
 cards (reminder, match started, result and schedule changes) into a server channel and answers esports slash commands.
 A separate **Formula 1** module posts confirmed session starts, results (with in-place corrections) and championship
 standings ([docs/FORMULA1.md](docs/FORMULA1.md)). A **Volleyball** module follows only Türkiye's women's senior national team
-("Filenin Sultanları") ([docs/volleyball/VOLLEYBALL.md](docs/volleyball/VOLLEYBALL.md)).
+("Filenin Sultanları") ([docs/volleyball/VOLLEYBALL.md](docs/volleyball/VOLLEYBALL.md)). **TSQ Live** announces the configured
+creators' Twitch/Kick streams ([docs/live/TSQ_LIVE.md](docs/live/TSQ_LIVE.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
 **BOT Greg** and reuses adapted portions of the open-source
@@ -25,10 +26,14 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   from the clock), practice/sprint/race results, drivers' and constructors' standings, `/f1 next|schedule|results|now`.
 - **Volleyball — Filenin Sultanları** (separate module, off by default): Türkiye women's senior national team only;
   15-minute reminder, match started, each set, final result (low spam, no point-by-point updates), `/volleyball next|schedule`.
+- **TSQ Live** (separate module, off by default and `Live:Enabled=false`): Twitch + Kick live announcements for configured
+  creators via the official APIs — one `@everyone` per new creator session (multistream = one message), title/platform
+  changes and the end of the stream edit the same message without pinging; restart, reconnect and provider-outage safe.
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
-- **Opt-in pings**: role mentions only for roles an admin explicitly mapped; `allowed_mentions` is locked down.
+- **Opt-in pings**: role mentions only for roles an admin explicitly mapped; `allowed_mentions` is locked down. The only
+  `@everyone` is TSQ Live's first announcement of a new stream session (never on edits, replacements or restarts).
 - **Honest data**: provider errors are never shown as "no matches", a passed start time is never "started", and
   HLTV is never scraped (only verified match-page links are shown).
 - **Durable delivery**: persistent outbox with de-duplication, crash recovery and ambiguous-delivery reconciliation.
@@ -47,6 +52,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | Formula 1 admin | `/f1-admin configure channel\|notifications\|role\|spoilers`, `/f1-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
 | Volleyball | `/volleyball next\|schedule` | everyone (module on) |
 | Volleyball admin | `/volleyball-admin configure channel\|notifications\|role`, `/volleyball-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
+| TSQ Live admin | `/live-admin doctor` | Manage Server |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
 [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md). The generated, test-checked schema is
@@ -110,6 +116,7 @@ Step-by-step setup (Turkish): [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md). Ad
 | `Esports:Provider:Mode` | `Fixture` | synthetic data through the real client/parser, labelled TEST/DEMO |
 | `Formula1:Provider:Mode` | `Fixture` | synthetic TEST/DEMO race weekend; `Live` for Jolpica + OpenF1 |
 | `Volleyball:Provider:Mode` | `Fixture` | synthetic TEST/DEMO match; `Live` for FIVB VIS |
+| `Live:Enabled` | `false` | TSQ Live off; needs `Live:DiscordChannelId` and Twitch/Kick credentials ([docs/live/TSQ_LIVE.md](docs/live/TSQ_LIVE.md)) |
 | `Discord:AllowedGuildIds` | `[]` | when set, the bot only serves these servers (enforced server-side) |
 | `Discord:AllowGlobalCommandSync` | `false` | global command registration is a separate, explicit step |
 | `Bot:SourceUrl` | `https://github.com/Torokal/TSQ-Bot` | shown by `/bot source` |
@@ -143,6 +150,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Esports` | The esports module (providers, planner, commands) |
 | `ToroSquad.Modules.Formula1` | The Formula 1 module (provider capabilities, lifecycle state machine, planner, commands) |
 | `ToroSquad.Modules.Volleyball` | The volleyball module (Türkiye women's senior team only: identity filter, match state machine, FIVB VIS provider, planner, commands) |
+| `ToroSquad.Modules.Live` | TSQ Live (Twitch + Kick stream announcements: creator session state machine, official-API reconciliation, planner) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |
 
