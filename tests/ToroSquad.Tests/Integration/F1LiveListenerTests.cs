@@ -247,4 +247,21 @@ public sealed class F1LiveListenerTests
         await WaitUntilAsync(() => transport.Active == 0);
         listener.IsRunning.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Incidents_are_queued_once_and_wake_the_poller()
+    {
+        var (listener, _, _, _) = Create();
+        await using var owned = listener;
+        var incident = new F1RaceControlIncident("fakelive", "P-1", F1IncidentKind.SafetyCarDeployed, At, 12, null, null, null);
+
+        var wait = listener.WaitForLiveDataAsync(TestContext.Current.CancellationToken);
+        await listener.OnIncidentAsync(incident, TestContext.Current.CancellationToken);
+        await listener.OnIncidentAsync(incident, TestContext.Current.CancellationToken); // replayed by the provider
+        await wait.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        listener.Incidents.TryRead(out var first).Should().BeTrue();
+        first.Should().Be(incident);
+        listener.Incidents.TryRead(out _).Should().BeFalse("the exact same provider message is queued once");
+    }
 }

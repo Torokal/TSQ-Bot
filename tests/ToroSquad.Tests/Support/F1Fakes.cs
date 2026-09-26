@@ -14,7 +14,7 @@ namespace ToroSquad.Tests.Support;
 /// Scriptable Formula 1 providers (all four capabilities) for integration tests. Lifecycle events are only "visible"
 /// once the fake clock has reached their provider timestamp, exactly like a real provider.
 /// </summary>
-public sealed class F1FakeProviders(TimeProvider clock) : IF1ScheduleProvider, IF1LifecycleProvider, IF1ResultsProvider, IF1StandingsProvider
+public sealed class F1FakeProviders(TimeProvider clock) : IF1ScheduleProvider, IF1LifecycleProvider, IF1ResultsProvider, IF1StandingsProvider, IF1RaceControlSource
 {
     public const string LifecycleId = "fakelive";
     public const string ResultsId = "fakeresults";
@@ -22,6 +22,7 @@ public sealed class F1FakeProviders(TimeProvider clock) : IF1ScheduleProvider, I
     public List<F1Meeting> Meetings { get; } = [];
     public List<F1ProviderSession> ProviderSessions { get; } = [];
     public Dictionary<string, List<F1LifecycleEvent>> Events { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, List<F1RaceControlIncident>> Incidents { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, F1SessionResult?> ResultsByRef { get; } = new(StringComparer.Ordinal);
     public F1StandingsSnapshot? Drivers { get; set; }
     public F1StandingsSnapshot? Constructors { get; set; }
@@ -58,6 +59,8 @@ public sealed class F1FakeProviders(TimeProvider clock) : IF1ScheduleProvider, I
         ProviderSessions.AddRange(other.ProviderSessions);
         foreach (var (key, list) in other.Events)
             Events[key] = [.. list];
+        foreach (var (key, list) in other.Incidents)
+            Incidents[key] = [.. list];
         foreach (var (key, result) in other.ResultsByRef)
             ResultsByRef[key] = result;
         Drivers = other.Drivers;
@@ -73,6 +76,22 @@ public sealed class F1FakeProviders(TimeProvider clock) : IF1ScheduleProvider, I
     }
 
     /// <summary>Adds a meeting and matching provider sessions (ref = "P-" + session key).</summary>
+    public void AddIncident(string providerRef, F1IncidentKind kind, DateTimeOffset at, int? lap = null, int? driver = null, string? code = null, string? reason = null)
+    {
+        if (!Incidents.TryGetValue(providerRef, out var list))
+            Incidents[providerRef] = list = [];
+        list.Add(new F1RaceControlIncident(LifecycleId, providerRef, kind, at, lap, driver, code, reason));
+    }
+
+    public Task<F1ProviderResult<IReadOnlyList<F1RaceControlIncident>>> GetIncidentsAsync(string providerSessionRef, CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow();
+        if (LifecycleFailure is { } f)
+            return Task.FromResult(F1ProviderResult<IReadOnlyList<F1RaceControlIncident>>.Fail(f, "scripted", now));
+        IReadOnlyList<F1RaceControlIncident> visible = Incidents.GetValueOrDefault(providerSessionRef)?.Where(i => i.OccurredAt <= now).OrderBy(i => i.OccurredAt).ToList() ?? [];
+        return Task.FromResult(F1ProviderResult<IReadOnlyList<F1RaceControlIncident>>.Ok(visible, now));
+    }
+
     public F1Meeting AddMeeting(int season, int round, params (F1SessionType Type, DateTimeOffset Start)[] sessions)
     {
         var meeting = new F1Meeting(season, round, "Test Grand Prix " + round, null, "Test Circuit", "Testland", "Test City", "test-" + round,
