@@ -35,6 +35,44 @@ public sealed class LiveCoordinator(
 
     public Task<IReadOnlyList<LiveEffect>> TickAsync(CancellationToken ct) => ApplyAsync([], ct);
 
+    /// <summary>
+    /// Called when the host starts with Live:Enabled=false. Nothing is observed while tracking is switched off, so what is
+    /// known becomes stale: every channel returns to "never observed" (its next observation is a baseline, never an
+    /// announcement) and open sessions are closed. Unlike a crash or deploy, a deliberate switch-off therefore never leads
+    /// to an announcement of a stream that started meanwhile.
+    /// </summary>
+    public async Task PauseTrackingAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ToroDbContext>();
+            var now = clock.GetUtcNow();
+            var platforms = await db.Set<PlatformState>().Where(p => p.Status != PlatformStatus.Unknown).ToListAsync(ct);
+            var creators = await db.Set<CreatorState>().Where(c => c.Phase != CreatorPhase.Offline).ToListAsync(ct);
+            foreach (var creator in creators)
+            {
+                creator.SessionEndedAt = creator.GraceSince
+                                         ?? platforms.Where(p => p.CreatorKey == creator.CreatorKey).Max(p => p.LastLiveAt)
+                                         ?? now;
+                creator.Phase = CreatorPhase.Offline;
+                creator.GraceSince = null;
+                creator.UpdatedAt = now;
+            }
+
+            foreach (var row in platforms)
+                ResetChannel(row, row.Login, now, keepMetadata: true); // the last title still labels the closed card
+            await db.SaveChangesAsync(ct);
+            if (platforms.Count + creators.Count > 0)
+                logger.LogInformation("live tracking switched off: {Channels} channel(s) will be re-baselined, {Sessions} open session(s) closed", platforms.Count, creators.Count);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public async Task<IReadOnlyList<LiveEffect>> ApplyAsync(IReadOnlyList<LiveObservation> observations, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
@@ -103,6 +141,11 @@ public sealed class LiveCoordinator(
         var announcementsAllowed = o.Enabled && guild is { } g && channelId is not null && deployment.IsGuildAllowed(g) &&
                                    await sp.GetRequiredService<IModuleGate>().IsEnabledAsync(g, LiveModule.ModuleIdTyped, ct);
 
+        // Bring every current card up to date first: a session closed while nothing was planned (tracking switched off)
+        // gets its "ended" edit before a new session of the same creator takes its place below.
+        var planner = sp.GetRequiredService<LiveAnnouncementPlanner>();
+        await planner.PlanAsync(creators, states, platforms, guild, channelId, ct);
+
         var rules = o.Rules;
         foreach (var observation in observations)
         {
@@ -117,7 +160,7 @@ public sealed class LiveCoordinator(
         foreach (var creator in creators)
             effects.AddRange(LiveStateMachine.Tick(states.Single(s => s.CreatorKey == creator.Key), Channels(platforms, creator), tracked, rules, now));
 
-        await sp.GetRequiredService<LiveAnnouncementPlanner>().PlanAsync(creators, states, platforms, guild, channelId, ct);
+        await planner.PlanAsync(creators, states, platforms, guild, channelId, ct);
         await db.SaveChangesAsync(ct);
         return effects;
     }
@@ -125,20 +168,22 @@ public sealed class LiveCoordinator(
     private static List<PlatformState> Channels(List<PlatformState> platforms, TrackedCreator creator) =>
         platforms.Where(p => p.CreatorKey == creator.Key && creator.Channel(p.Platform) is not null).ToList();
 
-    private static void ResetChannel(PlatformState row, string login, DateTimeOffset now)
+    private static void ResetChannel(PlatformState row, string login, DateTimeOffset now, bool keepMetadata = false)
     {
         row.Login = login;
         row.Status = PlatformStatus.Unknown;
         row.StreamId = null;
         row.StartedAt = null;
+        row.StatusObservedAt = null;
+        row.LastEventId = null;
+        row.UpdatedAt = now;
+        if (keepMetadata)
+            return;
         row.Title = null;
         row.TitleChangedAt = null;
         row.Category = null;
         row.AvatarUrl = null;
-        row.StatusObservedAt = null;
         row.MetadataObservedAt = null;
-        row.LastEventId = null;
-        row.UpdatedAt = now;
     }
 
     private void Log(IReadOnlyList<LiveEffect> effects)
@@ -162,7 +207,7 @@ public sealed class LiveCoordinator(
                 case LiveEffectKind.GraceEntered:
                     logger.LogInformation("live reconnect grace entered creator={Creator} ({Detail})", e.CreatorKey, e.Detail ?? "all platforms offline");
                     break;
-                case LiveEffectKind.ReconnectedWithinGrace when e.Detail is null:
+                case LiveEffectKind.ReconnectedWithinGrace when e.Detail is null or "same_stream":
                     logger.LogInformation("live reconnect within grace creator={Creator} platform={Platform}: same session, no new announcement", e.CreatorKey, e.Platform);
                     break;
                 case LiveEffectKind.SessionEnded:

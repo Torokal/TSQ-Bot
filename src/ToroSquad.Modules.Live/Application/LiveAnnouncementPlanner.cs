@@ -20,6 +20,9 @@ namespace ToroSquad.Modules.Live.Application;
 /// payload that may carry @everyone. Every later change (title, category, a second platform, a platform going offline,
 /// the end of the session) re-renders the same payload key → the outbox edits the same Discord message, and edits never
 /// ping.</item>
+/// <item>@everyone at most once per session: once the first send's outcome is uncertain it is never opted in again (the
+/// outbox strips it from any resend; this planner also drops the text); replacements never mention; a session announced
+/// under the other delivery mode (DryRun ↔ Send) is never announced again.</item>
 /// <item>During the reconnect grace the card is left as it is (a flap causes no edit).</item>
 /// <item>An announcement nobody delivered within <see cref="LiveOptions.AnnouncementMaxDelayMinutes"/> expires; the ended
 /// card is never sent as a new message.</item>
@@ -73,6 +76,8 @@ public sealed class LiveAnnouncementPlanner(
             var targetChannel = new ChannelId(state.AnnouncementChannelId!.Value);
             var sourceKey = SourceKey(state);
             var row = await RowAsync(target, sourceKey, targetChannel, state.AnnouncementKind, dryRun, ct);
+            if (row is null && await RowAsync(target, sourceKey, targetChannel, state.AnnouncementKind, !dryRun, ct) is not null)
+                continue; // announced under the other delivery mode (DryRun ↔ Send switch): never announce the session twice
             if (row?.DiscordMessageId is { } messageId)
                 state.AnnouncementMessageId = messageId;
 
@@ -97,7 +102,7 @@ public sealed class LiveAnnouncementPlanner(
             switch (state.Phase)
             {
                 case CreatorPhase.Live:
-                    message = renderer.Live(creator, state, perCreator, language, withEveryone: state.AnnouncementKind == AnnounceKind);
+                    message = renderer.Live(creator, state, perCreator, language, withEveryone: state.AnnouncementKind == AnnounceKind && !Uncertain(row));
                     expiresAt = (state.AnnouncedAt ?? now) + TimeSpan.FromMinutes(o.AnnouncementMaxDelayMinutes);
                     break;
                 case CreatorPhase.Offline when state.SessionEndedAt is not null && row is not null:
@@ -127,6 +132,12 @@ public sealed class LiveAnnouncementPlanner(
             }
         }
     }
+
+    /// <summary>
+    /// The first send may have reached Discord without us knowing (ambiguous outcome, crash in flight): from then on the
+    /// card is rendered without @everyone (text and mention). The outbox enforces the mention part independently.
+    /// </summary>
+    public static bool Uncertain(OutboxMessageEntity? row) => row is { Status: OutboxStatus.DeliveryUnknown } or { ReconcileAttempts: > 0 };
 
     private async Task<OutboxMessageEntity?> RowAsync(GuildId guild, string sourceKey, ChannelId channel, string kind, bool dryRun, CancellationToken ct)
     {

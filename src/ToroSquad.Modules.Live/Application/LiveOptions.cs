@@ -32,9 +32,6 @@ public sealed class LiveOptions
     /// </summary>
     public bool AnnounceExistingLiveOnBootstrap { get; set; }
 
-    /// <summary>After a gap in observation (restart, outage), a stream is still announced when it started at most this long ago.</summary>
-    public int LateAnnounceMinutes { get; set; } = 10;
-
     /// <summary>A first announcement not delivered within this time after detection is dropped (a late @everyone is worse than none).</summary>
     public int AnnouncementMaxDelayMinutes { get; set; } = 15;
 
@@ -53,7 +50,7 @@ public sealed class LiveOptions
     /// <summary>Observations further apart than this are not continuous: at least four reconciliations, at least three minutes.</summary>
     public TimeSpan Continuity => TimeSpan.FromSeconds(Math.Max(180, ReconciliationIntervalSeconds * 4));
 
-    public LiveRules Rules => new(ReconnectGrace, Continuity, TimeSpan.FromMinutes(LateAnnounceMinutes), AnnounceExistingLiveOnBootstrap);
+    public LiveRules Rules => new(ReconnectGrace, Continuity, AnnounceExistingLiveOnBootstrap);
 
     /// <summary>The configured guild, else the single allowed guild; null when neither is known.</summary>
     public GuildId? ResolveGuild(DeploymentPolicy deployment) =>
@@ -93,7 +90,6 @@ public sealed class LiveOptions
 
         Range(nameof(ReconciliationIntervalSeconds), ReconciliationIntervalSeconds, 15, 300);
         Range(nameof(ReconnectGraceSeconds), ReconnectGraceSeconds, 30, 1800);
-        Range(nameof(LateAnnounceMinutes), LateAnnounceMinutes, 0, 60);
         Range(nameof(AnnouncementMaxDelayMinutes), AnnouncementMaxDelayMinutes, 2, 120);
 
         var keys = new HashSet<string>(StringComparer.Ordinal);

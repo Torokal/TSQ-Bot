@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Modules.Live.Application;
@@ -420,18 +422,165 @@ public sealed class LiveAnnouncementTests
     }
 
     [Fact]
-    public async Task A_stream_that_started_while_the_bot_was_down_is_announced_only_when_fresh()
+    public async Task A_stream_that_started_while_the_bot_was_down_is_announced_after_the_restart_whatever_its_age()
+    {
+        // Known offline, then the bot stops.
+        await using var first = await WatchingAsync();
+        await StepsAsync(first, 2);
+        var stoppedAt = first.Now;
+
+        // LORDTORO goes live 2 minutes after the stop; the bot is back 22 minutes after the stop (stream 20 minutes old).
+        first.Twitch.GoLive(Toro, Stream("t1", stoppedAt + TimeSpan.FromMinutes(2), "Bot kapalıyken başladı"));
+        await using var second = await CreateAsync(restartOf: first, start: stoppedAt + TimeSpan.FromMinutes(22));
+        await second.PollAsync();
+        await StepsAsync(second, 4);
+
+        var message = second.Messages.Should().ContainSingle("a genuine new session, even though the bot missed its start").Subject;
+        message.Message.Embed!.Title.Should().Be("Bot kapalıyken başladı");
+        second.EveryonePings.Should().Be(1);
+        (await second.CreatorAsync(Toro)).Should().Match<CreatorState>(s => s.Announced && s.SessionNumber == 1);
+        (await second.CreatorAsync(Nasil)).SessionNumber.Should().Be(0, "nothing started for the other creator");
+    }
+
+    [Fact]
+    public async Task Switching_live_tracking_off_rebaselines_so_re_enabling_never_announces_a_stale_stream()
+    {
+        await using var first = await WatchingAsync();
+        first.Twitch.GoLive(Toro, Stream("t1", first.Now, "Birinci"));
+        await first.StepAsync(Poll);
+        first.Messages.Should().ContainSingle();
+
+        // Host restarted with Live:Enabled=false: tracking pauses (channels forgotten, open session closed).
+        await using (var off = await CreateAsync(new() { ["Live:Enabled"] = "false" }, restartOf: first, start: first.Now + TimeSpan.FromMinutes(1)))
+            await off.Host.Services.GetRequiredService<LiveCoordinator>().PauseTrackingAsync(CancellationToken.None);
+
+        // Two hours later tracking is switched on again; a different stream started while it was off.
+        first.Twitch.GoLive(Toro, Stream("t2", first.Now + TimeSpan.FromMinutes(90), "Kapalıyken başlayan"));
+        await using var on = await CreateAsync(restartOf: first, start: first.Now + TimeSpan.FromHours(2));
+        await on.PollAsync();
+        await StepsAsync(on, 3);
+
+        on.Messages.Should().ContainSingle("only the original announcement; no stale @everyone");
+        on.EveryonePings.Should().Be(1);
+        on.Messages[0].Edits.Should().ContainSingle().Which.Content.Should().Be("⚫ **LORDTORO** yayını sona erdi.", "the old session was closed");
+        var state = await on.CreatorAsync(Toro);
+        state.Announced.Should().BeFalse();
+        state.NotAnnouncedReason.Should().Be("bootstrap");
+    }
+
+    // ------------------------------------------------------------------ @everyone at most once (ambiguous delivery)
+
+    [Fact]
+    public async Task Ambiguous_create_that_Discord_accepted_is_reconciled_and_pings_exactly_once()
     {
         await using var bed = await WatchingAsync();
-        // Bot down for 20 minutes: LORDTORO started 15 minutes ago (old news), NASILYANI69 5 minutes ago (still news).
-        bed.Host.Clock.Advance(TimeSpan.FromMinutes(20));
-        bed.Twitch.GoLive(Toro, Stream("t1", bed.Now - TimeSpan.FromMinutes(15), "Eski"));
-        bed.Twitch.GoLive(Nasil, Stream("t2", bed.Now - TimeSpan.FromMinutes(5), "Taze"));
-        await bed.PollAsync();
+        bed.Transport.ScriptAcceptedButTimedOut(); // Discord accepts the message, the response is lost
+        bed.Twitch.GoLive(Toro, Stream("t1", bed.Now, "Yayın"));
+        await bed.StepAsync(Poll);
+        (await bed.OutboxAsync()).Single().Status.Should().Be(OutboxStatus.DeliveryUnknown);
+        await StepsAsync(bed, 4); // reconciliation finds the message
 
-        bed.Messages.Should().ContainSingle().Which.Message.Embed!.Title.Should().Be("Taze");
-        bed.EveryonePings.Should().Be(1);
-        (await bed.CreatorAsync(Toro)).NotAnnouncedReason.Should().Be("gap");
+        bed.Messages.Should().ContainSingle();
+        bed.EveryonePings.Should().Be(1, "maximum one actual @everyone");
+        (await bed.OutboxAsync()).Single().Status.Should().Be(OutboxStatus.Sent);
+        bed.Transport.SendCalls.Should().Be(1, "no blind resend");
+    }
+
+    [Fact]
+    public async Task Ambiguous_create_whose_message_cannot_be_recovered_is_resent_once_without_any_mention()
+    {
+        await using var bed = await WatchingAsync();
+        bed.Transport.ScriptAcceptedButTimedOut();          // it DID ping …
+        bed.Transport.ScriptedReconcile = new ReconcileOutcome.NotFound(); // … but scrolled out of the scanned history
+        bed.Twitch.GoLive(Toro, Stream("t1", bed.Now, "Yayın"));
+        await bed.StepAsync(Poll);
+        await StepsAsync(bed, 4);
+
+        bed.Messages.Should().HaveCount(2, "the original (unseen by us) and one replacement");
+        bed.EveryonePings.Should().Be(1, "maximum one actual @everyone");
+        var replacement = bed.Messages[1].Message;
+        replacement.Mentions.PingsAnything.Should().BeFalse("allowed_mentions = none after an uncertain delivery");
+        replacement.Content.Should().NotContain("@everyone");
+        bed.Transport.SendCalls.Should().Be(2, "exactly one resend, never a loop");
+    }
+
+    [Fact]
+    public async Task Ambiguous_create_that_never_reached_Discord_is_resent_without_mention_rather_than_risking_a_second_ping()
+    {
+        await using var bed = await WatchingAsync();
+        bed.Transport.ScriptSend(() => new SendOutcome.Ambiguous("HTTP 502 on create")); // nothing was created
+        bed.Twitch.GoLive(Toro, Stream("t1", bed.Now, "Yayın"));
+        await bed.StepAsync(Poll);
+        await StepsAsync(bed, 4);
+
+        var message = bed.Messages.Should().ContainSingle().Subject.Message;
+        message.Mentions.PingsAnything.Should().BeFalse("we cannot prove the first attempt did not ping");
+        bed.EveryonePings.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Proven_non_delivery_is_retried_normally_with_the_single_everyone()
+    {
+        await using var bed = await WatchingAsync();
+        bed.Transport.ScriptSend(() => new SendOutcome.RateLimited(TimeSpan.FromSeconds(1)));
+        bed.Transport.ScriptSend(() => new SendOutcome.Transient("discord client not logged in yet"));
+        bed.Twitch.GoLive(Toro, Stream("t1", bed.Now, "Yayın"));
+        await bed.StepAsync(Poll);
+        await StepsAsync(bed, 4);
+
+        bed.Messages.Should().ContainSingle();
+        bed.EveryonePings.Should().Be(1, "a 429 / not-connected attempt provably created nothing");
+    }
+
+    [Fact]
+    public async Task Restart_during_an_in_flight_send_never_produces_a_second_mention()
+    {
+        await using var first = await WatchingAsync();
+        first.Twitch.GoLive(Toro, Stream("t1", first.Now, "Yayın"));
+        first.Host.Clock.Advance(Poll);
+        await first.Host.Services.GetRequiredService<LivePoller>().TickAsync(CancellationToken.None); // staged, not delivered
+        var row = (await first.OutboxAsync()).Single();
+
+        // The process dies right after Discord accepted the create: the message exists, the row is still InFlight.
+        var payload = ToroSquad.Infrastructure.Delivery.PayloadSerializer.Deserialize(row.PayloadJson);
+        (await first.Transport.SendAsync(Channel, payload, CancellationToken.None)).Should().BeOfType<SendOutcome.Sent>();
+        await first.Host.InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<ToroSquad.Infrastructure.Persistence.ToroDbContext>();
+            var tracked = await db.Outbox.SingleAsync(o => o.Id == row.Id);
+            tracked.Status = OutboxStatus.InFlight;
+            tracked.Attempts = 1;
+            tracked.LastAttemptAt = first.Now;
+            tracked.DeliveredPayloadHash = tracked.PayloadHash;
+            tracked.DeliveredFingerprint = MessageFingerprint.Of(payload);
+            await db.SaveChangesAsync();
+        });
+
+        // Restart; the message scrolled out of the scanned history, so reconciliation cannot find it.
+        first.Transport.ScriptedReconcile = new ReconcileOutcome.NotFound();
+        await using var second = await CreateAsync(restartOf: first, start: first.Now + TimeSpan.FromMinutes(1));
+        await second.Host.Services.GetRequiredService<ToroSquad.Infrastructure.Delivery.OutboxProcessor>().RecoverAsync(CancellationToken.None);
+        await second.PollAsync();
+        await StepsAsync(second, 4);
+
+        second.EveryonePings.Should().Be(1, "only the message sent before the crash pinged");
+        second.Messages.Should().HaveCount(2);
+        second.Messages[1].Message.Mentions.PingsAnything.Should().BeFalse();
+        (await second.CreatorAsync(Toro)).SessionNumber.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Switching_dry_run_to_send_mid_session_never_announces_the_session_again()
+    {
+        await using var first = await WatchingAsync(new() { ["Delivery:Mode"] = "DryRun" });
+        first.Twitch.GoLive(Toro, Stream("t1", first.Now, "Yayın"));
+        await first.StepAsync(Poll);
+        first.Messages.Should().BeEmpty("dry run");
+
+        await using var second = await CreateAsync(restartOf: first, start: first.Now + TimeSpan.FromMinutes(1));
+        await second.PollAsync();
+        await StepsAsync(second, 3);
+        second.Messages.Should().BeEmpty("the session was already announced (in dry run): no late @everyone");
     }
 
     [Fact]

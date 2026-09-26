@@ -62,7 +62,7 @@ public sealed class LiveCardRenderer(ILocalizer localizer)
         if (used.Count > 0)
             lines.Add(L(language, "live.card.platforms", string.Join(" + ", used.Select(p => p.Name()))));
         var embed = new MessageEmbed(
-            Title(main, name, language),
+            main?.Title is { } title ? DiscordText.UntrustedPlain(title, DiscordLimits.EmbedTitleMax) : DiscordText.UntrustedPlain(creator.DisplayName, 40),
             string.Join("\n", lines),
             used.Count > 0 ? creator.Channel(used[0])!.Url : null,
             [],

@@ -6,7 +6,7 @@ namespace ToroSquad.Tests.Unit;
 public sealed class LiveStateMachineTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 9, 26, 18, 0, 0, TimeSpan.Zero);
-    private static readonly LiveRules Rules = new(TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(10), AnnounceExistingLiveOnBootstrap: false);
+    private static readonly LiveRules Rules = new(TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(3), AnnounceExistingLiveOnBootstrap: false);
     private static readonly LivePlatform[] Both = [LivePlatform.Twitch, LivePlatform.Kick];
 
     private sealed class World
@@ -22,8 +22,8 @@ public sealed class LiveStateMachineTests
         public PlatformState Kick => Platforms[1];
 
         public IReadOnlyList<LiveEffect> See(LivePlatform platform, bool live, DateTimeOffset at, DateTimeOffset? started = null, string? title = null,
-            string? eventId = null, bool allowed = true, LiveRules? rules = null) =>
-            LiveStateMachine.Apply(Creator, Platforms, new LiveObservation(platform, "lordtoro", ObservationKind.Status, live, at, "s", started, title, EventId: eventId),
+            string? eventId = null, bool allowed = true, LiveRules? rules = null, string? stream = null) =>
+            LiveStateMachine.Apply(Creator, Platforms, new LiveObservation(platform, "lordtoro", ObservationKind.Status, live, at, stream, started, title, EventId: eventId),
                 rules ?? Rules, allowed, at);
 
         public IReadOnlyList<LiveEffect> Meta(LivePlatform platform, DateTimeOffset at, string title, string? eventId = null) =>
@@ -138,6 +138,55 @@ public sealed class LiveStateMachineTests
     }
 
     [Fact]
+    public void The_same_provider_stream_id_is_always_the_same_session()
+    {
+        // Seen live, then a long unseen gap with a later start time — but Twitch says it is the same stream.
+        var gap = World.Watching();
+        gap.See(LivePlatform.Twitch, true, At(30), At(20), stream: "tw-1");
+        gap.See(LivePlatform.Twitch, true, At(3660), At(3360), stream: "tw-1").Should().NotContain(e => e.Kind == LiveEffectKind.SessionStarted);
+        gap.Creator.SessionNumber.Should().Be(1);
+
+        // Offline, grace expired and confirmed, session ended — then the same stream id is back: the session is reopened.
+        var ended = World.Watching();
+        ended.See(LivePlatform.Twitch, true, At(30), At(20), stream: "tw-1");
+        ended.See(LivePlatform.Twitch, false, At(60));
+        ended.See(LivePlatform.Twitch, false, At(200));
+        ended.See(LivePlatform.Kick, false, At(200));
+        ended.Tick(At(200)).Should().ContainSingle(e => e.Kind == LiveEffectKind.SessionEnded);
+        ended.See(LivePlatform.Twitch, true, At(400), At(20), stream: "tw-1").Should().ContainSingle(e => e.Kind == LiveEffectKind.ReconnectedWithinGrace && e.Detail == "same_stream");
+        ended.Creator.Phase.Should().Be(CreatorPhase.Live);
+        ended.Creator.SessionNumber.Should().Be(1, "never a second announcement for the same stream");
+        ended.Creator.SessionEndedAt.Should().BeNull();
+
+        // A different stream id after the grace is a new session.
+        ended.See(LivePlatform.Twitch, false, At(430));
+        ended.See(LivePlatform.Twitch, false, At(600));
+        ended.See(LivePlatform.Kick, false, At(600));
+        ended.Tick(At(600));
+        ended.See(LivePlatform.Twitch, true, At(900), At(880), stream: "tw-2").Should().ContainSingle(e => e.Kind == LiveEffectKind.SessionStarted);
+        ended.Creator.SessionNumber.Should().Be(2);
+    }
+
+    [Fact]
+    public void Metadata_never_starts_a_session_or_changes_live_status()
+    {
+        var w = World.Watching();
+        for (var i = 1; i <= 20; i++)
+            w.Meta(LivePlatform.Twitch, At(i * 10), "Başlık " + i, "m" + i).Should().NotContain(e => e.Kind == LiveEffectKind.SessionStarted);
+        w.Creator.SessionNumber.Should().Be(0);
+        w.Twitch.Status.Should().Be(PlatformStatus.Offline);
+
+        w.See(LivePlatform.Twitch, true, At(300), At(290), stream: "tw-1");
+        for (var i = 1; i <= 20; i++)
+        {
+            w.Meta(LivePlatform.Twitch, At(300 + (i * 10)), "Yeni " + i).Should().NotContain(e => e.Kind == LiveEffectKind.SessionStarted);
+            w.See(LivePlatform.Twitch, true, At(305 + (i * 10)), At(290), "Yeni " + i, stream: "tw-1").Should().NotContain(e => e.Kind == LiveEffectKind.SessionStarted);
+        }
+
+        w.Creator.SessionNumber.Should().Be(1);
+    }
+
+    [Fact]
     public void The_first_observation_of_a_live_channel_is_a_baseline_unless_configured_otherwise()
     {
         var w = new World();
@@ -150,17 +199,22 @@ public sealed class LiveStateMachineTests
     }
 
     [Fact]
-    public void After_a_gap_only_a_fresh_stream_is_announced()
+    public void After_a_gap_a_stream_that_started_after_the_last_offline_statement_is_announced_whatever_its_age()
     {
-        var old = World.Watching();
-        old.See(LivePlatform.Twitch, true, At(1800), At(1800 - 900)).Should().ContainSingle(e => e.Detail == "gap");
-        old.Creator.Announced.Should().BeFalse();
+        // Known offline at T0; the bot was down; back 30 minutes later, the stream started 2 minutes after T0 (28 minutes old).
+        var down = World.Watching();
+        down.See(LivePlatform.Twitch, true, At(1800), At(120)).Should().ContainSingle(e => e.Kind == LiveEffectKind.SessionStarted && e.Detail == "announce");
+        down.Creator.Announced.Should().BeTrue("it provably started while the bot was not looking — no age cutoff");
 
-        var fresh = World.Watching();
-        fresh.See(LivePlatform.Twitch, true, At(1800), At(1800 - 300)).Should().ContainSingle(e => e.Detail == "announce");
+        var days = World.Watching();
+        days.See(LivePlatform.Twitch, true, At(3 * 86400), At(2 * 86400)).Should().ContainSingle(e => e.Detail == "announce");
+
+        var startedBefore = World.Watching();
+        startedBefore.See(LivePlatform.Twitch, true, At(1800), At(-60)).Should().ContainSingle(e => e.Detail == "gap",
+            "it started before the statement that saw the channel offline: not provably new");
 
         var unknownStart = World.Watching();
-        unknownStart.See(LivePlatform.Twitch, true, At(1800)).Should().ContainSingle(e => e.Detail == "gap", "no provider start time after a gap: not provably fresh");
+        unknownStart.See(LivePlatform.Twitch, true, At(1800)).Should().ContainSingle(e => e.Detail == "gap", "no provider start time after a gap: not provably new");
     }
 
     [Fact]

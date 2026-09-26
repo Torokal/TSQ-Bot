@@ -40,10 +40,11 @@ public sealed class KickOptions
 
 /// <summary>
 /// Kick through the official Public API only (kick.com pages are never scraped): one batched <c>GET channels?slug=…</c> per
-/// reconciliation. A channel in the answer states live (stream.is_live) or offline explicitly; a slug missing from the
-/// answer is NOT offline (unknown channel → warning, no observation). Kick's push transport is webhooks only
-/// (livestream.status.updated / livestream.metadata.updated need a public HTTPS callback, which this bot does not have),
-/// so both status and title changes come from this reconciliation.
+/// reconciliation. Only an explicit <c>stream.is_live</c> true/false is a live/offline statement; a missing/null stream,
+/// a non-boolean is_live or a slug missing from the answer is UNKNOWN (warning, no observation). Kick's push transport is
+/// webhooks only (livestream.status.updated / livestream.metadata.updated, delivered to a public HTTPS callback). The
+/// current TSQ Bot deployment exposes no HTTP callback endpoint (a generic host worker, no web server), so webhooks are
+/// deferred for V1 — not a Railway limitation — and status and title changes come from this reconciliation.
 /// </summary>
 public sealed class KickStatusProvider : ILiveStatusProvider
 {
@@ -138,8 +139,9 @@ public static class KickParser
 {
     /// <summary>
     /// /channels: a requested slug in <c>data</c> is live when <c>stream.is_live</c> is true (title = stream_title, category
-    /// name, start = stream.start_time) and offline when the provider says it is not live. A slug missing from a successful
-    /// answer is not described (warning, no observation) — never "offline".
+    /// name, start = stream.start_time) and offline only when <c>stream.is_live</c> is explicitly false. A slug missing from a
+    /// successful answer, a null/missing stream or a non-boolean is_live is not described (warning, no observation) — never
+    /// "offline", so a malformed answer can never end a live session.
     /// </summary>
     public static LiveProviderResult ParseChannels(JsonDocument doc, IReadOnlyCollection<string> logins, DateTimeOffset at, IReadOnlyDictionary<string, string> avatars)
     {
@@ -149,18 +151,25 @@ public static class KickParser
         var requested = logins.ToHashSet(StringComparer.Ordinal);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var observations = new List<LiveObservation>();
+        var warnings = new List<string>();
         foreach (var item in data.EnumerateArray())
         {
             var slug = LiveJson.Str(item, "slug")?.ToLowerInvariant();
             if (slug is null || !requested.Contains(slug) || !seen.Add(slug))
                 continue;
-            var stream = LiveJson.Obj(item, "stream");
-            var live = stream is { } s && LiveJson.Bool(s, "is_live") == true;
             var avatar = avatars.GetValueOrDefault(slug);
-            if (!live)
+            var stream = LiveJson.Obj(item, "stream");
+            switch (stream is { } s ? LiveJson.Bool(s, "is_live") : null)
             {
-                observations.Add(new LiveObservation(LivePlatform.Kick, slug, ObservationKind.Status, IsLive: false, at, AvatarUrl: avatar));
-                continue;
+                case false:
+                    // Only an explicit "is_live": false is offline.
+                    observations.Add(new LiveObservation(LivePlatform.Kick, slug, ObservationKind.Status, IsLive: false, at, AvatarUrl: avatar));
+                    continue;
+                case null:
+                    // stream null/missing or is_live missing/not a boolean: ambiguous → unknown (a malformed answer never
+                    // ends a live session). Surfaced as a provider warning (doctor + log).
+                    warnings.Add(slug + ": stream.is_live not stated");
+                    continue;
             }
 
             var category = LiveJson.Obj(item, "category") is { } c ? LiveJson.Str(c, "name") : null;
@@ -169,7 +178,7 @@ public static class KickParser
                 Category: string.IsNullOrWhiteSpace(category) ? null : category, AvatarUrl: avatar));
         }
 
-        var warnings = requested.Where(l => !seen.Contains(l)).Select(l => l + ": channel not in the answer (unknown slug?)").ToList();
+        warnings.AddRange(requested.Where(l => !seen.Contains(l)).Select(l => l + ": channel not in the answer (unknown slug?)"));
         return LiveProviderResult.Ok(observations, at, warnings);
     }
 

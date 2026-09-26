@@ -261,6 +261,51 @@ public sealed class LiveProviderContractTests
     }
 
     [Theory]
+    [InlineData("""{"slug":"lordtoro","broadcaster_user_id":1,"stream":{"is_live":false,"start_time":"0001-01-01T00:00:00Z"},"stream_title":"x"}""", false)]
+    [InlineData("""{"slug":"lordtoro","broadcaster_user_id":1,"stream":null,"stream_title":"x"}""", null)]
+    [InlineData("""{"slug":"lordtoro","broadcaster_user_id":1,"stream_title":"x"}""", null)]
+    [InlineData("""{"slug":"lordtoro","broadcaster_user_id":1,"stream":{"start_time":"2026-09-26T17:50:00Z"}}""", null)]
+    [InlineData("""{"slug":"lordtoro","broadcaster_user_id":1,"stream":{"is_live":"yes"}}""", null)]
+    [InlineData("""{"slug":"lordtoro","broadcaster_user_id":1,"stream":"live"}""", null)]
+    [InlineData("""{"slug":"lordtoro","broadcaster_user_id":1,"stream":{"is_live":true,"start_time":"not a date"},"stream_title":null,"category":null}""", true)]
+    public async Task Kick_only_an_explicit_is_live_is_a_statement_everything_else_is_unknown(string channel, bool? expected)
+    {
+        var (provider, _) = Kick((r, _) => r.RequestUri!.AbsolutePath.EndsWith("/channels", StringComparison.Ordinal)
+            ? Task.FromResult(StubHttpHandler.Json("{\"data\":[" + channel + "]}"))
+            : KickHappy(r));
+
+        var result = await provider.GetStatusAsync(["lordtoro"], CancellationToken.None);
+
+        result.Outcome.Should().Be(LiveProviderOutcome.Ok, "the parser never crashes on these shapes");
+        if (expected is { } live)
+        {
+            result.Observations.Should().ContainSingle().Which.IsLive.Should().Be(live);
+            result.Observations[0].Title.Should().BeNull();
+            result.Observations[0].StartedAt.Should().BeNull();
+        }
+        else
+        {
+            result.Observations.Should().BeEmpty("null/missing stream or a non-boolean is_live is UNKNOWN — never offline");
+            result.Warnings.Should().ContainSingle(w => w.Contains("is_live", StringComparison.Ordinal));
+        }
+    }
+
+    [Theory]
+    [InlineData("""{"data":{"slug":"lordtoro"}}""")]
+    [InlineData("""{"data":null}""")]
+    [InlineData("""[]""")]
+    [InlineData("""{"data":[ """)]
+    public async Task Kick_malformed_answers_are_failures_without_observations(string body)
+    {
+        var (provider, _) = Kick((r, _) => r.RequestUri!.AbsolutePath.EndsWith("/channels", StringComparison.Ordinal)
+            ? Task.FromResult(StubHttpHandler.Json(body))
+            : KickHappy(r));
+        var result = await provider.GetStatusAsync(Logins, CancellationToken.None);
+        result.Outcome.Should().Be(LiveProviderOutcome.SchemaError);
+        result.Observations.Should().BeEmpty("a malformed answer never ends a live session");
+    }
+
+    [Theory]
     [InlineData(HttpStatusCode.InternalServerError, LiveProviderOutcome.TransportError)]
     [InlineData(HttpStatusCode.ServiceUnavailable, LiveProviderOutcome.TransportError)]
     [InlineData(HttpStatusCode.Unauthorized, LiveProviderOutcome.AuthFailed)]

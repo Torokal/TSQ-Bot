@@ -43,8 +43,10 @@ public sealed class TwitchOptions
 /// Twitch through the official Helix API only (no page scraping, no undocumented endpoints): one batched
 /// <c>GET streams</c> per reconciliation describes every tracked channel — present = live (with stream id, title, category,
 /// start time), absent from a successful answer = offline. Profile pictures come from a batched <c>GET users</c> every few
-/// hours (best effort). EventSub is not used: its webhook transport needs a public HTTPS endpoint (the bot has no inbound
-/// networking) and its WebSocket transport needs a stored, rotating user refresh token (see docs/live/TSQ_LIVE.md).
+/// hours (best effort). EventSub is not used in V1: the webhook transport needs an HTTP callback endpoint, which the current
+/// deployment does not expose (not a Railway limitation), and creating WebSocket subscriptions requires a USER access token
+/// (app tokens are rejected) — V1 deliberately avoids a refresh-token lifecycle and its persistence solely for TSQ Live
+/// (see docs/live/TSQ_LIVE.md).
 /// </summary>
 public sealed class TwitchStatusProvider : ILiveStatusProvider
 {

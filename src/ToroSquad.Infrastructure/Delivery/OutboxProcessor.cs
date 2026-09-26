@@ -38,6 +38,8 @@ public sealed class DeliveryOptions
 /// turns into DeliveryUnknown — never blindly resent.</item>
 /// <item>Ambiguous outcomes (timeouts) become DeliveryUnknown and go through bounded reconciliation (content fingerprint of what was sent; no visible reference in the message).</item>
 /// <item>Edits never ping; a missing edit target is not replaced by a new message.</item>
+/// <item>@everyone at most once: a resend after an uncertain attempt (the row went through reconciliation) never carries
+/// the @everyone opt-in.</item>
 /// <item>One guild's failure never stops the batch.</item>
 /// </list>
 /// No exactly-once guarantee is claimed.
@@ -200,6 +202,15 @@ public sealed class OutboxProcessor(
         {
             await EditAsync(db, row, channel, message, policy, cancellationToken);
             return;
+        }
+
+        // @everyone is at most once. A row that went through reconciliation had an attempt that may have reached Discord
+        // (timeout, lost response, crash while in flight): its resend never opts in to @everyone again, even when the
+        // earlier message was not found — a missing ping is acceptable, a second one is not.
+        if (message.Mentions.Everyone && row.ReconcileAttempts > 0)
+        {
+            message = message with { Mentions = message.Mentions with { Everyone = false } };
+            logger.LogWarning("Outbox {OutboxId} ref={Marker}: resend after an uncertain delivery goes out without @everyone", row.Id, row.Marker);
         }
 
         // Claim: persist InFlight BEFORE talking to Discord (crash => DeliveryUnknown, not a blind resend).

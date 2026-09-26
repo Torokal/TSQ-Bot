@@ -27,6 +27,9 @@ public sealed class LiveFakeProvider(LivePlatform platform, TimeProvider clock) 
 {
     public Dictionary<string, FakeStream> Live { get; } = new(StringComparer.Ordinal);
     public LiveProviderOutcome? Failure { get; set; }
+
+    /// <summary>Channels the provider answer does not describe (unknown slug, malformed entry): no observation at all.</summary>
+    public HashSet<string> Undescribed { get; } = new(StringComparer.Ordinal);
     public bool Configured { get; set; } = true;
     public int Calls { get; private set; }
 
@@ -44,7 +47,7 @@ public sealed class LiveFakeProvider(LivePlatform platform, TimeProvider clock) 
         var at = clock.GetUtcNow();
         if (Failure is { } failure)
             return Task.FromResult(LiveProviderResult.Fail(failure, "scripted", at));
-        var observations = logins.Select(l => Live.TryGetValue(l, out var s)
+        var observations = logins.Where(l => !Undescribed.Contains(l)).Select(l => Live.TryGetValue(l, out var s)
                 ? new LiveObservation(platform, l, ObservationKind.Status, true, at, s.Id, s.StartedAt, s.Title, s.Category)
                 : new LiveObservation(platform, l, ObservationKind.Status, false, at))
             .ToList();

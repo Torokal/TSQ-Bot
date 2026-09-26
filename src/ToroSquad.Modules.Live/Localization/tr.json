@@ -48,7 +48,7 @@
   "live.doctor.feed_state": "son başarılı uzlaştırma {0} · son deneme {1} · ardışık hata {2} · son sonuç {3} · son hata {4} ({5})",
   "live.doctor.feed_warnings": "sağlayıcı bazı kanalları tanımlamadı: {0}",
   "live.doctor.push": "Olay aktarımı",
-  "live.doctor.push_value": "webhook/EventSub yok (botun public girişi yok) — resmî API uzlaştırması her {0} sn · yeniden bağlanma toleransı {1} sn",
+  "live.doctor.push_value": "V1'de webhook/EventSub yok (HTTP callback endpoint yok; EventSub WebSocket kullanıcı token'ı ister) — resmî API uzlaştırması her {0} sn · yeniden bağlanma toleransı {1} sn",
   "live.doctor.creators": "Takip edilen yayıncılar",
   "live.doctor.creators_value": "{0}: {1}",
   "live.doctor.creator": "Yayıncı",

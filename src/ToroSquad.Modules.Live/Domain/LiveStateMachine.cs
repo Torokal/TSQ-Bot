@@ -2,9 +2,8 @@ namespace ToroSquad.Modules.Live.Domain;
 
 /// <param name="ReconnectGrace">A session survives "every platform offline" for this long (OBS reconnects, flaps).</param>
 /// <param name="Continuity">Two status observations further apart than this are not continuous (restart, outage, disabled).</param>
-/// <param name="LateAnnounceWindow">After a gap, a stream that started at most this long ago is still announced.</param>
 /// <param name="AnnounceExistingLiveOnBootstrap">Announce a stream that is already live at the very first observation of a channel.</param>
-public sealed record LiveRules(TimeSpan ReconnectGrace, TimeSpan Continuity, TimeSpan LateAnnounceWindow, bool AnnounceExistingLiveOnBootstrap);
+public sealed record LiveRules(TimeSpan ReconnectGrace, TimeSpan Continuity, bool AnnounceExistingLiveOnBootstrap);
 
 public enum LiveEffectKind
 {
@@ -33,8 +32,9 @@ public sealed record LiveEffect(LiveEffectKind Kind, string CreatorKey, LivePlat
 /// during the grace keeps the session — unknown is never offline).</item>
 /// <item>The first platform opens the session; a second platform joins it (no second announcement).</item>
 /// <item>Only a brand-new session can be announced, and only when the bot was watching: the very first observation of a
-/// channel is a baseline (unless <see cref="LiveRules.AnnounceExistingLiveOnBootstrap"/>), and after a gap only a stream
-/// that started within <see cref="LiveRules.LateAnnounceWindow"/> is announced.</item>
+/// channel is a baseline (unless <see cref="LiveRules.AnnounceExistingLiveOnBootstrap"/>); after a gap in observation a
+/// stream is announced when its provider start time is after the last statement that saw the channel offline (it started
+/// while the bot was not looking), however long ago that was.</item>
 /// <item>Statements older than the newest applied one are ignored (per platform, separately for status and metadata);
 /// a repeated provider event id is a duplicate.</item>
 /// </list>
@@ -151,7 +151,9 @@ public static class LiveStateMachine
         var firstEver = p.Status == PlatformStatus.Unknown;
         var startedAt = o.StartedAt ?? (wasLive ? p.StartedAt : null) ?? o.ObservedAt;
         // The platform restarted between two observations (offline + live again unseen): same logic as a visible flap.
-        var restartedUnseen = wasLive && o.StartedAt is { } st && previous is { } prev && st > prev;
+        // The provider's own stream identity (Twitch stream id) proves continuity: the same stream is always the same session.
+        var sameStream = o.StreamId is not null && o.StreamId == p.StreamId;
+        var restartedUnseen = wasLive && !sameStream && o.StartedAt is { } st && previous is { } prev && st > prev;
         p.Status = PlatformStatus.Live;
         p.LastLiveAt = o.ObservedAt;
         p.StartedAt = startedAt;
@@ -176,7 +178,7 @@ public static class LiveStateMachine
                     effects.Add(new(LiveEffectKind.ReconnectedWithinGrace, creator.CreatorKey, p.Platform, "restarted_unseen"));
                 break;
 
-            case CreatorPhase.ReconnectGrace when creator.GraceSince is { } since && startedAt < since + rules.ReconnectGrace:
+            case CreatorPhase.ReconnectGrace when sameStream || (creator.GraceSince is { } since && startedAt < since + rules.ReconnectGrace):
                 creator.Phase = CreatorPhase.Live;
                 creator.GraceSince = null;
                 creator.AddSessionPlatform(p.Platform);
@@ -189,6 +191,15 @@ public static class LiveStateMachine
                 EndSession(creator, creator.GraceSince ?? o.ObservedAt, now);
                 effects.Add(new(LiveEffectKind.SessionEnded, creator.CreatorKey, p.Platform, "new_stream_after_grace"));
                 StartSession(creator, p, o, startedAt, firstEver, previous, rules, announcementsAllowed, now, effects);
+                break;
+
+            case CreatorPhase.Offline when sameStream && creator.SessionNumber > 0 && creator.HasPlatformInSession(p.Platform):
+                // The provider says it is the very stream of the last session (it came back after the grace): reopen that
+                // session — its message is edited back to live — instead of announcing the same stream a second time.
+                creator.Phase = CreatorPhase.Live;
+                creator.SessionEndedAt = null;
+                creator.UpdatedAt = now;
+                effects.Add(new(LiveEffectKind.ReconnectedWithinGrace, creator.CreatorKey, p.Platform, "same_stream"));
                 break;
 
             default:
@@ -253,8 +264,10 @@ public static class LiveStateMachine
         }
         else if (previous is null || o.ObservedAt - previous.Value > rules.Continuity)
         {
-            // We were not watching when it started (restart, outage, module switched off): only a fresh start is news.
-            if (o.StartedAt is not { } started || now - started > rules.LateAnnounceWindow)
+            // Not watched continuously (bot down, provider outage). The last trustworthy statement before the gap said
+            // "offline" at `previous`: the stream is a genuinely new one iff the provider's start time lies after it — however
+            // long ago that was (no age cutoff). Without a provable start time it is a baseline.
+            if (o.StartedAt is not { } started || previous is not { } lastSeen || started <= lastSeen)
                 reason = "gap";
         }
 

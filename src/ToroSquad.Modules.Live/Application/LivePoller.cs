@@ -41,6 +41,15 @@ public sealed class LivePoller(
         if (!options.Value.Enabled)
         {
             logger.LogInformation("TSQ Live is disabled (Live:Enabled=false): no provider requests, no announcements");
+            try
+            {
+                await coordinator.PauseTrackingAsync(stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "live tracking pause failed");
+            }
+
             return;
         }
 

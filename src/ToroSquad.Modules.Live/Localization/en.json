@@ -48,7 +48,7 @@
   "live.doctor.feed_state": "last successful reconciliation {0} · last attempt {1} · consecutive failures {2} · last outcome {3} · last error {4} ({5})",
   "live.doctor.feed_warnings": "the provider did not describe some channels: {0}",
   "live.doctor.push": "Event transport",
-  "live.doctor.push_value": "no webhook/EventSub (the bot has no public ingress) — official-API reconciliation every {0} s · reconnect grace {1} s",
+  "live.doctor.push_value": "no webhook/EventSub in V1 (no HTTP callback endpoint; EventSub WebSocket needs a user token) — official-API reconciliation every {0} s · reconnect grace {1} s",
   "live.doctor.creators": "Tracked creators",
   "live.doctor.creators_value": "{0}: {1}",
   "live.doctor.creator": "Creator",
