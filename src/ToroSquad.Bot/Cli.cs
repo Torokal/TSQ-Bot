@@ -55,7 +55,7 @@ public static partial class Cli
         catch (Exception ex)
         {
             // Last line of defence: never print secrets.
-            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Username"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Password"), Environment.GetEnvironmentVariable("TOROSQUAD_Volleyball__Fivb__AppId")]);
+            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Username"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Password"), Environment.GetEnvironmentVariable("TOROSQUAD_Volleyball__Fivb__AppId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Twitch__ClientId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Twitch__ClientSecret"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Kick__ClientId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Kick__ClientSecret")]);
             await Console.Error.WriteLineAsync("FATAL: " + redactor.Redact(ex.ToString()));
             return Failed;
         }
@@ -517,6 +517,14 @@ public static partial class Cli
         Add(string.Equals(vbProvider, "None", StringComparison.OrdinalIgnoreCase) ? "INFO" : "OK", "Volleyball (Türkiye women's senior team only): " + (vbLive
             ? "LIVE (" + vbProvider + ", public data; FIVB application id " + (string.IsNullOrWhiteSpace(config["Volleyball:Fivb:AppId"]) ? "not set — anonymous" : "set (value hidden)") + ")"
             : "FIXTURE (TEST/DEMO synthetic match)"));
+        var liveEnabled = config.GetValue("Live:Enabled", false);
+        var twitchSet = !string.IsNullOrWhiteSpace(config["Live:Twitch:ClientId"]) && !string.IsNullOrWhiteSpace(config["Live:Twitch:ClientSecret"]);
+        var kickSet = !string.IsNullOrWhiteSpace(config["Live:Kick:ClientId"]) && !string.IsNullOrWhiteSpace(config["Live:Kick:ClientSecret"]);
+        Add(liveEnabled ? "OK" : "INFO", "TSQ Live (Twitch + Kick announcements): " + (liveEnabled
+            ? $"ON; channel {config.GetValue("Live:DiscordChannelId", 0UL)}; Twitch credentials {(twitchSet ? "set (values hidden)" : "NOT SET")}; Kick credentials {(kickSet ? "set (values hidden)" : "NOT SET")}"
+            : "off (Live:Enabled=false)"));
+        if (liveEnabled && !(twitchSet && kickSet))
+            Add("BLOCKED", "TSQ Live: " + (twitchSet ? "" : "Twitch ") + (kickSet ? "" : "Kick ") + "not tracked until TOROSQUAD_Live__<Platform>__ClientId / __ClientSecret are set");
 
         var bot = config.GetSection(BotOptions.Section).Get<BotOptions>() ?? new BotOptions();
         Add(string.IsNullOrWhiteSpace(bot.SourceUrl) ? "WARN" : "OK", "Bot:SourceUrl (AGPL Corresponding Source): " + (bot.SourceUrl ?? "NOT SET"));
