@@ -25,6 +25,7 @@ public static class InfrastructureServiceCollectionExtensions
         "PandaScore:Token",
         "Formula1:OpenF1:Username",
         "Formula1:OpenF1:Password",
+        "Volleyball:Fivb:AppId",
     ];
 
     public static IServiceCollection AddToroInfrastructure(this IServiceCollection services, IConfiguration configuration, string contentRoot)

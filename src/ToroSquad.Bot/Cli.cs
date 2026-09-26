@@ -55,7 +55,7 @@ public static partial class Cli
         catch (Exception ex)
         {
             // Last line of defence: never print secrets.
-            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Username"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Password")]);
+            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Username"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Password"), Environment.GetEnvironmentVariable("TOROSQUAD_Volleyball__Fivb__AppId")]);
             await Console.Error.WriteLineAsync("FATAL: " + redactor.Redact(ex.ToString()));
             return Failed;
         }
@@ -511,6 +511,11 @@ public static partial class Cli
         Add(openF1Set ? "OK" : f1Live ? "BLOCKED" : "INFO", "OpenF1 live credentials: " + (openF1Set
             ? "set (values hidden)"
             : "NOT SET (live session starts NOT_CONFIGURED; schedule, results and standings still work)"));
+        var vbLive = string.Equals(config.GetValue("Volleyball:Provider:Mode", "Fixture"), "Live", StringComparison.OrdinalIgnoreCase);
+        var vbProvider = config.GetValue("Volleyball:Provider:Name", "FivbVis");
+        Add(string.Equals(vbProvider, "None", StringComparison.OrdinalIgnoreCase) ? "INFO" : "OK", "Volleyball (Türkiye women's senior team only): " + (vbLive
+            ? "LIVE (" + vbProvider + ", public data; FIVB application id " + (string.IsNullOrWhiteSpace(config["Volleyball:Fivb:AppId"]) ? "not set — anonymous" : "set (value hidden)") + ")"
+            : "FIXTURE (TEST/DEMO synthetic match)"));
 
         var bot = config.GetSection(BotOptions.Section).Get<BotOptions>() ?? new BotOptions();
         Add(string.IsNullOrWhiteSpace(bot.SourceUrl) ? "WARN" : "OK", "Bot:SourceUrl (AGPL Corresponding Source): " + (bot.SourceUrl ?? "NOT SET"));

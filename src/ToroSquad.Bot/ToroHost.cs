@@ -11,6 +11,7 @@ using ToroSquad.Infrastructure.Hosting;
 using ToroSquad.Modules.Esports;
 using ToroSquad.Modules.Example;
 using ToroSquad.Modules.Formula1;
+using ToroSquad.Modules.Volleyball;
 
 namespace ToroSquad.Bot;
 
@@ -24,7 +25,7 @@ public static class ToroHost
 
     public static IReadOnlyList<IToroModule> Modules(IConfiguration configuration)
     {
-        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module() };
+        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module(), new VolleyballModule() };
         // Example module: development/tests only. Off unless explicitly enabled.
         if (configuration.GetValue("Modules:Example:Enabled", false))
             modules.Add(new ExampleModule());
@@ -82,6 +83,7 @@ public static class ToroHost
             services.AddToroBackgroundJobs();
             EsportsModule.AddBackgroundJobs(services);
             Formula1Module.AddBackgroundJobs(services);
+            VolleyballModule.AddBackgroundJobs(services);
         }
     }
 
@@ -146,6 +148,7 @@ public static class ToroHost
                 new Attribution("BOT-Greg-v2_API (Julius Gmeinder)", "https://github.com/julius-gmeinder/BOT-Greg-v2_API", "AGPL-3.0", "about.attr.upstream"),
                 new Attribution("Discord.Net", "https://github.com/discord-net/Discord.Net", "MIT", "about.attr.discordnet"),
                 new Attribution("MQTTnet", "https://github.com/dotnet/MQTTnet", "MIT", "about.attr.mqttnet"),
+                new Attribution("FIVB VIS", "https://www.fivb.org/VisSDK/VisWebService/", "about.attr.fivb_terms", "about.attr.fivb"),
             ]);
     }
 }
