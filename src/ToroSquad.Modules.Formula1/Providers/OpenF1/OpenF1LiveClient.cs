@@ -11,7 +11,7 @@ namespace ToroSquad.Modules.Formula1.Providers.OpenF1;
 /// One OpenF1 MQTT connection (documented backend channel: mqtt.openf1.org:8883, TLS, OAuth2 access token as the MQTT
 /// password, topics = REST paths; we subscribe only to <see cref="OpenF1Topics.RaceControl"/>). The connection is ended
 /// cleanly shortly before the token expires so the listener reconnects with a fresh token. Delivers normalized
-/// lifecycle events only; it never talks to Discord and never decides notifications.
+/// lifecycle events and race-control incidents only; it never talks to Discord and never decides notifications.
 /// </summary>
 public sealed class OpenF1LiveClient(OpenF1TokenProvider tokens, IOptions<OpenF1Options> options, TimeProvider clock, ILogger<OpenF1LiveClient> logger) : IF1LiveTransport
 {
@@ -19,7 +19,11 @@ public sealed class OpenF1LiveClient(OpenF1TokenProvider tokens, IOptions<OpenF1
 
     public bool IsConfigured => tokens.IsConfigured;
 
-    public async Task RunConnectionAsync(Func<F1LifecycleEvent, CancellationToken, Task> onEvent, Action onConnected, CancellationToken cancellationToken)
+    public Task RunConnectionAsync(Func<F1LifecycleEvent, CancellationToken, Task> onEvent, Action onConnected, CancellationToken cancellationToken) =>
+        RunConnectionAsync(onEvent, (_, _) => Task.CompletedTask, onConnected, cancellationToken);
+
+    public async Task RunConnectionAsync(Func<F1LifecycleEvent, CancellationToken, Task> onEvent, Func<F1RaceControlIncident, CancellationToken, Task> onIncident,
+        Action onConnected, CancellationToken cancellationToken)
     {
         var o = options.Value;
         var token = await tokens.GetAsync(cancellationToken);
@@ -44,6 +48,8 @@ public sealed class OpenF1LiveClient(OpenF1TokenProvider tokens, IOptions<OpenF1
                 var (lifecycle, _) = OpenF1Parser.ParseMqttMessage(e.ApplicationMessage.Topic, payload);
                 if (lifecycle is not null)
                     await onEvent(lifecycle, cancellationToken);
+                if (OpenF1Parser.ParseMqttIncident(e.ApplicationMessage.Topic, payload) is { } incident)
+                    await onIncident(incident, cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

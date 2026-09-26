@@ -23,7 +23,12 @@ public sealed record F1NotificationChanges(
     bool? QualifyingStart = null,
     bool? QualifyingResults = null,
     bool? SprintQualifyingStart = null,
-    bool? SprintQualifyingResults = null);
+    bool? SprintQualifyingResults = null,
+    bool? WeekendSchedule = null,
+    bool? RaceReminder = null,
+    bool? Disqualification = null,
+    bool? SafetyCar = null,
+    bool? RedFlag = null);
 
 /// <summary>
 /// /f1-admin configure|pause|resume. Every method authorizes the actor (Manage Server) and only touches rows of
@@ -85,6 +90,11 @@ public sealed class Formula1ConfigService(ToroDbContext db, IGuildGateway guilds
         c.NotifyQualifyingResults = Apply(c.NotifyQualifyingResults, changes.QualifyingResults);
         c.NotifySprintQualifyingStart = Apply(c.NotifySprintQualifyingStart, changes.SprintQualifyingStart);
         c.NotifySprintQualifyingResults = Apply(c.NotifySprintQualifyingResults, changes.SprintQualifyingResults);
+        c.NotifyWeekendSchedule = Apply(c.NotifyWeekendSchedule, changes.WeekendSchedule);
+        c.NotifyRaceReminder = Apply(c.NotifyRaceReminder, changes.RaceReminder);
+        c.NotifyDisqualification = Apply(c.NotifyDisqualification, changes.Disqualification);
+        c.NotifySafetyCar = Apply(c.NotifySafetyCar, changes.SafetyCar);
+        c.NotifyRedFlag = Apply(c.NotifyRedFlag, changes.RedFlag);
         if (turnedOn)
             c.WatermarkUtc = clock.GetUtcNow(); // re-enabling a type never announces what happened while it was off
         Touch(c, actor);
@@ -212,6 +222,19 @@ public sealed class Formula1DeliveryPolicy(ToroDbContext db, TimeProvider clock)
             return new DeliveryDecision.Cancel("channel_changed");
         if (config.ChannelProblem is not null)
             return new DeliveryDecision.Cancel("channel_problem");
+
+        // Low-spam V2 kinds: each is gated by its own switch at dispatch time (turning it off cancels anything still pending).
+        bool? v2 = kind switch
+        {
+            Formula1NotificationPlanner.WeekendScheduleKind => config.NotifyWeekendSchedule,
+            Formula1NotificationPlanner.RaceReminderKind => config.NotifyRaceReminder,
+            _ when kind.StartsWith(Formula1NotificationPlanner.SafetyCarPrefix, StringComparison.Ordinal) => config.NotifySafetyCar,
+            _ when kind.StartsWith(Formula1NotificationPlanner.RedFlagPrefix, StringComparison.Ordinal) => config.NotifyRedFlag,
+            _ when kind.StartsWith(Formula1NotificationPlanner.DisqualificationPrefix, StringComparison.Ordinal) => config.NotifyDisqualification,
+            _ => null,
+        };
+        if (v2 is { } enabled)
+            return enabled ? DeliveryDecision.Allowed : new DeliveryDecision.Cancel("notification_type_disabled");
 
         var start = kind.StartsWith(Formula1NotificationPlanner.StartedPrefix, StringComparison.Ordinal);
         var result = kind.StartsWith(Formula1NotificationPlanner.ResultPrefix, StringComparison.Ordinal);

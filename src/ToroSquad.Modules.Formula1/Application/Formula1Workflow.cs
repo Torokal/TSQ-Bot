@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -240,6 +241,82 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
         return applied;
     }
 
+    // ---------------------------------------------------------------- race-control incidents (low-spam V2)
+
+    /// <summary>
+    /// Stores race-control incidents of mapped sessions, once per provider message (fingerprint), whatever the channel
+    /// (MQTT, REST reconciliation, replays after a reconnect). Unmapped provider sessions are ignored (never guessed).
+    /// Returns the number of newly stored incidents.
+    /// </summary>
+    public async Task<int> ApplyIncidentsAsync(string providerId, IReadOnlyCollection<F1RaceControlIncident> incidents, CancellationToken ct)
+    {
+        if (incidents.Count == 0)
+            return 0;
+        var refs = incidents.Select(i => i.ProviderSessionRef).Distinct().ToList();
+        var sessions = await Sessions.AsNoTracking().Where(s => s.LifecycleProvider == providerId && refs.Contains(s.LifecycleProviderRef!))
+            .Select(s => new { s.SessionKey, s.LifecycleProviderRef }).ToListAsync(ct);
+        var keys = sessions.Select(s => s.SessionKey).ToList();
+        var set = db.Set<F1RaceControlEventEntity>();
+        var known = (await set.AsNoTracking().Where(e => keys.Contains(e.SessionKey)).Select(e => e.SessionKey + "#" + e.Fingerprint).ToListAsync(ct))
+            .ToHashSet(StringComparer.Ordinal);
+        var now = clock.GetUtcNow();
+        var added = 0;
+        foreach (var i in incidents)
+        {
+            var session = sessions.FirstOrDefault(s => s.LifecycleProviderRef == i.ProviderSessionRef);
+            if (session is null || !known.Add(session.SessionKey + "#" + i.Fingerprint))
+                continue;
+            set.Add(new F1RaceControlEventEntity
+            {
+                SessionKey = session.SessionKey,
+                Kind = (int)i.Kind,
+                OccurredAt = i.OccurredAt,
+                Lap = i.Lap,
+                DriverNumber = i.DriverNumber,
+                DriverCode = i.DriverCode is null ? null : Clip(i.DriverCode, 8),
+                Reason = i.Reason is null ? null : Clip(i.Reason, 200),
+                Fingerprint = Clip(i.Fingerprint, 64),
+                Provider = providerId,
+                RecordedAt = now,
+            });
+            added++;
+            logger.LogInformation("F1 race control: {Session} {Kind} (provider time {At:u}, lap {Lap})", session.SessionKey, i.Kind, i.OccurredAt, i.Lap);
+        }
+
+        if (added > 0)
+            await db.SaveChangesAsync(ct);
+        return added;
+    }
+
+    /// <summary>
+    /// Disqualifications come from the provider's validated classification (OpenF1 session_result "dsq": true — verified on
+    /// real 2024–2025 disqualifications), not from free text: race_control carries no disqualification messages. Each
+    /// disqualified car is recorded once, at the time it first appeared (a post-race decision arrives as a correction).
+    /// </summary>
+    private void RecordDisqualifications(string sessionKey, F1SessionResult result, DateTimeOffset now)
+    {
+        var set = db.Set<F1RaceControlEventEntity>();
+        foreach (var entry in result.Entries.Where(e => e.Status == F1ResultStatus.Dsq))
+        {
+            var fingerprint = "dsq|" + entry.DriverNumber.ToString(CultureInfo.InvariantCulture);
+            if (set.Local.Any(e => e.SessionKey == sessionKey && e.Fingerprint == fingerprint) ||
+                set.AsNoTracking().Any(e => e.SessionKey == sessionKey && e.Fingerprint == fingerprint))
+                continue;
+            set.Add(new F1RaceControlEventEntity
+            {
+                SessionKey = sessionKey,
+                Kind = (int)F1IncidentKind.Disqualified,
+                OccurredAt = now,
+                DriverNumber = entry.DriverNumber,
+                DriverCode = entry.DriverCode is null ? null : Clip(entry.DriverCode, 8),
+                Fingerprint = fingerprint,
+                Provider = result.Source,
+                RecordedAt = now,
+            });
+            logger.LogInformation("F1 results: {Session} car {Car} disqualified (provider classification)", sessionKey, entry.DriverNumber);
+        }
+    }
+
     // ---------------------------------------------------------------- results
 
     /// <summary>
@@ -329,6 +406,9 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
                 outcome = F1ResultApplyOutcome.Unchanged;
             }
         }
+
+        if (outcome is F1ResultApplyOutcome.Finalised or F1ResultApplyOutcome.Corrected)
+            RecordDisqualifications(sessionKey, value, now);
 
         row.ResultAttempts = 0;
         row.ResultLastDetail = null;

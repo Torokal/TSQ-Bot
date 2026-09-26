@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "fb4b291dea6c1ea9033e1d34982733eef172a5575fb0f231fcbd6eb562927f4d",
+  "hash": "64be7734016819d7b79150714271e970ecbac94fc3f5639f523b7334407e91ae",
   "commands": [
     {
       "module": "core",
@@ -1098,6 +1098,51 @@
                     "description": "Sprint qualifying classification",
                     "description_localizations": {
                       "tr": "Sprint sıralaması sınıflandırması"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "weekend_schedule",
+                    "description": "Thursday weekend schedule card",
+                    "description_localizations": {
+                      "tr": "Perşembe hafta sonu programı kartı"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "race_reminder",
+                    "description": "Reminder 15 minutes before the race",
+                    "description_localizations": {
+                      "tr": "Yarıştan 15 dakika önce hatırlatma"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "disqualification",
+                    "description": "Disqualifications (no other penalties)",
+                    "description_localizations": {
+                      "tr": "Diskalifiyeler (diğer cezalar değil)"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "safety_car",
+                    "description": "Safety Car deployed (not VSC)",
+                    "description_localizations": {
+                      "tr": "Safety Car çıktı (VSC değil)"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "red_flag",
+                    "description": "Red flag",
+                    "description_localizations": {
+                      "tr": "Kırmızı bayrak"
                     },
                     "required": false
                   }

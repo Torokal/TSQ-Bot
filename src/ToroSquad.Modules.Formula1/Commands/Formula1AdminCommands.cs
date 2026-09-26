@@ -97,6 +97,8 @@ public sealed class Formula1AdminCommands(
                 await T("f1.status.line", await T("f1.category.qualifying"), YesNo(c.NotifyQualifyingStart), YesNo(c.NotifyQualifyingResults)),
                 await T("f1.status.line", await T("f1.category.sprint_qualifying"), YesNo(c.NotifySprintQualifyingStart), YesNo(c.NotifySprintQualifyingResults)),
                 await T("f1.status.standings_line", YesNo(c.NotifyStandings)),
+                await T("f1.status.extras_line", YesNo(c.NotifyWeekendSchedule), YesNo(c.NotifyRaceReminder)),
+                await T("f1.status.incidents_line", YesNo(c.NotifySafetyCar), YesNo(c.NotifyRedFlag), YesNo(c.NotifyDisqualification)),
             ]), false));
         }
 
@@ -165,11 +167,17 @@ public sealed class Formula1AdminCommands(
             [Summary("qualifying_start", "Qualifying started")] bool? qualifyingStart = null,
             [Summary("qualifying_results", "Qualifying classification")] bool? qualifyingResults = null,
             [Summary("sprint_qualifying_start", "Sprint qualifying started")] bool? sprintQualifyingStart = null,
-            [Summary("sprint_qualifying_results", "Sprint qualifying classification")] bool? sprintQualifyingResults = null)
+            [Summary("sprint_qualifying_results", "Sprint qualifying classification")] bool? sprintQualifyingResults = null,
+            [Summary("weekend_schedule", "Thursday weekend schedule card")] bool? weekendSchedule = null,
+            [Summary("race_reminder", "Reminder 15 minutes before the race")] bool? raceReminder = null,
+            [Summary("disqualification", "Disqualifications (no other penalties)")] bool? disqualification = null,
+            [Summary("safety_car", "Safety Car deployed (not VSC)")] bool? safetyCar = null,
+            [Summary("red_flag", "Red flag")] bool? redFlag = null)
         {
             await DeferEphemeralAsync();
             await ReplyResultAsync(await config.SetNotificationsAsync(Actor, new F1NotificationChanges(practiceStart, practiceResults, sprintStart, sprintResults,
-                raceStart, raceResults, standings, qualifyingStart, qualifyingResults, sprintQualifyingStart, sprintQualifyingResults), CancellationToken.None));
+                raceStart, raceResults, standings, qualifyingStart, qualifyingResults, sprintQualifyingStart, sprintQualifyingResults,
+                weekendSchedule, raceReminder, disqualification, safetyCar, redFlag), CancellationToken.None));
         }
 
         [SlashCommand("role", "Optional role pinged by Formula 1 notifications (never @everyone)")]

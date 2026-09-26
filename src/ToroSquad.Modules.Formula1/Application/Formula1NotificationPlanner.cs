@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -37,6 +38,7 @@ public sealed class Formula1NotificationPlanner(
     Formula1Cache cache,
     F1DataMode mode,
     DeploymentPolicy deployment,
+    IF1ScheduleProvider schedule,
     IF1LifecycleProvider lifecycle,
     IF1ResultsProvider results,
     IF1StandingsProvider standings,
@@ -47,6 +49,16 @@ public sealed class Formula1NotificationPlanner(
 {
     public const string StartedPrefix = "started:";
     public const string ResultPrefix = "result:";
+
+    // Low-spam V2 kinds. The logical key (guild + session/meeting + channel + kind) makes each of them one message at most.
+    public const string WeekendScheduleKind = "weekend_schedule";
+    public const string RaceReminderKind = "race_reminder";
+    public const string SafetyCarPrefix = "safety_car:";
+    public const string RedFlagPrefix = "red_flag:";
+    public const string DisqualificationPrefix = "disqualification:";
+
+    /// <summary>The race reminder is sent exactly this long before the scheduled race start.</summary>
+    public static readonly TimeSpan RaceReminderLead = TimeSpan.FromMinutes(15);
 
     public static string KindStarted(F1SessionType type) => StartedPrefix + F1SessionTypes.Slug(type);
 
@@ -86,10 +98,26 @@ public sealed class Formula1NotificationPlanner(
             .Where(s => !s.IsBaseline && ((s.StartedObservedAt != null && s.StartedObservedAt >= startFrom) ||
                                           (s.FinalisedObservedAt != null && s.FinalisedObservedAt >= resultFrom)))
             .ToListAsync(ct);
-        if (sessions.Count == 0)
+
+        // V2: the next days of the canonical schedule (weekend card, race reminder) and recent race-control incidents.
+        var upcomingFrom = now - TimeSpan.FromDays(2);
+        var upcomingTo = now + TimeSpan.FromDays(8);
+        var upcoming = await db.Set<F1SessionSnapshotEntity>().AsNoTracking()
+            .Where(s => s.ScheduledStartUtc >= upcomingFrom && s.ScheduledStartUtc <= upcomingTo)
+            .ToListAsync(ct);
+        var incidentFrom = now - TimeSpan.FromHours(Math.Max(o.DisqualificationFreshHours, 1));
+        var incidentKeys = await db.Set<F1RaceControlEventEntity>().AsNoTracking().Where(e => e.OccurredAt >= incidentFrom)
+            .Select(e => e.SessionKey).Distinct().ToListAsync(ct);
+        List<F1SessionSnapshotEntity> incidentSessions = incidentKeys.Count == 0
+            ? []
+            : await db.Set<F1SessionSnapshotEntity>().AsNoTracking().Where(s => incidentKeys.Contains(s.SessionKey) && !s.IsBaseline).ToListAsync(ct);
+        List<F1RaceControlEventEntity> incidents = incidentKeys.Count == 0
+            ? []
+            : await db.Set<F1RaceControlEventEntity>().AsNoTracking().Where(e => incidentKeys.Contains(e.SessionKey)).ToListAsync(ct);
+        if (sessions.Count == 0 && upcoming.Count == 0 && incidents.Count == 0)
             return new F1PlanReport(0, 0, 0, 0, SkippedStale: false);
 
-        var keys = sessions.Select(s => s.SessionKey).ToList();
+        var keys = sessions.Select(s => s.SessionKey).Concat(incidentSessions.Select(s => s.SessionKey)).Distinct().ToList();
         var resultRows = await db.Set<F1ResultSnapshotEntity>().AsNoTracking().Where(r => keys.Contains(r.SessionKey)).ToDictionaryAsync(r => r.SessionKey, StringComparer.Ordinal, ct);
         var snapshotIds = sessions.SelectMany(s => new[] { s.StandingsDriversSnapshotId, s.StandingsConstructorsSnapshotId }).OfType<long>().Distinct().ToList();
         var standingsRows = await db.Set<F1StandingsSnapshotEntity>().AsNoTracking().Where(s => snapshotIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, ct);
@@ -116,6 +144,12 @@ public sealed class Formula1NotificationPlanner(
             var channel = new ChannelId(config.ChannelId!.Value);
             var language = (await guildSettings.GetAsync(guild, ct)).Language;
             var newResults = 0;
+
+            var v2 = new PlanV2(guild, channel, language, dryRun, now);
+            var (scheduledCreated, scheduledUpdated) = await PlanScheduledAsync(config, v2, upcoming, o, ct);
+            var (incidentCreated, incidentUpdated) = await PlanIncidentsAsync(config, v2, incidentSessions, incidents, resultRows, o, ct);
+            created += scheduledCreated + incidentCreated;
+            updated += scheduledUpdated + incidentUpdated;
 
             foreach (var s in sessions.OrderBy(s => s.ScheduledStartUtc))
             {
@@ -175,6 +209,122 @@ public sealed class Formula1NotificationPlanner(
         if (created + updated + suppressed > 0)
             logger.LogInformation("F1 planner: guilds={Guilds} planned={Created} updated={Updated} suppressed={Suppressed}", guilds, created, updated, suppressed);
         return new F1PlanReport(guilds, created, updated, suppressed, SkippedStale: false);
+    }
+
+    private sealed record PlanV2(GuildId Guild, ChannelId Channel, string Language, bool DryRun, DateTimeOffset Now);
+
+    /// <summary>
+    /// Thursday weekend schedule (once per weekend) and the race reminder (once per race, start - 15 min). Both are
+    /// schedule-based and strictly time-boxed: outside their window nothing is staged, and the outbox expiry is the end of
+    /// the window, so a restart or downtime can never produce a late card. Windows opening before the guild watermark are
+    /// never announced.
+    /// </summary>
+    private async Task<(int Created, int Updated)> PlanScheduledAsync(Formula1GuildConfigEntity config, PlanV2 p, List<F1SessionSnapshotEntity> upcoming,
+        Formula1Options o, CancellationToken ct)
+    {
+        int created = 0, updated = 0;
+        if (config.NotifyWeekendSchedule)
+        {
+            foreach (var meeting in upcoming.GroupBy(s => s.MeetingKey))
+            {
+                var rows = meeting.Where(s => (F1SessionState)s.State != F1SessionState.Cancelled).ToList();
+                var race = rows.FirstOrDefault(s => (F1SessionType)s.SessionType == F1SessionType.Race);
+                if (race is null || rows.Any(s => s.IsBaseline))
+                    continue;
+                var (from, until) = WeekendScheduleWindow(race.ScheduledStartUtc, o);
+                var firstStart = rows.Min(s => s.ScheduledStartUtc);
+                var expires = until < firstStart ? until : firstStart;
+                if (p.Now < from || p.Now >= expires || from < config.WatermarkUtc)
+                    continue;
+                var message = renderer.WeekendSchedule(rows.Select(Formula1Workflow.ToView).ToList(), p.Language, schedule.AttributionKey);
+                Count(await outbox.StageAsync(new NotificationRequest(p.Guild, Formula1Module.ModuleIdTyped, meeting.Key, p.Channel, WeekendScheduleKind, message,
+                    expires, p.DryRun), ct), ref created, ref updated);
+            }
+        }
+
+        if (config.NotifyRaceReminder)
+        {
+            foreach (var race in upcoming.Where(s => (F1SessionType)s.SessionType == F1SessionType.Race && !s.IsBaseline &&
+                                                     (F1SessionState)s.State is F1SessionState.Scheduled or F1SessionState.Unknown))
+            {
+                var remindAt = race.ScheduledStartUtc - RaceReminderLead;
+                var expires = remindAt + TimeSpan.FromMinutes(o.RaceReminderGraceMinutes);
+                if (p.Now < remindAt || p.Now >= expires || remindAt < config.WatermarkUtc)
+                    continue;
+                var message = renderer.RaceReminder(Formula1Workflow.ToView(race), p.Language, schedule.AttributionKey);
+                Count(await outbox.StageAsync(new NotificationRequest(p.Guild, Formula1Module.ModuleIdTyped, race.SessionKey, p.Channel, RaceReminderKind, message,
+                    expires, p.DryRun), ct), ref created, ref updated);
+            }
+        }
+
+        return (created, updated);
+    }
+
+    /// <summary>
+    /// Safety Car, red flag and disqualification cards from the persisted race-control history: one card per real phase
+    /// start (per disqualified car), only while fresh relative to the provider message time and after the watermark.
+    /// </summary>
+    private async Task<(int Created, int Updated)> PlanIncidentsAsync(Formula1GuildConfigEntity config, PlanV2 p, List<F1SessionSnapshotEntity> sessions,
+        List<F1RaceControlEventEntity> rows, Dictionary<string, F1ResultSnapshotEntity> resultRows, Formula1Options o, CancellationToken ct)
+    {
+        int created = 0, updated = 0;
+        if (!config.NotifySafetyCar && !config.NotifyRedFlag && !config.NotifyDisqualification)
+            return (created, updated);
+        var fresh = TimeSpan.FromMinutes(o.IncidentFreshMinutes);
+        var dsqFresh = TimeSpan.FromHours(o.DisqualificationFreshHours);
+        foreach (var session in sessions)
+        {
+            var view = Formula1Workflow.ToView(session);
+            var history = rows.Where(r => r.SessionKey == session.SessionKey).Select(ToIncident).ToList();
+            var staged = new List<(string Kind, F1RaceControlIncident Incident, TimeSpan Window, OutgoingMessage Message)>();
+
+            if (config.NotifySafetyCar)
+            {
+                staged.AddRange(F1IncidentPhases.SafetyCarStarts(history).Select(start => (SafetyCarPrefix + Ticks(start), start, fresh,
+                    renderer.SafetyCar(view, start, p.Language, lifecycle.AttributionKey))));
+            }
+
+            if (config.NotifyRedFlag)
+            {
+                staged.AddRange(F1IncidentPhases.RedFlagStarts(history).Select(start => (RedFlagPrefix + Ticks(start), start, fresh,
+                    renderer.RedFlag(view, start, p.Language, lifecycle.AttributionKey))));
+            }
+
+            if (config.NotifyDisqualification)
+            {
+                var names = resultRows.TryGetValue(session.SessionKey, out var r) ? F1Json.Deserialize<F1SessionResult>(r.PayloadJson) : null;
+                staged.AddRange(F1IncidentPhases.Disqualifications(history).Select(dsq => (
+                    DisqualificationPrefix + dsq.DriverNumber!.Value.ToString(CultureInfo.InvariantCulture), dsq, dsqFresh,
+                    renderer.Disqualification(view, dsq, names?.Entries.FirstOrDefault(e => e.DriverNumber == dsq.DriverNumber)?.DriverName, p.Language,
+                        lifecycle.AttributionKey))));
+            }
+
+            foreach (var (kind, incident, window, message) in staged)
+            {
+                if (incident.OccurredAt < config.WatermarkUtc || p.Now - incident.OccurredAt > window)
+                    continue; // before the watermark or no longer fresh: never announced late
+                Count(await outbox.StageAsync(new NotificationRequest(p.Guild, Formula1Module.ModuleIdTyped, session.SessionKey, p.Channel, kind, message,
+                    incident.OccurredAt + window, p.DryRun), ct), ref created, ref updated);
+            }
+        }
+
+        return (created, updated);
+    }
+
+    private static string Ticks(F1RaceControlIncident i) => i.OccurredAt.UtcTicks.ToString(CultureInfo.InvariantCulture);
+
+    private static F1RaceControlIncident ToIncident(F1RaceControlEventEntity e) =>
+        new(e.Provider, e.SessionKey, (F1IncidentKind)e.Kind, e.OccurredAt, e.Lap, e.DriverNumber, e.DriverCode, e.Reason);
+
+    /// <summary>
+    /// The Thursday of the race week (the Monday-Sunday week, UTC, that contains the race day) between the configured hours.
+    /// </summary>
+    public static (DateTimeOffset From, DateTimeOffset Until) WeekendScheduleWindow(DateTimeOffset raceStartUtc, Formula1Options o)
+    {
+        var raceDay = raceStartUtc.UtcDateTime.Date;
+        var daysSinceMonday = ((int)raceDay.DayOfWeek + 6) % 7;
+        var thursday = new DateTimeOffset(raceDay.AddDays(3 - daysSinceMonday), TimeSpan.Zero);
+        return (thursday.AddHours(o.WeekendScheduleFromHourUtc), thursday.AddHours(o.WeekendScheduleUntilHourUtc));
     }
 
     private F1StandingsAttachment Standings(F1SessionSnapshotEntity s, Formula1GuildConfigEntity config, IReadOnlyDictionary<long, F1StandingsSnapshotEntity> rows, DateTimeOffset now)

@@ -9,7 +9,7 @@ namespace ToroSquad.Modules.Formula1.Providers.OpenF1;
 /// the provider is NOT_CONFIGURED and no lifecycle is ever reported (nothing is derived from the schedule instead).
 /// The push channel is <see cref="OpenF1LiveClient"/>.
 /// </summary>
-public sealed class OpenF1LifecycleProvider(OpenF1Client client, OpenF1TokenProvider tokens, F1DataMode mode, TimeProvider clock) : IF1LifecycleProvider
+public sealed class OpenF1LifecycleProvider(OpenF1Client client, OpenF1TokenProvider tokens, F1DataMode mode, TimeProvider clock) : IF1LifecycleProvider, IF1RaceControlSource
 {
     public string Id => OpenF1Parser.Source;
     public string AttributionKey => "f1.source.openf1";
@@ -24,6 +24,13 @@ public sealed class OpenF1LifecycleProvider(OpenF1Client client, OpenF1TokenProv
         if (!IsConfigured)
             return F1ProviderResult<IReadOnlyList<F1LifecycleEvent>>.Fail(F1ProviderOutcome.NotConfigured, "OpenF1 live credentials not configured", clock.GetUtcNow());
         return await client.GetLifecycleEventsAsync(providerSessionRef, cancellationToken);
+    }
+
+    public async Task<F1ProviderResult<IReadOnlyList<F1RaceControlIncident>>> GetIncidentsAsync(string providerSessionRef, CancellationToken cancellationToken)
+    {
+        if (!IsConfigured)
+            return F1ProviderResult<IReadOnlyList<F1RaceControlIncident>>.Fail(F1ProviderOutcome.NotConfigured, "OpenF1 live credentials not configured", clock.GetUtcNow());
+        return await client.GetIncidentsAsync(providerSessionRef, cancellationToken);
     }
 }
 

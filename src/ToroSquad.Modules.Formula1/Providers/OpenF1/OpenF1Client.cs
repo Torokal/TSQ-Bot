@@ -190,6 +190,10 @@ public sealed class OpenF1Client(HttpClient http, IOptions<OpenF1Options> option
     public Task<F1ProviderResult<IReadOnlyList<F1LifecycleEvent>>> GetLifecycleEventsAsync(string sessionKey, CancellationToken ct) =>
         GetAsync(Inv($"v1/race_control?session_key={Uri.EscapeDataString(sessionKey)}&category=SessionStatus"), OpenF1Parser.ParseLifecycleEvents, emptyValue: [], ct);
 
+    /// <summary>All race-control rows of a session, normalized to the incidents TSQ may announce (everything else is dropped).</summary>
+    public Task<F1ProviderResult<IReadOnlyList<F1RaceControlIncident>>> GetIncidentsAsync(string sessionKey, CancellationToken ct) =>
+        GetAsync(Inv($"v1/race_control?session_key={Uri.EscapeDataString(sessionKey)}"), OpenF1Parser.ParseIncidents, emptyValue: [], ct);
+
     /// <summary>Raw result rows (null value = not published yet).</summary>
     public Task<F1ProviderResult<JsonDocument>> GetSessionResultAsync(string sessionKey, CancellationToken ct) =>
         GetDocumentAsync(Inv($"v1/session_result?session_key={Uri.EscapeDataString(sessionKey)}"), ct);
