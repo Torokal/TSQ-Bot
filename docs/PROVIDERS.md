@@ -18,6 +18,7 @@ Research dates: Liquipedia/Valve 2026-09-24 (Liquipedia terms re-checked 2026-09
 | **PandaScore** (REST API) | **Default match provider** (`Esports:Provider:Name=PandaScore`) | Fixture in the running test bot; live **read** checked with `esports provider-check` | Owner's free-plan token configured (user-secrets, 2026-09-25) | Live **read** **VERIFIED_LIVE** (2026-09-25); live notifications not enabled yet / **TESTED_OFFLINE** (lifecycle transitions, error types) |
 | Liquipedia (LiquipediaDB API v3) | **Optional** HLTV-link enrichment; **legacy / optional** match provider (only when selected) | Fixture | Requires an **approved API key** — none configured; free access applied for only after the repo is public at release | **BLOCKED/OPTIONAL** (live) / **TESTED_OFFLINE** |
 | Valve Regional Standings (GitHub) | Rankings (VRS), independent of the match provider | Fixture | Public, no key | **TESTED_OFFLINE**; live fetch **NOT_RUN** |
+| Liquipedia (MediaWiki API) | **Automatic fallback** HLTV-link source while LiquipediaDB is not usable | — | Free, no key; terms: ≤ 1 request / 2 s, contact User-Agent, gzip, API only | **TESTED_OFFLINE**; one real page read 2026-09-26 (feasibility) |
 | HLTV | **Not a data provider.** Preferred *external match page* when a verified URL exists | — | No authorized access; **scraping prohibited by design** | Link policy **TESTED_OFFLINE**; data integration **DEFERRED** |
 
 A failing live provider **never** falls back to fixture data: the fixture handler is only wired in Fixture mode
@@ -76,10 +77,11 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
 
 - TSQ Bot **does not** scrape HLTV HTML, bypass Cloudflare, automate a browser, use unofficial scraping libraries, call
   undocumented endpoints, guess match ids or construct HLTV URLs. PandaScore data is never presented as HLTV data.
-- A verified HLTV match URL may be the **preferred "Maç Sayfası"** target. It enters only from a trusted deterministic source:
-  the operator-curated `Esports:VerifiedMatchLinks` list (match key → URL, validated at startup; the manual fallback that
-  always works) and, optionally, Liquipedia's editor-entered `links.hltv` (below; BLOCKED/OPTIONAL without a key). Validation is syntactic only (`https://www.hltv.org/matches/<id>/<slug>`),
-  the page is never fetched.
+- A verified HLTV match URL may be the **preferred "Maç Sayfası"** target. HLTV links are **fully automatic** — there is no
+  manual operator workflow. They come only from Liquipedia's editor-entered HLTV match id, in this order: (1) LiquipediaDB
+  API (approved key), (2) the free Liquipedia **MediaWiki API** while LPDB is not usable (no key or failing), (3) otherwise
+  no link and no "Maç Sayfası" field. Validation is syntactic only (`https://www.hltv.org/matches/<id>/<slug>`); the page is
+  never fetched.
 - Direct HLTV data integration requires authorized access → **DEFERRED**.
 
 ### Where legitimate HLTV match links come from (research 2026-09-25)
@@ -88,6 +90,7 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
 |---|---|---|---|
 | HLTV itself | — | **No official public API** found; every "HLTV API" found is an unofficial scraper | Not usable (scraping prohibited) |
 | **Liquipedia (LPDB match2 `links.hltv`)** | **Yes** — editors enter the HLTV match id; Liquipedia builds `https://www.hltv.org/matches/<id>/match` (VERIFIED: Liquipedia/Lua-Modules `Module:MatchExternalLinks` + `MatchGroup/Input/Custom.getLinks`, commit 23835da, 2026-09-09) and stores it with the match; upstream BOT-Greg-v2 reads `links.hltv["1"]["1"]` (VERIFIED) — this is how BOT Greg's "Matchpage" worked | Approved LPDB API key (see "Access and plans" below: free access only by application, Basic/Premium currently unavailable) | Parser support **TESTED_OFFLINE**; live **BLOCKED/OPTIONAL** (no key) |
+| **Liquipedia (MediaWiki API, wikitext)** | **Yes** — the same editor-entered id appears as `|hltv=<id>` in the match templates of tournament pages and `Match:` pages (VERIFIED 2026-09-26: "Stake Ranked/Episode 5/Qualifier", R1M6 Eternal Fire vs WBT → `hltv=2398672`) | Free, no key; `action=query` (search + revisions) only | Automatic fallback, **TESTED_OFFLINE** |
 | PandaScore | No HLTV id/URL in the match object (VERIFIED, OpenAPI) | — | Not available |
 | GRID | NOT_VERIFIED | All listed plans commercial, custom-priced (grid.gg, 2026-09-25) | Not evaluated further |
 
@@ -102,9 +105,35 @@ existing link is never replaced; a Liquipedia outage keeps the known links and c
 re-uses it and does not request again before the interval has passed. Implemented and **TESTED_OFFLINE**; live
 enrichment is **BLOCKED/OPTIONAL** until an approved LPDB key exists (see "Access and plans").
 
-**Without Liquipedia** nothing else changes: PandaScore match data, reminders, lifecycle cards and results never depend
-on Liquipedia (the link source is simply off, no error), and the manual fallback **`Esports:VerifiedMatchLinks`**
-(operator-verified HLTV/official URL per match, docs/NOTIFICATIONS.md) keeps working — both **TESTED_OFFLINE**.
+### MediaWiki API fallback (no LPDB key, 2026-09-26)
+
+While LiquipediaDB is not usable, `LiquipediaWikiLinkSource` looks up links through the free MediaWiki API
+(`https://liquipedia.net/counterstrike/api.php`, `Esports:HltvLinksFromWikiApi=true`):
+
+- **Only what is needed:** PandaScore matches with two known teams, at least one of them in a server's team filter, that
+  start within `WikiLinkLookaheadHours` (2) or started within `WikiLinkLookbackHours` (12), and have no link yet; at most
+  `WikiLinkMaxLookupsPerPoll` (2) per poll.
+- **Per lookup:** one CirrusSearch (`insource:"<team A>" insource:"<team B>"`, main + `Match:` namespaces, newest first,
+  3 pages) + one `prop=revisions` request for those pages; if the names find nothing, once more with the acronyms.
+  Never `action=parse`, never HTML pages, never HLTV.
+- **Terms:** ≥ `WikiMinIntervalSeconds` (2.5, validated ≥ 2) between requests, our own hourly cap
+  `WikiRequestsPerHour` (60), custom User-Agent with contact (`Esports:Liquipedia:UserAgent`; default names the public
+  repository), gzip, results cached.
+- **Matching (wrong link is worse than none):** both team templates match the two teams (order-free; normalized name or
+  acronym, spaces ignored; the two teams must be distinguishable), the wikitext start (`Month D, YYYY - HH:MM {{Abbr/TZ}}`,
+  unambiguous zones only — IST/CST/AST… are rejected) within `HltvLinkToleranceMinutes` (90), and exactly one distinct
+  numeric HLTV id. The URL is built deterministically: `https://www.hltv.org/matches/<id>/match`.
+- **Cache** (`esports_provider_state` key `liquipedia-wiki:hltv-links`): found links are kept for the match; a miss is
+  re-checked after `WikiLinkRecheckMinutes` (30), doubling up to `WikiLinkMaxRecheckMinutes` (240) — never permanent,
+  editors may add the id later. Entries are pruned 3 days after the match. A restart reuses the cache (no extra requests).
+- **Failure isolation:** timeout, 429 (pauses all lookups until Retry-After), 5xx, malformed JSON/wikitext, no or several
+  candidates → no link, nothing else changes; PandaScore alerts and known links are never affected.
+- A link found later edits the existing card without a ping (reminder / started / result, within their correction
+  windows); the footer then credits Liquipedia: "Kaynak: PandaScore · Link: Liquipedia".
+
+**Without any Liquipedia link** nothing else changes: PandaScore match data, reminders, lifecycle cards and results never
+depend on Liquipedia; the card simply has no "Maç Sayfası" field. The legacy `Esports:VerifiedMatchLinks` setting is
+still parsed for backward compatibility but is **not** a supported workflow.
 
 ## Capabilities (as implemented)
 
@@ -140,7 +169,7 @@ Normal operation does not need a Liquipedia key.
 - **Free access**: by **application** only, for open-source educational / non-commercial public / community projects,
   and in most cases **time-limited**. Liquipedia decides whether a project qualifies (NOT_VERIFIED for TSQ Bot).
 - **TSQ Bot**: the source is public (https://github.com/Torokal/TSQ-Bot), so free access can be requested. Without an
-  approved key Liquipedia enrichment stays off, `Esports:VerifiedMatchLinks` is the manual fallback, and PandaScore runs
+  approved key the free MediaWiki API fallback provides the links (see above), and PandaScore runs
   without Liquipedia.
 
 ### Technical notes

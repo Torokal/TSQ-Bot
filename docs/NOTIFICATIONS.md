@@ -63,14 +63,16 @@ Renkler: başladı/hatırlatma mavi, sonuç yeşil (kazanana göre değişmez), 
 ## Maç Sayfası bağlantısı
 
 Öncelik: **doğrulanmış HLTV** → resmî organizatör sayfası → sağlayıcı sayfası (izinli host) → **hiç** (yer tutucu yok).
-HLTV bağlantısı yalnızca `https://www.hltv.org/matches/<sayı>/<ad>` biçiminde ve güvenilir bir kaynaktan gelir:
-Liquipedia maç verisindeki `links.hltv` (Liquipedia sağlayıcısı seçiliyken otomatik) veya `Esports:VerifiedMatchLinks`; sayfa indirilmez, kimlik tahmin edilmez, HLTV olmayan bağlantı "HLTV" diye
-etiketlenmez. PandaScore HLTV kimliği vermediği için PandaScore maçlarının HLTV bağlantısı Liquipedia'dan eşleştirilir: aynı iki takım
-(sıra önemsiz, ad normalizasyonu) + başlangıç farkı ≤ 90 dk + **tek** geçerli HLTV adresi; aksi hâlde bağlantı yok
-(yanlış bağlantı hiç olmamasından kötüdür). Bağlantı sonradan bulunursa gönderilmiş kart ping'siz düzenlenir. Liquipedia
-anahtarı olmadan bu kaynak kapalıdır (BLOCKED/OPTIONAL; başvuru yayın aşamasında, depo public olduktan sonra): bildirimler
-aynen çalışır, HLTV bağlantısı yalnızca elle eklenen `Esports:VerifiedMatchLinks` ile gelir. Liquipedia yanıtı 30 dakikalık
-aralıkla alınır ve veritabanında önbelleğe alınır (yeniden başlatma ek istek yapmaz).
+HLTV bağlantısı **tamamen otomatiktir** (elle bağlantı girme yolu yoktur) ve yalnızca Liquipedia editörlerinin girdiği HLTV
+maç kimliğinden gelir: (1) onaylı anahtar varsa LiquipediaDB API, (2) LPDB kullanılamıyorsa ücretsiz Liquipedia **MediaWiki
+API**'si (yalnızca API, HTML yok, HLTV'ye hiç istek yok), (3) ikisi de yoksa bağlantı ve "Maç Sayfası" alanı **yok**.
+Eşleşme kuralı: iki takım da eşleşmeli (sıra önemsiz, normalize ad veya kısaltma), başlangıç farkı ≤ 90 dk ve **tam olarak
+bir** geçerli sayısal HLTV kimliği; 0 veya 2+ farklı aday → bağlantı yok (yanlış bağlantı hiç olmamasından kötüdür). Adres
+`https://www.hltv.org/matches/<id>/match` olarak kurulur, sayfa indirilmez. MediaWiki yalnızca sunucunun takım filtresindeki
+takımların yakın maçları için sorulur (≥ 2 sn aralık, saatlik sınır, önbellek; bulunamayan maç 30 dk → 4 saate kadar artan
+aralıkla yeniden kontrol edilir). Bağlantı sonradan bulunursa gönderilmiş kart ping'siz düzenlenir ve altbilgi
+"Kaynak: PandaScore · Link: Liquipedia" olur; Liquipedia bağlantısı yoksa altbilgi yalnızca "Kaynak: PandaScore". Liquipedia'da
+bir kesinti veya belirsiz eşleşme PandaScore bildirimlerini ve bilinen bağlantıları etkilemez. Ayrıntı: docs/PROVIDERS.md.
 Demo kartları gerçek hiçbir siteye bağlantı vermez. Tek istisna RFC 2606 ile ayrılmış test alanı `example.com`: demo hükmen
 kartı Maç Sayfası görünümünü göstermek için `https://example.com/tsq-bot-demo-match-page` adresine bağlanır (HLTV değil,
 indirilmez, gerçek maç sayfası olamaz; footer TEST/DEMO der).

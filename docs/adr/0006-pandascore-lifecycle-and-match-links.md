@@ -42,3 +42,12 @@ Discord'un göreli zamanıyla + "Başlangıç saati güncellendi (önceki: …)"
 ve zamanı gelince normal hatırlatma gider. 4. maddedeki "(saat değişikliği: yeni saat başına)" ve 5. maddedeki "(+ Yeni
 Saat)" artık geçersizdir. Ertelendi kartı korunur. Eski `rescheduled-*` outbox satırları ve gönderilmiş kartlar silinmez,
 düzenlenmez. Ayrıntı: docs/NOTIFICATIONS.md "Saat değişikliği".
+
+## Değişiklik (2026-09-26): HLTV bağlantıları tamamen otomatik
+
+Sahip elle HLTV bağlantısı girme yolunu istemedi. 6. maddedeki "işletmecinin `Esports:VerifiedMatchLinks` listesi" artık
+desteklenen bir kullanım yolu değildir (geriye uyumluluk için ayar hâlâ okunur). Kaynak sırası: (1) LiquipediaDB API (onaylı
+anahtar), (2) LPDB kullanılamıyorsa ücretsiz Liquipedia MediaWiki API'si — yalnızca `action=query`, ≤ 1 istek / 2 sn, iletişim
+bilgili User-Agent, önbellek; yalnızca sunucunun takip ettiği takımların yakın maçları, (3) yoksa bağlantı yok. Eşleşme
+kuralı değişmedi (iki takım, ±90 dk, tek aday); URL Liquipedia'daki sayısal kimlikten `https://www.hltv.org/matches/<id>/match`
+olarak kurulur, HLTV'ye istek atılmaz. Liquipedia kaynaklı bağlantıda kart altbilgisi "Kaynak: PandaScore · Link: Liquipedia".
