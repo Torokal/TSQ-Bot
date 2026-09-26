@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "fb4b291dea6c1ea9033e1d34982733eef172a5575fb0f231fcbd6eb562927f4d",
+  "hash": "30e610259446b3189473884bb03ec6bae272298ca8d54b2c5b6d8f08c0249ad2",
   "commands": [
     {
       "module": "core",
@@ -1317,6 +1317,307 @@
           0
         ],
         "options": []
+      }
+    },
+    {
+      "module": "volleyball",
+      "payload": {
+        "type": 1,
+        "name": "volleyball",
+        "description": "Türkiye women's national volleyball team: next match and schedule",
+        "description_localizations": {
+          "tr": "Türkiye Kadın A Milli Voleybol Takımı: sıradaki maç ve program"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "next",
+            "description": "The next (or current) match of Filenin Sultanları",
+            "description_localizations": {
+              "tr": "Filenin Sultanları'nın sıradaki (veya devam eden) maçı"
+            }
+          },
+          {
+            "type": 1,
+            "name": "schedule",
+            "description": "Upcoming matches and recent results of Filenin Sultanları",
+            "description_localizations": {
+              "tr": "Filenin Sultanları'nın yaklaşan maçları ve son sonuçları"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "module": "volleyball",
+      "payload": {
+        "type": 1,
+        "name": "volleyball-admin",
+        "description": "Filenin Sultanları notification settings for this server (admins)",
+        "description_localizations": {
+          "tr": "Bu sunucunun Filenin Sultanları bildirim ayarları (yöneticiler)"
+        },
+        "default_member_permissions": "32",
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "preview",
+            "description": "Ping-free TEST/DEMO preview of a volleyball card",
+            "description_localizations": {
+              "tr": "Pingsiz TEST/DEMO voleybol kart önizlemesi"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "card",
+                "description": "Which card",
+                "description_localizations": {
+                  "tr": "Hangi kart"
+                },
+                "required": false,
+                "choices": [
+                  {
+                    "name": "reminder",
+                    "name_localizations": {
+                      "tr": "maç öncesi hatırlatma"
+                    },
+                    "value": "reminder"
+                  },
+                  {
+                    "name": "started",
+                    "name_localizations": {
+                      "tr": "maç başladı"
+                    },
+                    "value": "started"
+                  },
+                  {
+                    "name": "set-won",
+                    "name_localizations": {
+                      "tr": "set Türkiye'nin"
+                    },
+                    "value": "set-won"
+                  },
+                  {
+                    "name": "set-lost",
+                    "name_localizations": {
+                      "tr": "set rakibin"
+                    },
+                    "value": "set-lost"
+                  },
+                  {
+                    "name": "final-won",
+                    "name_localizations": {
+                      "tr": "maç sonucu (galibiyet)"
+                    },
+                    "value": "final-won"
+                  },
+                  {
+                    "name": "final-lost",
+                    "name_localizations": {
+                      "tr": "maç sonucu (mağlubiyet)"
+                    },
+                    "value": "final-lost"
+                  },
+                  {
+                    "name": "postponed",
+                    "name_localizations": {
+                      "tr": "ertelendi"
+                    },
+                    "value": "postponed"
+                  },
+                  {
+                    "name": "cancelled",
+                    "name_localizations": {
+                      "tr": "iptal edildi"
+                    },
+                    "value": "cancelled"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "status",
+            "description": "Current volleyball configuration of this server",
+            "description_localizations": {
+              "tr": "Bu sunucunun mevcut voleybol ayarları"
+            }
+          },
+          {
+            "type": 1,
+            "name": "doctor",
+            "description": "Diagnose permissions, data provider health and delivery",
+            "description_localizations": {
+              "tr": "İzin, veri sağlayıcı sağlığı ve gönderim tanısı"
+            }
+          },
+          {
+            "type": 1,
+            "name": "pause",
+            "description": "Pause volleyball notifications in this server",
+            "description_localizations": {
+              "tr": "Bu sunucunun voleybol bildirimlerini duraklat"
+            }
+          },
+          {
+            "type": 1,
+            "name": "resume",
+            "description": "Resume notifications (nothing missed while paused is sent)",
+            "description_localizations": {
+              "tr": "Bildirimleri yeniden başlat (kaçanlar gönderilmez)"
+            }
+          },
+          {
+            "type": 2,
+            "name": "configure",
+            "description": "Volleyball notification settings",
+            "description_localizations": {
+              "tr": "Voleybol bildirim ayarları"
+            },
+            "options": [
+              {
+                "type": 1,
+                "name": "channel",
+                "description": "Channel for automatic volleyball notifications",
+                "description_localizations": {
+                  "tr": "Otomatik voleybol bildirim kanalı"
+                },
+                "options": [
+                  {
+                    "type": 7,
+                    "name": "channel",
+                    "description": "Notification channel",
+                    "description_localizations": {
+                      "tr": "Bildirim kanalı"
+                    },
+                    "required": true,
+                    "channel_types": [
+                      0,
+                      5
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "notifications",
+                "description": "Which volleyball notifications are sent",
+                "description_localizations": {
+                  "tr": "Hangi voleybol bildirimlerinin gönderileceği"
+                },
+                "options": [
+                  {
+                    "type": 5,
+                    "name": "match_reminder_15m",
+                    "description": "Reminder before the match",
+                    "description_localizations": {
+                      "tr": "Maç öncesi hatırlatma"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "match_started",
+                    "description": "Match started",
+                    "description_localizations": {
+                      "tr": "Maç başladı"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "set_finished",
+                    "description": "Each finished set",
+                    "description_localizations": {
+                      "tr": "Her biten set"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "match_finished",
+                    "description": "Final result",
+                    "description_localizations": {
+                      "tr": "Maç sonucu"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "match_postponed_cancelled",
+                    "description": "Postponed / cancelled",
+                    "description_localizations": {
+                      "tr": "Erteleme / iptal"
+                    },
+                    "required": false
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "name": "role",
+                "description": "Optional role pinged by volleyball notifications (never @everyone)",
+                "description_localizations": {
+                  "tr": "Voleybol bildirimlerinde pinglenecek isteğe bağlı rol (asla @everyone)"
+                },
+                "options": [
+                  {
+                    "type": 8,
+                    "name": "ping_role",
+                    "description": "Role to ping (leave empty to keep the current one)",
+                    "description_localizations": {
+                      "tr": "Pinglenecek rol (boş: mevcut rol korunur)"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "ping_reminder",
+                    "description": "Ping on the pre-match reminder",
+                    "description_localizations": {
+                      "tr": "Maç öncesi hatırlatmada pingle"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "ping_final",
+                    "description": "Ping on the final result",
+                    "description_localizations": {
+                      "tr": "Maç sonucunda pingle"
+                    },
+                    "required": false
+                  },
+                  {
+                    "type": 5,
+                    "name": "clear",
+                    "description": "Remove the notification role",
+                    "description_localizations": {
+                      "tr": "Bildirim rolünü kaldır"
+                    },
+                    "required": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       }
     }
   ]
