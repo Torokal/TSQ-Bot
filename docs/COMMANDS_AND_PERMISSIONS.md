@@ -56,6 +56,15 @@ Ayrıntı: [FORMULA1.md](FORMULA1.md).
 
 Başka takım seçtiren komut yoktur. Ayrıntı: [volleyball/VOLLEYBALL.md](volleyball/VOLLEYBALL.md).
 
+## TSQ Live — Twitch + Kick yayın duyuruları
+
+| Komut | Ne yapar |
+|---|---|
+| `/live-admin doctor` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): `Live:Enabled`, modül kapısı, duyuru kanalı ve izinleri (Mention Everyone dahil), Twitch/Kick yetkilendirme ve son başarılı uzlaştırma, yayıncı durumları ve duyuru mesajları. Sağlayıcıya istek atmaz, secret göstermez |
+
+Duyuru gönderen, yayıncı ekleyen veya ping atan komut yoktur (yayıncılar ve kanal yapılandırmadır). Ayrıntı:
+[live/TSQ_LIVE.md](live/TSQ_LIVE.md).
+
 ## Esports (modül açıkken)
 
 | Komut | Seçenekler |
@@ -98,7 +107,7 @@ panel, autocomplete ve bildirimler modül kapalıyken çalışmaz.
 | Embed Links | 16384 | embed'ler | evet |
 | Read Message History | 65536 | belirsiz teslimat uzlaştırması (yalnızca kendi mesajlarını arar) | önerilir |
 | Manage Roles | 268435456 | self-service bildirim rolleri | yalnızca self-service kullanılırsa |
-| Mention Everyone | 131072 | bahsedilemez rolleri pinglemek | **önerilmez** — rolü "bahsedilebilir" yapın |
+| Mention Everyone | 131072 | bahsedilemez rolleri pinglemek; TSQ Live duyurusunun `@everyone` bildirimi | rollerde **önerilmez** (rolü "bahsedilebilir" yapın); TSQ Live kullanılıyorsa **yalnızca duyuru kanalında** kanal izniyle verin |
 
   Asgari izin tamsayısı: **84992**; self-service rollerle: **268520448**.
   Bot rolü, dağıtacağı self-service rollerin **üstünde** olmalıdır.

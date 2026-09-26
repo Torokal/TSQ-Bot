@@ -38,6 +38,8 @@ public sealed class DeliveryOptions
 /// turns into DeliveryUnknown — never blindly resent.</item>
 /// <item>Ambiguous outcomes (timeouts) become DeliveryUnknown and go through bounded reconciliation (content fingerprint of what was sent; no visible reference in the message).</item>
 /// <item>Edits never ping; a missing edit target is not replaced by a new message.</item>
+/// <item>@everyone at most once: a resend after an uncertain attempt (the row went through reconciliation) never carries
+/// the @everyone opt-in.</item>
 /// <item>One guild's failure never stops the batch.</item>
 /// </list>
 /// No exactly-once guarantee is claimed.
@@ -200,6 +202,15 @@ public sealed class OutboxProcessor(
         {
             await EditAsync(db, row, channel, message, policy, cancellationToken);
             return;
+        }
+
+        // @everyone is at most once. A row that went through reconciliation had an attempt that may have reached Discord
+        // (timeout, lost response, crash while in flight): its resend never opts in to @everyone again, even when the
+        // earlier message was not found — a missing ping is acceptable, a second one is not.
+        if (message.Mentions.Everyone && row.ReconcileAttempts > 0)
+        {
+            message = message with { Mentions = message.Mentions with { Everyone = false } };
+            logger.LogWarning("Outbox {OutboxId} ref={Marker}: resend after an uncertain delivery goes out without @everyone", row.Id, row.Marker);
         }
 
         // Claim: persist InFlight BEFORE talking to Discord (crash => DeliveryUnknown, not a blind resend).
@@ -387,7 +398,13 @@ public sealed class OutboxProcessor(
         ReconcileOutcome outcome;
         try
         {
-            outcome = await transport.FindRecentAsync(channel, await ProbeAsync(db, row, ct), _options.ReconcileScanLimit, ct);
+            var probe = await ProbeAsync(db, row, ct);
+            // Another delivery with the identical fingerprint is unresolved in this channel: its message is not owned yet and
+            // would be indistinguishable from ours. Never adopt (and never resend) on an ambiguous match.
+            if (await HasUnresolvedTwinAsync(db, row, probe.Fingerprint, ct))
+                outcome = new ReconcileOutcome.NotPossible("identical payload of another unresolved delivery in this channel");
+            else
+                outcome = await transport.FindRecentAsync(channel, probe, _options.ReconcileScanLimit, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -452,6 +469,18 @@ public sealed class OutboxProcessor(
             attemptAt - TimeSpan.FromMinutes(5),
             owned.Select(id => new MessageId(id)).ToHashSet(),
             row.Marker);
+    }
+
+    /// <summary>
+    /// Whether another row in the same channel transmitted exactly the same content (same delivered fingerprint) and does not
+    /// own a message yet (in flight or itself unknown). Rows that own a message are already excluded by the probe.
+    /// </summary>
+    private static Task<bool> HasUnresolvedTwinAsync(ToroDbContext db, OutboxMessageEntity row, string fingerprint, CancellationToken ct)
+    {
+        var channelId = row.ChannelId;
+        return db.Outbox.AsNoTracking().AnyAsync(o =>
+            o.ChannelId == channelId && o.Id != row.Id && o.DiscordMessageId == null && o.DeliveredFingerprint == fingerprint &&
+            (o.Status == OutboxStatus.InFlight || o.Status == OutboxStatus.DeliveryUnknown), ct);
     }
 
     private static bool IsChannelProblem(PermanentFailureKind kind) =>

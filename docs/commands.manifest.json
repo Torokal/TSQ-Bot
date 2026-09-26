@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "30e610259446b3189473884bb03ec6bae272298ca8d54b2c5b6d8f08c0249ad2",
+  "hash": "e77d580d371cafdebc1d5ee91f8a419df69c81e0de577970afefad00b229a3e5",
   "commands": [
     {
       "module": "core",
@@ -1191,6 +1191,35 @@
           0
         ],
         "options": []
+      }
+    },
+    {
+      "module": "live",
+      "payload": {
+        "type": 1,
+        "name": "live-admin",
+        "description": "TSQ Live stream announcements (admins)",
+        "description_localizations": {
+          "tr": "TSQ Live yayın duyuruları (yöneticiler)"
+        },
+        "default_member_permissions": "32",
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "doctor",
+            "description": "Diagnose Twitch/Kick tracking, Discord target and announcements",
+            "description_localizations": {
+              "tr": "Twitch/Kick takibi, Discord kanalı ve duyuru tanısı"
+            }
+          }
+        ]
       }
     },
     {

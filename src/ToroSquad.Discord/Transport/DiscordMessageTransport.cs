@@ -153,8 +153,8 @@ public sealed class DiscordMessageTransport(DiscordSocketClient client, ILogger<
                 return new SendOutcome.Permanent(PermanentFailureKind.InvalidPayload, reason);
             case HttpStatusCode.TooManyRequests:
                 return new SendOutcome.RateLimited(TimeSpan.FromSeconds(5));
-            case HttpStatusCode.InternalServerError or HttpStatusCode.BadGateway or HttpStatusCode.GatewayTimeout when isCreate:
-                // Discord may have created the message before failing the response.
+            case >= HttpStatusCode.InternalServerError when isCreate:
+                // Discord may have created the message before failing the response (any 5xx: none proves it did not).
                 return new SendOutcome.Ambiguous($"{(int)status} on create");
             case >= HttpStatusCode.InternalServerError:
                 return new SendOutcome.Transient($"{(int)status}");

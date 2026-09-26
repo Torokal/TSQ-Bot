@@ -6,14 +6,24 @@ using System.Text.RegularExpressions;
 namespace ToroSquad.Core.Messaging;
 
 /// <summary>
-/// Which mentions may actually ping. Default is none. @everyone/@here and user pings are never allowed for
-/// automated messages; only explicitly configured and permitted role IDs can be listed.
-/// Wire mapping: allowed_mentions = { "parse": [], "roles": [..Roles] }.
+/// Which mentions may actually ping. Default is none. @here and user pings are never allowed for automated messages;
+/// only explicitly configured and permitted role IDs can be listed. <see cref="Everyone"/> is a separate, explicit
+/// opt-in for exactly one case — the first message of a new TSQ Live stream announcement — and is never set by any
+/// other module (architecture test). Edits and retries after a proven non-delivery reuse the same payload; edits always
+/// go out with <see cref="None"/> (outbox + transport).
+/// Wire mapping: allowed_mentions = { "parse": Everyone ? ["everyone"] : [], "roles": [..Roles] }.
+/// <see cref="Everyone"/> is left out of the stored payload while false, so existing payload hashes are unchanged.
 /// </summary>
-public sealed record MentionPolicy(IReadOnlyList<RoleId> Roles)
+public sealed record MentionPolicy(
+    IReadOnlyList<RoleId> Roles,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Everyone = false)
 {
     public static MentionPolicy None { get; } = new(Array.Empty<RoleId>());
-    public bool PingsAnything => Roles.Count > 0;
+
+    /// <summary>@everyone only (no roles). Only for the first send of a new live-stream announcement.</summary>
+    public static MentionPolicy EveryoneOnly { get; } = new(Array.Empty<RoleId>(), Everyone: true);
+
+    public bool PingsAnything => Roles.Count > 0 || Everyone;
 }
 
 public sealed record EmbedField(string Name, string Value, bool Inline = false);

@@ -7,12 +7,13 @@ namespace ToroSquad.Discord.Transport;
 public static class DiscordConversions
 {
     /// <summary>
-    /// allowed_mentions = { parse: [], roles: [explicitly permitted role ids] }. Users, @everyone and @here can never
-    /// ping from automated/bot messages.
+    /// allowed_mentions = { parse: [], roles: [explicitly permitted role ids] }. Users and @here can never ping from
+    /// automated/bot messages; @everyone only when the policy explicitly opts in (TSQ Live's first announcement — edits
+    /// always pass <see cref="MentionPolicy.None"/>).
     /// </summary>
     public static AllowedMentions ToAllowedMentions(MentionPolicy policy)
     {
-        var allowed = new AllowedMentions(AllowedMentionTypes.None)
+        var allowed = new AllowedMentions(policy.Everyone ? AllowedMentionTypes.Everyone : AllowedMentionTypes.None)
         {
             MentionRepliedUser = false,
         };

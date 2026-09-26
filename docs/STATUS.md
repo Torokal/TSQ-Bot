@@ -36,6 +36,18 @@ invite link and no global command registration. The source code is public under 
 - **BLOCKED**: API-Sports Free (no 2026 access). **NOT_VERIFIED**: live-volleyball-api.com (would need an account).
 - Module off by default; no production change without owner approval.
 
+## TSQ Live — Twitch + Kick stream announcements (new, 2026-09-26, branch `feat/tsq-live`)
+
+- Scope and rules: [live/TSQ_LIVE.md](live/TSQ_LIVE.md). Creators LORDTORO and NASILYANI69 (Twitch + Kick).
+- **IMPLEMENTED / TESTED_OFFLINE**: creator session state machine (multistream dedupe, reconnect grace, bootstrap baseline,
+  gap freshness), official-API reconciliation (Twitch Helix, Kick Public API), title sync by editing the same message,
+  restart safety, provider-failure isolation, deleted-card replacement without mentions, doctor/health, migration
+  `LiveModule`.
+- **NOT VERIFIED_LIVE**: no real Twitch/Kick call (credentials not configured), no real Discord delivery, no real `@everyone`.
+- **DEFERRED**: webhooks (Kick, Twitch EventSub webhook) — the current deployment exposes no HTTP callback endpoint (not a
+  Railway limitation); EventSub WebSocket requires a user access token + refresh-token lifecycle (owner decision).
+- Off by default (`Live:Enabled=false`, module gate off); no production change without owner approval.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

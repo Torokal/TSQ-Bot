@@ -15,6 +15,7 @@ COPY src/ToroSquad.Modules.Esports/ToroSquad.Modules.Esports.csproj src/ToroSqua
 COPY src/ToroSquad.Modules.Example/ToroSquad.Modules.Example.csproj src/ToroSquad.Modules.Example/packages.lock.json src/ToroSquad.Modules.Example/
 COPY src/ToroSquad.Modules.Formula1/ToroSquad.Modules.Formula1.csproj src/ToroSquad.Modules.Formula1/packages.lock.json src/ToroSquad.Modules.Formula1/
 COPY src/ToroSquad.Modules.Volleyball/ToroSquad.Modules.Volleyball.csproj src/ToroSquad.Modules.Volleyball/packages.lock.json src/ToroSquad.Modules.Volleyball/
+COPY src/ToroSquad.Modules.Live/ToroSquad.Modules.Live.csproj src/ToroSquad.Modules.Live/packages.lock.json src/ToroSquad.Modules.Live/
 COPY src/ToroSquad.Bot/ToroSquad.Bot.csproj src/ToroSquad.Bot/packages.lock.json src/ToroSquad.Bot/
 RUN dotnet restore src/ToroSquad.Bot/ToroSquad.Bot.csproj --locked-mode
 
