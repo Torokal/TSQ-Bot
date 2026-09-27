@@ -8,7 +8,15 @@
 | Discord.Net 3.20.1 | MIT | NuGet dependency |
 | MQTTnet 5.2.0.1603 — https://github.com/dotnet/MQTTnet | MIT | NuGet dependency (OpenF1 live MQTT connection, Formula 1 module) |
 | .NET / Microsoft.Extensions.* / EF Core 10.0.12 | MIT | NuGet dependencies |
+| SixLabors.ImageSharp 3.1.12, SixLabors.ImageSharp.Drawing 2.1.7, SixLabors.Fonts 2.1.3 — https://sixlabors.com | Six Labors Split License 1.0 → Apache-2.0 (software under an open source license) | NuGet dependencies (TSQ Quote card rendering, fully managed) |
 | xunit.v3, AwesomeAssertions, TngTech.ArchUnitNET | Apache-2.0 | Test-only dependencies |
+
+## Fonts
+
+| Font | License | Notes |
+|---|---|---|
+| Noto Sans (Regular, Italic) — https://github.com/notofonts/latin-greek-cyrillic | SIL Open Font License 1.1 | Embedded in `src/ToroSquad.Modules.Quote` for quote cards; license text in `src/ToroSquad.Modules.Quote/Assets/Fonts/OFL-NotoSans.txt` |
+| Noto Emoji (monochrome) — https://github.com/google/fonts/tree/main/ofl/notoemoji | SIL Open Font License 1.1 | Embedded in `src/ToroSquad.Modules.Quote` as the emoji fallback; license text in `src/ToroSquad.Modules.Quote/Assets/Fonts/OFL-NotoEmoji.txt` |
 
 Exact dependency versions are pinned in `Directory.Packages.props` and the per-project `packages.lock.json` files.
 

@@ -9,6 +9,7 @@
     <Project Path="src/ToroSquad.Modules.Volleyball/ToroSquad.Modules.Volleyball.csproj" />
     <Project Path="src/ToroSquad.Modules.Live/ToroSquad.Modules.Live.csproj" />
     <Project Path="src/ToroSquad.Modules.Lfg/ToroSquad.Modules.Lfg.csproj" />
+    <Project Path="src/ToroSquad.Modules.Quote/ToroSquad.Modules.Quote.csproj" />
     <Project Path="src/ToroSquad.Bot/ToroSquad.Bot.csproj" />
   </Folder>
   <Folder Name="/tests/">
