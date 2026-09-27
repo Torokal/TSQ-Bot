@@ -32,8 +32,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   creators via the official APIs — one `@everyone` per new creator session (multistream = one message), title/platform
   changes and the end of the stream edit the same message without pinging; restart, reconnect and provider-outage safe.
 - **TSQ LFG — Oyuncu Bul** (separate module, off by default): `/ekip` opens a form for a group listing for any game or
-  activity (free-text game name and details, team size, start — now or a date and time in the server's time zone —
-  and voice channel, then the duration and ping settings); members join/leave with buttons, the owner can edit the
+  activity (free-text game name, team size from a select, start — now or a date and time in the server's time zone —
+  voice channel and opt-in pings, then the duration and optional details); members join/leave with buttons, the owner can edit the
   listing (✏️ Düzenle), the owner or a moderator closes it, it expires on its own; Maybe RSVP, opt-in pings of the joined
   players 30 minutes before / at the start, optional voice channel; one generic lifecycle for every game, restart- and
   race-safe.
