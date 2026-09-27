@@ -133,20 +133,24 @@ public sealed partial class LfgArchitectureTests
     [Fact]
     public void Every_card_response_and_edit_in_the_commands_goes_out_without_pings()
     {
-        var commands = File.ReadAllText(Path.Combine(Root(), "Commands", "LfgCommands.cs"));
-        var calls = Regex.Matches(commands, @"\b(RespondAsync|ModifyOriginalResponseAsync|FollowupAsync)\(").ToList();
-        calls.Should().NotBeEmpty();
-        foreach (var call in calls)
+        // The card buttons and the listing form (its private steps and the public card it posts or edits).
+        foreach (var file in new[] { "LfgCommands.cs", "LfgFormCommands.cs" })
         {
-            // The whole argument list of each call (balanced parentheses) must set allowed_mentions = none.
-            var end = call.Index + call.Length;
-            for (var depth = 1; depth > 0; end++)
-                depth += commands[end] switch { '(' => 1, ')' => -1, _ => 0 };
-            commands[call.Index..end].Should().Contain("NoPings", $"{call.Value} at offset {call.Index}");
-        }
+            var commands = File.ReadAllText(Path.Combine(Root(), "Commands", file));
+            var calls = Regex.Matches(commands, @"\b(RespondAsync|ModifyOriginalResponseAsync|FollowupAsync|UpdateAsync)\(").ToList();
+            calls.Should().NotBeEmpty(file);
+            foreach (var call in calls)
+            {
+                // The whole argument list of each call (balanced parentheses) must set allowed_mentions = none.
+                var end = call.Index + call.Length;
+                for (var depth = 1; depth > 0; end++)
+                    depth += commands[end] switch { '(' => 1, ')' => -1, _ => 0 };
+                commands[call.Index..end].Should().Contain("NoPings", $"{file}: {call.Value} at offset {call.Index}");
+            }
 
-        commands.Should().Contain("NoPings => DiscordConversions.ToAllowedMentions(MentionPolicy.None)");
-        commands.Should().NotContain("MentionPolicy.EveryoneOnly").And.NotContain("AllowedMentionTypes");
+            commands.Should().Contain("NoPings => DiscordConversions.ToAllowedMentions(MentionPolicy.None)", file);
+            commands.Should().NotContain("MentionPolicy.EveryoneOnly", file).And.NotContain("AllowedMentionTypes", file);
+        }
     }
 
     [Fact]

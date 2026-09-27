@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "1f0f7ed64937caf0ecf9f5406cc017dd857ff02adb7bbb360efbec7fd6bd8852",
+  "hash": "0eb5c635a82e77c839c50a724475e5fe2ec7021d0511380267554e40ff8e12e4",
   "commands": [
     {
       "module": "core",
@@ -54,7 +54,7 @@
         "name": "ekip",
         "description": "Find players: open a group listing for any game",
         "description_localizations": {
-          "tr": "Oyuncu bul: herhangi bir oyun için ekip ilanı aç"
+          "tr": "Oyuncu bul: herhangi bir oyun için ekip ilanı formunu aç"
         },
         "default_member_permissions": null,
         "nsfw": false,
@@ -64,200 +64,7 @@
         "integration_types": [
           0
         ],
-        "options": [
-          {
-            "type": 3,
-            "name": "oyun",
-            "description": "Game or activity (e.g. Deadlock, CS2, Valheim)",
-            "description_localizations": {
-              "tr": "Oyun veya aktivite (ör. Deadlock, CS2, Valheim)"
-            },
-            "required": true,
-            "min_length": 2,
-            "max_length": 50
-          },
-          {
-            "type": 4,
-            "name": "kisi",
-            "description": "Total team size including you",
-            "description_localizations": {
-              "tr": "Toplam ekip büyüklüğü (sen dahil)"
-            },
-            "required": true,
-            "min_value": 2,
-            "max_value": 50
-          },
-          {
-            "type": 3,
-            "name": "detay",
-            "description": "Short details: mode, rank, roles, plan…",
-            "description_localizations": {
-              "tr": "Kısa detay: mod, rank, rol, plan…"
-            },
-            "required": false,
-            "max_length": 200
-          },
-          {
-            "type": 4,
-            "name": "baslangic",
-            "description": "When it starts (empty: now)",
-            "description_localizations": {
-              "tr": "Ne zaman başlıyor (boş: şimdi)"
-            },
-            "required": false,
-            "choices": [
-              {
-                "name": "Now",
-                "name_localizations": {
-                  "tr": "Şimdi"
-                },
-                "value": 0
-              },
-              {
-                "name": "In 30 minutes",
-                "name_localizations": {
-                  "tr": "30 dakika sonra"
-                },
-                "value": 30
-              },
-              {
-                "name": "In 1 hour",
-                "name_localizations": {
-                  "tr": "1 saat sonra"
-                },
-                "value": 60
-              },
-              {
-                "name": "In 1.5 hours",
-                "name_localizations": {
-                  "tr": "1,5 saat sonra"
-                },
-                "value": 90
-              },
-              {
-                "name": "In 2 hours",
-                "name_localizations": {
-                  "tr": "2 saat sonra"
-                },
-                "value": 120
-              },
-              {
-                "name": "In 3 hours",
-                "name_localizations": {
-                  "tr": "3 saat sonra"
-                },
-                "value": 180
-              },
-              {
-                "name": "In 4 hours",
-                "name_localizations": {
-                  "tr": "4 saat sonra"
-                },
-                "value": 240
-              },
-              {
-                "name": "In 6 hours",
-                "name_localizations": {
-                  "tr": "6 saat sonra"
-                },
-                "value": 360
-              },
-              {
-                "name": "In 8 hours",
-                "name_localizations": {
-                  "tr": "8 saat sonra"
-                },
-                "value": 480
-              },
-              {
-                "name": "In 12 hours",
-                "name_localizations": {
-                  "tr": "12 saat sonra"
-                },
-                "value": 720
-              },
-              {
-                "name": "In 24 hours",
-                "name_localizations": {
-                  "tr": "24 saat sonra"
-                },
-                "value": 1440
-              }
-            ]
-          },
-          {
-            "type": 3,
-            "name": "tarih_saat",
-            "description": "Custom start, e.g. 05.10.2026 21:30 (server time zone)",
-            "description_localizations": {
-              "tr": "Özel başlangıç tarihi. Örn: 05.10.2026 21:30"
-            },
-            "required": false,
-            "max_length": 40
-          },
-          {
-            "type": 4,
-            "name": "sure",
-            "description": "How long the listing stays open (from the start; empty: default)",
-            "description_localizations": {
-              "tr": "İlan ne kadar açık kalsın (planlıysa başlangıçtan itibaren; boş: varsayılan)"
-            },
-            "required": false,
-            "choices": [
-              {
-                "name": "1 hour",
-                "name_localizations": {
-                  "tr": "1 saat"
-                },
-                "value": 60
-              },
-              {
-                "name": "2 hours",
-                "name_localizations": {
-                  "tr": "2 saat"
-                },
-                "value": 120
-              },
-              {
-                "name": "3 hours",
-                "name_localizations": {
-                  "tr": "3 saat"
-                },
-                "value": 180
-              }
-            ]
-          },
-          {
-            "type": 5,
-            "name": "hatirlat_30dk",
-            "description": "Ping the joined players 30 minutes before the start",
-            "description_localizations": {
-              "tr": "Başlangıçtan 30 dakika önce katılanları etiketle"
-            },
-            "required": false
-          },
-          {
-            "type": 5,
-            "name": "baslangicta_etiketle",
-            "description": "Ping the joined players when it starts",
-            "description_localizations": {
-              "tr": "Başladığında katılanları etiketle"
-            },
-            "required": false
-          },
-          {
-            "type": 7,
-            "name": "ses_kanali",
-            "description": "Voice channel for the group",
-            "description_localizations": {
-              "tr": "Ekip için ses kanalı"
-            },
-            "required": false,
-            "channel_types": [
-              2
-            ]
-          }
-        ]
+        "options": []
       }
     },
     {

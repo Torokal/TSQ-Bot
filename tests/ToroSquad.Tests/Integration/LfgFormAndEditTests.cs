@@ -10,6 +10,7 @@ using ToroSquad.Discord.Transport;
 using ToroSquad.Infrastructure.Delivery;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Lfg.Application;
+using ToroSquad.Modules.Lfg.Commands;
 using ToroSquad.Modules.Lfg.Domain;
 using ToroSquad.Modules.Lfg.Persistence;
 using ToroSquad.Tests.Support;
@@ -223,6 +224,12 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         check.Preview!.GameName.Should().Be("Deadlock");
         check.Preview.Start.Delay.Should().Be(TimeSpan.FromHours(2));
         check.Preview.EventAt.Should().Be(T0.AddHours(2), "a relative start has a moment, so the settings step offers the notices");
+        var draft = _host.Services.GetRequiredService<LfgFormDrafts>().Open(User(Owner), Channel, LfgFormKind.Create, null, LfgFormValues.Empty) with
+        {
+            Preview = check.Preview,
+        };
+        LfgFormUi.Settings(draft, T0, (key, _) => key).Components.Components.Cast<global::Discord.ActionRowComponent>().SelectMany(r => r.Components)
+            .OfType<global::Discord.SelectMenuComponent>().Select(c => c.Type).Should().Equal(global::Discord.ComponentType.SelectMenu, global::Discord.ComponentType.ChannelSelect);
         check.Preview.Duration.Should().Be(TimeSpan.FromHours(3));
         (await ListingCountAsync()).Should().Be(0);
         (await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, LfgForm.ToCreateInput(Form(players: "x"), false, false, null), Ct)))

@@ -722,7 +722,7 @@ public sealed class LfgLifecycleTests : IAsyncLifetime
         await FillAsync(listing.Id, 2);
         var full = (await GetAsync(listing.Id))!;
         full.Status.Should().Be(LfgStatus.Full);
-        renderer.Render(full, "tr").Buttons!.Select(b => b.Disabled).Should().Equal(true, false, false, false);
+        renderer.Render(full, "tr").Buttons!.Select(b => b.Disabled).Should().Equal(true, false, false, false, false);
 
         (await JoinAsync(listing.Id, 30)).Result.MessageKey.Should().Be("lfg.join.full");
         (await Lfg(s => s.CheckCloseAsync(User(Owner), listing.Id, Ct))).Result.MessageKey.Should().Be("lfg.close.question");
