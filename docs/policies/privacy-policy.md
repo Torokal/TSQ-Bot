@@ -10,7 +10,10 @@
   bildirim filtreleri; ayarı son değiştiren yöneticinin Discord kullanıcı kimliği.
 - **Kişisel tercihleriniz** (yalnızca siz kullanırsanız): takip ettiğiniz takımlar, sonuçları spoiler olarak görme
   tercihiniz ve botun size verdiği bildirim rollerinin kaydı.
-- **Okumadığımız veriler**: mesaj içerikleri, üye listeleri, çevrimiçi durum, profil bilgileri.
+- **Okumadığımız veriler**: mesaj akışları, üye listeleri, çevrimiçi durum, profil bilgileri. Tek istisna `/quote`
+  (TSQ Quote, modül açıksa): bir üye açıkça istediğinde yalnızca o tek mesajın metni ve yazarının görünen adı, kullanıcı
+  adı ve profil fotoğrafı istek sırasında bir kez işlenir ve alıntı görseli olarak kanala gönderilir; mesaj içeriği ve
+  profil bilgisi kalıcı olarak depolanmaz ve kayıt (log) dosyalarına yazılmaz.
 - **Herkese açık esports verisi**: PandaScore (varsayılan), isteğe bağlı olarak Liquipedia (CC BY-SA 3.0) ve Valve Regional Standings kaynaklarından maç, turnuva ve
   sıralama bilgileri. Bunlar kişisel veri değildir.
 

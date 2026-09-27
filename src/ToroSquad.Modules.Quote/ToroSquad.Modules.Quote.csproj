@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TSQ Quote: /quote turns one Discord message into a black-and-white quote card (PNG). Stateless: no tables, no
+       background jobs. Depends on the shared TSQ layers only (never on another feature module). The Application namespace
+       must not use the Discord SDK (architecture tests); only Commands talks to Discord.Net. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="SixLabors.ImageSharp" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" />
+    <PackageReference Include="SixLabors.Fonts" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Quote.Localization.%(Filename)%(Extension)" />
+    <!-- Fonts ship inside the assembly: the renderer never depends on fonts installed on the host (the runtime container
+         has none). SIL Open Font License 1.1, see Assets/Fonts/OFL-*.txt and THIRD_PARTY_NOTICES.md. -->
+    <EmbeddedResource Include="Assets\Fonts\*.ttf" LogicalName="ToroSquad.Modules.Quote.Fonts.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

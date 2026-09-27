@@ -81,6 +81,30 @@ invite link and no global command registration. The source code is public under 
   and the bot's later edit of that card.
 - Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
 
+## TSQ Quote (new, 2026-09-27, branch `feat/quote`)
+
+- Scope and rules: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md). Stateless utility module: no table, no migration, no worker.
+- **IMPLEMENTED / TESTED_OFFLINE**: `/quote message:<id or link> [channel]`; reference parsing (snowflake, discord.com /
+  ptb / canary / discordapp.com links, DM and other-server links refused); server-side checks (same guild, message channel
+  of this guild, member and bot `ViewChannel` + `ReadMessageHistory` on the channel or the thread's parent, no private
+  threads, no age-restricted text into other channels) with one answer for every "no"; Discord text → plain text (mentions,
+  markdown, code, timestamps, escapes); ImageSharp card renderer (embedded Noto fonts, greyscale avatar fade, wrapping,
+  font shrink, grapheme-safe ellipsis, fallback panel); bounded avatar download (Discord CDN only, 5 s, 4 MB).
+- **Message-ID flow IMPLEMENTED / TESTED_OFFLINE**: primary UX `/quote message:<id>` (current channel, or `channel:`; link
+  still accepted; never a channel scan); the bot's `ViewChannel` + `AttachFiles` where the command ran is checked before
+  anything is read or drawn (`quote.bot_cannot_attach`); an empty text is classified from the returned message
+  (attachments/embeds/poll, forward, system, own/mentioning message = no text; a completely empty normal message = content
+  probably withheld, `quote.content_unavailable`, no claimed certainty); rendering failures log ids + exception type + trace
+  code only; tests assert no log line ever contains the message body, names or avatar url. Invite integer 117760.
+- **Owner decision made (2026-09-27)**: Message Content privileged access is used for TSQ Quote. Discord documents it as
+  not tied to any gateway event (REST content fields), so the gateway Identify stays `Guilds`; no message events, no
+  cache, no listener. **Pending (owner)**: toggle MESSAGE CONTENT INTENT in the Developer Portal; grant Attach Files to the
+  bot role (or the channels) in the main guild.
+- **NOT VERIFIED_LIVE**: the whole command in Discord (a normal member's non-mentioning message read by id with content,
+  private defer → public `quote.png` follow-up, Attach Files enforcement, the real Discord CDN download, Discord.Net
+  permission resolution on real overwrites). Live acceptance plan: docs/quote/TSQ_QUOTE.md.
+- Off by default (module gate off); `/quote` is in the manifest but not synced.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

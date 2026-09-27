@@ -145,7 +145,7 @@ Railway değişkenleri: `TOROSQUAD_Live__Enabled`, `TOROSQUAD_Live__DiscordChann
 ## Discord izinleri
 
 Duyuru kanalında bot: View Channel, Send Messages, Embed Links, **Mention Everyone** (`@everyone`'ın gerçekten bildirim
-göndermesi için; davet izinleri 84992 bunu içermez — kanal/rol izniyle verilmelidir), Read Message History (belirsiz
+göndermesi için; davet izinleri (117760) bunu içermez — kanal/rol izniyle verilmelidir), Read Message History (belirsiz
 gönderimlerin uzlaştırılması için, önerilir).
 
 ## Tanı ve loglar

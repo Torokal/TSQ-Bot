@@ -46,8 +46,8 @@ Doctor yalnızca "set / NOT SET" yazar; loglar ve hata çıktıları bilinen tok
 2. Privileged Gateway Intents: **hepsi kapalı** kalsın.
 3. Uygulama kimliğini (Application ID) `appsettings` yerine user-secrets/env ile de verebilirsiniz:
    `dotnet user-secrets set "Discord:ApplicationId" "<id>" --project src\ToroSquad.Bot`.
-4. Davet: OAuth2 URL Generator → kapsamlar `bot`, `applications.commands`; izin tamsayısı **84992**
-   (self-service rolleri kullanacaksanız **268520448**). Administrator vermeyin. Botu önce **test sunucunuza** ekleyin.
+4. Davet: OAuth2 URL Generator → kapsamlar `bot`, `applications.commands`; izin tamsayısı **117760**
+   (TSQ Quote'un `Attach Files` izni dahil; self-service rolleri kullanacaksanız **268553216**). Administrator vermeyin. Botu önce **test sunucunuza** ekleyin.
 
 ## 5. Test sunucusunda canlı deneme (onay kapısı)
 

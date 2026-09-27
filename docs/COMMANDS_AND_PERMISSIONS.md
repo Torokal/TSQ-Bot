@@ -85,6 +85,21 @@ taşıma — davet izinlerinde yok, isteğe bağlı olarak yalnızca ilgili ses 
 
 Ayrıntı: [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md).
 
+## TSQ Quote (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/quote message:<mesaj-id> [channel]` | Herkes: mesajı siyah-beyaz alıntı görseline (`quote.png`) çevirip **bu kanala** gönderir. Mesaj kimliği bu kanalda, `channel` verilirse o kanalda aranır (kanallar taranmaz); mesaj bağlantısı da kabul edilir (kanal bağlantıdan). Sunucu tarafında: botun **bu kanalda** `ViewChannel` + `AttachFiles` izni (yoksa hiçbir şey okunmaz); mesaj **bu sunucuya** ait olmalı; üyenin ve botun kaynak kanalda `ViewChannel` + `ReadMessageHistory` izni olmalı (thread'de üst kanal; özel thread desteklenmez); yaş sınırlı kanaldan yaş sınırı olmayan kanala alıntı yapılmaz. Tüm "yok/erişim yok" durumları tek, ephemeral cevaptır; kart ping'sizdir |
+
+Mesaj kimliği: Discord → Ayarlar → Gelişmiş → **Geliştirici Modu**; mesaja sağ tık → **Mesaj Kimliğini Kopyala**; aynı
+kanalda `/quote message:<mesaj-id>`, başka kanalda `/quote message:<mesaj-id> channel:<kanal>`.
+
+Bot izinleri: kaynak kanalda `ViewChannel` + `ReadMessageHistory`; komutun çalıştığı kanalda `ViewChannel` +
+`AttachFiles` (kart etkileşim takip mesajıdır, `SendMessages` gerekmez). Başka üyelerin mesaj metni için uygulamanın
+**Message Content** erişimi (Developer Portal → Bot → Privileged Gateway Intents) açık olmalıdır; gateway intent'i
+değişmez (aşağıya bakın).
+Ayrıntı: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md).
+
 ## Esports (modül açıkken)
 
 | Komut | Seçenekler |
@@ -115,8 +130,12 @@ panel, autocomplete ve bildirimler modül kapalıyken çalışmaz.
 ## Bot hesabı, intent'ler, davet
 
 - Resmî bot hesabı + bot token (self-bot/kullanıcı token'ı yok). **Administrator istenmez.**
-- Gateway intent: yalnızca **Guilds** (ayrıcalıklı değil). Message Content / Presence / Guild Members **kapalı**; gerekmez
-  (etkileşim yükü üyenin rollerini içerir, rol ekleme/çıkarma REST ile yapılır).
+- Gateway intent (Identify): yalnızca **Guilds** (ayrıcalıklı değil). Presence / Guild Members kapalı, gerekmez (etkileşim
+  yükü üyenin rollerini içerir, rol ekleme/çıkarma REST ile yapılır). Mesaj olayları (`GuildMessages`) dinlenmez.
+- **Message Content** (ayrıcalıklı erişim, yalnızca TSQ Quote için): Developer Portal → Bot → Privileged Gateway Intents →
+  MESSAGE CONTENT INTENT **açık**. Discord'a göre bu erişim bir gateway olayına bağlı değildir ve REST cevaplarındaki içerik
+  alanlarını açar; bu yüzden Identify'a eklenmez ve bot hiçbir mesaj olayı almaz — yalnızca `/quote`'ta verilen tek
+  mesajı okur.
 - OAuth2 kapsamları: `bot` ve `applications.commands`.
 - İzinler (asgari, işleve göre):
 
@@ -125,11 +144,15 @@ panel, autocomplete ve bildirimler modül kapalıyken çalışmaz.
 | View Channel | 1024 | bildirim kanalını görmek | evet |
 | Send Messages | 2048 | bildirim göndermek | evet |
 | Embed Links | 16384 | embed'ler | evet |
-| Read Message History | 65536 | belirsiz teslimat uzlaştırması (yalnızca kendi mesajlarını arar) | önerilir |
+| Read Message History | 65536 | belirsiz teslimat uzlaştırması (yalnızca kendi mesajlarını arar); TSQ Quote kaynak kanalı | önerilir; TSQ Quote için kaynak kanalda gerekli |
+| Attach Files | 32768 | TSQ Quote kartı (`quote.png`), komutun çalıştığı kanalda | TSQ Quote kullanılıyorsa |
 | Manage Roles | 268435456 | self-service bildirim rolleri | yalnızca self-service kullanılırsa |
 | Mention Everyone | 131072 | bahsedilemez rolleri pinglemek; TSQ Live duyurusunun `@everyone` bildirimi | rollerde **önerilmez** (rolü "bahsedilebilir" yapın); TSQ Live kullanılıyorsa **yalnızca duyuru kanalında** kanal izniyle verin |
 
-  Asgari izin tamsayısı: **84992**; self-service rollerle: **268520448**.
+  Asgari izin tamsayısı (tüm modüller, TSQ Quote dahil): **117760** (View Channel + Send Messages + Embed Links + Attach
+  Files + Read Message History); self-service rollerle: **268553216**. TSQ Quote kullanılmıyorsa **84992** yeterlidir.
+  Bot zaten sunucudaysa yeniden davet gerekmez: bot rolüne (ya da yalnızca ilgili kanallarda) **Attach Files** verilmesi
+  yeterlidir.
   Bot rolü, dağıtacağı self-service rollerin **üstünde** olmalıdır.
 - Rate limit: Discord.Net yerleşik yönetimi (`RetryRatelimit`, Retry-After'a uyar). Ek agresif retry katmanı yok;
   outbox kendi sınırlı geri çekilmesini uygular.
