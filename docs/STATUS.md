@@ -84,6 +84,11 @@ invite link and no global command registration. The source code is public under 
   create, current flags on edit; notices with an empty start are refused with a way back, never dropped). Details moved to
   their own small modal opened from the settings step (📝 Detay Ekle / Detayı Düzenle; empty clears). The card always shows
   the start (`🕘 Başlangıç: Şimdi` for "now"). No migration, command manifest unchanged.
+- **V3 merged** (PR #17, `cbd7234`), deployed, command sync dry-run "Nothing to change".
+- **Field errors IMPLEMENTED / TESTED_OFFLINE** (`feat/lfg-modal-edit`): Discord's own pre-submit checks are used wherever the
+  public API has them (required, min/max length, select choices); everything else is checked after submit and refused as
+  `❌ **field**` + reason with **✏️ Formu Düzelt** (the filled form again; a refused voice channel is not re-offered, a text
+  outside the input's own limits is not prefilled). The card's start label is bold.
 - **NOT VERIFIED_LIVE (V3)**: the string select and the checkbox group inside the modal in Discord clients (rendering,
   preselection on edit, the submitted values), the details modal opened from the settings message.
 - **NOT VERIFIED_LIVE**: the voice channel select inside the modal (rendering, clearing, and Discord echoing the preselected
