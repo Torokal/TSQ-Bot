@@ -38,11 +38,12 @@ Form gönderilince hiçbir şey kaydedilmez: yazılanlar oluşturma kuralların�
 denetlenir; hata varsa Türkçe neden ve *Formu Düzenle* düğmesi gösterilir. **İlanı Oluştur** mevcut
 `LfgService.CreateAsync` akışını çalıştırır (kanal kısıtı, kişi başı aktif ilan sınırı, sahip ilk Katılan, `BEGIN
 IMMEDIATE`, özel tarih/saat dilimi, bildirimler, ses doğrulaması) ve kart kanala herkese açık bir takip mesajı olarak
-**ping'siz** gönderilir; mesaj kimliği kaydedilir (bot kartı sonra kendisi düzenler). Gönderim hata verirse Discord
-kartı yine de oluşturmuş olabilir (kaybolan yanıt): kanalın son 20 mesajında bu ilanın kartı (Katıl düğmesi kimliği)
-aranır. Bulunursa kaydedilir; Discord isteği reddettiyse (4xx) ya da kart geçmişte yoksa ilan silinir (kimse görmedi) ve
-ayarlar mesajı yeniden denenebilir kalır; geçmiş okunamıyorsa (Read Message History yok) ilan tutulur — ikinci kart
-açılmaz, kartın ilk tıklaması mesaj kimliğini kaydeder. Kanal kısıtı ve aktif ilan sınırı formu açmadan önce de
+**ping'siz** gönderilir; mesaj kimliği kaydedilir (bot kartı sonra kendisi düzenler). İlan yalnızca Discord kartı
+kesin olarak reddettiyse (4xx) silinir (kimse görmedi) ve ayarlar mesajı yeniden denenebilir kalır. Başka her hatada
+(zaman aşımı, 5xx) Discord kartı yine de oluşturmuş olabilir: kanalın son 20 mesajında bu ilanın kartı (Katıl düğmesi
+kimliği) aranır ve bulunursa kaydedilir; bulunamazsa ilan **tutulur** (boş geçmiş kanıt değildir — Read Message History
+yoksa Discord boş liste döner, mesaj bir an sonra da görünebilir): ikinci kart açılmaz, kartın ilk tıklaması mesaj
+kimliğini kaydeder; kart gerçekten yoksa ilan en geç süresi dolunca kapanır. Kanal kısıtı ve aktif ilan sınırı formu açmadan önce de
 denetlenir; kimse boşuna form doldurmaz.
 
 **Taslak.** Adımlar arasındaki form, veritabanına değil **bellekte** kısa ömürlü bir taslakta durur (`LfgFormDrafts`):
