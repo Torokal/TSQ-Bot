@@ -59,7 +59,18 @@ public sealed class LfgNoticePlanner(
             .OrderBy(x => x.EventAt).Select(x => x.Id).Take(Batch).ToListAsync(ct);
         var queued = 0;
         foreach (var id in ids)
-            queued += await PlanAsync(id, ct);
+        {
+            try
+            {
+                queued += await PlanAsync(id, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // One listing must not hold back every other listing's notices (its transaction rolled back; retried next pass).
+                logger.LogError(ex, "LFG listing {Listing}: notice planning failed", id);
+            }
+        }
+
         return queued;
     }
 
@@ -121,13 +132,16 @@ public sealed class LfgNoticePlanner(
     }
 
     /// <summary>
-    /// Cancels this listing's notices still waiting in the outbox (closed/orphaned listing). Bumps the outbox version so a
-    /// dispatcher that already read the row cannot claim it afterwards.
+    /// Cancels this listing's notices still waiting in the outbox (closed/orphaned listing): Pending, and DeliveryUnknown —
+    /// otherwise a reconciliation that finds nothing would resend it (pingless) for an ended listing. Bumps the outbox
+    /// version so a dispatcher that already read a Pending row cannot claim it afterwards. A row already InFlight (claimed,
+    /// request under way) cannot be recalled: that window is the duration of one Discord request.
     /// </summary>
     public static Task<int> CancelPendingAsync(ToroDbContext db, long listingId, string reason, DateTimeOffset now, CancellationToken ct)
     {
         var key = SourceKey(listingId);
-        return db.Outbox.Where(o => o.ModuleId == LfgModule.ModuleIdValue && o.SourceKey == key && o.Status == OutboxStatus.Pending)
+        return db.Outbox.Where(o => o.ModuleId == LfgModule.ModuleIdValue && o.SourceKey == key &&
+                                    (o.Status == OutboxStatus.Pending || o.Status == OutboxStatus.DeliveryUnknown))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(o => o.Status, OutboxStatus.Cancelled)
                 .SetProperty(o => o.LastError, reason)
@@ -136,13 +150,17 @@ public sealed class LfgNoticePlanner(
                 .SetProperty(o => o.Version, o => o.Version + 1), ct);
     }
 
-    /// <summary>Removes finished LFG notice rows after <see cref="Retention"/> (their payload holds the pinged user ids).</summary>
+    /// <summary>
+    /// Removes finished LFG notice rows after <see cref="Retention"/> (their payload holds the pinged user ids), including a
+    /// DeliveryUnknown row whose reconciliation gave up (no next attempt): it will never be delivered.
+    /// </summary>
     public Task<int> PruneAsync(CancellationToken ct)
     {
         var cutoff = clock.GetUtcNow() - Retention;
         return db.Outbox.Where(o => o.ModuleId == LfgModule.ModuleIdValue && o.UpdatedAt < cutoff &&
                                     (o.Status == OutboxStatus.Cancelled || o.Status == OutboxStatus.Expired || o.Status == OutboxStatus.Failed ||
-                                     o.Status == OutboxStatus.Simulated || (o.Status == OutboxStatus.Sent && !o.EditPending)))
+                                     o.Status == OutboxStatus.Simulated || (o.Status == OutboxStatus.Sent && !o.EditPending) ||
+                                     (o.Status == OutboxStatus.DeliveryUnknown && o.NextAttemptAt == null)))
             .ExecuteDeleteAsync(ct);
     }
 }

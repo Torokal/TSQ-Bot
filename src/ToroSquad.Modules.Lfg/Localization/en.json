@@ -114,5 +114,6 @@
   "lfg.create.timezone_invalid": "Invalid time zone.",
   "lfg.status.timezone": "Time zone",
   "lfg.status.timezone_value": "{0} (/setup)",
-  "cmd.ekip.tarih_saat": "Custom start date. E.g. 05.10.2026 21:30"
+  "cmd.ekip.tarih_saat": "Custom start date. E.g. 05.10.2026 21:30",
+  "lfg.privacy.closed": "{0} listing(s) you closed as a moderator"
 }

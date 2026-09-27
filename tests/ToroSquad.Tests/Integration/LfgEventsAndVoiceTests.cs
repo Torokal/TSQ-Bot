@@ -704,6 +704,133 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         (await NoticesAsync()).Should().BeEmpty();
     }
 
+    // ---- release review fixes ----
+
+    [Fact]
+    public async Task A_moderator_who_closed_a_listing_is_covered_by_privacy()
+    {
+        var listing = await OpenAsync();
+        var moderator = new ActorContext(Guild, new UserId(40), GuildPermission.ManageMessages, [], false, 5);
+        await Lfg(s => s.CloseAsync(moderator, listing.Id, Ct));
+
+        await _host.InScopeAsync(async sp =>
+        {
+            var data = sp.GetServices<IUserDataContributor>().Single(c => c.Module.Value == "lfg");
+            (await data.ExportAsync(Guild, new UserId(40), Ct))["listingsYouClosedAsModerator"]!.GetValue<int>().Should().Be(1);
+            (await data.PreviewDeletionAsync(Guild, new UserId(40), Ct)).Should().ContainSingle(i => i.LabelKey == "lfg.privacy.closed");
+            await data.DeleteAsync(Guild, new UserId(40), Ct);
+        });
+
+        var row = await RowAsync(listing.Id);
+        row.ClosedByUserId.Should().BeNull();
+        row.Status.Should().Be(LfgStatus.Closed, "the listing (the owner's data) stays; only who closed it is forgotten");
+    }
+
+    [Fact]
+    public async Task A_voice_channel_with_a_user_limit_is_never_joined_through_the_bots_move()
+    {
+        _host.Guilds.SetVoiceChannel(Guild, Voice, new VoiceChannelAccess(true, true, VoiceChannelAccess.RequiredToMove));
+        var listing = await OpenAsync(voice: Voice);
+        _host.Guilds.ScriptedMoves.Enqueue(VoiceMoveOutcome.LimitedChannel);
+
+        var result = await VoiceAsync(listing.Id, Owner);
+
+        result.Result.MessageKey.Should().Be("lfg.voice.open", "the member joins themselves, so Discord enforces the limit");
+        result.OpenChannelUrl.Should().Be("https://discord.com/channels/881/8802");
+    }
+
+    [Fact]
+    public async Task A_refusal_never_carries_another_guilds_listing()
+    {
+        var listing = await OpenAsync();
+
+        foreach (var action in new Func<LfgService, Task<LfgResult>>[]
+                 {
+                     s => s.JoinAsync(User(20, OtherGuild), listing.Id, Ct), s => s.MaybeAsync(User(20, OtherGuild), listing.Id, Ct),
+                     s => s.LeaveAsync(User(20, OtherGuild), listing.Id, Ct), s => s.CheckCloseAsync(User(20, OtherGuild), listing.Id, Ct),
+                     s => s.CloseAsync(new ActorContext(OtherGuild, new UserId(20), GuildPermission.Administrator, [], true, 9), listing.Id, Ct),
+                 })
+        {
+            var result = await Lfg(action);
+            result.Result.MessageKey.Should().Be("lfg.not_found");
+            result.Listing.Should().BeNull();
+        }
+
+        (await RowAsync(listing.Id)).Status.Should().Be(LfgStatus.Open);
+    }
+
+    [Fact]
+    public async Task Closing_also_cancels_a_notice_whose_delivery_is_uncertain()
+    {
+        var listing = await OpenAsync(start: 30, remind: true);
+        _host.Transport.ScriptSend(() => new SendOutcome.Ambiguous("timeout"));
+        await TickAsync();
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.DeliveryUnknown);
+
+        await Lfg(s => s.CloseAsync(User(Owner), listing.Id, Ct));
+        _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await TickAsync();
+
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Cancelled);
+        Delivered().Should().BeEmpty("no resend for a closed listing");
+    }
+
+    [Fact]
+    public async Task A_notice_stuck_in_an_uncertain_delivery_is_pruned_and_covered_by_privacy()
+    {
+        await OpenAsync(start: 30, remind: true);
+        _host.Transport.ScriptSend(() => new SendOutcome.Ambiguous("timeout"));
+        await TickAsync();
+        // Reconciliation gave up (e.g. no Read Message History): no next attempt, it will never be delivered.
+        await _host.InScopeAsync(async sp => await sp.GetRequiredService<ToroDbContext>().Outbox.Where(o => o.ModuleId == "lfg")
+            .ExecuteUpdateAsync(s => s.SetProperty(o => o.NextAttemptAt, (DateTimeOffset?)null), Ct));
+
+        await _host.InScopeAsync(async sp =>
+        {
+            var data = sp.GetServices<IUserDataContributor>().Single(c => c.Module.Value == "lfg");
+            (await data.ExportAsync(Guild, new UserId(Owner), Ct))["eventNoticesPingingYou"]!.GetValue<int>().Should().Be(1);
+        });
+        _host.Clock.Advance(LfgNoticePlanner.Retention + TimeSpan.FromMinutes(6));
+        await TickAsync();
+
+        (await NoticesAsync()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task One_card_that_throws_does_not_stop_the_other_cards_or_the_pass()
+    {
+        var first = await OpenAsync(game: "First");
+        var second = await OpenAsync(game: "Second");
+        await Lfg(s => s.CloseAsync(User(Owner), first.Id, Ct));
+        await Lfg(s => s.CloseAsync(User(Owner), second.Id, Ct));
+        _host.Transport.ScriptEdit(() => throw new InvalidOperationException("unexpected SDK failure"));
+
+        await TickAsync();
+
+        var broken = await RowAsync(first.Id);
+        broken.CardStale.Should().BeTrue();
+        broken.CardSyncAttempts.Should().Be(1, "counted as an attempt, still bounded");
+        (await RowAsync(second.Id)).CardStale.Should().BeFalse("the next card was still updated");
+    }
+
+    [Fact]
+    public async Task Deleted_card_checks_reach_every_active_card_in_turn()
+    {
+        var listings = new List<LfgListingView>();
+        for (var i = 0; i < 55; i++)
+            listings.Add(await OpenAsync(owner: 5000 + (ulong)i, game: "Game " + i));
+        var newest = listings[^1];
+        _host.Transport.DeleteMessage(newest.Message!.Value);
+
+        await TickAsync(); // first 50 cards
+        (await RowAsync(newest.Id)).Status.Should().Be(LfgStatus.Open);
+        _host.Clock.Advance(LfgExpiryWorker.VerifyInterval);
+        await TickAsync(); // the rest
+
+        (await RowAsync(newest.Id)).Status.Should().Be(LfgStatus.Orphaned);
+        _host.Transport.PresenceCalls.Should().Be(55, "one read per active card, no repeats");
+    }
+
     // ---- schema upgrade ----
 
     [Fact]

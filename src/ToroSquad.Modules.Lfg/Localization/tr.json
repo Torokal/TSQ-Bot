@@ -114,5 +114,6 @@
   "lfg.create.timezone_invalid": "Geçersiz saat dilimi.",
   "lfg.status.timezone": "Saat dilimi",
   "lfg.status.timezone_value": "{0} (/setup)",
-  "cmd.ekip.tarih_saat": "Özel başlangıç tarihi. Örn: 05.10.2026 21:30"
+  "cmd.ekip.tarih_saat": "Özel başlangıç tarihi. Örn: 05.10.2026 21:30",
+  "lfg.privacy.closed": "{0} ilanda kapatan moderatör kaydın"
 }

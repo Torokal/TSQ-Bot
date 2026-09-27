@@ -99,6 +99,17 @@ public sealed partial class LfgArchitectureTests
             UserPingOptIn().IsMatch(File.ReadAllText(file)).Should().BeFalse($"{relative} must not opt in to user pings");
         }
 
+        // The detector itself: every known way in is caught, role-only policies are not.
+        foreach (var bad in new[]
+                 {
+                     "MentionPolicy.ExplicitUsers(ids)", "new MentionPolicy(roles, false, users)", "new MentionPolicy(Array.Empty<RoleId>(), false, list)",
+                     "new MentionPolicy(r, Users: list)", "policy with { Users = list }", "allowed.UserIds = ids", "AllowedMentions.All",
+                     "new AllowedMentions(AllowedMentionTypes.Users)", "AllowedMentionTypes.All",
+                 })
+            UserPingOptIn().IsMatch(bad).Should().BeTrue(bad);
+        foreach (var fine in new[] { "new MentionPolicy(roles)", "new MentionPolicy([new RoleId(role)])", "Mentions with { Users = null }", "Mentions.Users is { Count: > 0 }" })
+            UserPingOptIn().IsMatch(fine).Should().BeFalse(fine);
+
         var producer = File.ReadAllText(Path.Combine(src, allowed[2]));
         producer.Should().Contain("MentionPolicy.ExplicitUsers(listing.Players)", "exactly the Joined players, never Maybe or text");
         Regex.Matches(producer, @"ExplicitUsers\(").Should().ContainSingle();
@@ -212,8 +223,11 @@ public sealed partial class LfgArchitectureTests
 
     private static IEnumerable<string> Placeholders(string text) => PlaceholderPattern().Matches(text).Select(m => m.Value).Distinct().Order();
 
-    /// <summary>Any way to make a user id ping: the factory, the record's Users slot (except clearing it), Discord.Net's UserIds or AllowedMentionTypes.Users.</summary>
-    [GeneratedRegex(@"ExplicitUsers\(|\bUsers\s*:\s*(?!null)|\bUsers\s*=\s*(?!null)[^=\s]|UserIds\s*=|AllowedMentionTypes\.Users")]
+    /// <summary>
+    /// Any way to make a user id ping: the factory, the record's Users slot (named, or the positional third argument; clearing
+    /// it is fine), Discord.Net's UserIds, AllowedMentionTypes.Users/All or AllowedMentions.All.
+    /// </summary>
+    [GeneratedRegex(@"ExplicitUsers\(|\bUsers\s*:\s*(?!null)|\bUsers\s*=\s*(?!null)[^=\s]|UserIds\s*=|AllowedMentionTypes\.(Users|All)|AllowedMentions\.All|new\s+MentionPolicy\([^;()]*(\([^;()]*\))?[^;()]*,[^;()]*,")]
     private static partial Regex UserPingOptIn();
 
     [GeneratedRegex(@"\{\d+\}")]

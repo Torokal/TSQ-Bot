@@ -215,7 +215,7 @@ public sealed class LfgService(
                 logger.LogInformation("LFG listing {Listing} is full ({Players} players)", listing.Id, listing.MaxPlayers);
             return (OperationResult.Ok("lfg.join.done"), true);
         }, ct);
-        return new LfgResult(result, await GetAsync(listingId, ct), refresh);
+        return new LfgResult(result, await GetAsync(listingId, actor.GuildId, ct), refresh);
     }
 
     /// <summary>
@@ -265,7 +265,7 @@ public sealed class LfgService(
 
             return (OperationResult.Ok("lfg.maybe.done"), true);
         }, ct);
-        return new LfgResult(result, await GetAsync(listingId, ct), refresh);
+        return new LfgResult(result, await GetAsync(listingId, actor.GuildId, ct), refresh);
     }
 
     /// <summary>"Ayrıl": removes a Joined or Maybe member completely; a Joined one frees a slot (Full reopens).</summary>
@@ -296,7 +296,7 @@ public sealed class LfgService(
             await db.SaveChangesAsync(ct);
             return (OperationResult.Ok("lfg.leave.done"), true);
         }, ct);
-        return new LfgResult(result, await GetAsync(listingId, ct), refresh);
+        return new LfgResult(result, await GetAsync(listingId, actor.GuildId, ct), refresh);
     }
 
     /// <summary>First step of closing (before the confirmation is shown): same checks as <see cref="CloseAsync"/>, no change.</summary>
@@ -316,7 +316,7 @@ public sealed class LfgService(
                 return (ended, true);
             return (OperationResult.Ok("lfg.close.question"), false);
         }, ct);
-        return new LfgResult(result, await GetAsync(listingId, ct), refresh);
+        return new LfgResult(result, await GetAsync(listingId, actor.GuildId, ct), refresh);
     }
 
     /// <summary>
@@ -352,7 +352,7 @@ public sealed class LfgService(
             logger.LogInformation("LFG listing {Listing} closed by its {Who}", listing.Id, listing.OwnerUserId == actor.UserId.Value ? "owner" : "moderator");
             return (OperationResult.Ok("lfg.close.done"), true);
         }, ct);
-        return new LfgResult(result, await GetAsync(listingId, ct), refresh);
+        return new LfgResult(result, await GetAsync(listingId, actor.GuildId, ct), refresh);
     }
 
     /// <summary>
@@ -417,22 +417,32 @@ public sealed class LfgService(
                     return new(No(OperationError.Forbidden, "lfg.voice.no_access", mention));
                 case VoiceMoveOutcome.ChannelUnavailable:
                     return await VoiceGoneAsync(listing.Id, voiceId, ct);
+                case VoiceMoveOutcome.LimitedChannel:
+                    return new(OperationResult.Ok("lfg.voice.open", mention), ChannelUrl(listing.GuildId, voiceId));
                 default:
                     break; // not connected to voice, permission race, transient failure: the link below
             }
         }
 
-        var url = string.Create(CultureInfo.InvariantCulture, $"https://discord.com/channels/{listing.GuildId}/{voiceId}");
-        return new(OperationResult.Ok(access.BotCanMove ? "lfg.voice.open_not_connected" : "lfg.voice.open", mention), url);
+        return new(OperationResult.Ok(access.BotCanMove ? "lfg.voice.open_not_connected" : "lfg.voice.open", mention), ChannelUrl(listing.GuildId, voiceId));
     }
+
+    /// <summary>Opens the channel in Discord (fixed host, numeric ids only); it connects nobody by itself.</summary>
+    private static string ChannelUrl(ulong guild, ulong channel) =>
+        string.Create(CultureInfo.InvariantCulture, $"https://discord.com/channels/{guild}/{channel}");
 
     /// <summary>An interactive card update failed: the worker takes over.</summary>
     public async Task MarkCardStaleAsync(long listingId, CancellationToken ct) =>
         await Listings.Where(x => x.Id == listingId).ExecuteUpdateAsync(s => s.SetProperty(x => x.CardStale, true), ct);
 
-    public async Task<LfgListingView?> GetAsync(long listingId, CancellationToken ct)
+    public Task<LfgListingView?> GetAsync(long listingId, CancellationToken ct) => GetAsync(listingId, null, ct);
+
+    /// <summary>With a guild, another guild's listing is null — an actor never receives a foreign listing, not even on refusal.</summary>
+    public async Task<LfgListingView?> GetAsync(long listingId, GuildId? guild, CancellationToken ct)
     {
-        var listing = await Listings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == listingId, ct);
+        var listing = guild is { } only
+            ? await Listings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == listingId && x.GuildId == only.Value, ct)
+            : await Listings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == listingId, ct);
         if (listing is null)
             return null;
         var players = await Participants.AsNoTracking().Where(p => p.ListingId == listingId).ToListAsync(ct);

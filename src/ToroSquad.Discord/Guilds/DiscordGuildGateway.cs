@@ -75,6 +75,9 @@ public sealed class DiscordGuildGateway(DiscordSocketClient client) : IGuildGate
             var own = member.GetPermissions(voice);
             if (!own.ViewChannel || !own.Connect)
                 return VoiceMoveOutcome.MemberCannotConnect;
+            // The bot's Move Members would bypass a user limit the member is subject to; occupancy is unknown (no voice states).
+            if (voice.UserLimit is > 0 && !own.MoveMembers)
+                return VoiceMoveOutcome.LimitedChannel;
             // PATCH /guilds/{guild}/members/{user} { channel_id }: only works while the member is connected to voice.
             await member.ModifyAsync(p => p.ChannelId = voice.Id,
                 new RequestOptions { CancelToken = cancellationToken, AuditLogReason = "TSQ LFG: member asked to join the listing's voice channel" });

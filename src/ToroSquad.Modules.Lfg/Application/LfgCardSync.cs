@@ -54,8 +54,20 @@ public sealed class LfgCardSync(
         var updated = 0;
         foreach (var id in ids)
         {
-            if (await SyncAsync(id, ct) == LfgCardSyncOutcome.Updated)
-                updated++;
+            try
+            {
+                if (await SyncAsync(id, ct) == LfgCardSyncOutcome.Updated)
+                    updated++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // An unexpected failure of one card must not stop the pass; it counts as an attempt (still bounded).
+                logger.LogError(ex, "LFG listing {Listing}: card update threw", id);
+                db.ChangeTracker.Clear();
+                await Listings.Where(x => x.Id == id).ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.CardSyncAttempts, x => x.CardSyncAttempts + 1)
+                    .SetProperty(x => x.CardStale, x => x.CardSyncAttempts + 1 < MaxAttempts), ct);
+            }
         }
 
         return updated;
@@ -117,14 +129,19 @@ public sealed class LfgCardSync(
         }
     }
 
-    /// <summary>Worker reconciliation (throttled by the worker): one read per active card, oldest listing first.</summary>
-    public async Task<int> VerifyActiveCardsAsync(CancellationToken ct)
+    /// <summary>
+    /// Worker reconciliation (throttled by the worker): one sequential read per active card, at most
+    /// <see cref="VerifyBatch"/> per round, continuing after <paramref name="afterId"/> so every active card is reached in
+    /// turn. Returns the cursor for the next round (0 = start over).
+    /// </summary>
+    public async Task<long> VerifyActiveCardsAsync(long afterId, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         var ids = await Listings.AsNoTracking()
-            .Where(x => (x.Status == LfgStatus.Open || x.Status == LfgStatus.Full) && x.ExpiresAt > now && x.MessageId != null)
+            .Where(x => (x.Status == LfgStatus.Open || x.Status == LfgStatus.Full) && x.ExpiresAt > now && x.MessageId != null && x.Id > afterId)
             .OrderBy(x => x.Id).Select(x => x.Id).Take(VerifyBatch).ToListAsync(ct);
-        return await VerifyManyAsync(ids, ct);
+        await VerifyManyAsync(ids, ct);
+        return ids.Count < VerifyBatch ? 0 : ids[^1];
     }
 
     /// <summary>
@@ -160,8 +177,16 @@ public sealed class LfgCardSync(
         var orphaned = 0;
         foreach (var id in ids)
         {
-            if (await VerifyAsync(id, ct) == LfgCardSyncOutcome.MessageMissing)
-                orphaned++;
+            try
+            {
+                if (await VerifyAsync(id, ct) == LfgCardSyncOutcome.MessageMissing)
+                    orphaned++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "LFG listing {Listing}: card check threw", id); // nothing changed; checked again next round
+                db.ChangeTracker.Clear();
+            }
         }
 
         return orphaned;
@@ -176,9 +201,12 @@ public sealed class LfgCardSync(
         listing.CardStale = false;
         listing.CardSyncAttempts = 0;
         listing.Version++;
+        // The terminal state and the cancellation of any queued notice commit together (no notice for an orphaned listing).
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         if (!await SaveAsync(ct))
             return false;
         await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "listing_orphaned", clock.GetUtcNow(), ct);
+        await transaction.CommitAsync(ct);
         return true;
     }
 

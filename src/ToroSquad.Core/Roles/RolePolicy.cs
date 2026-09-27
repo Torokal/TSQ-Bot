@@ -147,6 +147,12 @@ public enum VoiceMoveOutcome
     BotMissingPermissions = 3,
     ChannelUnavailable = 4,
     Failed = 5,
+
+    /// <summary>
+    /// The channel has a user limit. A bot with Move Members could move a member past it, and occupancy is unknown without
+    /// voice-state events, so the member joins themselves (Discord then enforces the limit).
+    /// </summary>
+    LimitedChannel = 6,
 }
 
 public sealed record BotChannelAccess(bool Exists, bool IsTextBased, GuildPermission Permissions)

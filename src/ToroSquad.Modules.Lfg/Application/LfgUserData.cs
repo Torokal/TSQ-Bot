@@ -58,7 +58,14 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
         foreach (var j in joined)
             participations.Add(new JsonObject { ["listingId"] = j.Id, ["game"] = j.GameName, ["response"] = j.Response.ToString(), ["respondedAtUtc"] = Iso(j.JoinedAt) });
         var notices = (await NoticesMentioningAsync(guild, user, cancellationToken)).Count;
-        return new JsonObject { ["listings"] = listings, ["joinedListings"] = participations, ["eventNoticesPingingYou"] = notices };
+        var closedAsModerator = await ClosedAsModerator(guild, user).CountAsync(cancellationToken);
+        return new JsonObject
+        {
+            ["listings"] = listings,
+            ["joinedListings"] = participations,
+            ["eventNoticesPingingYou"] = notices,
+            ["listingsYouClosedAsModerator"] = closedAsModerator,
+        };
     }
 
     public async Task<IReadOnlyList<DeletionPreviewItem>> PreviewDeletionAsync(GuildId guild, UserId user, CancellationToken cancellationToken)
@@ -70,6 +77,9 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
             items.Add(new DeletionPreviewItem("lfg.privacy.listings", owned));
         if (joined > 0)
             items.Add(new DeletionPreviewItem("lfg.privacy.joined", joined));
+        var closed = await ClosedAsModerator(guild, user).CountAsync(cancellationToken);
+        if (closed > 0)
+            items.Add(new DeletionPreviewItem("lfg.privacy.closed", closed));
         return items;
     }
 
@@ -101,7 +111,11 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
         await Participants.Where(p => owned.Any(l => l.Id == p.ListingId)).ExecuteDeleteAsync(cancellationToken);
         deleted += await owned.ExecuteDeleteAsync(cancellationToken);
 
-        // Event notices whose payload lists the user as a pinged player (not those Discord may be receiving right now).
+        // Listings of others the user closed as a moderator: keep the listing, forget who closed it.
+        deleted += await ClosedAsModerator(guild, user).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClosedByUserId, (ulong?)null), cancellationToken);
+
+        // Event notices whose payload lists the user as a pinged player — except one Discord may be receiving right now
+        // (in flight, or an uncertain delivery still being reconciled); those are pruned after they finish.
         var notices = await NoticesMentioningAsync(guild, user, cancellationToken);
         deleted += await db.Outbox.Where(o => notices.Contains(o.Id)).ExecuteDeleteAsync(cancellationToken);
 
@@ -121,10 +135,14 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
     private async Task<List<long>> NoticesMentioningAsync(GuildId guild, UserId user, CancellationToken ct)
     {
         var rows = await db.Outbox.AsNoTracking()
-            .Where(o => o.GuildId == guild.Value && o.ModuleId == LfgModule.ModuleIdValue && o.Status != OutboxStatus.InFlight && o.Status != OutboxStatus.DeliveryUnknown)
+            .Where(o => o.GuildId == guild.Value && o.ModuleId == LfgModule.ModuleIdValue && o.Status != OutboxStatus.InFlight &&
+                        (o.Status != OutboxStatus.DeliveryUnknown || o.NextAttemptAt == null))
             .Select(o => new { o.Id, o.PayloadJson }).ToListAsync(ct);
         return rows.Where(r => PayloadSerializer.Deserialize(r.PayloadJson).Mentions.Users?.Contains(user) == true).Select(r => r.Id).ToList();
     }
+
+    private IQueryable<LfgListingEntity> ClosedAsModerator(GuildId guild, UserId user) =>
+        Listings.Where(x => x.GuildId == guild.Value && x.ClosedByUserId == user.Value && x.OwnerUserId != user.Value);
 
     private IQueryable<LfgParticipantEntity> JoinedElsewhere(GuildId guild, UserId user) =>
         Participants.Where(p => p.UserId == user.Value && Listings.Any(l => l.Id == p.ListingId && l.GuildId == guild.Value && l.OwnerUserId != user.Value));

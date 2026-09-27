@@ -23,6 +23,7 @@ public sealed class LfgExpiryWorker(IServiceScopeFactory scopes, TimeProvider cl
     public static readonly TimeSpan VerifyInterval = TimeSpan.FromMinutes(5);
 
     private DateTimeOffset _lastVerify = DateTimeOffset.MinValue;
+    private long _verifyCursor;
 
     public async Task RunOnceAsync(CancellationToken cancellationToken)
     {
@@ -37,7 +38,7 @@ public sealed class LfgExpiryWorker(IServiceScopeFactory scopes, TimeProvider cl
         if (now - _lastVerify >= VerifyInterval)
         {
             _lastVerify = now;
-            await cards.VerifyActiveCardsAsync(cancellationToken);
+            _verifyCursor = await cards.VerifyActiveCardsAsync(_verifyCursor, cancellationToken);
             await notices.PruneAsync(cancellationToken);
         }
     }
