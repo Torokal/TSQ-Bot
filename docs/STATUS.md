@@ -60,6 +60,12 @@ invite link and no global command registration. The source code is public under 
   token, allowed_mentions empty).
 - **NOT VERIFIED_LIVE**: no real Discord interaction yet (commands not synced; module not enabled). In particular the bot
   editing its own `/ekip` response through the channel endpoint (expiry/close) has not been observed live.
+- **V2 IMPLEMENTED / TESTED_OFFLINE**: Maybe RSVP (never a slot, never pinged), relative scheduled start (`EventAt`;
+  `ExpiresAt = EventAt + duration`), opt-in 30-minute and start notices through the outbox (current Joined players only,
+  once across restarts, never late, none for ended listings or a disabled module), `MentionPolicy.ExplicitUsers` (only
+  the LFG notice renderer), optional voice channel + button (moves a member already in voice with Move Members; otherwise
+  an honest "open channel" link), migration `LfgScheduledEvents`.
+- **NOT VERIFIED_LIVE**: real user pings, the voice move and the channel link behaviour in Discord clients.
 - Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
 
 ## What has been verified against real Discord / real APIs

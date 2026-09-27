@@ -32,7 +32,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   changes and the end of the stream edit the same message without pinging; restart, reconnect and provider-outage safe.
 - **TSQ LFG — Oyuncu Bul** (separate module, off by default): `/ekip` opens a group listing for any game or activity (free-text
   game name and details, team size, optional duration); members join/leave with buttons, the owner or a moderator closes
-  it, it expires on its own; one generic lifecycle for every game, no pings, restart- and race-safe.
+  it, it expires on its own; Maybe RSVP, optional relative start with opt-in pings of the joined players 30 minutes
+  before / at the start, optional voice channel; one generic lifecycle for every game, restart- and race-safe.
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
@@ -57,7 +58,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | Volleyball | `/volleyball next\|schedule` | everyone (module on) |
 | Volleyball admin | `/volleyball-admin configure channel\|notifications\|role`, `/volleyball-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
 | TSQ Live admin | `/live-admin doctor` | Manage Server |
-| TSQ LFG | `/ekip` (buttons: Katıl · Ayrıl · İlanı Kapat) | everyone (module on) |
+| TSQ LFG | `/ekip` (buttons: Katıl · Belki · Ayrıl · 🔊 Ses Odası · İlanı Kapat) | everyone (module on) |
 | TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:

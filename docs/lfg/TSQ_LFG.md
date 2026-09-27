@@ -1,22 +1,24 @@
 # TSQ LFG — Oyuncu Bul
 
 Ayrı modül (`lfg`, `src/ToroSquad.Modules.Lfg`). Sunucudaki oyuncular **herhangi bir oyun veya aktivite** için `/ekip`
-ile hızlıca ekip ilanı açar; diğerleri butonlarla katılır/ayrılır, ilan sahibi veya bir moderatör kapatır, ilan süresi
-dolunca kendiliğinden kapanır.
+ile hızlıca ekip ilanı açar; diğerleri butonlarla katılır, "belki" der veya ayrılır; ilan sahibi veya bir moderatör kapatır,
+ilan süresi dolunca kendiliğinden kapanır. İsteğe bağlı olarak ileri bir başlangıç zamanı, başlangıçtan 30 dakika önce ve
+başlangıçta katılanları etiketleyen bildirimler ve bir ses kanalı seçilebilir.
 
-**Tek generic sistem.** Bot yalnızca şunu bilir: *bir kullanıcı, adı X olan bir oyun/aktivite için Y kişilik ekip arıyor
-ve Z detayını yazmış.* Oyun listesi, oyuna özel model, handler, alan, doğrulama veya buton yoktur (Deadlock, CS2, WoW,
-Valheim ya da yarın çıkan bir oyun aynı yaşam döngüsünü kullanır; yeni oyun kod değişikliği gerektirmez). Rank, rating,
-boss, rol, dungeon, mod… hepsi kullanıcının `detay` metnidir ve bot bu metni yorumlamaz (`LfgArchitectureTests` oyuna
-özel tip/kolon adlarını yasaklar).
+**Tek generic sistem.** Bot yalnızca şunu bilir: *bir kullanıcı, adı X olan bir oyun/aktivite için Y kişilik ekip arıyor,
+Z detayını yazmış; kim katıldı / kim belki; ne zaman başlıyor; hangi ses kanalı.* Oyun listesi, oyuna özel model,
+handler, alan, doğrulama veya buton yoktur (Deadlock, CS2, WoW, Valheim ya da yarın çıkan bir oyun aynı yaşam döngüsünü
+kullanır; yeni oyun kod değişikliği gerektirmez). Rank, rating, boss, rol, dungeon, mod… hepsi kullanıcının `detay`
+metnidir ve bot bu metni yorumlamaz (`LfgArchitectureTests` oyuna özel tip/kolon adlarını yasaklar).
 
-Kapsam dışı (V1, mimari engel değil): ses kanalı / thread açma, zamanlanmış veya tekrarlayan ilan, lider devri, rol
-mention'ı, davetle katılım, geçmiş/itibar, otomatik eşleştirme.
+Kapsam dışı (mimari engel değil): ses kanalı / thread açma, tekrarlayan ilan, lider devri, rol mention'ı, davetle
+katılım, geçmiş/itibar, otomatik eşleştirme.
 
 ## Kullanım
 
 ```
-/ekip oyun:Deadlock kisi:6 detay:Casual oynayacağız, rank fark etmez. [sure:1 saat|2 saat|3 saat]
+/ekip oyun:Deadlock kisi:6 detay:Ranked, mikrofon gerekli [baslangic:2 saat sonra] [sure:2 saat]
+      [hatirlat_30dk:True] [baslangicta_etiketle:True] [ses_kanali:#Deadlock]
 ```
 
 | Seçenek | Kural |
@@ -24,89 +26,186 @@ mention'ı, davetle katılım, geçmiş/itibar, otomatik eşleştirme.
 | `oyun` | serbest metin, 2–50 karakter (kontrol/format karakterleri atılır, boşluklar sadeleşir) |
 | `kisi` | toplam ekip büyüklüğü, **sahip dahil**; 2 … `Lfg:MaxPlayersPerListing` (varsayılan 20, üst sınır 50) |
 | `detay` | isteğe bağlı, tek satır, en fazla 200 karakter |
-| `sure` | isteğe bağlı: 1 / 2 / 3 saat; boşsa `Lfg:DefaultExpirationMinutes` (varsayılan 120). Serbest dakika girişi yok |
+| `baslangic` | isteğe bağlı, göreli seçim: Şimdi (varsayılan) · 30 dk · 1 · 1,5 · 2 · 3 · 4 · 6 · 8 · 12 · 24 saat sonra. Tarih/saat dilimi ayrıştırma yok |
+| `sure` | isteğe bağlı: 1 / 2 / 3 saat; boşsa `Lfg:DefaultExpirationMinutes` (varsayılan 120). Planlı ilanda **başlangıçtan itibaren** sayılır |
+| `hatirlat_30dk` | isteğe bağlı, varsayılan kapalı: başlangıçtan 30 dk önce katılanları etiketle (yalnızca ileri bir `baslangic` ile) |
+| `baslangicta_etiketle` | isteğe bağlı, varsayılan kapalı: başladığında katılanları etiketle (yalnızca ileri bir `baslangic` ile) |
+| `ses_kanali` | isteğe bağlı, Discord'un kanal seçicisi (yalnızca ses kanalları); sunucu tarafında bu guild'in gerçek bir ses kanalı mı diye yeniden denetlenir. Stage kanalları V1'de yok |
 
-Neden modal değil: depoda modal kalıbı yok ve slash seçenekleri Discord'un kendi doğrulamasını (sayı aralığı, uzunluk,
-süre seçimi) istemci tarafında verir; `/ekip` + 3 alan ≈ 10 saniye. Sınırlar sunucu tarafında yeniden denetlenir.
+Etiketleme seçeneği "Şimdi" ile istenirse kısa hata: `Etiketleme seçenekleri yalnızca ileri bir başlangıç zamanı
+seçildiğinde kullanılabilir.` Neden modal değil: depoda modal kalıbı yok ve slash seçenekleri Discord'un kendi
+doğrulamasını (sayı aralığı, uzunluk, seçimler) istemci tarafında verir.
+
+### Başlangıç ve süre
+
+`EventAt` etkinliğin başlayacağı an, `ExpiresAt` ilanın artık kullanılamayacağı an — ikisi ayrı alanlardır.
+
+- **Şimdi** (`EventAt = null`): `ExpiresAt = CreatedAt + süre` — V1 davranışı aynen.
+- **Planlı**: `EventAt = şimdi + seçilen gecikme`, `ExpiresAt = EventAt + süre`. Örnek: 3 saat sonra başlayan, 2 saatlik ilan
+  3 saat boyunca ekip toplar, etkinlik başlar ve başlangıçtan 2 saat sonra kapanır; başlangıçtan önce asla expire olmaz.
 
 ## Kart
 
-Kart, `/ekip` komutunun **herkese açık etkileşim yanıtıdır** (ayrı kanal mesajı yok). Örnekler (aynı renderer):
+Kart, `/ekip` komutunun **herkese açık etkileşim yanıtıdır** (ayrı kanal mesajı yok). Aynı renderer her oyun için:
 
 ```
-🎮 Deadlock                                   🎮 Counter-Strike 2
-@Toro ekip arıyor                             @Toro ekip arıyor
-👥 2 / 6                                      👥 3 / 5
-📝 Casual oynayacağız. Rank fark etmez.       📝 Premier • 18.500 rating civarı • mikrofon gerekli
+🎮 Deadlock
+@Toro ekip arıyor
+👥 3 / 6
+📝 Ranked gireceğiz, mikrofon gerekli.
 
-Oyuncular                                     Oyuncular
-@Toro · @Oykeli                               @Toro · @Oykeli · @Hasom
+Katılanlar
+@Toro · @Oykeli · @Hasom
+🤔 Belki
+@Arif · @Shotgun
 
-⏰ 2 saat içinde kapanır                      ⏰ 1 saat içinde kapanır
-[Katıl] [Ayrıl] [İlanı Kapat]                 [Katıl] [Ayrıl] [İlanı Kapat]
+🗓️ Başlangıç: 27 Eylül 2026 21:00 • 2 saat içinde
+🔊 Ses Odası: #Deadlock
+⏰ 4 saat içinde kapanır
+[Katıl] [Belki] [Ayrıl] [🔊 Ses Odası] [İlanı Kapat]
 ```
 
+- Kapasite yalnızca **Katılanlar** sayısıdır (`3 / 6`); Belki listesi ayrı gösterilir ve sayılmaz. Belki listesinin ilk 20
+  kişisi gösterilir (`(+N)`).
+- Dolu: `✅ Ekip tamamlandı`, `[Katıl]` devre dışı; `[Belki]`, `[Ayrıl]`, `[🔊 Ses Odası]`, `[İlanı Kapat]` açık.
+- Ses kanalı yoksa dört buton (`Katıl · Belki · Ayrıl · İlanı Kapat`), varsa tam beş (Discord'un satır başına beş buton
+  sınırı; tek satır).
 - Oyuncular Discord kullanıcı kimliğiyle tutulur; kartta `<@id>` mention'ı olarak (her izleyici güncel görünen adı görür)
-  **embed içinde** gösterilir. Tüm yanıt ve düzenlemeler `allowed_mentions` boş gönderilir: ilk gönderim de, her
-  düzenleme de kimseyi pinglemez. Görünen ad kalıcı veri olarak saklanmaz.
+  **embed içinde** gösterilir. Kartın her gönderimi ve düzenlemesi (oluşturma, katıl, belki, ayrıl, kapat, süre dolumu)
+  `allowed_mentions` boş gider: **kart asla ping atmaz**. Görünen ad kalıcı veri olarak saklanmaz.
 - Oyun adı ve detay güvenilmez metindir: mention, markdown ve link etkisizleştirilir (`DiscordText.Untrusted*`).
-- Geri sayım Discord'un yerel göreli zaman damgasıdır (`<t:…:R>`); bot saat ilerlesin diye kartı düzenlemez.
-- Durumlar: açık (yeşil) · **✅ Ekip tamamlandı** (dolu; Katıl devre dışı) · **🔒 İlan kapatıldı** · **⏰ Bu ekip ilanının
-  süresi doldu.** Bitmiş ilanda mesaj silinmez; oyuncu listesi kalır, tüm butonlar devre dışıdır.
+- Zamanlar Discord'un yerel zaman damgalarıdır (`<t:…:f>`, `<t:…:R>`): her kullanıcı kendi saat diliminde görür; bot saat
+  dilimi dönüştürmez ve geri sayım için kartı düzenlemez.
+- Durumlar: açık (yeşil) · dolu · **🔒 İlan kapatıldı** · **⏰ Bu ekip ilanının süresi doldu.** Bitmiş ilanda mesaj
+  silinmez; listeler kalır, tüm butonlar devre dışıdır.
+
+## RSVP: Katıl / Belki / Ayrıl
+
+| Durum → işlem | Sonuç |
+|---|---|
+| yok → Katıl | boş slot varsa `Joined` (son slot `Full` yapar); yoksa `Bu ekip dolu.` |
+| yok → Belki | `Maybe` (kapasite denetimi yok; dolu ilanda da mümkün) |
+| Belki → Katıl | slot varsa `Joined`; yoksa **Belki kalır**: `Bu ekip şu anda dolu. "Belki" olarak kaldın.` |
+| Katıldı → Belki | izinli; slot boşalır, ilan `Full` idiyse `Open` olur ve Katıl yeniden aktifleşir |
+| Katıldı / Belki → Ayrıl | kayıt tamamen silinir; yalnızca Katılan ayrılınca slot boşalır |
+| Sahip | her zaman `Joined`; Belki'ye geçemez, ayrılamaz (`İlan sahibi … seçemez/ayrılamaz`), ilanı kapatabilir |
+
+`Belki` olan kişi kapasiteye sayılmaz, bildirimlerde etiketlenmez, ses butonunu kullanamaz. Durum `lfg_participant.Response`
+alanındadır; aynı kullanıcı bir ilanda tek satırdır (fikir değiştirmek satırı günceller).
 
 ## Yaşam döngüsü
 
 | Olay | Davranış |
 |---|---|
-| Oluştur | Girdi + kanal kısıtı + kişi başı aktif ilan sınırı (`Lfg:MaxActiveListingsPerUser`, varsayılan 2, guild başına) denetlenir; ilan `Open`, sahip ilk oyuncu (`1 / N`). Kart yanıt olarak gönderilir, mesaj kimliği kaydedilir. Yanıt hiç gönderilemediyse ilan silinir (sahibin hakkını yemez) |
-| Katıl | Etkileşim hemen onaylanır (deferred update); ilan veritabanından yeniden okunur: guild, durum, süre, üyelik, boş slot. Oyuncu eklenir, son slot `Full` yapar, **aynı kart** düzenlenir, tıklayana ephemeral `✅ Ekibe katıldın.` Hatalar ephemeral: `Zaten bu ekiptesin.` · `Bu ekip dolu.` · `Bu ilan kapatılmış.` · `Bu ilanın süresi dolmuş.` |
-| Ayrıl | Oyuncu çıkarılır; ilan `Full` idiyse ve süresi dolmadıysa yeniden `Open` (Katıl yeniden aktif). Sahip ayrılamaz: `İlan sahibi ekipten ayrılamaz. İstersen ilanı kapatabilirsin.` |
-| Kapat | Yalnızca sahip veya moderatör (Discord **Manage Messages** ya da Administrator; mevcut `Authorize.Require`). Önce ephemeral onay (`Evet, kapat` / `Vazgeç`), sonra `Closed`; kart kapalı olarak düzenlenir. Tekrar kapatmak idempotenttir |
+| Oluştur | Girdi + kanal kısıtı + ses kanalı doğrulaması + kişi başı aktif ilan sınırı (`Lfg:MaxActiveListingsPerUser`, varsayılan 2, guild başına) denetlenir; ilan `Open`, sahip ilk oyuncu (`1 / N`). Kart yanıt olarak gönderilir, mesaj kimliği kaydedilir. Yanıt hiç gönderilemediyse ilan silinir (sahibin hakkını yemez) |
+| Katıl / Belki / Ayrıl | Etkileşim hemen onaylanır (deferred update); ilan veritabanından yeniden okunur: guild, durum, süre, üyelik, boş slot. **Aynı kart** düzenlenir, tıklayana ephemeral sonuç. Hatalar ephemeral: `Zaten bu ekiptesin.` · `Bu ekip dolu.` · `Bu ilan kapatılmış.` · `Bu ilanın süresi dolmuş.` |
+| Kapat | Yalnızca sahip veya moderatör (Discord **Manage Messages** ya da Administrator; mevcut `Authorize.Require`). Önce ephemeral onay (`Evet, kapat` / `Vazgeç`), sonra `Closed`; kart kapalı olarak düzenlenir; outbox'ta bekleyen bildirim iptal edilir. Tekrar kapatmak idempotenttir |
 | Süre dolumu | Tek arka plan döngüsü (`LfgExpiryWorker`, ~60 sn; ilan başına zamanlayıcı yok) `ExpiresAt <= now` olan aktif ilanları toplu `Expired` yapar ve kartları düzenler. Bir butona süre dolduktan sonra basılırsa ilan o anda da expire edilir |
-| Restart | Durum yalnızca veritabanındadır. Buton custom id'leri yalnızca ilan kimliğini taşır (`tsq:lfg:join:<id>`, `…:leave:`, `…:close:`), restart sonrası da çalışır. Açılışta ilk tur (~20 sn sonra) kapalıyken süresi dolan ilanları expire eder ve kartlarını düzenler |
-| Mesaj silindi | Bot yalnızca **Guilds** intent'i kullanır; mesaj silme olayı (`MESSAGE_DELETE`) ayrıcalıksız ama ayrı bir intent (`GuildMessages`) ister ve botun gördüğü her kanaldaki her mesajın olaylarını getirirdi — belgelenmiş "yalnızca Guilds" politikasına ve gizlilik metnine aykırı olduğu için eklenmedi. Onun yerine: (1) worker **en fazla 5 dakikada bir** her aktif kartı tek bir okumayla (`GET /channels/{kanal}/messages/{mesaj}`) doğrular; (2) kullanıcı aktif ilan sınırına takılınca yalnızca **onun** aktif kartları o anda (1,5 sn sınırla) kontrol edilir; (3) bir kart düzenlemesi `Unknown Message/Channel` dönerse. Üç yolda da ilan hemen `Orphaned` olur (terminal; aktif sayılmaz, bir daha düzenlenmez, yeniden açılamaz; tekrar kontrol hiçbir şey değiştirmez). "Belirlenemedi" (Read Message History yok, 5xx, gateway hazır değil) asla silinmiş sayılmaz. `Closed`'dan ayrı tutulur çünkü kimse kapatmadı — mesaj ortadan kalktı; geçmiş ve tanı doğru kalır |
+| Restart | Durum yalnızca veritabanındadır. Buton custom id'leri yalnızca ilan kimliğini taşır (`tsq:lfg:join|maybe|leave|voice|close:<id>`), restart sonrası da çalışır. Açılışta ilk tur (~20 sn sonra) kapalıyken süresi dolan ilanları expire eder, vadesi gelen bildirimleri kurallara göre işler ve kartları düzenler |
+| Mesaj silindi | Bot yalnızca **Guilds** intent'i kullanır; mesaj silme olayı (`MESSAGE_DELETE`) ayrıcalıksız ama ayrı bir intent (`GuildMessages`) ister ve botun gördüğü her kanaldaki her mesajın olaylarını getirirdi — belgelenmiş "yalnızca Guilds" politikasına ve gizlilik metnine aykırı olduğu için eklenmedi. Onun yerine: (1) worker **en fazla 5 dakikada bir** her aktif kartı tek bir okumayla (`GET /channels/{kanal}/messages/{mesaj}`) doğrular; (2) kullanıcı aktif ilan sınırına takılınca yalnızca **onun** aktif kartları o anda (1,5 sn sınırla) kontrol edilir; (3) bir kart düzenlemesi `Unknown Message/Channel` dönerse. Üç yolda da ilan hemen `Orphaned` olur (terminal; aktif sayılmaz, bir daha düzenlenmez, yeniden açılamaz, bildirim üretmez; tekrar kontrol hiçbir şey değiştirmez). "Belirlenemedi" (Read Message History yok, 5xx, gateway hazır değil) asla silinmiş sayılmaz. `Closed`'dan ayrı tutulur çünkü kimse kapatmadı — mesaj ortadan kalktı; geçmiş ve tanı doğru kalır |
 
-Modül bir sunucuda kapatılırsa (`/modules disable lfg`) butonlar "modül kapalı" cevabı verir; süre dolumu yine işler
-(yalnızca kartı "süresi doldu" yapar, veri silinmez).
+Modül bir sunucuda kapatılırsa (`/modules disable lfg`) butonlar "modül kapalı" cevabı verir, yeni bildirim üretilmez;
+süre dolumu yine işler (yalnızca kartı "süresi doldu" yapar, veri silinmez).
+
+## Etkinlik bildirimleri (30 dk önce / başlangıçta)
+
+Açıkça istenirse (varsayılan kapalı) iki **yeni** mesaj — kart düzenlenmez, çünkü amaç gerçekten bildirim göndermek:
+
+```
+⏰ Deadlock 30 dakika içinde başlıyor!        🚀 Deadlock şimdi başlıyor!
+@Toro @Oykeli @Hasom                          @Toro @Oykeli @Hasom @Arif
+👥 3 / 6 · 🕘 21:00                            🔊 Ses Odası: #Deadlock
+🔊 Ses Odası: #Deadlock                        [🔊 Ses Odasına Katıl]
+[🔊 Ses Odasına Katıl]
+```
+
+- **Kim etiketlenir**: mesaj planlandığı andaki **Joined** oyuncular (sahip dahil), veritabanından yeniden okunur. Belki
+  olanlar ve ayrılmış kullanıcılar etiketlenmez; 30 dk mesajından sonra katılan başlangıç mesajında vardır. En fazla 50.
+- **Ne zaman**: 30 dk hatırlatma `EventAt − 30 dk ≤ now < EventAt` penceresinde; başlangıç mesajı `EventAt ≤ now <
+  EventAt + 5 dk` (kısa tolerans). Pencere geçtiyse (bot kapalıydı) geç mesaj **gönderilmez**: bildirim `Skipped` olarak
+  tüketilir, restart'ta tekrar denenmez. Çözünürlük ~1 dk (worker döngüsü).
+- **Kapalı / süresi dolmuş / Orphaned** ilanlar bildirim üretmez; kapatma outbox'ta bekleyen bildirimi iptal eder.
+- **Modül kapalı** (veya guild izin listesinde değil) iken vadesi gelen bildirim `Skipped` olur; modül saatler sonra açılsa
+  bile geçmiş bildirimler toplu gönderilmez.
+- **Dayanıklılık / tekrar yok**: `LfgNoticePlanner` tek bir yazma transaction'ında ilanı yeniden okur, Joined oyuncuları
+  alıcı yapar, **mevcut outbox'a** satır ekler ve bildirimi `Queued` işaretler (`ReminderState` / `StartNoticeState` +
+  zaman). "Gönder, sonra işaretle" penceresi yoktur; teslimi outbox yapar (modül kapısı, izin listesi, `InFlight` claim,
+  belirsiz teslimde uzlaştırma). Benzersiz outbox anahtarı + ilan işareti, restart'larda aynı bildirimin ikinci kez
+  oluşmasını engeller; belirsiz bir teslimden sonraki tek yeniden gönderim **ping taşımaz** (bir eksik ping kabul, ikinci
+  ping değil). Kişisel liste ilan satırında tutulmaz; bildirim satırı (etiketlenen kimlikler) teslimden 24 saat sonra silinir.
+
+### Kontrollü kullanıcı pingi
+
+Core'daki `MentionPolicy` varsayılan olarak kullanıcı ping'ine izin vermez. Tek, açık bir ek: `MentionPolicy.ExplicitUsers(...)`
+→ kablo tarafında yalnızca listelenen kimlikler `allowed_mentions.users` olur; `parse` boş (metinden kullanıcı/@everyone/
+@here ayrıştırılmaz), rol yok. Bunu kullanabilen **tek** yer `LfgNoticeRenderer`'dır ve yalnızca Joined oyuncuların
+kimliklerini verir (`LfgArchitectureTests.Explicit_user_pings_exist_only_in_the_lfg_notice_renderer`). Oyun adı/detaydaki
+`@everyone`, `<@id>` gibi metinler etkisizleştirilir. TSQ Live'ın `@everyone` davranışı değişmedi.
+
+## Ses kanalı
+
+Discord API'sinin gerçek kabiliyeti (2026-09-27, resmî belgeler ve Discord.Net 3.20 ile doğrulandı):
+
+- **Taşıma**: `Modify Guild Member` `channel_id` bir üyeyi **yalnızca zaten bir ses kanalına bağlıysa** başka bir ses
+  kanalına taşır; bot için **Move Members** + hedefte **Connect** gerekir. Bağlı değilse Discord `40032 Target user is not
+  connected to voice` döner. **Botun, seste olmayan birini sese bağlamasının hiçbir yolu yoktur.**
+- Bot yalnızca Guilds intent'iyle kullanıcının seste olup olmadığını bilemez (GuildVoiceStates eklenmedi); bu yüzden izin
+  varsa taşımayı dener ve 40032'yi "bağlı değil" olarak yorumlar.
+
+`[🔊 Ses Odası]` (kart) ve `[🔊 Ses Odasına Katıl]` (bildirimler) aynı işleyicidir (`tsq:lfg:voice:<id>`). Buton hiçbir
+kanal/izin bilgisi taşımaz; her tıklamada: doğru guild, ilan aktif, tıklayan **Joined** (Belki/üye olmayan →
+`Önce ekibe katılmalısın.`), ilanın ses kanalı var ve hâlâ bu guild'in bir ses kanalı.
+
+| Durum | Sonuç |
+|---|---|
+| Tıklayan zaten başka bir ses kanalında, bot Move Members + Connect'e sahip, tıklayanın kendisi o kanala bağlanabilir | **Tek tıkla taşınır**: `🔊 #kanal kanalına taşındın.` |
+| Tıklayan seste değil | Taşınmaz; ephemeral: kanal + "bot yalnızca zaten seste olanları taşıyabilir" + **Ses kanalını aç** link butonu |
+| Bot Move Members'a sahip değil | Taşıma **denenmez**; ephemeral: kanal + **Ses kanalını aç** link butonu |
+| Tıklayan kanala kendisi bağlanamıyor (View/Connect yok) | Taşınmaz (botun izni kullanıcının erişimini aşamaz): `… bağlanma iznin yok.` |
+| Ses kanalı silinmiş / artık ses kanalı değil | `Seçilen ses kanalı artık mevcut değil.` İlan kapanmaz ve Orphaned olmaz; yalnızca ses özelliği kaldırılır, kart sonraki çizimde ses satırı/butonu olmadan gösterilir |
+
+**Ses kanalını aç** butonu `https://discord.com/channels/{guild}/{kanal}` adresli bir link butonudur: Discord'da kanalı
+**açar**, kimseyi kendiliğinden sese **bağlamaz**; kullanıcı Discord'un kendi **Sese Katıl** düğmesine basar. (Davet
+linki oluşturmak ek bir izin ve kalıcı davet kayıtları gerektirirdi; kullanılmadı.) Bu davranış istemci tarafıdır ve canlı
+olarak ayrıca gözlemlenmelidir.
 
 ## Tutarlılık ve eşzamanlılık
 
 - Her durum değişikliği bir yazma transaction'ında çalışır; SQLite'ta `BeginTransaction` = **`BEGIN IMMEDIATE`**: yazma
   kilidi okumadan *önce* alınır, böylece "boş slot var mı / zaten üye mi / aktif ilan sınırı" kontrolü ile yazma tüm
-  bağlantılar arasında sıralanır (diğer yazıcı meşgul zaman aşımı kadar bekler).
+  bağlantılar arasında sıralanır (diğer yazıcı meşgul zaman aşımı kadar bekler). Bildirim planlaması da aynı kilidi alır:
+  alıcı listesi ile işaret arasına katıl/ayrıl giremez.
 - `lfg_participant` birincil anahtarı `(ListingId, UserId)`: aynı kullanıcı bir ilanda veritabanı seviyesinde iki kez
   olamaz. `lfg_listing.Version` iyimser eşzamanlılık belirteci ek güvencedir (çakışmada işlem yeniden denenir).
 - Testler: 5/6 ilana aynı anda iki katılım → biri katılır, diğeri "dolu", sonuç 6/6; 12 eşzamanlı katılım 3 boş slota
-  → tam 3; aynı kullanıcının 4 eşzamanlı tıklaması → tek kayıt; aynı kullanıcının 5 eşzamanlı ilanı (sınır 2) → tam 2.
+  → tam 3; aynı kullanıcının 4 eşzamanlı tıklaması → tek kayıt; aynı kullanıcının 5 eşzamanlı ilanı (sınır 2) → tam 2;
+  karışık eşzamanlı Katıl/Belki → kişi başı tek satır, Joined ≤ kapasite, Full yalnızca Joined sayısına göre.
 - İki eşzamanlı tıklamada Discord eski görüntünün düzenlemesini sonra uygulayabilir: her tıklama kartı düzenledikten sonra
   sürümü yeniden okur, değiştiyse güncel hali yeniden çizer; oturmazsa kart `CardStale` işaretlenir ve worker düzeltir.
 
 ## Arka plan düzenlemesi (kullanıcı etkileşimi gerekmez)
 
-Süre dolumu, onaylı kapatma ve restart sonrası telafi kartı etkileşim olmadan günceller. `/ekip` yanıtının gerçek kanal ve
-mesaj kimliği `GetOriginalResponseAsync` ile saklanır (bir buton tıklaması yalnızca kimlik boşsa, yalnızca aynı guild'de ve
-yalnızca botun kendi mesajı için tamamlar; var olan kimliğin üzerine yazılmaz). Düzenleme **botun kendi REST kimliğiyle**
-`PATCH /channels/{kanal}/messages/{mesaj}` üzerinden yapılır; etkileşim/webhook token'ı kullanılmaz, dolayısıyla token
-süresine bağlı değildir (`DiscordEditRouteContractTests`, Discord.Net'in gerçek istek yolu kayıt edilerek). Hata kuralları:
-`Unknown Message/Channel` → `Orphaned`; yetki/erişim kaybı, 429, 5xx, zaman aşımı → uyarı günlüğü, worker aralığıyla (~60 sn)
-en fazla 8 deneme, sonra bırakılır. Başarısız bir düzenleme ilanın durumunu asla değiştirmez (kapalı ilan açılmaz).
+Süre dolumu, onaylı kapatma, ses kanalının kaldırılması ve restart sonrası telafi kartı etkileşim olmadan günceller.
+`/ekip` yanıtının gerçek kanal ve mesaj kimliği `GetOriginalResponseAsync` ile saklanır (bir buton tıklaması yalnızca
+kimlik boşsa, yalnızca aynı guild'de ve yalnızca botun kendi kart mesajı için tamamlar; bildirim mesajları asla kart
+sayılmaz). Düzenleme **botun kendi REST kimliğiyle** `PATCH /channels/{kanal}/messages/{mesaj}` üzerinden yapılır;
+etkileşim/webhook token'ı kullanılmaz (`DiscordEditRouteContractTests`). `Unknown Message/Channel` → `Orphaned`;
+yetki/erişim kaybı, 429, 5xx, zaman aşımı → uyarı, worker aralığıyla en fazla 8 deneme. Başarısız bir düzenleme ilanın
+durumunu asla değiştirmez.
 
-## Neden outbox değil
+## Kart outbox'sız, bildirimler outbox'lu
 
-Diğer modüllerin otomatik bildirimleri `INotificationOutbox` üzerinden gider (tekilleştirme, belirsiz gönderim
-uzlaştırması). LFG kartı ise kullanıcının kendi komutuna verilen **etkileşim yanıtıdır**: anında görünür, kanal izni
-gerektirmez, tekilleştirilecek bir "gönderim" yoktur. Katıl/Ayrıl düzenlemeleri de etkileşimin kendisiyle yapılır. Botun
-kendi başına yaptığı tek şey mevcut kartı **düzenlemektir** (süre dolumu, onaylı kapatma, başarısız bir etkileşim
-düzenlemesinin telafisi): bu yalnızca `LfgCardSync` içinde `IMessageTransport.EditAsync` ile yapılır — `SendAsync` hiç
-çağrılmaz, düzenlemeler asla ping atmaz (mimari test).
+LFG kartı kullanıcının kendi komutuna verilen **etkileşim yanıtıdır**: anında görünür, kanal izni gerektirmez,
+tekilleştirilecek bir "gönderim" yoktur; bot sonrasında yalnızca **düzenler** (`LfgCardSync`, yalnızca `EditAsync`
+ve tek okumalık `GetPresenceAsync`). Etkinlik bildirimleri ise planlanmış, yeni, ping atan mesajlardır; bu yüzden mevcut
+outbox'tan gider (yalnızca `LfgNoticePlanner` outbox'a yazar — mimari test). İkinci bir kuyruk yoktur.
 
-## Kanal
+## Kanal ve izinler
 
-İsteğe bağlı: `/lfg-admin channel kanal:#ekip-bul` → `/ekip` yalnızca o kanalda çalışır (başka kanalda ephemeral
-`Ekip ilanları bu sunucuda yalnızca #ekip-bul kanalında açılabilir.`). `/lfg-admin channel` (boş) kısıtı kaldırır. Ayar
-yoksa `/ekip` kullanıldığı kanalda çalışır. Bot kartları süre dolunca düzenleyebilmek için kanalı görebilmelidir
-(`ViewChannel`, `SendMessages`, `EmbedLinks`); eksikse ayar kaydedilir ama uyarı verilir. İsteğe bağlı `ReadMessageHistory`,
-silinen kartların erken fark edilmesini sağlar (yoksa kart en geç süre dolumundaki düzenlemede fark edilir).
+İsteğe bağlı: `/lfg-admin channel kanal:#ekip-bul` → `/ekip` yalnızca o kanalda çalışır. `/lfg-admin channel` (boş)
+kısıtı kaldırır. İlan kanalında gerekli: `ViewChannel`, `SendMessages` (bildirimler), `EmbedLinks`. İsteğe bağlı:
+`ReadMessageHistory` (silinen kartın erken fark edilmesi), ses kanalında **Move Members** + **Connect** (seste olanı tek
+tıkla taşıma). İsteğe bağlılar olmadan özellikler zarifçe geri çekilir; ek gateway intent'i gerekmez.
 
 ## Yapılandırma (`Lfg`)
 
@@ -116,26 +215,28 @@ silinen kartların erken fark edilmesini sağlar (yoksa kart en geç süre dolum
 | `MaxActiveListingsPerUser` | `2` | 1–10 |
 | `MaxPlayersPerListing` | `20` | 2–50 |
 
-Modül **her sunucuda varsayılan kapalıdır** (`EnabledByDefault=false`) ve depodaki standart mekanizmayla açılır:
-`/modules enable lfg`. Ayrı bir `Lfg:Enabled` bayrağı yoktur (harici bağımlılık olmadığından ikinci bir anahtar yalnızca
-sürtünme eklerdi). Ortam değişkeni örneği: `TOROSQUAD_Lfg__MaxActiveListingsPerUser=3`.
+Hatırlatma öncesi süre (30 dk) ve başlangıç toleransı (5 dk) sabittir (`LfgRules`), yapılandırma değildir. Modül **her
+sunucuda varsayılan kapalıdır** (`EnabledByDefault=false`) ve depodaki standart mekanizmayla açılır: `/modules enable lfg`.
 
 ## Veri ve gizlilik
 
-Tablolar (additive migration `LfgModule`): `lfg_listing` (ilan; oyun adı + detay kullanıcının kendi metni),
-`lfg_participant` (ListingId + UserId + katılma zamanı), `lfg_guild_config` (isteğe bağlı kanal). İndeksler:
-`(Status, ExpiresAt)` süre dolumu taraması, `(GuildId, OwnerUserId, Status)` aktif ilan sınırı, `CardStale = 1` kısmi
-indeks (bekleyen kart düzenlemeleri), `lfg_participant(UserId)` gizlilik sorguları; FK `ListingId` → `lfg_listing`
-(cascade).
+Tablolar (additive migration'lar `LfgModule`, `LfgScheduledEvents`): `lfg_listing` (ilan; oyun adı + detay kullanıcının
+kendi metni, `EventAt`, `VoiceChannelId`, bildirim tercihleri ve işaretleri), `lfg_participant` (ListingId + UserId +
+`Response` Joined/Maybe + cevap zamanı), `lfg_guild_config` (isteğe bağlı kanal). İndeksler: `(Status, ExpiresAt)` süre
+dolumu, `(GuildId, OwnerUserId, Status)` aktif ilan sınırı, `CardStale = 1` kısmi, `(Status, EventAt)` kısmi
+(`EventAt IS NOT NULL`, vadesi gelen bildirimler), `lfg_participant(UserId)` gizlilik; FK `ListingId` → `lfg_listing`
+(cascade). `LfgScheduledEvents` yalnızca kolon/indeks ekler: mevcut katılımcılar `Joined`, mevcut ilanlar `EventAt = null`,
+bildirim bayrakları kapalı, ses kanalı yok — V1 anlamı korunur (test).
 
-`/privacy export` açtığın ilanları (oyun, detay, durum, zamanlar) ve katıldığın ilanları içerir. `/privacy delete`
-katıldığın ilanlardan seni çıkarır (dolu ilan yeniden açılır, kart senin olmadan yeniden çizilir) ve açtığın ilanları
-oyuncularıyla siler; o ilanların kartındaki butonlar "Bu ilan artık mevcut değil." der ve butonlarını kaldırır. Sunucudan
-ayrılma sonrası saklama süresi dolunca guild'in tüm LFG verisi silinir.
+`/privacy export` açtığın ilanları (oyun, detay, durum, zamanlar, bildirim tercihleri), katıldığın/belki dediğin ilanları
+(cevabınla) ve seni etiketleyen, henüz silinmemiş bildirim sayısını içerir. `/privacy delete` katıldığın veya belki dediğin
+ilanlardan seni çıkarır (yalnızca Katılan silinince dolu ilan yeniden açılır; kart senin olmadan yeniden çizilir), açtığın
+ilanları oyuncularıyla siler ve seni etiketleyen bildirim satırlarını kaldırır. Sunucudan ayrılma sonrası saklama süresi
+dolunca guild'in tüm LFG verisi silinir.
 
 ## Günlükler
 
-`LFG listing {id} created|is full|closed by its owner/moderator|expired` (Information), `card message is gone … orphaned`,
+`LFG listing {id} created|is full|closed by its owner/moderator|expired`, `{Kind} queued for N joined player(s)`,
+`{Kind} skipped (reason)`, `voice channel no longer exists` (Information), `card message is gone … orphaned`,
 `card update failed, will retry`, `giving up …` (Warning), `expiry/card recovery pass failed` (Error). Normal buton
-tıklamaları ve beklenen retler (dolu, zaten üye…) günlüğe yazılmaz ve takip kodu üretmez; kullanıcı metni günlüğe
-yazılmaz.
+tıklamaları ve beklenen retler günlüğe yazılmaz ve takip kodu üretmez; kullanıcı metni günlüğe yazılmaz.

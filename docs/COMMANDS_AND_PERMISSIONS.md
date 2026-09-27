@@ -69,14 +69,17 @@ Duyuru gönderen, yayıncı ekleyen veya ping atan komut yoktur (yayıncılar ve
 
 | Komut / etkileşim | Ne yapar |
 |---|---|
-| `/ekip oyun kisi [detay] [sure]` | Herkes: herhangi bir oyun için ekip ilanı açar (kart, komutun herkese açık yanıtıdır; ping yok). Kişi başı aktif ilan sınırı, isteğe bağlı kanal kısıtı |
-| Buton `Katıl` · `Ayrıl` (`tsq:lfg:join:<id>`, `tsq:lfg:leave:<id>`) | Herkes; her tıklamada sunucu tarafında guild, durum, süre, üyelik ve boş slot yeniden denetlenir; sonuç ephemeral |
+| `/ekip oyun kisi [detay] [baslangic] [sure] [hatirlat_30dk] [baslangicta_etiketle] [ses_kanali]` | Herkes: herhangi bir oyun için ekip ilanı açar (kart, komutun herkese açık yanıtıdır; kart asla ping atmaz). Kişi başı aktif ilan sınırı, isteğe bağlı kanal kısıtı; `baslangic` göreli seçim (Şimdi … 24 saat sonra); iki etiketleme seçeneği varsayılan kapalı ve ileri bir başlangıç ister; `ses_kanali` yalnızca bu sunucunun ses kanalı |
+| Buton `Katıl` · `Belki` · `Ayrıl` (`tsq:lfg:join|maybe|leave:<id>`) | Herkes; her tıklamada sunucu tarafında guild, durum, süre, üyelik ve boş slot yeniden denetlenir; Belki kapasiteye sayılmaz; sonuç ephemeral |
 | Buton `İlanı Kapat` (`tsq:lfg:close:<id>`) → `Evet, kapat` / `Vazgeç` | Yalnızca ilan sahibi veya **Manage Messages** (ya da Administrator) yetkili moderatör (`Authorize.Require`); ephemeral onay |
+| Buton `🔊 Ses Odası` / `🔊 Ses Odasına Katıl` (`tsq:lfg:voice:<id>`, kart ve bildirimlerde) | Yalnızca Joined oyuncu; zaten seste olanı bot Move Members + Connect ile taşır, aksi hâlde kanal + "Ses kanalını aç" link butonu (sese otomatik bağlama yok — Discord API'si izin vermez) |
+| Etkinlik bildirimleri (isteğe bağlı) | Başlangıçtan 30 dk önce / başlangıçta **yalnızca Joined oyuncuları** etiketleyen yeni mesajlar (outbox; tekrarsız, geç gönderilmez) |
 | `/lfg-admin channel [channel]` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): `/ekip`'i tek kanala kısıtlar; boş = her kanal |
 | `/lfg-admin status` | Yönetici: modül durumu, kanal, aktif ilan sayıları, sınırlar, bekleyen kart düzenlemeleri |
 
 Bot izinleri (ilan kanalı): `ViewChannel`, `SendMessages`, `EmbedLinks` (süre dolumu/kapatma düzenlemesi); isteğe bağlı
-`ReadMessageHistory` (silinen kartın erken fark edilmesi). Ek gateway intent'i gerekmez.
+`ReadMessageHistory` (silinen kartın erken fark edilmesi); ses kanalında `MoveMembers` + `Connect` (seste olanı tek tıkla
+taşıma — davet izinlerinde yok, isteğe bağlı olarak yalnızca ilgili ses kanallarında verilebilir). Ek gateway intent'i gerekmez.
 
 Ayrıntı: [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md).
 

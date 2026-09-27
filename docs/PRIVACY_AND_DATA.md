@@ -16,7 +16,8 @@ presence izlemez. Profil, avatar, kullanıcı adı **saklanmaz**.
 | `f1_guild_config` | Formula 1 sunucu ayarları; değiştiren yöneticinin kullanıcı ID'si | sunucu | bot sunucudan çıkarıldıktan 30 gün sonra |
 | `f1_session_snapshot`, `f1_result_snapshot`, `f1_standings_snapshot`, `f1_provider_state` | Herkese açık F1 takvim, seans durumu, sonuç ve puan durumu verisi (kişisel veri yok) | — | — |
 | `lfg_listing` | TSQ LFG ekip ilanı: ilan sahibinin kullanıcı ID'si, kendi yazdığı oyun adı ve detay, kanal/mesaj ID, durum ve zamanlar | kullanıcı (sahip) | `/privacy delete` (ilan oyuncularıyla silinir), sunucu verisiyle birlikte |
-| `lfg_participant` | İlan ID + oyuncunun kullanıcı ID'si + katılma zamanı (görünen ad saklanmaz) | kullanıcı | ayrılınca / `/privacy delete`, sunucu verisiyle birlikte |
+| `lfg_participant` | İlan ID + oyuncunun kullanıcı ID'si + cevabı (Katıldı / Belki) + cevap zamanı (görünen ad saklanmaz) | kullanıcı | ayrılınca / `/privacy delete`, sunucu verisiyle birlikte |
+| `outbox` (LFG etkinlik bildirimleri) | Etiketlenen Joined oyuncuların kullanıcı ID'leri (bildirim içeriği) | kullanıcı | teslimden/bitişten 24 saat sonra; `/privacy delete` ile hemen |
 | `lfg_guild_config` | İsteğe bağlı LFG kanalı; değiştiren yöneticinin kullanıcı ID'si | sunucu | bot sunucudan çıkarıldıktan 30 gün sonra |
 
 Discord ID'leri kayıpsız (64-bit) saklanır.
