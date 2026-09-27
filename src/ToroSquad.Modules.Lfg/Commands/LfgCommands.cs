@@ -31,6 +31,12 @@ public sealed class LfgCommands(
     public const string KeepOpenPrefix = "tsq:lfg:close-no:";
     private const int MaxRedraws = 3;
 
+    /// <summary>Bound for the at-limit card check: the /ekip answer must still arrive within Discord's 3 seconds.</summary>
+    private static readonly TimeSpan LimitRecheckBudget = TimeSpan.FromMilliseconds(1500);
+
+    /// <summary>allowed_mentions = none on EVERY create and edit of a card (players are embed mentions, which never ping anyway).</summary>
+    private static AllowedMentions NoPings => DiscordConversions.ToAllowedMentions(MentionPolicy.None);
+
     [SlashCommand("ekip", "Find players: open a group listing for any game")]
     public async Task CreateAsync(
         [Summary("oyun", "Game or activity (e.g. Deadlock, CS2, Valheim)"), MinLength(LfgRules.GameNameMinLength), MaxLength(LfgRules.GameNameMaxLength)] string oyun,
@@ -40,6 +46,8 @@ public sealed class LfgCommands(
     {
         // No defer: validation and the insert take milliseconds, and a refusal must stay private while the card is public.
         var created = await lfg.CreateAsync(Actor, Here, oyun, kisi, detay, sure, CancellationToken.None);
+        if (created.Result.MessageKey == "lfg.create.limit" && await OwnerCardWasDeletedAsync())
+            created = await lfg.CreateAsync(Actor, Here, oyun, kisi, detay, sure, CancellationToken.None);
         if (!created.Result.Succeeded || created.Listing is not { } listing)
         {
             await ReplyResultAsync(created.Result);
@@ -50,7 +58,7 @@ public sealed class LfgCommands(
         try
         {
             await RespondAsync(embed: DiscordConversions.ToEmbed(card.Embed), components: DiscordConversions.ToComponents(card.Buttons),
-                allowedMentions: DiscordConversions.ToAllowedMentions(MentionPolicy.None));
+                allowedMentions: NoPings);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -125,6 +133,20 @@ public sealed class LfgCommands(
 
     private ChannelId Here => new(Context.Interaction.ChannelId ?? Context.Channel.Id);
 
+    /// <summary>At the limit: were any of the caller's active cards deleted in Discord? (Orphans them; bounded in time.)</summary>
+    private async Task<bool> OwnerCardWasDeletedAsync()
+    {
+        using var budget = new CancellationTokenSource(LimitRecheckBudget);
+        try
+        {
+            return await cards.VerifyOwnerCardsAsync(Actor.GuildId, Actor.UserId, budget.Token) > 0;
+        }
+        catch (OperationCanceledException)
+        {
+            return false; // could not tell in time: the limit answer stands
+        }
+    }
+
     private async Task CardActionAsync(string id, Func<ActorContext, long, CancellationToken, Task<LfgResult>> action)
     {
         await DeferEphemeralAsync(); // deferred update of the card: acknowledged at once, redrawn below
@@ -144,7 +166,8 @@ public sealed class LfgCommands(
             return null;
         }
 
-        if (Context.Interaction is IComponentInteraction { Message: { } message })
+        // Only the bot's own card can carry these buttons; the author check keeps "edit only our own messages" explicit.
+        if (Context.Interaction is IComponentInteraction { Message: { } message } && message.Author.Id == Context.Client.CurrentUser.Id)
             await lfg.AttachMessageAsync(listingId, Actor.GuildId, new ChannelId(message.Channel.Id), new MessageId(message.Id), CancellationToken.None);
         return listingId;
     }
@@ -174,7 +197,6 @@ public sealed class LfgCommands(
             {
                 m.Embed = DiscordConversions.ToEmbed(card.Embed);
                 m.Components = DiscordConversions.ToComponents(card.Buttons);
-                m.AllowedMentions = DiscordConversions.ToAllowedMentions(MentionPolicy.None);
             });
             if (!drawn)
                 break;
@@ -191,7 +213,11 @@ public sealed class LfgCommands(
     {
         try
         {
-            await Context.Interaction.ModifyOriginalResponseAsync(change);
+            await Context.Interaction.ModifyOriginalResponseAsync(m =>
+            {
+                change(m);
+                m.AllowedMentions = NoPings; // every card edit, whatever it changes
+            });
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -209,7 +235,7 @@ public sealed class LfgCommands(
             {
                 m.Content = text;
                 m.Components = new ComponentBuilder().Build();
-                m.AllowedMentions = DiscordConversions.ToAllowedMentions(MentionPolicy.None);
+                m.AllowedMentions = NoPings;
             });
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

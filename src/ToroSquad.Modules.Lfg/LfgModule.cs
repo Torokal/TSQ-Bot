@@ -31,7 +31,7 @@ public sealed class LfgModule : IToroModule
         IsCore: false,
         EnabledByDefault: false, // explicit activation: /modules enable lfg
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks, // the bot edits its cards on expiry/close
-        OptionalBotPermissions: GuildPermission.None,
+        OptionalBotPermissions: GuildPermission.ReadMessageHistory, // lets the worker notice a card deleted in Discord
         AdminCommands: ["lfg-admin"]);
 
     public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LfgCommands), typeof(LfgAdminCommands)];
