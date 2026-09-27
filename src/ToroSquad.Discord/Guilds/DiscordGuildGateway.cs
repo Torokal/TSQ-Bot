@@ -48,6 +48,61 @@ public sealed class DiscordGuildGateway(DiscordSocketClient client) : IGuildGate
     public Task<RoleOperationOutcome> RemoveRoleAsync(GuildId guild, UserId user, RoleId role, string auditReason, CancellationToken cancellationToken) =>
         RunAsync(() => client.Rest.RemoveRoleAsync(guild.Value, user.Value, role.Value, Options(auditReason, cancellationToken)));
 
+    public Task<VoiceChannelAccess> GetVoiceChannelAccessAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken)
+    {
+        var g = client.GetGuild(guild.Value);
+        var c = g?.GetChannel(channel.Value);
+        if (g?.CurrentUser is null || c is null)
+            return Task.FromResult(VoiceChannelAccess.Missing); // unknown here = not a channel of this guild
+        return Task.FromResult(new VoiceChannelAccess(true, IsGuildVoice(c), (CorePermission)g.CurrentUser.GetPermissions(c).RawValue));
+    }
+
+    public async Task<VoiceMoveOutcome> MoveMemberToVoiceAsync(GuildId guild, UserId user, ChannelId channel, CancellationToken cancellationToken)
+    {
+        var g = client.GetGuild(guild.Value);
+        if (g?.CurrentUser is null || g.GetChannel(channel.Value) is not IVoiceChannel voice || !IsGuildVoice(voice))
+            return VoiceMoveOutcome.ChannelUnavailable;
+        var bot = g.CurrentUser.GetPermissions(voice);
+        if (!bot.ViewChannel || !bot.Connect || !bot.MoveMembers)
+            return VoiceMoveOutcome.BotMissingPermissions;
+
+        try
+        {
+            IGuildUser? member = g.GetUser(user.Value);
+            member ??= await client.Rest.GetGuildUserAsync(guild.Value, user.Value, new RequestOptions { CancelToken = cancellationToken });
+            if (member is null)
+                return VoiceMoveOutcome.Failed;
+            var own = member.GetPermissions(voice);
+            if (!own.ViewChannel || !own.Connect)
+                return VoiceMoveOutcome.MemberCannotConnect;
+            // PATCH /guilds/{guild}/members/{user} { channel_id }: only works while the member is connected to voice.
+            await member.ModifyAsync(p => p.ChannelId = voice.Id,
+                new RequestOptions { CancelToken = cancellationToken, AuditLogReason = "TSQ LFG: member asked to join the listing's voice channel" });
+            return VoiceMoveOutcome.Moved;
+        }
+        catch (HttpException ex) when (ex.DiscordCode == DiscordErrorCode.TargetUserNotInVoice)
+        {
+            return VoiceMoveOutcome.NotConnected;
+        }
+        catch (HttpException ex) when (ex.HttpCode == HttpStatusCode.Forbidden)
+        {
+            return VoiceMoveOutcome.BotMissingPermissions;
+        }
+        catch (HttpException ex) when (ex.HttpCode == HttpStatusCode.NotFound)
+        {
+            return VoiceMoveOutcome.ChannelUnavailable;
+        }
+        catch (Exception ex) when (ex is HttpException or TimeoutException or HttpRequestException or TaskCanceledException)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                throw;
+            return VoiceMoveOutcome.Failed;
+        }
+    }
+
+    /// <summary>Plain guild voice channels only; stage channels (a voice subtype in Discord.Net) are excluded.</summary>
+    private static bool IsGuildVoice(IChannel channel) => channel is IVoiceChannel and not IStageChannel;
+
     private static RequestOptions Options(string reason, CancellationToken ct) => new() { AuditLogReason = reason, CancelToken = ct };
 
     private static async Task<RoleOperationOutcome> RunAsync(Func<Task> action)

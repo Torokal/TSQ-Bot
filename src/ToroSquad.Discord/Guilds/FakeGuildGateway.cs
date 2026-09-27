@@ -32,6 +32,30 @@ public sealed class FakeGuildGateway : IGuildGateway
     public Task<BotChannelAccess> GetBotChannelAccessAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken) =>
         Task.FromResult(_channels.TryGetValue((guild.Value, channel.Value), out var a) ? a : BotChannelAccess.Missing);
 
+    private readonly ConcurrentDictionary<(ulong Guild, ulong Channel), VoiceChannelAccess> _voice = new();
+
+    /// <summary>Scripted results of voice moves (default: the member is not connected to voice).</summary>
+    public Queue<VoiceMoveOutcome> ScriptedMoves { get; } = new();
+
+    public List<(GuildId Guild, UserId User, ChannelId Channel)> Moves { get; } = [];
+
+    public void SetVoiceChannel(GuildId guild, ChannelId channel, VoiceChannelAccess access) => _voice[(guild.Value, channel.Value)] = access;
+
+    public void RemoveVoiceChannel(GuildId guild, ChannelId channel) => _voice.TryRemove((guild.Value, channel.Value), out _);
+
+    public Task<VoiceChannelAccess> GetVoiceChannelAccessAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken) =>
+        Task.FromResult(_voice.TryGetValue((guild.Value, channel.Value), out var a) ? a : VoiceChannelAccess.Missing);
+
+    public Task<VoiceMoveOutcome> MoveMemberToVoiceAsync(GuildId guild, UserId user, ChannelId channel, CancellationToken cancellationToken)
+    {
+        Moves.Add((guild, user, channel));
+        if (!_voice.TryGetValue((guild.Value, channel.Value), out var access) || !access.Usable)
+            return Task.FromResult(VoiceMoveOutcome.ChannelUnavailable);
+        if (!access.BotCanMove)
+            return Task.FromResult(VoiceMoveOutcome.BotMissingPermissions);
+        return Task.FromResult(ScriptedMoves.TryDequeue(out var scripted) ? scripted : VoiceMoveOutcome.NotConnected);
+    }
+
     public Task<RoleOperationOutcome> AddRoleAsync(GuildId guild, UserId user, RoleId role, string auditReason, CancellationToken cancellationToken)
     {
         Operations.Add(("add", guild, user, role));
