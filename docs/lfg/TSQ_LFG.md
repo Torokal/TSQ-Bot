@@ -38,8 +38,11 @@ Form gönderilince hiçbir şey kaydedilmez: yazılanlar oluşturma kuralların�
 denetlenir; hata varsa Türkçe neden ve *Formu Düzenle* düğmesi gösterilir. **İlanı Oluştur** mevcut
 `LfgService.CreateAsync` akışını çalıştırır (kanal kısıtı, kişi başı aktif ilan sınırı, sahip ilk Katılan, `BEGIN
 IMMEDIATE`, özel tarih/saat dilimi, bildirimler, ses doğrulaması) ve kart kanala herkese açık bir takip mesajı olarak
-**ping'siz** gönderilir; mesaj kimliği kaydedilir (bot kartı sonra kendisi düzenler). Kart gönderilemezse ilan silinir
-(kimse görmedi) ve ayarlar mesajı yeniden denenebilir kalır. Kanal kısıtı ve aktif ilan sınırı formu açmadan önce de
+**ping'siz** gönderilir; mesaj kimliği kaydedilir (bot kartı sonra kendisi düzenler). Gönderim hata verirse Discord
+kartı yine de oluşturmuş olabilir (kaybolan yanıt): kanalın son 20 mesajında bu ilanın kartı (Katıl düğmesi kimliği)
+aranır. Bulunursa kaydedilir; Discord isteği reddettiyse (4xx) ya da kart geçmişte yoksa ilan silinir (kimse görmedi) ve
+ayarlar mesajı yeniden denenebilir kalır; geçmiş okunamıyorsa (Read Message History yok) ilan tutulur — ikinci kart
+açılmaz, kartın ilk tıklaması mesaj kimliğini kaydeder. Kanal kısıtı ve aktif ilan sınırı formu açmadan önce de
 denetlenir; kimse boşuna form doldurmaz.
 
 **Taslak.** Adımlar arasındaki form, veritabanına değil **bellekte** kısa ömürlü bir taslakta durur (`LfgFormDrafts`):
@@ -73,7 +76,12 @@ karar vermez; hepsi-ya-hiç — reddedilen düzenleme hiçbir alanı değiştirm
 | Bildirimler | bkz. [Etkinlik bildirimleri](#etkinlik-bildirimleri) → *Düzenleme* |
 | Ses kanalı | eklenebilir, değiştirilebilir, kaldırılabilir; her kayıtta (değişmese de) bu sunucunun gerçek bir ses kanalı mı diye yeniden denetlenir. İlan kapanmaz, katılımcılar etkilenmez, kart yeniden çizilir; sonraki hatırlatma/başlangıç bildirimi yeni kanalı kullanır; gönderilmiş bildirim düzenlenmez |
 
-Aynı formu ikinci kez kaydetmek `Değişiklik yok; ilan aynı kaldı.` der (sürüm ve kart değişmez).
+Aynı formu ikinci kez kaydetmek `Değişiklik yok; ilan aynı kaldı.` der (sürüm ve kart değişmez). "Dokunulmamış" alan,
+formun **açıldığı andaki** haliyle karşılaştırılır (aynı tarih başka yazımla — `5.10.2026 21:30` — ya da başlangıcı boş
+formda `şimdi` da dokunulmamış sayılır): iki açık düzenleme formundan eskisi, yenisinin değiştirdiği başlangıcı geri almaz.
+Form gönderildiğindeki denetim yazma kilidi almaz ve hiçbir şey kaydetmez; karar kayıtta kilit altında yeniden verilir.
+Silinmiş bir ses kanalı düzenleme ayarlarında yeniden önerilmez. Saat dilimi çözülemezse (bozuk ayar) yazılan tarih
+oluşturmadaki gibi reddedilir.
 
 ### Başlangıç ve süre
 
@@ -206,8 +214,8 @@ Açıkça istenirse (varsayılan kapalı) iki **yeni** mesaj — kart düzenlenm
   kapatmak onu outbox'ta iptal eder (kapatma ile aynı anlam: bekleyen iptal, gönderilmekte/uzlaştırılmakta olan yeniden
   denenmez). Anı geçmiş bir bildirimi sonradan açmak onu `Skipped` olarak tüketir; geç gönderilmez. Başlangıç zamanı etkinlik
   başladıktan (veya başlangıç bildirimi işlendikten) sonra değişmez, bu yüzden başlangıç bildirimi de tekrar etmez.
-  Kuyruğa alınmış ama henüz teslim edilmemiş bir hatırlatma (tipik olarak birkaç saniye) başlangıç o arada değişirse eski
-  saatle gider — kabul edilen küçük pencere.
+  Başlangıç değişirken kuyrukta bekleyen (henüz teslim edilmemiş) hatırlatma eski saati yazdığı için outbox'ta iptal edilir
+  ve yeniden planlanmaz (bir eksik hatırlatma kabul, yanlış saatli ya da ikinci hatırlatma değil).
 - **Dayanıklılık / tekrar yok**: `LfgNoticePlanner` tek bir yazma transaction'ında ilanı yeniden okur, Joined oyuncuları
   alıcı yapar, **mevcut outbox'a** satır ekler ve bildirimi `Queued` işaretler (`ReminderState` / `StartNoticeState` +
   zaman). "Gönder, sonra işaretle" penceresi yoktur; teslimi outbox yapar (modül kapısı, izin listesi, `InFlight` claim,
