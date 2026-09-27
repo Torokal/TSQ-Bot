@@ -26,7 +26,7 @@ izin verir (Discord API: modal `components` 1–5; her alan bir `Label` + metin 
    | Oyun / Etkinlik | serbest metin, 2–50 karakter (kontrol/format karakterleri atılır, boşluklar sadeleşir) |
    | Kişi sayısı | toplam ekip, **sahip dahil**; 2 … `Lfg:MaxPlayersPerListing` (varsayılan 20, üst sınır 50); yalnızca rakam |
    | Detay | isteğe bağlı, en fazla 200 karakter |
-   | Başlangıç | isteğe bağlı, **tek alan**: boş / `şimdi` = şimdi · göreli `30 dk`, `45 dakika`, `1 saat`, `1,5 saat` / `1.5 saat`, `2 saat (sonra)`, `1 gün` · tarih `05.10.2026 21:30` (GG.AA.YYYY SS:DD) veya ISO `2026-10-05 21:30`. Göreli başlangıç için birim zorunludur (`30` tek başına tarih sayılır ve reddedilir); doğal dil ayrıştırıcısı yoktur |
+   | Başlangıç | isteğe bağlı, **tek alan**: boş / `şimdi` = şimdi · göreli `30 dk`, `45 dakika`, `1 saat`, `1,5 saat` / `1.5 saat`, `2 saat (sonra)`, `1 gün` · tarih `05.10.2026 21:30` (GG.AA.YYYY SS:DD) veya ISO `2026-10-05 21:30`. Göreli başlangıç için birim zorunludur (`30` tek başına tarih sayılır ve reddedilir; `d` birim değildir — dakika mı gün mü belirsiz); büyük harf (`ŞİMDİ`, `30 DAKİKA`) de olur; doğal dil ayrıştırıcısı yoktur |
    | Süre (saat) | isteğe bağlı: `1`, `2` veya `3` (`2 saat` da olur); boşsa `Lfg:DefaultExpirationMinutes` (varsayılan 120). Planlı ilanda **başlangıçtan itibaren** sayılır |
 
 2. **Ayarlar (yalnızca formu gönderene görünür mesaj)** — formun özeti ve Discord'un yerel bileşenleri:
@@ -43,7 +43,9 @@ kesin olarak reddettiyse (4xx) silinir (kimse görmedi) ve ayarlar mesajı yenid
 (zaman aşımı, 5xx) Discord kartı yine de oluşturmuş olabilir: kanalın son 20 mesajında bu ilanın kartı (Katıl düğmesi
 kimliği) aranır ve bulunursa kaydedilir; bulunamazsa ilan **tutulur** (boş geçmiş kanıt değildir — Read Message History
 yoksa Discord boş liste döner, mesaj bir an sonra da görünebilir): ikinci kart açılmaz, kartın ilk tıklaması mesaj
-kimliğini kaydeder; kart gerçekten yoksa ilan en geç süresi dolunca kapanır. Kanal kısıtı ve aktif ilan sınırı formu açmadan önce de
+kimliğini kaydeder; kart gerçekten yoksa ilan en geç süresi dolunca kapanır — planlı ilanda bu, başlangıç + süre kadar
+(en fazla ~1 yıl) sürebilir ve o süre sahibin aktif ilan haklarından birini tutar; bu nadir durum kabul edilen risktir
+(yanlış mesaja bağlama ya da ikinci kart yerine). Böyle bir ilanın bildirimi yalnızca sahibini (tek Katılan) etiketler. Kanal kısıtı ve aktif ilan sınırı formu açmadan önce de
 denetlenir; kimse boşuna form doldurmaz.
 
 **Taslak.** Adımlar arasındaki form, veritabanına değil **bellekte** kısa ömürlü bir taslakta durur (`LfgFormDrafts`):
@@ -77,9 +79,12 @@ karar vermez; hepsi-ya-hiç — reddedilen düzenleme hiçbir alanı değiştirm
 | Bildirimler | bkz. [Etkinlik bildirimleri](#etkinlik-bildirimleri) → *Düzenleme* |
 | Ses kanalı | eklenebilir, değiştirilebilir, kaldırılabilir; her kayıtta (değişmese de) bu sunucunun gerçek bir ses kanalı mı diye yeniden denetlenir. İlan kapanmaz, katılımcılar etkilenmez, kart yeniden çizilir; sonraki hatırlatma/başlangıç bildirimi yeni kanalı kullanır; gönderilmiş bildirim düzenlenmez |
 
-Aynı formu ikinci kez kaydetmek `Değişiklik yok; ilan aynı kaldı.` der (sürüm ve kart değişmez). "Dokunulmamış" alan,
-formun **açıldığı andaki** haliyle karşılaştırılır (aynı tarih başka yazımla — `5.10.2026 21:30` — ya da başlangıcı boş
-formda `şimdi` da dokunulmamış sayılır): iki açık düzenleme formundan eskisi, yenisinin değiştirdiği başlangıcı geri almaz.
+Aynı formu ikinci kez kaydetmek `Değişiklik yok; ilan aynı kaldı.` der (sürüm ve kart değişmez). **Her alan** (oyun,
+detay, kişi, başlangıç, süre, iki bildirim tercihi, ses kanalı) formun **açıldığı andaki** haliyle karşılaştırılır;
+dokunulmamış alan kayıtta veritabanındaki **güncel** değerini korur (aynı tarih başka yazımla — `5.10.2026 21:30` — ya da
+başlangıcı boş formda `şimdi` da dokunulmamış sayılır; metinlerde büyük/küçük harf değişikliği düzenlemedir): iki açık
+düzenleme formundan eskisi, yenisinin değiştirdiği hiçbir alanı geri almaz (kayıp güncelleme yok). Değiştirilen alan
+güncel duruma göre doğrulanır. Dokunulmamış kişi sayısı, yapılandırılan üst sınır sonradan düşürülmüş olsa da geçerli kalır.
 Form gönderildiğindeki denetim yazma kilidi almaz ve hiçbir şey kaydetmez; karar kayıtta kilit altında yeniden verilir.
 Silinmiş bir ses kanalı düzenleme ayarlarında yeniden önerilmez. Saat dilimi çözülemezse (bozuk ayar) yazılan tarih
 oluşturmadaki gibi reddedilir.
@@ -120,7 +125,8 @@ kapanır; başlangıçtan önce asla expire olmaz. 30 dk hatırlatma `EventAt �
 
 ## Kart
 
-Kart, `/ekip` komutunun **herkese açık etkileşim yanıtıdır** (ayrı kanal mesajı yok). Aynı renderer her oyun için:
+Kart, formun **İlanı Oluştur** tıklamasına verilen herkese açık takip (follow-up) mesajıdır (formun kendisi yalnızca
+açana görünür; `/ekip` önceden komutun kendi yanıtıydı). Aynı renderer her oyun için:
 
 ```
 🎮 Deadlock
@@ -278,16 +284,16 @@ olarak ayrıca gözlemlenmelidir.
 ## Arka plan düzenlemesi (kullanıcı etkileşimi gerekmez)
 
 Süre dolumu, onaylı kapatma, ses kanalının kaldırılması ve restart sonrası telafi kartı etkileşim olmadan günceller.
-`/ekip` yanıtının gerçek kanal ve mesaj kimliği `GetOriginalResponseAsync` ile saklanır (bir buton tıklaması yalnızca
-kimlik boşsa, yalnızca aynı guild'de ve yalnızca botun kendi kart mesajı için tamamlar; bildirim mesajları asla kart
-sayılmaz). Düzenleme **botun kendi REST kimliğiyle** `PATCH /channels/{kanal}/messages/{mesaj}` üzerinden yapılır;
+Kart mesajının kanal ve mesaj kimliği takip mesajı gönderilince saklanır (belirsiz bir hatada son 20 mesajdan tam kimlik
+eşleşmesiyle; bir buton tıklaması yalnızca kimlik boşsa, yalnızca aynı guild'de ve yalnızca botun kendi kart mesajı için
+tamamlar; bildirim mesajları asla kart sayılmaz). Düzenleme **botun kendi REST kimliğiyle** `PATCH /channels/{kanal}/messages/{mesaj}` üzerinden yapılır;
 etkileşim/webhook token'ı kullanılmaz (`DiscordEditRouteContractTests`). `Unknown Message/Channel` → `Orphaned`;
 yetki/erişim kaybı, 429, 5xx, zaman aşımı → uyarı, worker aralığıyla en fazla 8 deneme. Başarısız bir düzenleme ilanın
 durumunu asla değiştirmez.
 
 ## Kart outbox'sız, bildirimler outbox'lu
 
-LFG kartı kullanıcının kendi komutuna verilen **etkileşim yanıtıdır**: anında görünür, kanal izni gerektirmez,
+LFG kartı kullanıcının kendi etkileşimine verilen **takip mesajıdır**: anında görünür, kanal izni gerektirmez,
 tekilleştirilecek bir "gönderim" yoktur; bot sonrasında yalnızca **düzenler** (`LfgCardSync`, yalnızca `EditAsync`
 ve tek okumalık `GetPresenceAsync`). Etkinlik bildirimleri ise planlanmış, yeni, ping atan mesajlardır; bu yüzden mevcut
 outbox'tan gider (yalnızca `LfgNoticePlanner` outbox'a yazar — mimari test). İkinci bir kuyruk yoktur.
@@ -327,6 +333,8 @@ ilanları oyuncularıyla siler (gönderilmemiş bildirimleri de durdurulur), mod
 bildirim satırlarını kaldırır (o an gönderilmekte/uzlaştırılmakta olan bir satır bittikten 24 saat sonra silinir). Teslimi
 uzlaştırılamayıp bırakılan bildirim satırları da 24 saat sonra budanır. Sunucudan ayrılma sonrası saklama süresi
 dolunca guild'in tüm LFG verisi silinir.
+
+Kartı Discord tarafından kesin reddedilip silinen ilanın arada planlanmış bildirimi de iptal edilir.
 
 Form taslakları (adımlar arasındaki yazılanlar ve seçimler) **hiçbir zaman veritabanına yazılmaz**: yalnızca bot
 sürecinin belleğinde, son kullanımdan en fazla 30 dakika tutulur ve restart'ta kaybolur (`LfgFormDrafts`).

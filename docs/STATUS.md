@@ -58,8 +58,9 @@ invite link and no global command registration. The source code is public under 
   intent only) — a throttled one-read check per active card (≤ every 5 min) and an immediate check of the caller's cards at
   the limit orphan them. Offline contract test of the edit route (bot-token PATCH on the channel message, no interaction
   token, allowed_mentions empty).
-- **NOT VERIFIED_LIVE**: no real Discord interaction yet (commands not synced; module not enabled). In particular the bot
-  editing its own `/ekip` response through the channel endpoint (expiry/close) has not been observed live.
+- **Production (2026-09-27)**: PR #12 merged and deployed, `/ekip` + `/lfg-admin` synced to the main guild; enabling the
+  module (`/modules enable lfg`) and the live checks are done by the owner in Discord.
+- **NOT VERIFIED_LIVE**: the bot editing its own card through the channel endpoint (expiry/close) has not been observed live.
 - **V2 IMPLEMENTED / TESTED_OFFLINE**: Maybe RSVP (never a slot, never pinged), relative scheduled start (`EventAt`;
   `ExpiresAt = EventAt + duration`), opt-in 30-minute and start notices through the outbox (current Joined players only,
   once across restarts, never late, none for ended listings or a disabled module), `MentionPolicy.ExplicitUsers` (only
