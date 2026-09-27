@@ -77,10 +77,15 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
 
     private Task<LfgResult> CreateAsync(LfgCreateInput input, ulong owner = Owner) => Lfg(s => s.CreateAsync(User(owner), Channel, input, Ct));
 
+    private static readonly TimeZoneInfo Istanbul = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
+
+    /// <summary>The date the owner types for a start <paramref name="minutes"/> from now (null / 0 = empty = now).</summary>
+    private string? In(int? minutes) => minutes is > 0 ? LfgForm.FormatDate(_host.Clock.GetUtcNow().AddMinutes(minutes.Value), Istanbul) : null;
+
     private async Task<LfgListingView> OpenAsync(int players = 6, int? start = null, bool remind = false, bool atStart = false, ChannelId? voice = null,
         string game = "Deadlock", ulong owner = Owner)
     {
-        var created = await CreateAsync(new LfgCreateInput(game, players, "Ranked, mikrofon gerekli", null, start, remind, atStart, voice), owner);
+        var created = await CreateAsync(new LfgCreateInput(game, players, "Ranked, mikrofon gerekli", null, remind, atStart, voice, In(start)), owner);
         created.Result.Succeeded.Should().BeTrue(created.Result.MessageKey);
         var card = _host.Services.GetRequiredService<LfgCardRenderer>().Render(created.Listing!, "tr");
         var posted = (SendOutcome.Sent)await _host.Transport.SendAsync(Channel, card, Ct);
@@ -212,7 +217,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
     [Fact]
     public async Task A_listing_starting_now_keeps_the_original_expiry()
     {
-        var now = (await CreateAsync(new LfgCreateInput("CS2", 5, DurationMinutes: 60, StartMinutes: 0))).Listing!;
+        var now = (await CreateAsync(new LfgCreateInput("CS2", 5, DurationMinutes: 60, StartAt: ""))).Listing!;
 
         now.EventAt.Should().BeNull();
         now.ExpiresAt.Should().Be(TestHost.T0.AddHours(1));
@@ -221,7 +226,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
     [Fact]
     public async Task A_scheduled_listing_expires_duration_after_the_start_and_never_before_it()
     {
-        var listing = (await CreateAsync(new LfgCreateInput("Valheim", 6, DurationMinutes: 120, StartMinutes: 180))).Listing!;
+        var listing = (await CreateAsync(new LfgCreateInput("Valheim", 6, DurationMinutes: 120, StartAt: In(180)))).Listing!;
 
         listing.EventAt.Should().Be(TestHost.T0.AddHours(3));
         listing.ExpiresAt.Should().Be(TestHost.T0.AddHours(5));
@@ -239,14 +244,12 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
 
     [Theory]
     [InlineData(null, true, false)]
-    [InlineData(0, false, true)]
-    public async Task Pings_need_a_later_start(int? start, bool remind, bool atStart)
+    [InlineData("", false, true)]
+    public async Task Pings_need_a_later_start(string? start, bool remind, bool atStart)
     {
-        var result = await CreateAsync(new LfgCreateInput("Deadlock", 5, StartMinutes: start, NotifyBeforeStart: remind, NotifyAtStart: atStart));
+        var result = await CreateAsync(new LfgCreateInput("Deadlock", 5, StartAt: start, NotifyBeforeStart: remind, NotifyAtStart: atStart));
 
         result.Result.MessageKey.Should().Be("lfg.create.notice_needs_start");
-        (await CreateAsync(new LfgCreateInput("Deadlock", 5, StartMinutes: -5))).Result.MessageKey.Should().Be("lfg.create.start_invalid");
-        (await CreateAsync(new LfgCreateInput("Deadlock", 5, StartMinutes: LfgRules.MaxStartMinutes + 1))).Result.MessageKey.Should().Be("lfg.create.start_invalid");
     }
 
     // ---- custom start date (same EventAt pipeline) ----
@@ -263,18 +266,18 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         listing.ExpiresAt.Should().Be(Custom.AddHours(2));
         var at = Custom.ToUnixTimeSeconds();
         _host.Services.GetRequiredService<LfgCardRenderer>().Render(listing, "tr").Embed!.Description
-            .Should().Contain($"🗓️ Başlangıç: <t:{at}:F> • <t:{at}:R>", "rendered exactly like a relative start");
+            .Should().Contain($"🗓️ Başlangıç: <t:{at}:F> • <t:{at}:R>", "rendered like every scheduled start");
     }
 
     [Fact]
-    public async Task Relative_and_custom_starts_cannot_be_combined_and_bad_dates_are_refused()
+    public async Task Only_a_full_date_and_time_is_a_start_and_bad_dates_are_refused()
     {
-        (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartMinutes: 120, StartAt: "24.09.2026 17:00"))).Result.MessageKey
-            .Should().Be("lfg.create.start_conflict");
+        foreach (var relative in new[] { "2 saat", "30 dk", "1 gün", "2", "30" })
+            (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: relative))).Result.MessageKey.Should().Be("lfg.create.date_format", relative);
         (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: "24.09.2026 14:00"))).Result.MessageKey.Should().Be("lfg.create.date_not_future");
         (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: "31.02.2026 21:00"))).Result.MessageKey.Should().Be("lfg.create.date_format");
         (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: "25.09.2027 12:00"))).Result.MessageKey.Should().Be("lfg.create.date_too_far");
-        (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartMinutes: 120))).Listing!.EventAt.Should().Be(TestHost.T0.AddHours(2), "relative starts unchanged");
+        (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: "24.09.26 17:00"))).Listing!.EventAt.Should().Be(Custom, "a two-digit year");
         (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: " "), owner: 11)).Listing!.EventAt.Should().BeNull("blank = now");
     }
 
@@ -504,7 +507,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
     [Fact]
     public async Task Notices_defuse_mentions_in_the_creators_text_and_ping_only_listed_ids()
     {
-        var created = await CreateAsync(new LfgCreateInput("@everyone <@&1> @here <@999>", 5, "@everyone", StartMinutes: 30, NotifyBeforeStart: true));
+        var created = await CreateAsync(new LfgCreateInput("@everyone <@&1> @here <@999>", 5, "@everyone", StartAt: In(30), NotifyBeforeStart: true));
         created.Result.Succeeded.Should().BeTrue();
         await Lfg(s => s.MaybeAsync(User(30), created.Listing!.Id, Ct));
 

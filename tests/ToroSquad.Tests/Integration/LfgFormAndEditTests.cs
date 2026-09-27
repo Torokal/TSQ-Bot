@@ -20,7 +20,7 @@ namespace ToroSquad.Tests.Integration;
 
 /// <summary>
 /// The /ekip form and the owner's edit on the real SQLite database, production wiring and the real outbox: the typed texts
-/// map onto the existing create rules (validation, relative/custom start, guild time zone, notices, voice); the edit is
+/// map onto the existing create rules (validation, start date or now, guild time zone, notices, voice); the edit is
 /// owner-only, all-or-nothing, decided on the stored state inside the write lock (size never below the Joined players,
 /// start only while ahead, expiry never restarted), never repeats or revives a handled notice, and redraws the same card
 /// without pinging anyone.
@@ -64,6 +64,11 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
 
     private static LfgFormValues Form(string? game = "Deadlock", string? players = "6", string? details = null, string? start = null, string? duration = null) =>
         new(game, players, details, start, duration);
+
+    private static readonly TimeZoneInfo Istanbul = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
+
+    /// <summary>The date the owner types for a start <paramref name="minutes"/> from now (the form takes only a full date and time).</summary>
+    private string In(int minutes) => LfgForm.FormatDate(_host.Clock.GetUtcNow().AddMinutes(minutes), Istanbul);
 
     private Task<T> Lfg<T>(Func<LfgService, Task<T>> action) => _host.InScopeAsync(sp => action(sp.GetRequiredService<LfgService>()));
 
@@ -152,7 +157,16 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [InlineData("Deadlock", "6", null, "31.02.2026 21:00", null, "lfg.create.date_format")]
     [InlineData("Deadlock", "6", null, "30", null, "lfg.create.date_format")]
     [InlineData("Deadlock", "6", null, "01.01.2026 10:00", null, "lfg.create.date_not_future")]
-    [InlineData("Deadlock", "6", null, "1,33 saat", null, "lfg.create.start_invalid")]
+    [InlineData("Deadlock", "6", null, "1,33 saat", null, "lfg.create.date_format")]
+    [InlineData("Deadlock", "6", null, "2 saat", null, "lfg.create.date_format")]
+    [InlineData("Deadlock", "6", null, "30 dk", null, "lfg.create.date_format")]
+    [InlineData("Deadlock", "6", null, "1 gün", null, "lfg.create.date_format")]
+    [InlineData("Deadlock", "6", null, "2", null, "lfg.create.date_format")]
+    [InlineData("Deadlock", "6", null, "3 saat sonra", null, "lfg.create.date_format")]
+    [InlineData("Deadlock", "6", null, "yarın 21:30", null, "lfg.create.date_format")]
+    [InlineData("Deadlock", "6", null, "27.09.2026", null, "lfg.create.date_format")]
+    [InlineData("Deadlock", "6", null, "21:30", null, "lfg.create.date_format")]
+    [InlineData("Deadlock", "6", null, "şimdi", null, "lfg.create.date_format")]
     [InlineData("Deadlock", "6", null, null, "5", "lfg.create.duration_invalid")]
     [InlineData("Deadlock", "6", null, null, "1,5", "lfg.create.duration_invalid")]
     [InlineData("Deadlock", "6", null, null, "iki", "lfg.create.duration_invalid")]
@@ -175,20 +189,16 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
 
     [Theory]
     [InlineData("", null)]
-    [InlineData("şimdi", null)]
-    [InlineData("30 dk", 30)]
-    [InlineData("45dk", 45)]
-    [InlineData("1 saat", 60)]
-    [InlineData("1.5 saat", 90)]
-    [InlineData("1,5 saat", 90)]
-    [InlineData("2 saat", 120)]
-    [InlineData("2 saat sonra", 120)]
-    [InlineData("1 gün", 1440)]
-    public async Task Relative_starts_go_through_the_same_EventAt_pipeline(string start, int? minutes)
+    [InlineData("25.09.2026 21:30", "2026-09-25T18:30:00Z")]
+    [InlineData("25.09.26 21:30", "2026-09-25T18:30:00Z")]
+    [InlineData("5.10.2026 20:00", "2026-10-05T17:00:00Z")]
+    [InlineData("5.10.26 20:00", "2026-10-05T17:00:00Z")]
+    [InlineData("2026-10-05 20:00", "2026-10-05T17:00:00Z")]
+    public async Task A_full_date_or_nothing_is_the_start(string start, string? expected)
     {
         var listing = (await CreateAsync(Form(start: start, duration: "2"))).Listing!;
 
-        listing.EventAt.Should().Be(minutes is { } m ? T0.AddMinutes(m) : null);
+        listing.EventAt.Should().Be(expected is null ? null : DateTimeOffset.Parse(expected, System.Globalization.CultureInfo.InvariantCulture));
         listing.ExpiresAt.Should().Be((listing.EventAt ?? T0).AddHours(2), "ExpiresAt = (EventAt ?? now) + duration");
     }
 
@@ -207,30 +217,130 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task Notices_and_voice_come_from_the_settings_step()
     {
-        var listing = await OpenAsync(Form(start: "2 saat"), before: true, atStart: true, voice: Voice);
+        var listing = await OpenAsync(Form(start: In(120)), before: true, atStart: true, voice: Voice);
         listing.NotifyBeforeStart.Should().BeTrue();
         listing.NotifyAtStart.Should().BeTrue();
         listing.VoiceChannel.Should().Be(Voice);
 
         (await CreateAsync(Form(start: ""), before: true, owner: 11)).Result.MessageKey.Should().Be("lfg.create.notice_needs_start");
-        (await CreateAsync(Form(start: "2 saat"), voice: TextNotVoice, owner: 11)).Result.MessageKey.Should().Be("lfg.create.voice_invalid");
+        (await CreateAsync(Form(start: In(120)), voice: TextNotVoice, owner: 11)).Result.MessageKey.Should().Be("lfg.create.voice_invalid");
+    }
+
+    /// <summary>The modal submit path without Discord: the draft, the bound text fields, the service check, the settings step.</summary>
+    private async Task<(LfgFormCheck Check, string Shown)> SubmitAsync(string start)
+    {
+        var drafts = _host.Services.GetRequiredService<LfgFormDrafts>();
+        var draft = drafts.Open(User(Owner), Channel, LfgFormKind.Create, null, LfgFormValues.Empty);
+        var modal = new ToroSquad.Modules.Lfg.Commands.LfgFormModal { Game = "Deadlock", Players = "6", Details = "Rank fark etmez", Start = start };
+        draft = drafts.Update(draft.Id, User(Owner), d => d with { Values = modal.ToValues(d.Values.Duration), VoiceChannel = Voice })!;
+        var check = await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, draft.ToCreateInput() with { NotifyBeforeStart = false, NotifyAtStart = false }, Ct));
+        var catalog = _host.Services.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>();
+        if (!check.Result.Succeeded)
+            return (check, catalog.Get("tr", check.Result.MessageKey, check.Result.Args.ToArray()));
+        draft = drafts.Update(draft.Id, User(Owner), d => d with { Preview = check.Preview })!;
+        return (check, LfgFormUi.Settings(draft, _host.Clock.GetUtcNow(), 120, (key, args) => catalog.Get("tr", key, args)).Content);
+    }
+
+    /// <summary>What the Back modal shows, submitted again unchanged (the texts it prefills and the voice channel it preselects).</summary>
+    private static (ToroSquad.Modules.Lfg.Commands.LfgFormModal Modal, ChannelId? Voice) Resubmit(global::Discord.Modal modal)
+    {
+        var labels = modal.Component.Components.Cast<global::Discord.LabelComponent>().ToList();
+        string? Text(string id) => labels.Select(l => l.Component).OfType<global::Discord.TextInputComponent>().Single(t => t.CustomId == id).Value;
+        var voice = labels.Select(l => l.Component).OfType<global::Discord.SelectMenuComponent>().Single(s => s.CustomId == LfgForm.VoiceField)
+            .DefaultValues.Select(v => (ChannelId?)new ChannelId(v.Id)).FirstOrDefault();
+        return (new ToroSquad.Modules.Lfg.Commands.LfgFormModal
+        {
+            Game = Text(LfgForm.GameField),
+            Players = Text(LfgForm.PlayersField),
+            Details = Text(LfgForm.DetailsField),
+            Start = Text(LfgForm.StartField),
+        }, voice);
+    }
+
+    [Fact]
+    public async Task Back_to_the_form_and_again_to_the_settings_loses_nothing()
+    {
+        var drafts = _host.Services.GetRequiredService<LfgFormDrafts>();
+        var id = drafts.Open(User(Owner), Channel, LfgFormKind.Create, null, LfgFormValues.Empty).Id;
+        string Text(string key, object?[] args) => key;
+
+        async Task<LfgFormDraft> SubmitAsync(ToroSquad.Modules.Lfg.Commands.LfgFormModal modal, ChannelId? voice)
+        {
+            var draft = drafts.Update(id, User(Owner), d => LfgFormUi.WithModal(d, modal, voice))!;
+            var check = await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, draft.ToCreateInput() with { NotifyBeforeStart = false, NotifyAtStart = false }, Ct));
+            check.Result.Succeeded.Should().BeTrue(check.Result.MessageKey);
+            return drafts.Update(id, User(Owner), d => LfgFormUi.WithCheck(d, check.Preview!))!;
+        }
+
+        // Modal: date + voice; settings: 3 hours and the reminder.
+        await SubmitAsync(new ToroSquad.Modules.Lfg.Commands.LfgFormModal { Game = "Deadlock", Players = "5", Details = "Rank fark etmez", Start = "25.09.26 21:30" }, Voice);
+        drafts.Update(id, User(Owner), d => LfgFormUi.WithDuration(d, ["3"], 120));
+        var chosen = drafts.Update(id, User(Owner), d => LfgFormUi.WithNotices(d, [LfgFormUi.NotifyBefore]))!;
+        chosen.Preview!.Duration.Should().Be(TimeSpan.FromHours(3), "the summary shows the chosen duration at once");
+
+        // ✏️ Formu Düzenle: the modal comes back with everything; submitted unchanged it leads to the same settings.
+        var back = LfgFormUi.Modal(chosen, 20, Text);
+        var (modal, voice) = Resubmit(back);
+        (modal.Game, modal.Players, modal.Details, modal.Start, voice).Should().Be(("Deadlock", "5", "Rank fark etmez", "25.09.26 21:30", (ChannelId?)Voice));
+        var again = await SubmitAsync(modal, voice);
+
+        (again.Values.Duration, again.NotifyBeforeStart, again.NotifyAtStart, again.VoiceChannel).Should().Be(("3", true, false, (ChannelId?)Voice));
+        again.Preview!.Duration.Should().Be(TimeSpan.FromHours(3));
+        var settings = LfgFormUi.Settings(again, _host.Clock.GetUtcNow(), 120, Text).Components.Components.Cast<global::Discord.ActionRowComponent>()
+            .SelectMany(r => r.Components).OfType<global::Discord.SelectMenuComponent>().ToList();
+        settings[0].Options.Single(o => o.IsDefault == true).Value.Should().Be("3", "the duration select shows the choice again");
+        settings[1].Options.Where(o => o.IsDefault == true).Select(o => o.Value).Should().Equal(LfgFormUi.NotifyBefore);
+
+        // Cleared in the modal = no voice channel; emptied start = now, so the notices are dropped (hidden), the duration stays.
+        var cleared = await SubmitAsync(new ToroSquad.Modules.Lfg.Commands.LfgFormModal { Game = modal.Game, Players = modal.Players, Details = modal.Details, Start = "" }, null);
+        (cleared.VoiceChannel, cleared.NotifyBeforeStart, cleared.Values.Duration).Should().Be(((ChannelId?)null, false, "3"));
+
+        // Saved: the listing gets exactly what the form holds.
+        var saved = await Lfg(s => s.CreateAsync(User(Owner), Channel, drafts.Take(id, User(Owner))!.ToCreateInput(), Ct));
+        (saved.Listing!.EventAt, saved.Listing.ExpiresAt, saved.Listing.VoiceChannel).Should().Be(((DateTimeOffset?)null, T0.AddHours(3), (ChannelId?)null));
+    }
+
+    [Theory]
+    [InlineData("25.09.2026 21:30")]
+    [InlineData("25.09.26 21:30")]
+    public async Task The_form_submit_accepts_a_start_date_and_shows_the_settings_step(string start)
+    {
+        var (check, shown) = await SubmitAsync(start);
+
+        check.Result.Succeeded.Should().BeTrue();
+        check.Preview!.EventAt.Should().Be(new DateTimeOffset(2026, 9, 25, 18, 30, 0, TimeSpan.Zero));
+        shown.Should().Contain("<t:" + new DateTimeOffset(2026, 9, 25, 18, 30, 0, TimeSpan.Zero).ToUnixTimeSeconds() + ":F>").And.Contain("🔊 Ses Odası: <#8902>");
+        (await ListingCountAsync()).Should().Be(0, "nothing is stored before İlanı Oluştur");
+    }
+
+    [Theory]
+    [InlineData("2 saat")]
+    [InlineData("30 dk")]
+    [InlineData("1 gün")]
+    [InlineData("2")]
+    public async Task The_form_submit_refuses_a_relative_time_with_the_date_format(string start)
+    {
+        var (check, shown) = await SubmitAsync(start);
+
+        check.Result.MessageKey.Should().Be("lfg.create.date_format");
+        shown.Should().Be("Tarih/saat anlaşılamadı. Örnek: 27.09.2026 21:30 veya 27.09.26 21:30");
     }
 
     [Fact]
     public async Task Checking_a_submitted_form_stores_nothing_and_previews_the_listing()
     {
-        var check = await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, LfgForm.ToCreateInput(Form(start: "2 saat", duration: "3"), false, false, null), Ct));
+        var check = await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, LfgForm.ToCreateInput(Form(start: In(120), duration: "3"), false, false, null), Ct));
 
         check.Result.Succeeded.Should().BeTrue();
         check.Preview!.GameName.Should().Be("Deadlock");
-        check.Preview.Start.Delay.Should().Be(TimeSpan.FromHours(2));
-        check.Preview.EventAt.Should().Be(T0.AddHours(2), "a relative start has a moment, so the settings step offers the notices");
+        check.Preview.Start.At.Should().Be(T0.AddHours(2));
+        check.Preview.EventAt.Should().Be(T0.AddHours(2), "a start date: the settings step offers the notices");
         var draft = _host.Services.GetRequiredService<LfgFormDrafts>().Open(User(Owner), Channel, LfgFormKind.Create, null, LfgFormValues.Empty) with
         {
             Preview = check.Preview,
         };
-        LfgFormUi.Settings(draft, T0, (key, _) => key).Components.Components.Cast<global::Discord.ActionRowComponent>().SelectMany(r => r.Components)
-            .OfType<global::Discord.SelectMenuComponent>().Select(c => c.Type).Should().Equal(global::Discord.ComponentType.SelectMenu, global::Discord.ComponentType.ChannelSelect);
+        LfgFormUi.Settings(draft, T0, 120, (key, _) => key).Components.Components.Cast<global::Discord.ActionRowComponent>().SelectMany(r => r.Components)
+            .OfType<global::Discord.SelectMenuComponent>().Select(c => c.CustomId).Should().Equal(LfgFormUi.DurationPrefix + draft.Id, LfgFormUi.NotifyPrefix + draft.Id);
         check.Preview.Duration.Should().Be(TimeSpan.FromHours(3));
         (await ListingCountAsync()).Should().Be(0);
         (await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, LfgForm.ToCreateInput(Form(players: "x"), false, false, null), Ct)))
@@ -372,14 +482,14 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task A_future_start_can_move_and_the_expiry_follows_it()
     {
-        var listing = await OpenAsync(Form(start: "2 saat", duration: "2"));
+        var listing = await OpenAsync(Form(start: In(120), duration: "2"));
 
         (await EditAsync(listing.Id, f => f with { Start = "05.10.2026 21:30" })).Result.MessageKey.Should().Be("lfg.edit.done");
         var moved = (await GetAsync(listing.Id))!;
         moved.EventAt.Should().Be(new DateTimeOffset(2026, 10, 5, 18, 30, 0, TimeSpan.Zero));
         moved.ExpiresAt.Should().Be(moved.EventAt!.Value.AddHours(2));
 
-        (await EditAsync(listing.Id, f => f with { Start = "3 saat" })).Result.Succeeded.Should().BeTrue();
+        (await EditAsync(listing.Id, f => f with { Start = In(180) })).Result.Succeeded.Should().BeTrue();
         (await GetAsync(listing.Id))!.EventAt.Should().Be(T0.AddHours(3));
 
         (await EditAsync(listing.Id, f => f with { Duration = "3" })).Result.Succeeded.Should().BeTrue();
@@ -388,6 +498,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
 
         (await EditAsync(listing.Id, f => f with { Start = "01.01.2026 10:00" })).Result.MessageKey.Should().Be("lfg.create.date_not_future", "never into the past");
         (await EditAsync(listing.Id, f => f with { Start = "iki saat" })).Result.MessageKey.Should().Be("lfg.create.date_format");
+        (await EditAsync(listing.Id, f => f with { Start = "2 saat" })).Result.MessageKey.Should().Be("lfg.create.date_format", "relative times are not a start");
         (await EditAsync(listing.Id, f => f with { Duration = "4" })).Result.MessageKey.Should().Be("lfg.create.duration_invalid");
         (await GetAsync(listing.Id))!.ExpiresAt.Should().Be(T0.AddHours(6));
     }
@@ -395,7 +506,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task An_empty_start_moves_a_scheduled_listing_to_now()
     {
-        var listing = await OpenAsync(Form(start: "2 saat", duration: "1"));
+        var listing = await OpenAsync(Form(start: In(120), duration: "1"));
 
         (await EditAsync(listing.Id, f => f with { Start = "" })).Result.Succeeded.Should().BeTrue();
 
@@ -406,10 +517,10 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task The_start_is_locked_once_the_event_started_but_the_rest_stays_editable()
     {
-        var listing = await OpenAsync(Form(start: "30 dk", duration: "2"));
+        var listing = await OpenAsync(Form(start: In(30), duration: "2"));
         _host.Clock.Advance(TimeSpan.FromMinutes(31));
 
-        (await EditAsync(listing.Id, f => f with { Start = "2 saat" })).Result.MessageKey.Should().Be("lfg.edit.start_locked");
+        (await EditAsync(listing.Id, f => f with { Start = In(120) })).Result.MessageKey.Should().Be("lfg.edit.start_locked");
         (await EditAsync(listing.Id, f => f with { Start = "05.10.2026 21:30", Game = "CS2" })).Result.MessageKey.Should().Be("lfg.edit.start_locked");
         (await GetAsync(listing.Id))!.GameName.Should().Be("Deadlock");
 
@@ -424,7 +535,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         var listing = await OpenAsync(Form(duration: "2"));
         _host.Clock.Advance(TimeSpan.FromMinutes(90));
 
-        (await EditAsync(listing.Id, f => f with { Start = "2 saat" })).Result.MessageKey.Should().Be("lfg.edit.start_locked");
+        (await EditAsync(listing.Id, f => f with { Start = In(120) })).Result.MessageKey.Should().Be("lfg.edit.start_locked");
         (await EditAsync(listing.Id, f => f with { Duration = "3" })).Result.Succeeded.Should().BeTrue();
         (await GetAsync(listing.Id))!.ExpiresAt.Should().Be(T0.AddHours(3), "CreatedAt + duration, not now + duration");
 
@@ -455,8 +566,8 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task A_pending_reminder_follows_the_new_start()
     {
-        var listing = await OpenAsync(Form(start: "2 saat"), before: true);
-        (await EditAsync(listing.Id, f => f with { Start = "3 saat" })).Result.Succeeded.Should().BeTrue();
+        var listing = await OpenAsync(Form(start: In(120)), before: true);
+        (await EditAsync(listing.Id, f => f with { Start = In(180) })).Result.Succeeded.Should().BeTrue();
 
         _host.Clock.Advance(TimeSpan.FromMinutes(91)); // the old reminder window
         await TickAsync();
@@ -470,12 +581,12 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task A_sent_reminder_is_never_sent_again_for_a_new_start()
     {
-        var listing = await OpenAsync(Form(start: "40 dk"), before: true);
+        var listing = await OpenAsync(Form(start: In(40)), before: true);
         _host.Clock.Advance(TimeSpan.FromMinutes(11));
         await TickAsync();
         Delivered().Should().ContainSingle();
 
-        (await EditAsync(listing.Id, f => f with { Start = "3 saat" })).Result.Succeeded.Should().BeTrue();
+        (await EditAsync(listing.Id, f => f with { Start = In(180) })).Result.Succeeded.Should().BeTrue();
         (await RowAsync(listing.Id)).ReminderState.Should().Be(LfgNoticeState.Queued, "handled once, never reset");
         _host.Clock.Advance(TimeSpan.FromMinutes(160)); // inside the new reminder window
         await TickAsync();
@@ -486,7 +597,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task Switching_notices_on_after_their_moment_never_sends_them_late()
     {
-        var listing = await OpenAsync(Form(start: "30 dk", duration: "2"));
+        var listing = await OpenAsync(Form(start: In(30), duration: "2"));
         _host.Clock.Advance(TimeSpan.FromMinutes(32));
 
         (await EditAsync(listing.Id, before: true, atStart: true)).Result.MessageKey.Should().Be("lfg.edit.done");
@@ -500,7 +611,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task Switching_a_notice_off_before_it_is_queued_sends_nothing()
     {
-        var listing = await OpenAsync(Form(start: "2 saat"), before: true, atStart: true);
+        var listing = await OpenAsync(Form(start: In(120)), before: true, atStart: true);
         (await EditAsync(listing.Id, before: false, atStart: false)).Result.Succeeded.Should().BeTrue();
 
         _host.Clock.Advance(TimeSpan.FromMinutes(121));
@@ -512,7 +623,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task Switching_off_a_queued_notice_cancels_it_and_switching_on_again_never_repeats_it()
     {
-        var listing = await OpenAsync(Form(start: "40 dk"), before: true);
+        var listing = await OpenAsync(Form(start: In(40)), before: true);
         _host.Clock.Advance(TimeSpan.FromMinutes(11));
         await _host.Services.GetRequiredService<LfgExpiryWorker>().RunOnceAsync(Ct); // queued in the outbox, not delivered yet
         (await NoticesAsync()).Should().ContainSingle().Which.Status.Should().Be(OutboxStatus.Pending);
@@ -533,12 +644,12 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task A_queued_reminder_that_names_the_old_time_is_cancelled_when_the_start_moves()
     {
-        var listing = await OpenAsync(Form(start: "40 dk"), before: true);
+        var listing = await OpenAsync(Form(start: In(40)), before: true);
         _host.Clock.Advance(TimeSpan.FromMinutes(11));
         await _host.Services.GetRequiredService<LfgExpiryWorker>().RunOnceAsync(Ct); // queued (e.g. delivery retrying), not delivered
         (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Pending);
 
-        (await EditAsync(listing.Id, f => f with { Start = "3 saat" })).Result.MessageKey.Should().Be("lfg.edit.done");
+        (await EditAsync(listing.Id, f => f with { Start = In(180) })).Result.MessageKey.Should().Be("lfg.edit.done");
 
         (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Cancelled, "its text names the old start");
         (await RowAsync(listing.Id)).ReminderState.Should().Be(LfgNoticeState.Queued, "handled once: not planned again");
@@ -556,17 +667,18 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         var scheduled = await OpenAsync(Form(game: "CS2", start: "05.10.2026 21:30"));
         _host.Clock.Advance(TimeSpan.FromMinutes(5));
 
-        (await EditAsync(now.Id, f => f with { Start = "şimdi", Details = "a" })).Result.MessageKey.Should().Be("lfg.edit.done", "'now' where no start is shown");
+        (await EditAsync(now.Id, f => f with { Start = "  ", Details = "a" })).Result.MessageKey.Should().Be("lfg.edit.done", "still empty where no start is shown");
         (await EditAsync(scheduled.Id, f => f with { Start = "5.10.2026 21:30", Details = "b" })).Result.MessageKey.Should().Be("lfg.edit.done");
+        (await EditAsync(scheduled.Id, f => f with { Start = "5.10.26 21:30", Details = "c" })).Result.MessageKey.Should().Be("lfg.edit.done", "a two-digit year");
         (await GetAsync(scheduled.Id))!.EventAt.Should().Be(new DateTimeOffset(2026, 10, 5, 18, 30, 0, TimeSpan.Zero));
     }
 
     [Fact]
     public async Task A_stale_form_never_undoes_a_newer_start()
     {
-        var listing = await OpenAsync(Form(start: "2 saat"));
+        var listing = await OpenAsync(Form(start: In(120)));
         var stale = (await OpenEditAsync(listing.Id)).Prefill!; // form A opened
-        (await EditAsync(listing.Id, f => f with { Start = "3 saat" })).Result.Succeeded.Should().BeTrue(); // form B saved
+        (await EditAsync(listing.Id, f => f with { Start = In(180) })).Result.Succeeded.Should().BeTrue(); // form B saved
 
         var saved = await Lfg(s => s.EditAsync(User(Owner), listing.Id, new LfgEditInput(stale with { Details = "A" }, false, false, null, Opened: stale), Ct));
 
@@ -582,7 +694,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task A_stale_form_never_reverts_any_field_it_did_not_touch()
     {
-        var listing = await OpenAsync(Form(details: "casual", start: "2 saat"), before: true, voice: Voice);
+        var listing = await OpenAsync(Form(details: "casual", start: In(120)), before: true, voice: Voice);
         var formA = await OpenEditAsync(listing.Id);
         var formB = await OpenEditAsync(listing.Id);
 
@@ -666,7 +778,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task A_discarded_listing_never_sends_a_notice_planned_meanwhile()
     {
-        var listing = await OpenAsync(Form(start: "40 dk"), before: true);
+        var listing = await OpenAsync(Form(start: In(40)), before: true);
         _host.Clock.Advance(TimeSpan.FromMinutes(11));
         await _host.Services.GetRequiredService<LfgExpiryWorker>().RunOnceAsync(Ct);
         (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Pending);
@@ -685,12 +797,12 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task A_typed_date_is_refused_when_the_guild_time_zone_is_unknown()
     {
-        var listing = await OpenAsync(Form(start: "2 saat"));
+        var listing = await OpenAsync(Form(start: In(120)));
         await _host.InScopeAsync(sp => sp.GetRequiredService<IGuildSettingsStore>()
             .SaveAsync(GuildSettings.Default(Guild) with { TimeZoneId = "Mars/Olympus" }, new UserId(1), Ct));
 
         (await EditAsync(listing.Id, f => f with { Start = "05.10.2026 21:30" })).Result.MessageKey.Should().Be("lfg.create.timezone_invalid");
-        (await EditAsync(listing.Id, f => f with { Start = "3 saat" })).Result.MessageKey.Should().Be("lfg.edit.done", "a relative start needs no zone");
+        (await EditAsync(listing.Id, f => f with { Start = "" })).Result.MessageKey.Should().Be("lfg.edit.done", "an empty start (now) needs no zone");
     }
 
     [Fact]
@@ -748,7 +860,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [Fact]
     public async Task The_next_notice_uses_the_new_voice_channel()
     {
-        var listing = await OpenAsync(Form(start: "40 dk"), before: true, voice: Voice);
+        var listing = await OpenAsync(Form(start: In(40)), before: true, voice: Voice);
         (await EditAsync(listing.Id, voice: Voice2)).Result.Succeeded.Should().BeTrue();
 
         _host.Clock.Advance(TimeSpan.FromMinutes(11));

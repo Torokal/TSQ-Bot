@@ -17,16 +17,14 @@ namespace ToroSquad.Modules.Lfg.Application;
 public sealed record LfgResult(OperationResult Result, LfgListingView? Listing, bool RefreshCard);
 
 /// <summary>
-/// What the /ekip form asked for. <see cref="StartMinutes"/>: a relative start in minutes (null/0 = now) or
-/// <see cref="StartAt"/>: a custom date — never both. The notices are explicit opt-ins and need a later start.
-/// <see cref="VoiceChannel"/>: optional guild voice channel.
+/// What the /ekip form asked for. <see cref="StartAt"/>: empty = now, otherwise a date and time (read in the guild's time
+/// zone). The notices are explicit opt-ins and need a later start. <see cref="VoiceChannel"/>: optional guild voice channel.
 /// </summary>
 public sealed record LfgCreateInput(
     string? Game,
     int Players,
     string? Details = null,
     int? DurationMinutes = null,
-    int? StartMinutes = null,
     bool NotifyBeforeStart = false,
     bool NotifyAtStart = false,
     ChannelId? VoiceChannel = null,
@@ -135,7 +133,7 @@ public sealed class LfgService(
         var (draft, refusal) = await PrepareCreateAsync(actor, channel, input, now, ct);
         if (draft is null)
             return new LfgFormCheck(refusal!, null);
-        var (eventAt, _) = draft.Schedule(now); // a relative start is shown (and offers notices) as of now; saving recomputes it
+        var (eventAt, _) = draft.Schedule(now); // the start date (or none = now); the settings step offers notices only for a date
         return new LfgFormCheck(OperationResult.Ok("lfg.form.checked"),
             new LfgFormPreview(draft.GameName, draft.Details, draft.MaxPlayers, draft.Start ?? LfgStart.Now, eventAt, draft.Duration));
     }
@@ -172,8 +170,8 @@ public sealed class LfgService(
     /// The owner saves the edit form: game, details, size, start, duration, the two notice opt-ins and the voice channel.
     /// Owner, participants and status are never edited. Everything is decided on the state read inside the write
     /// transaction (never on what the form showed): only the owner, only while active; the size never below the Joined
-    /// players (Maybe never counts; equal = Full); the start only while it is still ahead (then relative or a custom date,
-    /// never in the past); <c>ExpiresAt = (EventAt ?? CreatedAt) + duration</c>, so an edit never restarts the listing's
+    /// players (Maybe never counts; equal = Full); the start only while it is still ahead (a date, never in the past, or
+    /// empty = start now); <c>ExpiresAt = (EventAt ?? CreatedAt) + duration</c>, so an edit never restarts the listing's
     /// lifetime. A notice that was already handled (queued or skipped) is never handled again — a new start or switching
     /// it off and on again cannot repeat it; one switched off while still waiting in the outbox is cancelled; one switched
     /// on after its moment is consumed as skipped, never sent late. All or nothing: a refused edit changes no field.
@@ -246,18 +244,18 @@ public sealed class LfgService(
             var started = (listing.EventAt ?? listing.CreatedAt) <= now || listing.StartNoticeState != LfgNoticeState.Pending;
             var eventAt = listing.EventAt;
             var start = listing.EventAt is { } at ? LfgStart.AtInstant(at) : LfgStart.Now;
-            if (!LfgForm.SameStart(form.Start, shown.Start))
+            if (!LfgForm.SameStart(form.Start, shown.Start, TimeZoneInfo.ConvertTime(now, zone).Year))
             {
                 if (started)
                     return (Refusal(LfgDraftError.StartLocked), null);
-                var typed = LfgStartText.Parse(form.Start);
-                if (typed.At is not null && !zoneKnown)
+                var typed = LfgRules.Normalize(form.Start);
+                if (typed is not null && !zoneKnown)
                     return (Refusal(LfgDraftError.TimeZoneInvalid), null); // like create: never guess a zone for a typed date
-                var (resolved, startError) = LfgRules.ResolveStart(typed.Minutes, typed.At, zone, now);
+                var (resolved, startError) = LfgRules.ResolveStart(typed, zone, now);
                 if (resolved is null)
                     return (Refusal(startError), null);
                 start = resolved;
-                eventAt = resolved.EventAt(now) ?? now; // "now" for a scheduled listing: it starts at this moment
+                eventAt = resolved.At ?? now; // emptied on a scheduled listing: it starts at this moment
             }
 
             // Duration: untouched keeps the current one (even a configured default that is not one of the choices).
@@ -344,7 +342,7 @@ public sealed class LfgService(
         if (!string.IsNullOrWhiteSpace(input.StartAt) && GuildTime.TryResolve((await settings.GetAsync(actor.GuildId, ct)).TimeZoneId, out var guildZone))
             zone = guildZone;
         var (draft, error) = LfgRules.Validate(input.Game, input.Details, input.Players, input.DurationMinutes, o.MaxPlayersPerListing, o.DefaultExpirationMinutes,
-            input.StartMinutes, input.NotifyBeforeStart || input.NotifyAtStart, input.StartAt, zone, now);
+            input.NotifyBeforeStart || input.NotifyAtStart, input.StartAt, zone, now);
         if (draft is null)
             return (null, Refusal(error));
 
@@ -385,9 +383,7 @@ public sealed class LfgService(
             LfgDraftError.GameTooLong => No(OperationError.InvalidInput, "lfg.create.game_too_long", LfgRules.GameNameMaxLength),
             LfgDraftError.DetailsTooLong => No(OperationError.InvalidInput, "lfg.create.details_too_long", LfgRules.DetailsMaxLength),
             LfgDraftError.PlayersOutOfRange => No(OperationError.InvalidInput, "lfg.create.players_range", LfgRules.MinPlayers, Math.Min(o.MaxPlayersPerListing, LfgRules.HardMaxPlayers)),
-            LfgDraftError.StartInvalid => No(OperationError.InvalidInput, "lfg.create.start_invalid"),
             LfgDraftError.NoticeNeedsStart => No(OperationError.InvalidInput, "lfg.create.notice_needs_start"),
-            LfgDraftError.StartConflict => No(OperationError.InvalidInput, "lfg.create.start_conflict"),
             LfgDraftError.DateFormat => No(OperationError.InvalidInput, "lfg.create.date_format"),
             LfgDraftError.DateNotInTimeZone => No(OperationError.InvalidInput, "lfg.create.date_not_in_zone"),
             LfgDraftError.DateAmbiguous => No(OperationError.InvalidInput, "lfg.create.date_ambiguous"),

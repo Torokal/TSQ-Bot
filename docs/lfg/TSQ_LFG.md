@@ -17,7 +17,7 @@ katılım, geçmiş/itibar, otomatik eşleştirme.
 ## Kullanım
 
 `/ekip` parametresizdir: yazınca ilan **açılmaz**, bir form açılır. Discord bir modalda en fazla **5** üst düzey bileşene
-izin verir (Discord API: modal `components` 1–5; her alan bir `Label` + metin girişi), bu yüzden akış iki adımdır:
+izin verir (Discord API: modal `components` 1–5; her alan bir `Label` içindedir), bu yüzden akış iki adımdır:
 
 1. **Form (modal)** — *Ekip İlanı Oluştur*
 
@@ -26,13 +26,15 @@ izin verir (Discord API: modal `components` 1–5; her alan bir `Label` + metin 
    | Oyun / Etkinlik | serbest metin, 2–50 karakter (kontrol/format karakterleri atılır, boşluklar sadeleşir) |
    | Kişi sayısı | toplam ekip, **sahip dahil**; 2 … `Lfg:MaxPlayersPerListing` (varsayılan 20, üst sınır 50); yalnızca rakam |
    | Detay | isteğe bağlı, en fazla 200 karakter |
-   | Başlangıç | isteğe bağlı, **tek alan**: boş / `şimdi` = şimdi · göreli `30 dk`, `45 dakika`, `1 saat`, `1,5 saat` / `1.5 saat`, `2 saat (sonra)`, `1 gün` · tarih `05.10.2026 21:30` (GG.AA.YYYY SS:DD) veya ISO `2026-10-05 21:30`. Göreli başlangıç için birim zorunludur (`30` tek başına tarih sayılır ve reddedilir; `d` birim değildir — dakika mı gün mü belirsiz); büyük harf (`ŞİMDİ`, `30 DAKİKA`) de olur; doğal dil ayrıştırıcısı yoktur |
-   | Süre (saat) | isteğe bağlı: `1`, `2` veya `3` (`2 saat` da olur); boşsa `Lfg:DefaultExpirationMinutes` (varsayılan 120). Planlı ilanda **başlangıçtan itibaren** sayılır |
+   | Başlangıç Tarihi | isteğe bağlı. **Boş = şimdi**; yoksa tam tarih ve saat: `27.09.2026 21:30` (GG.AA.YYYY SS:DD) veya kısa yıl `27.09.26 21:30` (GG.AA.YY SS:DD); baştaki sıfırlar gerekmez (`5.10.26 20:00`). Uyumluluk için ISO `2026-09-27 21:30` de kabul edilir. Göreli süreler (`2 saat`, `30 dk`, `1 gün`, `2`), kelimeler (`yarın 21:00`) ve eksik tarih/saat (`27.09.2026`, `21:30`) **kabul edilmez** → `Tarih/saat anlaşılamadı. Örnek: 27.09.2026 21:30 veya 27.09.26 21:30` |
+   | Ses Kanalı | isteğe bağlı, Discord'un yerel kanal seçicisi (yalnızca ses kanalları, 0–1 seçim); sunucu tarafında bu guild'in gerçek bir ses kanalı mı diye yeniden denetlenir |
 
-2. **Ayarlar (yalnızca formu gönderene görünür mesaj)** — formun özeti ve Discord'un yerel bileşenleri:
-   bildirim seçimi (çoklu seçim: *⏰ 30 dk önce hatırlat*, *🚀 Başladığında etiketle*; yalnızca ileri bir başlangıçta
-   gösterilir), ses kanalı seçici (yalnızca ses kanalları, isteğe bağlı) ve **[İlanı Oluştur] [✏️ Formu Düzenle] [İptal]**.
-   *Formu Düzenle* aynı formu yazılanlarla yeniden açar.
+2. **Ayarlar (yalnızca formu gönderene görünür mesaj)** — formun özeti ve Discord'un yerel seçicileri: **İlan süresi**
+   (1 / 2 / 3 saat; varsayılan `Lfg:DefaultExpirationMinutes` seçili — 120 dk — ve seçeneklerden biri değilse "(varsayılan)"
+   olarak eklenir; planlı ilanda **başlangıçtan itibaren** sayılır), bildirimler (çoklu seçim: *⏰ 30 dk önce hatırlat*,
+   *🚀 Başladığında etiketle*; **yalnızca bir başlangıç tarihi varsa** gösterilir) ve **[İlanı Oluştur] [✏️ Formu Düzenle]
+   [İptal]**. *Formu Düzenle* aynı formu yazılanlarla ve seçilen ses kanalıyla yeniden açar; süre ve bildirim seçimleri
+   taslakta korunur.
 
 Form gönderilince hiçbir şey kaydedilmez: yazılanlar oluşturma kurallarının aynısıyla (`LfgService.CheckCreateAsync`)
 denetlenir; hata varsa Türkçe neden ve *Formu Düzenle* düğmesi gösterilir. **İlanı Oluştur** mevcut
@@ -52,7 +54,7 @@ denetlenir; kimse boşuna form doldurmaz.
 128 bit rastgele kimlik, yalnızca açan kullanıcı + sunucu için geçerli (kopyalanan/tahmin edilen kimlik başkası için
 yoktur), son kullanımdan 30 dk sonra düşer, kullanıcı başına en fazla 3 ve toplamda en fazla 2000; restart'ta kaybolur
 (kullanıcı formu yeniden açar). Kaydederken taslak alınır: çift tıklama tek kayıt yapar; reddedilirse taslak geri konur.
-Özel kimliklerde (`tsq:lfg:form:<taslak>`, `tsq:lfg:draft:save|back|cancel|notify|voice:<taslak>`) yalnızca taslak
+Özel kimliklerde (`tsq:lfg:form:<taslak>`, `tsq:lfg:draft:save|back|cancel|notify|duration:<taslak>`) yalnızca taslak
 kimliği bulunur; ne yapılabileceğine her adımda sunucu karar verir.
 
 ### İlanı düzenle
@@ -63,8 +65,8 @@ içeriğini değiştiremez → `Bu ilanı yalnızca ilan sahibi düzenleyebilir.
 Kapalı / süresi dolmuş / Orphaned ilan → `Bu ilan artık düzenlenemez.`
 
 Sahip aynı formu **mevcut değerlerle dolu** açar (başlangıç sunucunun saat diliminde `GG.AA.YYYY SS:DD`; "şimdi"
-ilanlarında boş; süre tam saatse `2`, değilse `90 dk`), ardından aynı ayarlar adımı mevcut bildirim tercihleri ve ses
-kanalıyla gelir → **Kaydet**. Değişebilenler: oyun, detay, kişi sayısı, başlangıç, süre, iki bildirim tercihi, ses kanalı.
+ilanlarında boş; mevcut ses kanalı seçili, seçim kaldırılabilir), ardından aynı ayarlar adımı mevcut süre (1/2/3 saat
+değilse "(mevcut)" olarak) ve bildirim tercihleriyle gelir → **Kaydet**. Değişebilenler: oyun, detay, kişi sayısı, başlangıç, süre, iki bildirim tercihi, ses kanalı.
 Sahip, katılımcılar ve durum düzenlenemez. Başarılıysa sahibe `✅ İlan güncellendi.` ve **aynı kart** bot tarafından
 yeniden çizilir (yeni mesaj yok, kanala "güncellendi" duyurusu yok, ping yok, katılımcı listesi korunur).
 
@@ -74,37 +76,34 @@ karar vermez; hepsi-ya-hiç — reddedilen düzenleme hiçbir alanı değiştirm
 | Konu | Kural |
 |---|---|
 | Kişi sayısı | yeni değer ≥ **Katılan** sayısı (Belki sayılmaz). Eşitse ilan **Dolu**, fazlaysa **Açık**. Az ise `Kişi sayısı, katılmış oyuncu sayısından (N) az olamaz.` Eşzamanlı katılımlar aynı kilitle sıralanır: aşırı rezervasyon olmaz |
-| Başlangıç | yalnızca etkinlik **henüz başlamadıysa** değişir (göreli, tarih veya boş = şimdi başlat). Başladıysa (`EventAt ≤ şimdi`, "şimdi" ilanları oluşturulduğu an başlamış sayılır, ya da başlangıç bildirimi işlendiyse) → `Etkinlik başladıktan sonra başlangıç zamanı değiştirilemez.`; diğer alanlar yine düzenlenir. Yeni başlangıç geçmişe alınamaz (tarih en erken şimdi + 1 dk) |
+| Başlangıç | yalnızca etkinlik **henüz başlamadıysa** değişir (tam tarih/saat ya da boş = şimdi başlat). Başladıysa (`EventAt ≤ şimdi`, "şimdi" ilanları oluşturulduğu an başlamış sayılır, ya da başlangıç bildirimi işlendiyse) → `Etkinlik başladıktan sonra başlangıç zamanı değiştirilemez.`; diğer alanlar yine düzenlenir. Yeni başlangıç geçmişe alınamaz (tarih en erken şimdi + 1 dk) |
 | Süre / bitiş | `ExpiresAt = (EventAt ?? CreatedAt) + süre`: "şimdi" ilanında süre **oluşturulma anından** sayılır, her düzenleme ilanı baştan başlatmaz (90. dakikada süreyi 2 saate çekmek bitişi `şimdi + 2 saat` yapmaz). Bitiş geçmişte kalırsa reddedilir. Dokunulmayan süre (ör. 1, 2, 3 dışındaki yapılandırılmış varsayılan) aynen kalır |
 | Bildirimler | bkz. [Etkinlik bildirimleri](#etkinlik-bildirimleri) → *Düzenleme* |
 | Ses kanalı | eklenebilir, değiştirilebilir, kaldırılabilir; her kayıtta (değişmese de) bu sunucunun gerçek bir ses kanalı mı diye yeniden denetlenir. İlan kapanmaz, katılımcılar etkilenmez, kart yeniden çizilir; sonraki hatırlatma/başlangıç bildirimi yeni kanalı kullanır; gönderilmiş bildirim düzenlenmez |
 
 Aynı formu ikinci kez kaydetmek `Değişiklik yok; ilan aynı kaldı.` der (sürüm ve kart değişmez). **Her alan** (oyun,
 detay, kişi, başlangıç, süre, iki bildirim tercihi, ses kanalı) formun **açıldığı andaki** haliyle karşılaştırılır;
-dokunulmamış alan kayıtta veritabanındaki **güncel** değerini korur (aynı tarih başka yazımla — `5.10.2026 21:30` — ya da
-başlangıcı boş formda `şimdi` da dokunulmamış sayılır; metinlerde büyük/küçük harf değişikliği düzenlemedir): iki açık
+dokunulmamış alan kayıtta veritabanındaki **güncel** değerini korur (aynı tarih başka yazımla — `5.10.2026 21:30` ya da
+`5.10.26 21:30` — da dokunulmamış sayılır; metinlerde büyük/küçük harf değişikliği düzenlemedir): iki açık
 düzenleme formundan eskisi, yenisinin değiştirdiği hiçbir alanı geri almaz (kayıp güncelleme yok). Değiştirilen alan
 güncel duruma göre doğrulanır. Dokunulmamış kişi sayısı, yapılandırılan üst sınır sonradan düşürülmüş olsa da geçerli kalır.
 Form gönderildiğindeki denetim yazma kilidi almaz ve hiçbir şey kaydetmez; karar kayıtta kilit altında yeniden verilir.
-Silinmiş bir ses kanalı düzenleme ayarlarında yeniden önerilmez; ayar "yok" bırakılırsa kayıtta kaldırılır (başka bir form o arada yeni bir kanal seçtiyse o kanal korunur). Dokunulmamış kanal, kayıtta saklanacak kanal olarak yeniden doğrulanır; form açıldıktan sonra silinmişse kayıt reddedilir (form yeniden açılınca "yok" ile kaydedilebilir). Saat dilimi çözülemezse (bozuk ayar) yazılan tarih
+Silinmiş bir ses kanalı düzenleme formunda yeniden önerilmez (ön seçili gelmez); ayar "yok" bırakılırsa kayıtta kaldırılır (başka bir form o arada yeni bir kanal seçtiyse o kanal korunur). Dokunulmamış kanal, kayıtta saklanacak kanal olarak yeniden doğrulanır; form açıldıktan sonra silinmişse kayıt reddedilir (form yeniden açılınca "yok" ile kaydedilebilir). Saat dilimi çözülemezse (bozuk ayar) yazılan tarih
 oluşturmadaki gibi reddedilir.
 
 ### Başlangıç ve süre
 
-`EventAt` etkinliğin başlayacağı an, `ExpiresAt` ilanın artık kullanılamayacağı an — ikisi ayrı alanlardır. Başlangıç tek
-bir kaynaktan gelir (`LfgStart`: şimdi · göreli · mutlak); nereden geldiği sonrasında önemsizdir — süre dolumu,
-bildirimler, kart ve ses aynı `EventAt` hattını kullanır.
+`EventAt` etkinliğin başlayacağı an, `ExpiresAt` ilanın artık kullanılamayacağı an — ikisi ayrı alanlardır. Başlangıç ya
+**şimdi** ya da **mutlak bir an**dır (`LfgStart`); göreli başlangıç kavramı yoktur. Süre dolumu, bildirimler, kart ve ses
+aynı `EventAt` hattını kullanır.
 
-| Başlangıç alanı | Sonuç |
+| Başlangıç Tarihi alanı | Sonuç |
 |---|---|
-| boş / `şimdi` | Şimdi: `EventAt = null`, `ExpiresAt = CreatedAt + süre` (V1 davranışı) |
-| göreli (`30 dk`, `2 saat`, …) | `EventAt = şimdi + gecikme` (1 dk … 365 gün; kaydetme anına göre) |
-| tarih (`05.10.2026 21:30`) | `EventAt` = girilen tarih/saat, sunucunun saat diliminde |
+| boş | Şimdi: `EventAt = null`, `ExpiresAt = CreatedAt + süre` |
+| `27.09.2026 21:30` / `27.09.26 21:30` | `EventAt` = girilen tarih/saat, sunucunun saat diliminde; `ExpiresAt = EventAt + süre` |
+| `2 saat`, `30 dk`, `1 gün`, `2`, `yarın 21:00`, `27.09.2026`, `21:30` | reddedilir (tarih biçimi hatası) |
 
-Domain, göreli başlangıç ile tarihin aynı anda verilmesini yine reddeder (`LfgRules.ResolveStart`); form tek alan olduğu
-için kullanıcı bunu yapamaz.
-
-Planlıysa `ExpiresAt = EventAt + süre`: ör. Başlangıç `05.10.2026 21:30`, Süre `2` → ilan 05.10.2026 23:30'da
+Planlıysa `ExpiresAt = EventAt + süre`: ör. Başlangıç Tarihi `05.10.2026 21:30`, Süre 2 saat → ilan 05.10.2026 23:30'da
 kapanır; başlangıçtan önce asla expire olmaz. 30 dk hatırlatma `EventAt − 30 dk`'da (21:00), başlangıç bildirimi `EventAt`'te.
 
 ### Özel tarih/saat ve saat dilimi
@@ -115,8 +114,10 @@ kapanır; başlangıçtan önce asla expire olmaz. 30 dk hatırlatma `EventAt �
   **Europe/Istanbul**). LFG ikinci bir saat dilimi ayarı tutmaz, yeni kolon/migration yoktur. Kayıt yalnızca `/setup`
   üzerinden, doğrulanmış IANA kimlikleriyle olur (`GuildTime.TryResolve`; Railway/Linux ve Windows'ta aynı ID'ler);
   `/lfg-admin status` kullanılan saat dilimini gösterir.
-- Ayrıştırma açık ve kültürden bağımsızdır (`TryParseExact`, `d.M.yyyy H:mm` ve `yyyy-M-d H:mm`; makine yereli yok).
-  `31.02.2026 21:00`, `05/10/2026`, eksik saat vb. → `Tarih/saat anlaşılamadı. Biçim: GG.AA.YYYY SS:DD`.
+- Ayrıştırma açık ve kültürden bağımsızdır (kendi kurallarıyla: `G.A.YYYY S:DD`, `G.A.YY S:DD`, ISO `YYYY-A-G S:DD`; makine
+  yereli ya da `Calendar.TwoDigitYearMax` kullanılmaz). **Kısa yıl**, sunucunun saat dilimindeki bu yıla en yakın yıldır
+  (bu yıl − 50 … bu yıl + 49; 2026'da `26` → 2026, `27` → 2027) — 365 gün sınırıyla pratikte yalnızca bu yıl ve gelecek
+  yıl geçerlidir. `31.02.2026 21:00`, `05/10/2026`, eksik saat vb. → `Tarih/saat anlaşılamadı. Örnek: 27.09.2026 21:30 veya 27.09.26 21:30`.
 - Sınırlar: en erken **şimdi + 1 dakika** (geçmiş, şimdi veya 30 sn sonrası → `Başlangıç tarihi gelecekte olmalı.`), en
   geç **şimdi + 365 gün** (`Başlangıç tarihi en fazla 1 yıl sonrası olabilir.`). Sabit domain sınırları (`LfgEventDate`).
 - Yaz saati: ileri alınırken hiç var olmayan saat → `Bu tarih/saat seçilen saat diliminde geçerli değil.`; geri alınırken

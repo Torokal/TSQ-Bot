@@ -85,9 +85,7 @@ public enum LfgDraftError
     DetailsTooLong = 4,
     PlayersOutOfRange = 5,
     DurationInvalid = 6,
-    StartInvalid = 7,
     NoticeNeedsStart = 8,
-    StartConflict = 9,
     DateFormat = 10,
     DateNotInTimeZone = 11,
     DateAmbiguous = 12,
@@ -106,31 +104,20 @@ public enum LfgDraftError
 }
 
 /// <summary>
-/// When the activity starts — exactly one source: now (null <c>EventAt</c>), a relative choice, or an absolute instant
-/// (a custom date already resolved in the guild's time zone). Every source ends as the same <c>EventAt</c>; nothing after
-/// this point (expiry, notices, card) knows or cares which one it was.
+/// When the activity starts: now (null <c>EventAt</c>) or an absolute instant (a date and time typed by the user, already
+/// resolved in the guild's time zone). Nothing after this point (expiry, notices, card) knows how it was typed.
 /// </summary>
 public sealed record LfgStart
 {
-    private LfgStart(TimeSpan? delay, DateTimeOffset? at)
-    {
-        Delay = delay;
-        At = at;
-    }
+    private LfgStart(DateTimeOffset? at) => At = at;
 
-    public static LfgStart Now { get; } = new(null, null);
-
-    public TimeSpan? Delay { get; }
+    public static LfgStart Now { get; } = new((DateTimeOffset?)null);
 
     public DateTimeOffset? At { get; }
 
-    public bool IsNow => Delay is null && At is null;
+    public bool IsNow => At is null;
 
-    public static LfgStart After(TimeSpan delay) => delay > TimeSpan.Zero ? new LfgStart(delay, null) : Now;
-
-    public static LfgStart AtInstant(DateTimeOffset at) => new(null, at.ToUniversalTime());
-
-    public DateTimeOffset? EventAt(DateTimeOffset now) => Delay is { } delay ? now + delay : At;
+    public static LfgStart AtInstant(DateTimeOffset at) => new(at.ToUniversalTime());
 }
 
 /// <summary>A validated request to open a listing (normalized texts, bounded size, one of the offered durations, one start).</summary>
@@ -142,42 +129,73 @@ public sealed record LfgDraft(string GameName, string? Details, int MaxPlayers, 
     /// </summary>
     public (DateTimeOffset? EventAt, DateTimeOffset ExpiresAt) Schedule(DateTimeOffset now)
     {
-        var eventAt = (Start ?? LfgStart.Now).EventAt(now);
+        var eventAt = Start?.At;
         return (eventAt, (eventAt ?? now) + Duration);
     }
 }
 
 /// <summary>
-/// Custom start dates typed by the user ("05.10.2026 21:30"), read as wall-clock time in the guild's time zone. Parsing is
-/// explicit and culture-independent (never the machine locale). A wall-clock time that does not exist (clocks jump forward)
-/// or exists twice (clocks go back) in that zone is refused rather than guessed.
+/// Start dates typed by the user, read as wall-clock time in the guild's time zone. The only forms are a full date and time:
+/// <c>GG.AA.YYYY SS:DD</c> and <c>GG.AA.YY SS:DD</c> (leading zeros optional), plus ISO <c>YYYY-AA-GG SS:DD</c> for
+/// compatibility — no relative times, no words. Parsing is explicit (no culture, no machine setting): a two-digit year is the
+/// year of that century nearest to the reference year (the guild's current year), never <c>Calendar.TwoDigitYearMax</c>. A
+/// wall-clock time that does not exist (clocks jump forward) or exists twice (clocks go back) in the zone is refused
+/// rather than guessed.
 /// </summary>
-public static class LfgEventDate
+public static partial class LfgEventDate
 {
-    /// <summary>Main format GG.AA.YYYY SS:DD (leading zeros optional); ISO "yyyy-MM-dd HH:mm" is also accepted.</summary>
-    public static IReadOnlyList<string> Formats { get; } = ["d.M.yyyy H:mm", "yyyy-M-d H:mm"];
-
     /// <summary>At least this far ahead (clock skew, minute-precision input): no event "right now" through a date.</summary>
     public static readonly TimeSpan MinLead = TimeSpan.FromMinutes(1);
 
     /// <summary>At most this far ahead.</summary>
     public static readonly TimeSpan MaxAhead = TimeSpan.FromDays(365);
 
-    /// <summary>The wall-clock date and time written in one of the <see cref="Formats"/> (no time zone, no range check).</summary>
-    public static bool TryReadWallClock(string? text, out DateTime local)
+    /// <summary>
+    /// The wall-clock date and time written in one of the accepted forms (no time zone, no range check);
+    /// <paramref name="referenceYear"/> resolves a two-digit year.
+    /// </summary>
+    public static bool TryReadWallClock(string? text, int referenceYear, out DateTime local)
     {
         local = default;
-        if (string.IsNullOrWhiteSpace(text) || !DateTime.TryParseExact(text.Trim(), Formats.ToArray(), System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out var parsed))
+        var value = text?.Trim();
+        if (string.IsNullOrEmpty(value))
             return false;
-        local = DateTime.SpecifyKind(parsed, DateTimeKind.Unspecified);
+        var match = DatePattern().Match(value);
+        if (!match.Success)
+            match = IsoPattern().Match(value);
+        if (!match.Success)
+            return false;
+
+        int Part(string name) => int.Parse(match.Groups[name].Value, NumberStyles.None, CultureInfo.InvariantCulture);
+        var year = match.Groups["y"].Value.Length == 2 ? TwoDigitYear(Part("y"), referenceYear) : Part("y");
+        var (month, day, hour, minute) = (Part("m"), Part("d"), Part("h"), Part("min"));
+        if (year is < 1 or > 9999 || month is < 1 or > 12 || day < 1 || day > DateTime.DaysInMonth(year, month) || hour > 23 || minute > 59)
+            return false;
+        local = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified);
         return true;
+    }
+
+    /// <summary>"26" → the year ending in 26 nearest to <paramref name="referenceYear"/> (2026 in 2026, 2126 never).</summary>
+    public static int TwoDigitYear(int twoDigits, int referenceYear)
+    {
+        var year = referenceYear - referenceYear % 100 + twoDigits;
+        if (year < referenceYear - 50)
+            year += 100;
+        else if (year > referenceYear + 49)
+            year -= 100;
+        return year;
     }
 
     public static (DateTimeOffset? At, LfgDraftError Error) Resolve(string text, TimeZoneInfo zone, DateTimeOffset now)
     {
-        if (!TryReadWallClock(text, out var local))
+        var year = TimeZoneInfo.ConvertTime(now, zone).Year;
+        if (!TryReadWallClock(text, year, out var local))
             return (null, LfgDraftError.DateFormat);
+        // Far outside the one-year window (e.g. year 1 or 9999): refused before any time-zone arithmetic could overflow.
+        if (local.Year < year - 1)
+            return (null, LfgDraftError.DateNotInFuture);
+        if (local.Year > year + 1)
+            return (null, LfgDraftError.DateTooFar);
         if (zone.IsInvalidTime(local))
             return (null, LfgDraftError.DateNotInTimeZone);
         if (zone.IsAmbiguousTime(local))
@@ -190,6 +208,12 @@ public static class LfgEventDate
             return (null, LfgDraftError.DateTooFar);
         return (at, LfgDraftError.None);
     }
+
+    [GeneratedRegex(@"^(?<d>[0-9]{1,2})\.(?<m>[0-9]{1,2})\.(?<y>[0-9]{4}|[0-9]{2})\s+(?<h>[0-9]{1,2}):(?<min>[0-9]{2})$", RegexOptions.CultureInvariant)]
+    private static partial Regex DatePattern();
+
+    [GeneratedRegex(@"^(?<y>[0-9]{4})-(?<m>[0-9]{1,2})-(?<d>[0-9]{1,2})\s+(?<h>[0-9]{1,2}):(?<min>[0-9]{2})$", RegexOptions.CultureInvariant)]
+    private static partial Regex IsoPattern();
 }
 
 /// <summary>
@@ -212,9 +236,6 @@ public static class LfgRules
     /// <summary>The optional durations offered by /ekip (no free minute input); no choice = the configured default.</summary>
     public static IReadOnlyList<int> DurationChoicesMinutes { get; } = [60, 120, 180];
 
-    /// <summary>A relative start ("2 saat") reaches as far ahead as a custom date: 0 = now.</summary>
-    public static readonly int MaxStartMinutes = (int)LfgEventDate.MaxAhead.TotalMinutes;
-
     /// <summary>The optional reminder goes out this long before the start, and only before the start.</summary>
     public static readonly TimeSpan ReminderLead = TimeSpan.FromMinutes(30);
 
@@ -224,12 +245,11 @@ public static class LfgRules
     private const int ZeroWidthJoiner = 0x200D;
 
     /// <summary>
-    /// <paramref name="startMinutes"/> (a relative start in minutes, 0 = now) and <paramref name="startAt"/> (a custom date, read in
-    /// <paramref name="zone"/> relative to <paramref name="now"/>) are alternatives: giving both is refused here, not only
-    /// in the command. A blank <paramref name="startAt"/> counts as not given.
+    /// <paramref name="startAt"/>: empty = now, otherwise a date and time read in <paramref name="zone"/> relative to
+    /// <paramref name="now"/>.
     /// </summary>
     public static (LfgDraft? Draft, LfgDraftError Error) Validate(string? game, string? details, int players, int? durationMinutes, int maxPlayers, int defaultMinutes,
-        int? startMinutes = null, bool notices = false, string? startAt = null, TimeZoneInfo? zone = null, DateTimeOffset? now = null)
+        bool notices = false, string? startAt = null, TimeZoneInfo? zone = null, DateTimeOffset? now = null)
     {
         var (name, text, basics) = ValidateTexts(game, details, players, maxPlayers);
         if (basics != LfgDraftError.None)
@@ -238,7 +258,7 @@ public static class LfgRules
         if (durationMinutes is { } minutes && !DurationChoicesMinutes.Contains(minutes))
             return (null, LfgDraftError.DurationInvalid);
 
-        var (begin, startError) = ResolveStart(startMinutes, startAt, zone, now);
+        var (begin, startError) = ResolveStart(startAt, zone, now);
         if (begin is null)
             return (null, startError);
 
@@ -270,26 +290,18 @@ public static class LfgRules
     }
 
     /// <summary>
-    /// One start from either a relative start (minutes, 0 = now) or a custom date read in <paramref name="zone"/> relative to
-    /// <paramref name="now"/> (shared by create and edit). Giving both is refused. A blank date counts as not given.
+    /// The start (shared by create and edit): empty = now, otherwise a date and time read in <paramref name="zone"/> relative
+    /// to <paramref name="now"/>.
     /// </summary>
-    public static (LfgStart? Start, LfgDraftError Error) ResolveStart(int? startMinutes, string? startAt, TimeZoneInfo? zone, DateTimeOffset? now)
+    public static (LfgStart? Start, LfgDraftError Error) ResolveStart(string? startAt, TimeZoneInfo? zone, DateTimeOffset? now)
     {
         var custom = Normalize(startAt);
-        if (startMinutes is not null && custom is not null)
-            return (null, LfgDraftError.StartConflict);
-
-        if (custom is not null)
-        {
-            if (zone is null || now is null)
-                return (null, LfgDraftError.TimeZoneInvalid);
-            var (at, dateError) = LfgEventDate.Resolve(custom, zone, now.Value);
-            return at is null ? (null, dateError) : (LfgStart.AtInstant(at.Value), LfgDraftError.None);
-        }
-
-        if (startMinutes is { } start)
-            return start < 0 || start > MaxStartMinutes ? (null, LfgDraftError.StartInvalid) : (LfgStart.After(TimeSpan.FromMinutes(start)), LfgDraftError.None);
-        return (LfgStart.Now, LfgDraftError.None);
+        if (custom is null)
+            return (LfgStart.Now, LfgDraftError.None);
+        if (zone is null || now is null)
+            return (null, LfgDraftError.TimeZoneInvalid);
+        var (at, dateError) = LfgEventDate.Resolve(custom, zone, now.Value);
+        return at is null ? (null, dateError) : (LfgStart.AtInstant(at.Value), LfgDraftError.None);
     }
 
     /// <summary>Drops control/format characters, collapses whitespace runs to one space and trims; null when nothing is left.</summary>
@@ -322,42 +334,7 @@ public static class LfgRules
     public static int Length(string value) => value.EnumerateRunes().Count();
 }
 
-/// <summary>
-/// What the creator typed into the form's start field: nothing (or "şimdi") = now; a relative start ("30 dk", "1,5 saat",
-/// "2 saat", "1 gün") = minutes from now; anything else is a custom date for <see cref="LfgEventDate"/>. Deliberately not a
-/// natural-language parser: a unit is required for a relative start, so "1.5.2026 21:00" can never be read as hours.
-/// </summary>
-public sealed record LfgStartText(int? Minutes, string? At)
-{
-    public static LfgStartText Now { get; } = new(null, null);
-
-    /// <summary>Minutes of a relative start that is not a whole number of minutes (e.g. "1,33 saat").</summary>
-    public const int Unusable = -1;
-
-    private static readonly string[] NowWords = ["şimdi", "simdi", "hemen", "now"];
-
-    public bool IsNow => Minutes is null && At is null;
-
-    public static LfgStartText Parse(string? text)
-    {
-        var value = LfgRules.Normalize(text);
-        var lower = value is null ? null : LfgFormText.Lower(value);
-        if (lower is null || NowWords.Contains(lower))
-            return Now;
-        var match = LfgFormText.RelativePattern().Match(lower);
-        if (!match.Success)
-            return new LfgStartText(null, value);
-        var minutes = LfgFormText.ToMinutes(match.Groups["n"].Value, match.Groups["unit"].Value, defaultUnitMinutes: 1);
-        return minutes switch
-        {
-            null => new LfgStartText(Unusable, null),
-            0 => Now,
-            _ => new LfgStartText(minutes, null),
-        };
-    }
-}
-
-/// <summary>The form's number fields, read leniently but exactly: anything unreadable becomes a value the rules refuse.</summary>
+/// <summary>The form's number fields, read exactly: anything unreadable becomes a value the rules refuse.</summary>
 public static partial class LfgFormText
 {
     /// <summary>Returned for unreadable input; always outside every allowed range.</summary>
@@ -370,41 +347,26 @@ public static partial class LfgFormText
         return value is not null && PlayersPattern().IsMatch(value) && int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : Invalid;
     }
 
-    /// <summary>Empty → null (the default duration); "2", "2 saat", "1,5 saat", "90 dk" → minutes; else <see cref="Invalid"/>.</summary>
+    /// <summary>
+    /// The duration as the settings step stores it (<see cref="LfgRules.DurationChoicesMinutes"/> written as whole hours,
+    /// e.g. "2", or a stored non-hour duration as "90 dk"): empty → null (the default duration); else minutes or
+    /// <see cref="Invalid"/>.
+    /// </summary>
     public static int? DurationMinutes(string? text)
     {
         var value = LfgRules.Normalize(text);
         if (value is null)
             return null;
-        var match = DurationPattern().Match(Lower(value));
-        return match.Success ? ToMinutes(match.Groups["n"].Value, match.Groups["unit"].Value, defaultUnitMinutes: 60) ?? Invalid : Invalid;
-    }
-
-    /// <summary>Lower case for unit words, with the Turkish dotted capital I ("ŞİMDİ", "DAKİKA") read as i.</summary>
-    internal static string Lower(string value) => value.Replace('İ', 'i').ToLowerInvariant();
-
-    /// <summary>Whole minutes of "number unit", or null when it is not a whole number of minutes (or absurdly large).</summary>
-    internal static int? ToMinutes(string number, string unit, int defaultUnitMinutes)
-    {
-        if (!decimal.TryParse(number.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var n))
-            return null;
-        var factor = unit switch
-        {
-            "" => defaultUnitMinutes,
-            "dk" or "dak" or "dakika" or "min" or "m" => 1,
-            "sa" or "saat" or "s" or "h" => 60,
-            _ => 1440, // gün / gun / g
-        };
-        var minutes = n * factor;
-        return minutes != decimal.Truncate(minutes) || minutes > int.MaxValue ? null : (int)minutes;
+        var match = DurationPattern().Match(value);
+        if (!match.Success)
+            return Invalid;
+        var n = int.Parse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture);
+        return match.Groups["dk"].Success ? n : n * 60;
     }
 
     [GeneratedRegex(@"^[0-9]{1,3}$", RegexOptions.CultureInvariant)]
     private static partial Regex PlayersPattern();
 
-    [GeneratedRegex(@"^(?<n>[0-9]{1,3}(?:[.,][0-9]{1,2})?)\s*(?<unit>dk|dak|dakika|min|m|sa|saat|s|h|)\.?$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(?<n>[0-9]{1,4})(?<dk> dk)?$", RegexOptions.CultureInvariant)]
     private static partial Regex DurationPattern();
-
-    [GeneratedRegex(@"^(?<n>[0-9]{1,6}(?:[.,][0-9]{1,2})?)\s*(?<unit>dk|dak|dakika|min|m|sa|saat|s|h|gün|gun|g)\.?(?:\s*sonra)?$", RegexOptions.CultureInvariant)]
-    internal static partial Regex RelativePattern();
 }

@@ -28,53 +28,66 @@ public sealed class LfgFormTests
     // ---- start / duration / team size ----
 
     [Theory]
-    [InlineData(null, null, null)]
-    [InlineData("", null, null)]
-    [InlineData("   ", null, null)]
-    [InlineData("şimdi", null, null)]
-    [InlineData("Şimdi", null, null)]
-    [InlineData("hemen", null, null)]
-    [InlineData("0 dk", null, null)]
-    [InlineData("30 dk", 30, null)]
-    [InlineData("30dk", 30, null)]
-    [InlineData("45 dakika", 45, null)]
-    [InlineData("1 saat", 60, null)]
-    [InlineData("1 SAAT", 60, null)]
-    [InlineData("1.5 saat", 90, null)]
-    [InlineData("1,5 saat", 90, null)]
-    [InlineData("2 saat", 120, null)]
-    [InlineData("2 saat sonra", 120, null)]
-    [InlineData("2 h", 120, null)]
-    [InlineData("90 min", 90, null)]
-    [InlineData("1 gün", 1440, null)]
-    [InlineData("ŞİMDİ", null, null)]
-    [InlineData("SİMDİ", null, null)]
-    [InlineData("30 DAKİKA", 30, null)]
-    [InlineData("30 d", null, "30 d")] // "d" could be dakika or day: not a unit, refused as a date
-    [InlineData("1,33 saat", LfgStartText.Unusable, null)]
-    [InlineData("05.10.2026 21:30", null, "05.10.2026 21:30")]
-    [InlineData("2026-10-05 21:30", null, "2026-10-05 21:30")]
-    [InlineData("30", null, "30")]
-    [InlineData("yarın", null, "yarın")]
-    public void The_start_field_is_now_a_relative_start_or_a_date(string? text, int? minutes, string? at)
+    [InlineData("27.09.2026 21:30", 2026, 9, 27, 21, 30)]
+    [InlineData("27.09.26 21:30", 2026, 9, 27, 21, 30)]
+    [InlineData("5.10.2026 21:30", 2026, 10, 5, 21, 30)]
+    [InlineData("5.10.26 21:30", 2026, 10, 5, 21, 30)]
+    [InlineData("05.1.27 9:05", 2027, 1, 5, 9, 5)]
+    [InlineData("2026-10-05 21:30", 2026, 10, 5, 21, 30)]
+    public void The_start_field_takes_a_full_date_and_time(string text, int year, int month, int day, int hour, int minute)
     {
-        var start = LfgStartText.Parse(text);
+        LfgEventDate.TryReadWallClock(text, 2026, out var local).Should().BeTrue(text);
+        local.Should().Be(new DateTime(year, month, day, hour, minute, 0));
+        LfgForm.ToCreateInput(new LfgFormValues("Deadlock", "6", null, text, null), false, false, null).StartAt.Should().Be(text, "passed on as typed");
+    }
 
-        (start.Minutes, start.At).Should().Be((minutes, at));
+    [Theory]
+    [InlineData("2")]
+    [InlineData("3")]
+    [InlineData("30")]
+    [InlineData("30 dk")]
+    [InlineData("30 dakika")]
+    [InlineData("1 saat")]
+    [InlineData("2 saat")]
+    [InlineData("3 saat")]
+    [InlineData("1.5 saat")]
+    [InlineData("1,5 saat")]
+    [InlineData("2 saat sonra")]
+    [InlineData("1 gün")]
+    [InlineData("yarın 21:00")]
+    [InlineData("yarın 21:30")]
+    [InlineData("akşam 9")]
+    [InlineData("şimdi")]
+    [InlineData("27.09.2026")]
+    [InlineData("21:30")]
+    [InlineData("31.02.2026 21:30")]
+    [InlineData("27.13.2026 21:30")]
+    [InlineData("27.09.2026 24:00")]
+    public void Relative_times_words_and_partial_dates_are_not_a_start(string text) =>
+        LfgEventDate.TryReadWallClock(text, 2026, out _).Should().BeFalse(text);
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void An_empty_start_is_now(string? text)
+    {
+        LfgForm.ToCreateInput(new LfgFormValues("Deadlock", "6", null, text, null), false, false, null).StartAt.Should().BeNull();
+        LfgRules.ResolveStart(text, null, null).Start!.IsNow.Should().BeTrue();
     }
 
     [Theory]
     [InlineData(null, null)]
     [InlineData("", null)]
+    [InlineData("1", 60)]
     [InlineData("2", 120)]
-    [InlineData("2 saat", 120)]
-    [InlineData("3saat", 180)]
-    [InlineData("1,5", 90)]
+    [InlineData("3", 180)]
     [InlineData("90 dk", 90)]
+    [InlineData("2 saat", LfgFormText.Invalid)]
+    [InlineData("1,5", LfgFormText.Invalid)]
     [InlineData("iki", LfgFormText.Invalid)]
-    [InlineData("1,33", LfgFormText.Invalid)]
     [InlineData("-2", LfgFormText.Invalid)]
-    public void The_duration_field_is_hours_unless_a_unit_says_otherwise(string? text, int? minutes) =>
+    public void The_duration_value_of_the_settings_step_is_whole_hours_or_stored_minutes(string? text, int? minutes) =>
         LfgFormText.DurationMinutes(text).Should().Be(minutes);
 
     [Theory]
@@ -90,21 +103,11 @@ public sealed class LfgFormTests
     [Fact]
     public void The_form_maps_onto_the_existing_create_input()
     {
-        LfgForm.ToCreateInput(new LfgFormValues("Deadlock", "6", "Casual", "2 saat", "3"), true, false, new ChannelId(9))
-            .Should().Be(new LfgCreateInput("Deadlock", 6, "Casual", 180, 120, true, false, new ChannelId(9), null));
-        LfgForm.ToCreateInput(new LfgFormValues("CS2", "5", null, "05.10.2026 21:30", null), false, false, null)
-            .Should().Be(new LfgCreateInput("CS2", 5, null, null, null, false, false, null, "05.10.2026 21:30"));
+        LfgForm.ToCreateInput(new LfgFormValues("Deadlock", "6", "Casual", "05.10.2026 21:30", "3"), true, false, new ChannelId(9))
+            .Should().Be(new LfgCreateInput("Deadlock", 6, "Casual", 180, true, false, new ChannelId(9), "05.10.2026 21:30"));
+        LfgForm.ToCreateInput(new LfgFormValues("CS2", "5", null, " ", null), false, false, null)
+            .Should().Be(new LfgCreateInput("CS2", 5, null, null, false, false, null, null));
         LfgForm.ToCreateInput(LfgFormValues.Empty, false, false, null).Should().Be(new LfgCreateInput(null, LfgFormText.Invalid));
-    }
-
-    [Fact]
-    public void Relative_starts_are_limited_like_custom_dates()
-    {
-        LfgRules.ResolveStart(LfgRules.MaxStartMinutes, null, null, null).Start!.Delay.Should().Be(TimeSpan.FromDays(365));
-        LfgRules.ResolveStart(LfgRules.MaxStartMinutes + 1, null, null, null).Error.Should().Be(LfgDraftError.StartInvalid);
-        LfgRules.ResolveStart(-1, null, null, null).Error.Should().Be(LfgDraftError.StartInvalid);
-        LfgRules.ResolveStart(0, null, null, null).Start!.IsNow.Should().BeTrue();
-        LfgRules.ResolveStart(30, "05.10.2026 21:30", Istanbul, T0).Error.Should().Be(LfgDraftError.StartConflict);
     }
 
     // ---- prefill ----
@@ -119,19 +122,18 @@ public sealed class LfgFormTests
         LfgForm.Prefill(now, Istanbul).Should().Be(new LfgFormValues("Deadlock", "6", "Casual", null, "90 dk"),
             "a listing that started now has no start to show; a duration that is not whole hours keeps its minutes");
         LfgFormText.DurationMinutes("90 dk").Should().Be(90, "the prefill reads back as the same duration");
-        LfgStartText.Parse("05.10.2026 21:30").At.Should().Be("05.10.2026 21:30");
     }
 
     [Fact]
     public void An_untouched_start_is_recognized_however_it_is_written()
     {
-        LfgForm.SameStart("5.10.2026 21:30", "05.10.2026 21:30").Should().BeTrue();
-        LfgForm.SameStart("2026-10-05 21:30", "05.10.2026 21:30").Should().BeTrue();
-        LfgForm.SameStart("şimdi", null).Should().BeTrue();
-        LfgForm.SameStart("", null).Should().BeTrue();
-        LfgForm.SameStart("2 saat", null).Should().BeFalse();
-        LfgForm.SameStart("05.10.2026 21:31", "05.10.2026 21:30").Should().BeFalse();
-        LfgForm.SameStart("şimdi", "05.10.2026 21:30").Should().BeFalse();
+        LfgForm.SameStart("5.10.2026 21:30", "05.10.2026 21:30", 2026).Should().BeTrue();
+        LfgForm.SameStart("5.10.26 21:30", "05.10.2026 21:30", 2026).Should().BeTrue();
+        LfgForm.SameStart("2026-10-05 21:30", "05.10.2026 21:30", 2026).Should().BeTrue();
+        LfgForm.SameStart("", null, 2026).Should().BeTrue();
+        LfgForm.SameStart("şimdi", null, 2026).Should().BeFalse("only an empty field means now");
+        LfgForm.SameStart("2 saat", null, 2026).Should().BeFalse();
+        LfgForm.SameStart("05.10.2026 21:31", "05.10.2026 21:30", 2026).Should().BeFalse();
     }
 
     [Fact]
