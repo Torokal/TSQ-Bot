@@ -38,7 +38,7 @@ public sealed class LfgCardAndRulesTests
         var description = card.Embed.Description!;
         description.Should().StartWith("<@1> ekip arıyor\n👥 **2 / " + max + "**\n📝 ");
         description.Should().Contain("**Katılanlar**\n<@1> · <@2>").And.NotContain("Belki").And.NotContain("Ses Odası");
-        description.Should().Contain("\n\n🕘 Başlangıç: Şimdi\n⏰ <t:", "a listing without a start date started when it was opened");
+        description.Should().Contain("\n\n🕘 **Başlangıç:** Şimdi\n⏰ <t:", "a listing without a start date started when it was opened");
         description.Should().EndWith("⏰ <t:" + T0.AddHours(2).ToUnixTimeSeconds() + ":R> kapanır");
         card.Embed.Footer.Should().Be("TSQ LFG · Oyuncu Bul");
         card.Buttons!.Select(b => (b.Label, b.CustomId, b.Disabled, b.Style, b.NewRow)).Should().Equal(
@@ -85,8 +85,8 @@ public sealed class LfgCardAndRulesTests
     }
 
     [Theory]
-    [InlineData("tr", "🕘 Başlangıç: Şimdi", "⏰ <t:1790539200:R> kapanır")]
-    [InlineData("en", "🕘 Start: Now", "⏰ Closes <t:1790539200:R>")]
+    [InlineData("tr", "🕘 **Başlangıç:** Şimdi", "⏰ <t:1790539200:R> kapanır")]
+    [InlineData("en", "🕘 **Start:** Now", "⏰ Closes <t:1790539200:R>")]
     public void A_listing_without_a_start_date_says_it_starts_now_and_still_counts_down(string language, string start, string expires)
     {
         var listing = Listing("Deadlock", null, 4) with { EventAt = null, ExpiresAt = T0.AddHours(2) };
@@ -99,8 +99,8 @@ public sealed class LfgCardAndRulesTests
     }
 
     [Theory]
-    [InlineData("tr", "🗓️ Başlangıç: ")]
-    [InlineData("en", "🗓️ Starts: ")]
+    [InlineData("tr", "🗓️ **Başlangıç:** ")]
+    [InlineData("en", "🗓️ **Starts:** ")]
     public void A_scheduled_listing_shows_its_start_date(string language, string prefix)
     {
         var at = T0.AddHours(3);

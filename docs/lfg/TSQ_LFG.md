@@ -42,8 +42,45 @@ izin verir (Discord API: modal `components` 1–5; her alan bir `Label` içinded
 Ana form → ayarlar → detay → ayarlar → *Ana Formu Düzenle* → ayarlar turunda hiçbir alan kaybolmaz: ana form yazılanları,
 seçilen kişi sayısını, ses kanalını ve bildirim kutularını yeniden doldurur; süre ve detay taslakta kalır.
 
+### Doğrulama: Discord'un kendi denetimi ve sunucu
+
+Discord'un herkese açık modal API'si (resmi Component Reference; Discord.Net 3.20.1 ve discord.js builder'ları da aynı
+alanları taşır) Text Input için yalnızca `required`, `min_length`, `max_length`, `value` ve `placeholder` tanır;
+`min_value`/`max_value`, regex/pattern, özel doğrulayıcı, alana özel hata gösterimi ya da botun Gönder düğmesini
+açıp kapatması **yoktur**. Modal açıkken bot yazılanı göremez (yalnızca gönderimde gelir) ve bir modal gönderimine yeni
+bir modalla cevap veremez. Bu yüzden:
+
+| Alan | Discord'un gönderimden önce uyguladığı (native) | Gönderimden sonra sunucuda |
+|---|---|---|
+| Oyun / Etkinlik | `required`, `min_length` 2, `max_length` 50 (düzenlemede 100: emoji'li kayıtlı ad kesilmeden dolsun; kural 50 karakter) | normalizasyon + 2–50 karakter |
+| Kişi Sayısı | String Select, `required`, tam 1 seçim; yalnızca 2…üst sınır seçenekleri (`234` yazılamaz) | aralık + Katılan sayısı (düzenleme) |
+| Başlangıç Tarihi | isteğe bağlı, `max_length` 40, örnek metin | tarih biçimi, gelecekte, ≤ 1 yıl, saat dilimi/yaz saati, başlamış etkinlik kilidi |
+| Ses Kanalı | Channel Select, yalnızca ses kanalı, 0–1, isteğe bağlı | bu sunucunun gerçek ses kanalı |
+| Bildirimler | Checkbox Group, 0–2, isteğe bağlı | başlangıç tarihi gerektirir (alanlar arası bağımlılık) |
+| Detay (ayrı modal) | isteğe bağlı, `max_length` 200, paragraf | normalizasyon + 200 karakter |
+| Süre (ayarlar) | String Select: 1/2/3 saat (+ "(varsayılan)"/"(mevcut)") | izinli seçenek |
+
+Discord istemcisi zorunlu alan boşken, metin `min_length`'ten kısa / `max_length`'ten uzunken veya zorunlu seçici
+seçilmemişken formu göndermez. Tarihin anlamı, alanlar arası bağımlılık (bildirim ↔ başlangıç), veritabanındaki güncel
+Katılan sayısı ve yetki gönderimden önce denetlenemez: sunucu hepsini gönderimde ve kayıtta yeniden denetler (sahte
+yüklere karşı da; istemci güvenlik sınırı değildir).
+
 Form gönderilince hiçbir şey kaydedilmez: yazılanlar oluşturma kurallarının aynısıyla (`LfgService.CheckCreateAsync`)
-denetlenir; hata varsa Türkçe neden ve *✏️ Formu Düzenle* / *📝 Detay* / *İptal* düğmeleri gösterilir. **İlanı Oluştur** mevcut
+denetlenir. Hata varsa yalnızca gönderene, **hangi alanın neden** hatalı olduğu gösterilir (genel "Geçersiz giriş" yok):
+
+```
+❌ Başlangıç Tarihi
+Tarih/saat anlaşılamadı.
+Örnek: `27.09.2026 21:30` veya `27.09.26 21:30`.
+[✏️ Formu Düzelt] [📝 Detay Ekle] [İptal]
+```
+
+*✏️ Formu Düzelt* aynı formu taslaktaki her şeyle (oyun, kişi seçimi, tarih, ses kanalı, bildirimler) yeniden açar;
+yalnızca hatalı alan düzeltilir. İstisnalar: reddedilen ses kanalı yeniden önerilmez (başka bir kanal ya da hiçbiri
+seçilir) ve alanın kendi sınırı dışındaki bir metin (ör. 1 karakterlik oyun adı) Discord bu değeri kabul etmediği için
+önceden doldurulmaz. Kayıtta (kilit altında) reddedilen bir form da alanı ve nedeni gösterir; alanla düzeltilebiliyorsa
+aynı düğmeleri verir. İlanın kendisiyle ilgili retler (kanal kısıtı, ilan sınırı, yetki) alan başlığı olmadan `❌ …`
+olarak gösterilir. **İlanı Oluştur** mevcut
 `LfgService.CreateAsync` akışını çalıştırır (kanal kısıtı, kişi başı aktif ilan sınırı, sahip ilk Katılan, `BEGIN
 IMMEDIATE`, özel tarih/saat dilimi, bildirimler, ses doğrulaması) ve kart kanala herkese açık bir takip mesajı olarak
 **ping'siz** gönderilir; mesaj kimliği kaydedilir (bot kartı sonra kendisi düzenler). İlan yalnızca Discord kartı
@@ -148,15 +185,15 @@ Katılanlar
 🤔 Belki
 @Arif · @Shotgun
 
-🗓️ Başlangıç: 5 Ekim 2026 Pazartesi 21:30 • 8 gün içinde    ("şimdi" ilanında: 🕘 Başlangıç: Şimdi)
+🗓️ **Başlangıç:** 5 Ekim 2026 Pazartesi 21:30 • 8 gün içinde    ("şimdi" ilanında: 🕘 **Başlangıç:** Şimdi)
 🔊 Ses Odası: #Deadlock
 ⏰ 4 saat içinde kapanır
 [Katıl] [Belki] [Ayrıl] [🔊 Ses Odası]
 [✏️ Düzenle] [İlanı Kapat]
 ```
 
-- Başlangıç satırı **her zaman** gösterilir: planlı ilanda `🗓️ Başlangıç: <t:…:F> • <t:…:R>`, başlangıcı boş ilanda
-  `🕘 Başlangıç: Şimdi` (en: `🕘 Start: Now`); veritabanında `EventAt` yine `null` kalır ve kapanış geri sayımı değişmez.
+- Başlangıç satırı **her zaman** gösterilir: planlı ilanda `🗓️ **Başlangıç:** <t:…:F> • <t:…:R>`, başlangıcı boş ilanda
+  `🕘 **Başlangıç:** Şimdi` (en: `🕘 **Start:** Now`); veritabanında `EventAt` yine `null` kalır ve kapanış geri sayımı değişmez.
 - Kapasite yalnızca **Katılanlar** sayısıdır (`3 / 6`); Belki listesi ayrı gösterilir ve sayılmaz. Belki listesinin ilk 20
   kişisi gösterilir (`(+N)`).
 - Dolu: `✅ Ekip tamamlandı`, `[Katıl]` devre dışı; `[Belki]`, `[Ayrıl]`, `[🔊 Ses Odası]`, `[✏️ Düzenle]`, `[İlanı Kapat]` açık.

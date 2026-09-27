@@ -232,7 +232,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         listing.ExpiresAt.Should().Be(TestHost.T0.AddHours(5));
         var card = _host.Services.GetRequiredService<LfgCardRenderer>().Render(listing, "tr");
         var at = TestHost.T0.AddHours(3).ToUnixTimeSeconds();
-        card.Embed!.Description.Should().Contain($"🗓️ Başlangıç: <t:{at}:F> • <t:{at}:R>");
+        card.Embed!.Description.Should().Contain($"🗓️ **Başlangıç:** <t:{at}:F> • <t:{at}:R>");
 
         _host.Clock.Advance(TimeSpan.FromHours(3) + TimeSpan.FromMinutes(5));
         await TickAsync();
@@ -266,7 +266,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         listing.ExpiresAt.Should().Be(Custom.AddHours(2));
         var at = Custom.ToUnixTimeSeconds();
         _host.Services.GetRequiredService<LfgCardRenderer>().Render(listing, "tr").Embed!.Description
-            .Should().Contain($"🗓️ Başlangıç: <t:{at}:F> • <t:{at}:R>", "rendered like every scheduled start");
+            .Should().Contain($"🗓️ **Başlangıç:** <t:{at}:F> • <t:{at}:R>", "rendered like every scheduled start");
     }
 
     [Fact]
