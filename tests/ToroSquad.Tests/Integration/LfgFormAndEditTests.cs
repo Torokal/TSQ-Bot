@@ -20,7 +20,7 @@ namespace ToroSquad.Tests.Integration;
 
 /// <summary>
 /// The /ekip form and the owner's edit on the real SQLite database, production wiring and the real outbox: the typed texts
-/// map onto the existing create rules (validation, relative/custom start, guild time zone, notices, voice); the edit is
+/// map onto the existing create rules (validation, start date or now, guild time zone, notices, voice); the edit is
 /// owner-only, all-or-nothing, decided on the stored state inside the write lock (size never below the Joined players,
 /// start only while ahead, expiry never restarted), never repeats or revives a handled notice, and redraws the same card
 /// without pinging anyone.

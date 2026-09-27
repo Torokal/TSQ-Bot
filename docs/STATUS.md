@@ -78,7 +78,9 @@ invite link and no global command registration. The source code is public under 
   **✏️ Düzenle** (second row, via the additive `MessageButton.NewRow`): owner-only, same form prefilled; size never below
   the Joined players, start only before the event, `ExpiresAt = (EventAt ?? CreatedAt) + duration`, handled notices never
   repeat or revive, same card redrawn without pings. No migration.
-- **NOT VERIFIED_LIVE**: the modal and settings step in Discord clients, the public follow-up card after the settings step
+- **NOT VERIFIED_LIVE**: the voice channel select inside the modal (rendering, clearing, and Discord echoing the preselected
+  channel on submit — an edit that only changes the details must keep the voice channel), the duration select in the settings
+  step; the modal and settings step in Discord clients, the public follow-up card after the settings step
   and the bot's later edit of that card.
 - Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
 

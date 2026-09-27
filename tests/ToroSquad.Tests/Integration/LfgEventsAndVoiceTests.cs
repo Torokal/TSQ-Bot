@@ -266,7 +266,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         listing.ExpiresAt.Should().Be(Custom.AddHours(2));
         var at = Custom.ToUnixTimeSeconds();
         _host.Services.GetRequiredService<LfgCardRenderer>().Render(listing, "tr").Embed!.Description
-            .Should().Contain($"🗓️ Başlangıç: <t:{at}:F> • <t:{at}:R>", "rendered exactly like a relative start");
+            .Should().Contain($"🗓️ Başlangıç: <t:{at}:F> • <t:{at}:R>", "rendered like every scheduled start");
     }
 
     [Fact]
