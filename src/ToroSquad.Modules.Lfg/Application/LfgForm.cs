@@ -28,9 +28,11 @@ public static class LfgForm
     public const string DetailsField = "details";
     public const string StartField = "start";
 
-    public const int PlayersMaxLength = 3;
     /// <summary>The voice channel select inside the modal (not a text field).</summary>
     public const string VoiceField = "voice";
+
+    /// <summary>The notice opt-ins (a checkbox group) inside the modal.</summary>
+    public const string NoticesField = "notices";
 
     public const int StartMaxLength = 40;
 
