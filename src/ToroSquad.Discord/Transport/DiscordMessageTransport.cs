@@ -126,6 +126,37 @@ public sealed class DiscordMessageTransport(DiscordSocketClient client, ILogger<
         }
     }
 
+    public async Task<MessagePresence> GetPresenceAsync(ChannelId channel, MessageId message, CancellationToken cancellationToken)
+    {
+        if (client.LoginState != LoginState.LoggedIn)
+            return MessagePresence.Unknown;
+        try
+        {
+            var target = await ResolveAsync(channel);
+            if (target is null)
+                return MessagePresence.Missing; // channel deleted (or no longer a text channel)
+            // GET /channels/{channel}/messages/{message}; Discord.Net answers null for 404 Unknown Message.
+            var found = await target.GetMessageAsync(message.Value, CacheMode.AllowDownload, new RequestOptions { CancelToken = cancellationToken });
+            if (found is null)
+                return MessagePresence.Missing;
+            // An id that is not a message of this bot is never ours to edit. The bot's own id is only known after the gateway
+            // READY; before that the answer is "cannot tell", never "missing" (found by the offline contract test).
+            if (client.CurrentUser?.Id is not { } self)
+                return MessagePresence.Unknown;
+            return found.Author.Id == self ? MessagePresence.Present : MessagePresence.Missing;
+        }
+        catch (HttpException ex) when (ex.HttpCode == HttpStatusCode.NotFound)
+        {
+            return MessagePresence.Missing;
+        }
+        catch (Exception ex) when (ex is HttpException or TimeoutException or HttpRequestException or TaskCanceledException or RateLimitedException)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                throw;
+            return MessagePresence.Unknown; // 403 (no Read Message History / access), 5xx, timeouts: never "missing"
+        }
+    }
+
     /// <summary>The <see cref="MessageFingerprint"/> of a message as Discord returned it (first embed only; we send one).</summary>
     public static string Fingerprint(IMessage message) => Fingerprint(message.Content, message.Embeds.FirstOrDefault());
 
