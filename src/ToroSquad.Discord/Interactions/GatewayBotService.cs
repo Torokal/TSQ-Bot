@@ -14,7 +14,9 @@ using ToroSquad.Discord.Transport;
 namespace ToroSquad.Discord.Interactions;
 
 /// <summary>
-/// Real Discord connection (only when Discord:Transport = Gateway). Intents: Guilds only — no privileged intents.
+/// Real Discord connection (only when Discord:Transport = Gateway). Intents: Guilds only — no privileged gateway intents
+/// and no message events. (TSQ Quote's Message Content access is an application setting in the Developer Portal that
+/// fills content fields of REST reads; Discord does not tie it to a gateway event, so it is not requested here.)
 /// Never registers commands on Ready/reconnect; registration is the separate Sync-Commands step.
 /// </summary>
 public sealed class GatewayBotService(

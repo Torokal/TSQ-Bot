@@ -88,6 +88,26 @@ public sealed partial class QuoteArchitectureTests
     }
 
     [Fact]
+    public void Quote_adds_no_gateway_intent_message_event_or_message_cache()
+    {
+        // Messages are read by id over REST when /quote asks; nothing listens to MESSAGE_CREATE.
+        var config = GatewayBotService.CreateSocketConfig();
+        config.GatewayIntents.Should().Be(global::Discord.GatewayIntents.Guilds);
+        config.MessageCacheSize.Should().Be(0);
+        foreach (var file in Directory.GetFiles(Root(), "*.cs", SearchOption.AllDirectories)
+                     .Concat(Directory.GetFiles(Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Discord"), "*.cs", SearchOption.AllDirectories))
+                     .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p is "bin" or "obj")))
+        {
+            var code = File.ReadAllText(file);
+            code.Should().NotContain("MessageReceived", Path.GetFileName(file)).And.NotContain("GatewayIntents.GuildMessages", Path.GetFileName(file))
+                .And.NotContain("GatewayIntents.MessageContent", Path.GetFileName(file));
+        }
+
+        // No context-menu command: /quote is the only entry point.
+        File.ReadAllText(Path.Combine(Root(), "Commands", "QuoteCommands.cs")).Should().NotContain("MessageCommand");
+    }
+
+    [Fact]
     public void Fonts_are_embedded_and_licensed()
     {
         var resources = Quote.GetManifestResourceNames();

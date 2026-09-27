@@ -35,9 +35,13 @@ public sealed class QuoteResolverTests
         public Dictionary<(UserId, ChannelId), GuildPermission> Permissions { get; } = [];
         public Dictionary<(ChannelId, MessageId), QuoteFetch> Messages { get; } = [];
         public List<(GuildId Guild, ChannelId Channel, MessageId Message)> Fetches { get; } = [];
+        public List<ChannelId> ChannelLookups { get; } = [];
 
-        public QuoteChannel? GetChannel(GuildId guild, ChannelId channel) =>
-            guild == Guild && Channels.TryGetValue(channel, out var c) ? c : null;
+        public QuoteChannel? GetChannel(GuildId guild, ChannelId channel)
+        {
+            ChannelLookups.Add(channel);
+            return guild == Guild && Channels.TryGetValue(channel, out var c) ? c : null;
+        }
 
         public Task<GuildPermission?> GetMemberPermissionsAsync(GuildId guild, UserId member, ChannelId channel, CancellationToken cancellationToken) =>
             Task.FromResult<GuildPermission?>(Permissions.TryGetValue((member, channel), out var p) ? p : null);
@@ -53,7 +57,9 @@ public sealed class QuoteResolverTests
         public void Put(ChannelId channel, string content, bool withheld = false, QuoteMentionNames? mentions = null) =>
             Messages[(channel, Message)] = new QuoteFetch(QuoteFetchStatus.Found, new QuoteSourceMessage(Message, channel, content,
                 new QuoteAuthor(Author, "Pizza Venk", "pizzavenk", "https://cdn.discordapp.com/avatars/500000000000000002/abc.png?size=1024"),
-                mentions ?? QuoteMentionNames.Empty, withheld));
+                mentions ?? QuoteMentionNames.Empty,
+                content.Length > 0 ? QuoteTextAvailability.Available : withheld ? QuoteTextAvailability.ProbablyWithheld : QuoteTextAvailability.NoTextInMessage,
+                withheld ? false : null));
     }
 
     private readonly FakeQuoteDiscord _discord = new();
@@ -75,7 +81,7 @@ public sealed class QuoteResolverTests
         BotReads(Forum);
     }
 
-    private void BotReads(ChannelId channel, GuildPermission permissions = Read | GuildPermission.SendMessages) =>
+    private void BotReads(ChannelId channel, GuildPermission permissions = Read | GuildPermission.SendMessages | GuildPermission.AttachFiles) =>
         _gateway.SetChannel(Guild, channel, new BotChannelAccess(true, true, permissions));
 
     private Task<QuoteResolution> Resolve(string input, ChannelId? option = null, ChannelId? invokedIn = null) =>
@@ -257,6 +263,82 @@ public sealed class QuoteResolverTests
             mentions: new QuoteMentionNames(new Dictionary<ulong, string> { [500000000000000002] = "Pizza Venk" },
                 new Dictionary<ulong, string>(), new Dictionary<ulong, string>()));
         (await Resolve(Message.ToString())).Text.Should().Be("Selam @Pizza Venk!\nİyi akşamlar, ığdır çağ 😂");
+    }
+
+    // ---- message-id flow, destination, no scanning ----
+
+    [Fact]
+    public async Task A_bare_id_touches_only_the_current_channel_and_reads_one_message()
+    {
+        _discord.Allow(Here);
+        _discord.Put(Here, "sadece burası");
+        (await Resolve(Message.ToString())).Succeeded.Should().BeTrue();
+        _discord.ChannelLookups.Distinct().Should().Equal(Here);
+        _discord.Fetches.Should().Equal((Guild, Here, Message));
+    }
+
+    [Fact]
+    public async Task The_resolver_never_scans_other_channels_even_when_the_message_is_elsewhere()
+    {
+        _discord.Allow(Here);
+        _discord.Allow(Elsewhere);
+        _discord.Put(Elsewhere, "başka kanalda duruyor"); // the id exists, but not in the channel that was asked
+        (await Resolve(Message.ToString())).Failure.Should().Be(QuoteFailure.NotFound);
+        _discord.ChannelLookups.Distinct().Should().Equal(Here);
+        _discord.Fetches.Should().Equal((Guild, Here, Message));
+
+        _discord.ChannelLookups.Clear();
+        _discord.Fetches.Clear();
+        (await Resolve(Message.ToString(), option: Elsewhere)).Text.Should().Be("başka kanalda duruyor");
+        _discord.ChannelLookups.Distinct().Should().BeEquivalentTo([Here, Elsewhere], "the card's channel and the named source channel only");
+        _discord.Fetches.Should().Equal((Guild, Elsewhere, Message));
+    }
+
+    [Theory]
+    [InlineData(Read | GuildPermission.SendMessages)] // no Attach Files
+    [InlineData(GuildPermission.AttachFiles)] // no View Channel
+    public async Task Without_attach_files_where_the_command_ran_nothing_is_read(GuildPermission destination)
+    {
+        BotReads(Here, destination);
+        _discord.Allow(Elsewhere);
+        _discord.Put(Elsewhere, "okunmamalı");
+        var result = await Resolve(Message.ToString(), option: Elsewhere);
+        result.Failure.Should().Be(QuoteFailure.BotCannotAttach);
+        result.MessageKey.Should().Be("quote.bot_cannot_attach");
+        _discord.Fetches.Should().BeEmpty();
+        _discord.ChannelLookups.Should().NotContain(Elsewhere, "the source channel is not even looked at");
+    }
+
+    [Fact]
+    public async Task Attach_files_is_checked_on_the_parent_when_the_command_runs_in_a_thread()
+    {
+        _gateway.SetChannel(Guild, Elsewhere, new BotChannelAccess(true, true, Read)); // the thread's parent: no Attach Files
+        _discord.Allow(Here);
+        _discord.Put(Here, "x");
+        (await Resolve(Link(Guild, Here), invokedIn: Thread)).Failure.Should().Be(QuoteFailure.BotCannotAttach);
+        BotReads(Elsewhere);
+        (await Resolve(Link(Guild, Here), invokedIn: Thread)).Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Bot_missing_read_message_history_in_the_source_channel_is_not_found()
+    {
+        BotReads(Elsewhere, GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.AttachFiles);
+        _discord.Allow(Elsewhere);
+        _discord.Put(Elsewhere, "x");
+        (await Resolve(Message.ToString(), option: Elsewhere)).Failure.Should().Be(QuoteFailure.NotFound);
+        _discord.Fetches.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_normal_members_message_with_text_resolves()
+    {
+        _discord.Allow(Here);
+        _discord.Put(Here, "normal bir üyenin, botu etiketlemeyen mesajı");
+        var result = await Resolve(Message.ToString());
+        result.Succeeded.Should().BeTrue();
+        result.Message!.TextAvailability.Should().Be(QuoteTextAvailability.Available);
+        result.Text.Should().Be("normal bir üyenin, botu etiketlemeyen mesajı");
     }
 
     [Fact]

@@ -13,9 +13,11 @@ using ToroSquad.Modules.Quote.Application;
 namespace ToroSquad.Modules.Quote.Commands;
 
 /// <summary>
-/// /quote message:&lt;id or link&gt; [channel] — posts the message as a black-and-white quote card (quote.png) in this
-/// channel. Acknowledged privately at once (the avatar download and drawing can take longer than Discord's 3 seconds); every
-/// refusal stays private; only the finished card is public, as an attachment without text. Nothing here ever pings.
+/// /quote message:&lt;message id&gt; [channel] (a message link also works) — posts the message as a black-and-white quote
+/// card (quote.png) in this channel. A bare id is looked up in this channel, or in the channel option; never searched for.
+/// Acknowledged privately at once (the avatar download and drawing can take longer than Discord's 3 seconds); every refusal
+/// stays private; only the finished card is public, as an attachment without text. Nothing here ever pings, and nothing
+/// of the message (text, names, avatar) is stored or logged.
 /// </summary>
 [ToroModule(QuoteModule.ModuleIdValue)]
 [CommandContextType(InteractionContextType.Guild)]
@@ -23,8 +25,7 @@ namespace ToroSquad.Modules.Quote.Commands;
 public sealed class QuoteCommands(
     InteractionServices services,
     QuoteMessageResolver resolver,
-    QuoteAvatarClient avatars,
-    QuoteImageRenderer renderer,
+    QuoteCardBuilder cards,
     ILogger<QuoteCommands> logger) : ToroInteractionModule(services)
 {
     public const string FileName = "quote.png";
@@ -33,7 +34,7 @@ public sealed class QuoteCommands(
 
     [SlashCommand("quote", "Turn a message into a black-and-white quote card")]
     public async Task QuoteAsync(
-        [Summary("message", "Message ID or message link")] string message,
+        [Summary("message", "Message ID (Copy Message ID) or message link")] string message,
         [Summary("channel", "Channel of the message when you give a bare ID (default: this channel)")]
         [ChannelTypes(ChannelType.Text, ChannelType.News, ChannelType.Voice, ChannelType.Stage, ChannelType.PublicThread, ChannelType.NewsThread)]
         IChannel? channel = null)
@@ -52,8 +53,12 @@ public sealed class QuoteCommands(
             return;
         }
 
-        var avatar = await avatars.DownloadAsync(source.Author.AvatarUrl, CancellationToken.None);
-        var card = renderer.Render(new QuoteRenderModel(resolution.Text, source.Author.DisplayName, source.Author.Username, avatar));
+        var built = await cards.BuildAsync(source, resolution.Text, CancellationToken.None);
+        if (built is not { Card: { } card })
+        {
+            await SendEphemeralAsync(await T("error.internal") + "\n" + await T("error.trace_code", built.TraceCode), null, null);
+            return;
+        }
 
         // The deferred reply is private. Settle it first so the card below is a separate, public message (the first follow-up
         // of a deferred reply would otherwise take the deferred reply's place — and its privacy).

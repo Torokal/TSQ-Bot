@@ -30,7 +30,12 @@ public sealed record QuoteCard(byte[] Png, int Width, int Height, QuoteCardLayou
 /// "@username" under it. No logo, no frame, no colour. Long text wraps; the font shrinks step by step down to a minimum,
 /// and only then the last visible line ends in "…". Pure CPU work on managed code (ImageSharp): no GDI+, no host fonts.
 /// </summary>
-public sealed class QuoteImageRenderer(QuoteFonts fonts)
+public interface IQuoteRenderer
+{
+    QuoteCard Render(QuoteRenderModel model);
+}
+
+public sealed class QuoteImageRenderer(QuoteFonts fonts) : IQuoteRenderer
 {
     public const int Width = 1600;
     public const int Height = 800;

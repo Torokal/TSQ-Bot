@@ -14,8 +14,18 @@ public sealed record QuoteChannel(ChannelId Id, bool IsMessageChannel, bool IsPr
 /// <summary>Who wrote the message, as shown in this guild: nickname/display name, @username, the Discord CDN avatar url.</summary>
 public sealed record QuoteAuthor(UserId Id, string DisplayName, string Username, string? AvatarUrl);
 
-/// <summary>The fetched message. <paramref name="ContentWithheld"/>: Discord hid the text from the bot (Message Content intent).</summary>
-public sealed record QuoteSourceMessage(MessageId Id, ChannelId Channel, string RawContent, QuoteAuthor Author, QuoteMentionNames Mentions, bool ContentWithheld);
+/// <summary>
+/// The fetched message. <paramref name="TextAvailability"/> tells an empty text apart (see <see cref="QuoteMessageShape"/>);
+/// <paramref name="ApplicationHasContentAccess"/> is the application's Message Content flag, for the log only (null: not read).
+/// </summary>
+public sealed record QuoteSourceMessage(
+    MessageId Id,
+    ChannelId Channel,
+    string RawContent,
+    QuoteAuthor Author,
+    QuoteMentionNames Mentions,
+    QuoteTextAvailability TextAvailability,
+    bool? ApplicationHasContentAccess = null);
 
 public enum QuoteFetchStatus
 {
@@ -68,6 +78,9 @@ public enum QuoteFailure
 
     /// <summary>An age-restricted channel's message into a channel that is not age-restricted.</summary>
     AgeRestricted = 6,
+
+    /// <summary>The bot may not attach files in the channel the command ran in (checked before anything is read or drawn).</summary>
+    BotCannotAttach = 7,
 }
 
 public sealed record QuoteRequest(GuildId Guild, UserId Member, ChannelId InvokedIn, string MessageInput, ChannelId? ChannelOption);
@@ -83,6 +96,7 @@ public sealed record QuoteResolution(QuoteFailure Failure, QuoteSourceMessage? M
         QuoteFailure.NoText => "quote.no_text",
         QuoteFailure.ContentUnavailable => "quote.content_unavailable",
         QuoteFailure.AgeRestricted => "quote.age_restricted",
+        QuoteFailure.BotCannotAttach => "quote.bot_cannot_attach",
         _ => "quote.not_found",
     };
 }
@@ -98,6 +112,13 @@ public sealed partial class QuoteMessageResolver(IGuildGateway guilds, ILogger<Q
 {
     /// <summary>What the member and the bot both need in the source channel.</summary>
     public const GuildPermission RequiredToRead = GuildPermission.ViewChannel | GuildPermission.ReadMessageHistory;
+
+    /// <summary>
+    /// What the bot needs where the command ran: the card is an interaction follow-up carrying quote.png. Follow-ups are
+    /// sent through the interaction webhook, so Send Messages is not required; Attach Files is (TSQ policy: never post a
+    /// file where the bot may not attach one).
+    /// </summary>
+    public const GuildPermission RequiredToPost = GuildPermission.ViewChannel | GuildPermission.AttachFiles;
 
     public async Task<QuoteResolution> ResolveAsync(IQuoteDiscord discord, QuoteRequest request, CultureInfo culture, TimeZoneInfo zone, CancellationToken cancellationToken)
     {
@@ -119,6 +140,15 @@ public sealed partial class QuoteMessageResolver(IGuildGateway guilds, ILogger<Q
                 return new(QuoteFailure.InvalidReference);
         }
 
+        // Where the card goes, first: no source channel is looked at, no message read, nothing drawn if it cannot be posted.
+        var destination = discord.GetChannel(request.Guild, request.InvokedIn);
+        var post = await guilds.GetBotChannelAccessAsync(request.Guild, destination?.PermissionChannel ?? request.InvokedIn, cancellationToken);
+        if (!post.Exists || !post.Permissions.Grants(RequiredToPost))
+        {
+            LogCannotPost(logger, request.Guild.Value, request.InvokedIn.Value);
+            return new(QuoteFailure.BotCannotAttach);
+        }
+
         // A channel id from a link or an option is only a claim: it must be a message channel the cache knows in THIS guild.
         if (discord.GetChannel(request.Guild, channelId) is not { IsMessageChannel: true } channel || channel.IsPrivateThread)
             return Denied("channel is not a readable message channel of this guild", request, channelId);
@@ -132,7 +162,7 @@ public sealed partial class QuoteMessageResolver(IGuildGateway guilds, ILogger<Q
             return Denied("bot cannot view the channel or read its history", request, channelId);
 
         // Age-restricted text only stays in age-restricted channels, whoever may read it.
-        if (channel.IsNsfw && discord.GetChannel(request.Guild, request.InvokedIn) is not { IsNsfw: true })
+        if (channel.IsNsfw && destination is not { IsNsfw: true })
             return new(QuoteFailure.AgeRestricted);
 
         var fetch = await discord.GetMessageAsync(request.Guild, channel.Id, messageId, cancellationToken);
@@ -141,13 +171,19 @@ public sealed partial class QuoteMessageResolver(IGuildGateway guilds, ILogger<Q
 
         var text = QuoteText.Normalize(message.RawContent, message.Mentions, culture, zone);
         if (text.Length > 0)
-            return new(QuoteFailure.None, message, text);
-        if (message.ContentWithheld)
         {
-            LogContentWithheld(logger, request.Guild.Value, channelId.Value);
+            LogResolved(logger, request.Guild.Value, channelId.Value, messageId.Value);
+            return new(QuoteFailure.None, message, text);
+        }
+
+        if (message.TextAvailability == QuoteTextAvailability.ProbablyWithheld)
+        {
+            LogContentWithheld(logger, request.Guild.Value, channelId.Value, messageId.Value,
+                message.ApplicationHasContentAccess?.ToString() ?? "unknown");
             return new(QuoteFailure.ContentUnavailable, message);
         }
 
+        LogNoText(logger, request.Guild.Value, channelId.Value, messageId.Value);
         return new(QuoteFailure.NoText, message);
     }
 
@@ -160,7 +196,18 @@ public sealed partial class QuoteMessageResolver(IGuildGateway guilds, ILogger<Q
     [LoggerMessage(Level = LogLevel.Information, Message = "Quote refused: {Reason} guild={Guild} channel={Channel} user={User}")]
     private static partial void LogDenied(ILogger logger, string reason, ulong guild, ulong channel, ulong user);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Quote: Discord returned no message text for guild={Guild} channel={Channel}. " +
-        "The application's Message Content intent is not enabled in the Developer Portal, so message text is withheld from the bot.")]
-    private static partial void LogContentWithheld(ILogger logger, ulong guild, ulong channel);
+    // Logs carry ids and outcomes only — never message text, names or avatar urls.
+    [LoggerMessage(Level = LogLevel.Information, Message = "Quote refused: the bot may not attach files where the command ran guild={Guild} channel={Channel}")]
+    private static partial void LogCannotPost(ILogger logger, ulong guild, ulong channel);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Quote resolved guild={Guild} channel={Channel} message={Message}")]
+    private static partial void LogResolved(ILogger logger, ulong guild, ulong channel, ulong message);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Quote refused: the message has no text guild={Guild} channel={Channel} message={Message}")]
+    private static partial void LogNoText(ILogger logger, ulong guild, ulong channel, ulong message);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Quote: Discord returned a normal message with no content at all guild={Guild} channel={Channel} " +
+        "message={Message} (application Message Content flag: {ContentAccess}). Discord withholds content from apps without Message Content " +
+        "access (Developer Portal → Bot → Privileged Gateway Intents).")]
+    private static partial void LogContentWithheld(ILogger logger, ulong guild, ulong channel, ulong message, string contentAccess);
 }

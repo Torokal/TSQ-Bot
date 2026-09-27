@@ -77,8 +77,9 @@ public sealed partial class DiscordQuoteSource(DiscordSocketClient client, IGuil
             return QuoteFetch.NotFound;
 
         var author = await AuthorAsync(g, found, cancellationToken);
+        var shape = await ShapeAsync(found);
         return new QuoteFetch(QuoteFetchStatus.Found, new QuoteSourceMessage(
-            new MessageId(found.Id), channel, found.Content ?? "", author, Mentions(g, found), await IsWithheldAsync(found)));
+            new MessageId(found.Id), channel, found.Content ?? "", author, Mentions(g, found), shape.Classify(), shape.ApplicationHasContentAccess));
     }
 
     /// <summary>
@@ -129,22 +130,34 @@ public sealed partial class DiscordQuoteSource(DiscordSocketClient client, IGuil
     }
 
     /// <summary>
-    /// Discord sends empty text for other users' messages unless the application has the Message Content intent (Developer
-    /// Portal). The bot's own messages and messages that mention it are exempt.
+    /// The facts <see cref="QuoteMessageShape"/> needs to tell a text-less message from withheld text. The application's
+    /// Message Content flag is read (one cached application-info request) only when the text came back empty.
     /// </summary>
-    private async Task<bool> IsWithheldAsync(IMessage message)
+    private async Task<QuoteMessageShape> ShapeAsync(IMessage message)
     {
-        if (!string.IsNullOrEmpty(message.Content) || message.Author.Id == client.CurrentUser?.Id ||
-            (client.CurrentUser is { } me && message.MentionedUserIds.Contains(me.Id)))
-            return false;
+        var hasText = !string.IsNullOrEmpty(message.Content);
+        var user = message as IUserMessage;
+        var exempt = client.CurrentUser is { } me && (message.Author.Id == me.Id || message.MentionedUserIds.Contains(me.Id));
+        return new QuoteMessageShape(
+            hasText,
+            IsRegularMessage: message.Type is MessageType.Default or MessageType.Reply,
+            HasGatedContent: message.Attachments.Count > 0 || message.Embeds.Count > 0 || message.Components.Count > 0 || user?.Poll is not null,
+            HasStickers: message.Stickers.Count > 0,
+            IsForward: message.Reference?.ReferenceType.GetValueOrDefault() == MessageReferenceType.Forward,
+            ContentExempt: exempt,
+            ApplicationHasContentAccess: hasText || exempt ? null : await ContentAccessAsync());
+    }
+
+    private async Task<bool?> ContentAccessAsync()
+    {
         try
         {
             var flags = (await client.GetApplicationInfoAsync()).Flags;
-            return (flags & (ApplicationFlags.GatewayMessageContent | ApplicationFlags.GatewayMessageContentLimited)) == 0;
+            return (flags & (ApplicationFlags.GatewayMessageContent | ApplicationFlags.GatewayMessageContentLimited)) != 0;
         }
         catch (Exception ex) when (ex is HttpException or TimeoutException or HttpRequestException or TaskCanceledException)
         {
-            return false; // unknown: report "no text", never guess about configuration
+            return null; // unknown: never guess about configuration
         }
     }
 
