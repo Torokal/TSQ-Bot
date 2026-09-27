@@ -130,6 +130,38 @@ public static class LfgFormUi
     /// <summary>The duration value stored in the draft for a chosen option (the default option stores none = default).</summary>
     public static string? DurationValue(string option) => option == DefaultDuration ? null : option;
 
+    // The draft transitions of the steps (used by the handlers; pure, so a whole modal ↔ settings round trip is testable).
+
+    /// <summary>The modal was submitted: its texts and voice channel; the duration chosen in the settings step is kept.</summary>
+    public static LfgFormDraft WithModal(LfgFormDraft draft, LfgFormModal modal, ChannelId? voice) =>
+        draft with { Values = modal.ToValues(draft.Values.Duration), VoiceChannel = voice, Preview = null };
+
+    /// <summary>The submitted form was checked: its preview; notices that no longer apply (start = now) are dropped.</summary>
+    public static LfgFormDraft WithCheck(LfgFormDraft draft, LfgFormPreview preview) => draft with
+    {
+        Preview = preview,
+        NotifyBeforeStart = draft.NotifyBeforeStart && preview.EventAt is not null,
+        NotifyAtStart = draft.NotifyAtStart && preview.EventAt is not null,
+    };
+
+    public static LfgFormDraft WithNotices(LfgFormDraft draft, IReadOnlyCollection<string> values) => draft with
+    {
+        NotifyBeforeStart = values.Contains(NotifyBefore),
+        NotifyAtStart = values.Contains(NotifyStart),
+    };
+
+    /// <summary>A duration option was chosen: stored in the draft and shown at once (an unreadable option changes nothing).</summary>
+    public static LfgFormDraft WithDuration(LfgFormDraft draft, IReadOnlyCollection<string> values, int defaultMinutes)
+    {
+        if (values.FirstOrDefault() is not { } option)
+            return draft;
+        var duration = DurationValue(option);
+        var minutes = LfgFormText.DurationMinutes(duration) ?? defaultMinutes;
+        return minutes <= 0
+            ? draft
+            : draft with { Values = draft.Values with { Duration = duration }, Preview = draft.Preview is { } p ? p with { Duration = TimeSpan.FromMinutes(minutes) } : null };
+    }
+
     /// <summary>A refused form: the reason and the way back into the same form (with what was typed) or out.</summary>
     public static MessageComponent Retry(LfgFormDraft draft, Text L) => new ComponentBuilder()
         .WithButton(L("lfg.form.back"), BackPrefix + draft.Id, ButtonStyle.Primary)

@@ -88,7 +88,7 @@ public sealed class LfgFormCommands(
     {
         var L = await TextAsync();
         var voice = LfgFormUi.ReadVoice(((IModalInteraction)Context.Interaction).Data.Components);
-        var draft = drafts.Update(id, Actor, d => d with { Values = modal.ToValues(d.Values.Duration), VoiceChannel = voice, Preview = null });
+        var draft = drafts.Update(id, Actor, d => LfgFormUi.WithModal(d, modal, voice));
         if (draft is null)
         {
             await ShowAsync(L("lfg.form.expired"), new ComponentBuilder().Build());
@@ -107,13 +107,7 @@ public sealed class LfgFormCommands(
             return;
         }
 
-        // Settings that no longer apply (a start of "now" has no notices) are dropped rather than refused later.
-        draft = drafts.Update(id, Actor, d => d with
-        {
-            Preview = check.Preview,
-            NotifyBeforeStart = d.NotifyBeforeStart && (check.Preview.EventAt is not null),
-            NotifyAtStart = d.NotifyAtStart && (check.Preview.EventAt is not null),
-        });
+        draft = drafts.Update(id, Actor, d => LfgFormUi.WithCheck(d, check.Preview));
         if (draft is null)
         {
             await ShowAsync(L("lfg.form.expired"), new ComponentBuilder().Build());
@@ -126,25 +120,12 @@ public sealed class LfgFormCommands(
 
     [ComponentInteraction(LfgFormUi.NotifyPrefix + "*", ignoreGroupNames: true)]
     public async Task ChooseNoticesAsync(string id, string[] values) =>
-        await UpdateSettingsAsync(drafts.Update(id, Actor, d => d with
-        {
-            NotifyBeforeStart = values.Contains(LfgFormUi.NotifyBefore),
-            NotifyAtStart = values.Contains(LfgFormUi.NotifyStart),
-        }));
+        await UpdateSettingsAsync(drafts.Update(id, Actor, d => LfgFormUi.WithNotices(d, values)));
 
     /// <summary>The listing duration (settings step); the summary shows it at once, the save checks it.</summary>
     [ComponentInteraction(LfgFormUi.DurationPrefix + "*", ignoreGroupNames: true)]
     public async Task ChooseDurationAsync(string id, string[] values) =>
-        await UpdateSettingsAsync(drafts.Update(id, Actor, d =>
-        {
-            if (values.FirstOrDefault() is not { } option)
-                return d;
-            var duration = LfgFormUi.DurationValue(option);
-            var minutes = LfgFormText.DurationMinutes(duration) ?? DefaultMinutes;
-            return minutes <= 0
-                ? d
-                : d with { Values = d.Values with { Duration = duration }, Preview = d.Preview is { } p ? p with { Duration = TimeSpan.FromMinutes(minutes) } : null };
-        }));
+        await UpdateSettingsAsync(drafts.Update(id, Actor, d => LfgFormUi.WithDuration(d, values, DefaultMinutes)));
 
     /// <summary>Back into the same form, filled with what was typed.</summary>
     [ComponentInteraction(LfgFormUi.BackPrefix + "*", ignoreGroupNames: true)]
