@@ -129,7 +129,7 @@ alanındadır; aynı kullanıcı bir ilanda tek satırdır (fikir değiştirmek 
 | Kapat | Yalnızca sahip veya moderatör (Discord **Manage Messages** ya da Administrator; mevcut `Authorize.Require`). Önce ephemeral onay (`Evet, kapat` / `Vazgeç`), sonra `Closed`; kart kapalı olarak düzenlenir; outbox'ta bekleyen bildirim iptal edilir. Tekrar kapatmak idempotenttir |
 | Süre dolumu | Tek arka plan döngüsü (`LfgExpiryWorker`, ~60 sn; ilan başına zamanlayıcı yok) `ExpiresAt <= now` olan aktif ilanları toplu `Expired` yapar ve kartları düzenler. Bir butona süre dolduktan sonra basılırsa ilan o anda da expire edilir |
 | Restart | Durum yalnızca veritabanındadır. Buton custom id'leri yalnızca ilan kimliğini taşır (`tsq:lfg:join|maybe|leave|voice|close:<id>`), restart sonrası da çalışır. Açılışta ilk tur (~20 sn sonra) kapalıyken süresi dolan ilanları expire eder, vadesi gelen bildirimleri kurallara göre işler ve kartları düzenler |
-| Mesaj silindi | Bot yalnızca **Guilds** intent'i kullanır; mesaj silme olayı (`MESSAGE_DELETE`) ayrıcalıksız ama ayrı bir intent (`GuildMessages`) ister ve botun gördüğü her kanaldaki her mesajın olaylarını getirirdi — belgelenmiş "yalnızca Guilds" politikasına ve gizlilik metnine aykırı olduğu için eklenmedi. Onun yerine: (1) worker **en fazla 5 dakikada bir** her aktif kartı tek bir okumayla (`GET /channels/{kanal}/messages/{mesaj}`) doğrular; (2) kullanıcı aktif ilan sınırına takılınca yalnızca **onun** aktif kartları o anda (1,5 sn sınırla) kontrol edilir; (3) bir kart düzenlemesi `Unknown Message/Channel` dönerse. Üç yolda da ilan hemen `Orphaned` olur (terminal; aktif sayılmaz, bir daha düzenlenmez, yeniden açılamaz, bildirim üretmez; tekrar kontrol hiçbir şey değiştirmez). "Belirlenemedi" (Read Message History yok, 5xx, gateway hazır değil) asla silinmiş sayılmaz. `Closed`'dan ayrı tutulur çünkü kimse kapatmadı — mesaj ortadan kalktı; geçmiş ve tanı doğru kalır |
+| Mesaj silindi | Bot yalnızca **Guilds** intent'i kullanır; mesaj silme olayı (`MESSAGE_DELETE`) ayrıcalıksız ama ayrı bir intent (`GuildMessages`) ister ve botun gördüğü her kanaldaki her mesajın olaylarını getirirdi — belgelenmiş "yalnızca Guilds" politikasına ve gizlilik metnine aykırı olduğu için eklenmedi. Onun yerine: (1) worker **en fazla 5 dakikada bir** aktif kartları sırayla, tur başına en çok 50 tek okumayla (`GET /channels/{kanal}/messages/{mesaj}`) doğrular — bir imleçle devam ederek her aktif karta sırası gelir; (2) kullanıcı aktif ilan sınırına takılınca yalnızca **onun** aktif kartları o anda (1,5 sn sınırla) kontrol edilir; (3) bir kart düzenlemesi `Unknown Message/Channel` dönerse. Üç yolda da ilan hemen `Orphaned` olur (terminal; aktif sayılmaz, bir daha düzenlenmez, yeniden açılamaz, bildirim üretmez; tekrar kontrol hiçbir şey değiştirmez). "Belirlenemedi" (Read Message History yok, 5xx, gateway hazır değil) asla silinmiş sayılmaz. `Closed`'dan ayrı tutulur çünkü kimse kapatmadı — mesaj ortadan kalktı; geçmiş ve tanı doğru kalır |
 
 Modül bir sunucuda kapatılırsa (`/modules disable lfg`) butonlar "modül kapalı" cevabı verir, yeni bildirim üretilmez;
 süre dolumu yine işler (yalnızca kartı "süresi doldu" yapar, veri silinmez).
@@ -151,7 +151,10 @@ Açıkça istenirse (varsayılan kapalı) iki **yeni** mesaj — kart düzenlenm
 - **Ne zaman**: 30 dk hatırlatma `EventAt − 30 dk ≤ now < EventAt` penceresinde; başlangıç mesajı `EventAt ≤ now <
   EventAt + 5 dk` (kısa tolerans). Pencere geçtiyse (bot kapalıydı) geç mesaj **gönderilmez**: bildirim `Skipped` olarak
   tüketilir, restart'ta tekrar denenmez. Çözünürlük ~1 dk (worker döngüsü).
-- **Kapalı / süresi dolmuş / Orphaned** ilanlar bildirim üretmez; kapatma outbox'ta bekleyen bildirimi iptal eder.
+- **Kapalı / süresi dolmuş / Orphaned** ilanlar bildirim üretmez; kapatma (ve Orphaned) outbox'ta bekleyen ya da teslimi
+  belirsiz (uzlaştırılan) bildirimi iptal eder. O an Discord'a gönderilmekte olan (claim edilmiş) bir bildirim geri
+  çağrılamaz: pencere tek bir Discord isteğinin süresidir (genelde < 1 sn) ve en fazla o ilanın o anki Joined oyuncularına
+  tek bir bildirim olur — tekrar veya toplu ping değildir.
 - **Modül kapalı** (veya guild izin listesinde değil) iken vadesi gelen bildirim `Skipped` olur; modül saatler sonra açılsa
   bile geçmiş bildirimler toplu gönderilmez.
 - **Dayanıklılık / tekrar yok**: `LfgNoticePlanner` tek bir yazma transaction'ında ilanı yeniden okur, Joined oyuncuları
@@ -189,6 +192,7 @@ kanal/izin bilgisi taşımaz; her tıklamada: doğru guild, ilan aktif, tıklaya
 | Tıklayan seste değil | Taşınmaz; ephemeral: kanal + "bot yalnızca zaten seste olanları taşıyabilir" + **Ses kanalını aç** link butonu |
 | Bot Move Members'a sahip değil | Taşıma **denenmez**; ephemeral: kanal + **Ses kanalını aç** link butonu |
 | Tıklayan kanala kendisi bağlanamıyor (View/Connect yok) | Taşınmaz (botun izni kullanıcının erişimini aşamaz): `… bağlanma iznin yok.` |
+| Kanalın kullanıcı sınırı var (ve tıklayanın kendi Move Members izni yok) | Taşınmaz, kanal + **Ses kanalını aç** link butonu: botun Move Members izni dolu bir kanalın sınırını aşabilirdi ve kanal doluluğu (ses durumu olayları olmadan) bilinemez; kullanıcı kendisi katılınca sınırı Discord uygular |
 | Ses kanalı silinmiş / artık ses kanalı değil | `Seçilen ses kanalı artık mevcut değil.` İlan kapanmaz ve Orphaned olmaz; yalnızca ses özelliği kaldırılır, kart sonraki çizimde ses satırı/butonu olmadan gösterilir |
 
 **Ses kanalını aç** butonu `https://discord.com/channels/{guild}/{kanal}` adresli bir link butonudur: Discord'da kanalı
@@ -258,7 +262,9 @@ bildirim bayrakları kapalı, ses kanalı yok — V1 anlamı korunur (test).
 `/privacy export` açtığın ilanları (oyun, detay, durum, zamanlar, bildirim tercihleri), katıldığın/belki dediğin ilanları
 (cevabınla) ve seni etiketleyen, henüz silinmemiş bildirim sayısını içerir. `/privacy delete` katıldığın veya belki dediğin
 ilanlardan seni çıkarır (yalnızca Katılan silinince dolu ilan yeniden açılır; kart senin olmadan yeniden çizilir), açtığın
-ilanları oyuncularıyla siler ve seni etiketleyen bildirim satırlarını kaldırır. Sunucudan ayrılma sonrası saklama süresi
+ilanları oyuncularıyla siler, moderatör olarak kapattığın ilanlardaki "kapatan" kaydını temizler ve seni etiketleyen
+bildirim satırlarını kaldırır (o an gönderilmekte/uzlaştırılmakta olan bir satır bittikten 24 saat sonra silinir). Teslimi
+uzlaştırılamayıp bırakılan bildirim satırları da 24 saat sonra budanır. Sunucudan ayrılma sonrası saklama süresi
 dolunca guild'in tüm LFG verisi silinir.
 
 ## Günlükler
