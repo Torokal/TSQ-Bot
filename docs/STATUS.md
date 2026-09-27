@@ -61,14 +61,15 @@ invite link and no global command registration. The source code is public under 
 - **Production (2026-09-27)**: PR #12 merged and deployed, `/ekip` + `/lfg-admin` synced to the main guild; enabling the
   module (`/modules enable lfg`) and the live checks are done by the owner in Discord.
 - **NOT VERIFIED_LIVE**: the bot editing its own card through the channel endpoint (expiry/close) has not been observed live.
-- **V2 IMPLEMENTED / TESTED_OFFLINE**: Maybe RSVP (never a slot, never pinged), relative scheduled start (`EventAt`;
+- **V2 IMPLEMENTED / TESTED_OFFLINE**: Maybe RSVP (never a slot, never pinged), scheduled start (`EventAt`;
   `ExpiresAt = EventAt + duration`), opt-in 30-minute and start notices through the outbox (current Joined players only,
   once across restarts, never late, none for ended listings or a disabled module), `MentionPolicy.ExplicitUsers` (only
   the LFG notice renderer), optional voice channel + button (moves a member already in voice with Move Members; otherwise
   an honest "open channel" link), migration `LfgScheduledEvents`.
-- **Custom start date IMPLEMENTED / TESTED_OFFLINE**: `/ekip tarih_saat` (`05.10.2026 21:30`, culture-independent), read in
-  the existing guild time zone (`/setup`, default Europe/Istanbul), DST gaps/overlaps refused, 1 minute – 1 year ahead,
-  exclusive with `baslangic`; feeds the same `EventAt` (expiry, notices, card, voice unchanged). No new migration.
+- **Start date IMPLEMENTED / TESTED_OFFLINE**: a full date and time (`05.10.2026 21:30`, `05.10.26 21:30`,
+  culture-independent), read in the existing guild time zone (`/setup`, default Europe/Istanbul), DST gaps/overlaps
+  refused, 1 minute – 1 year ahead; feeds the same `EventAt` (expiry, notices, card, voice unchanged). No relative starts.
+  No new migration.
 - **NOT VERIFIED_LIVE**: real user pings, the voice move and the channel link behaviour in Discord clients.
 - **Form + owner edit IMPLEMENTED / TESTED_OFFLINE** (`feat/lfg-modal-edit`): `/ekip` has no options and opens a modal
   (game, players, details, start date — empty = now or `27.09.2026 21:30` / `27.09.26 21:30`, no relative times — and the
