@@ -151,10 +151,12 @@ Açıkça istenirse (varsayılan kapalı) iki **yeni** mesaj — kart düzenlenm
 - **Ne zaman**: 30 dk hatırlatma `EventAt − 30 dk ≤ now < EventAt` penceresinde; başlangıç mesajı `EventAt ≤ now <
   EventAt + 5 dk` (kısa tolerans). Pencere geçtiyse (bot kapalıydı) geç mesaj **gönderilmez**: bildirim `Skipped` olarak
   tüketilir, restart'ta tekrar denenmez. Çözünürlük ~1 dk (worker döngüsü).
-- **Kapalı / süresi dolmuş / Orphaned** ilanlar bildirim üretmez; kapatma (ve Orphaned) outbox'ta bekleyen ya da teslimi
-  belirsiz (uzlaştırılan) bildirimi iptal eder. O an Discord'a gönderilmekte olan (claim edilmiş) bir bildirim geri
-  çağrılamaz: pencere tek bir Discord isteğinin süresidir (genelde < 1 sn) ve en fazla o ilanın o anki Joined oyuncularına
-  tek bir bildirim olur — tekrar veya toplu ping değildir.
+- **Kapalı / süresi dolmuş / Orphaned** ilanlar bildirim üretmez; kapatma, Orphaned ve `/privacy delete` ile silinen ilan
+  outbox'ta bekleyen bildirimi iptal eder. O an gönderilmekte olan ya da teslimi belirsiz (uzlaştırılan) bildirimin süresi
+  geçmişe çekilir: Discord'a ulaşmışsa `Sent` kaydedilir, ulaşmamışsa `Expired` olur — **yeniden denenmez, yeniden
+  gönderilmez**. Geri çağrılamayan tek şey Discord'un o an almakta olduğu istektir: pencere tek bir Discord isteğinin
+  süresidir (genelde < 1 sn) ve en fazla o ilanın o anki Joined oyuncularına tek bir bildirim olur — tekrar veya toplu ping
+  değildir.
 - **Modül kapalı** (veya guild izin listesinde değil) iken vadesi gelen bildirim `Skipped` olur; modül saatler sonra açılsa
   bile geçmiş bildirimler toplu gönderilmez.
 - **Dayanıklılık / tekrar yok**: `LfgNoticePlanner` tek bir yazma transaction'ında ilanı yeniden okur, Joined oyuncuları
@@ -169,7 +171,8 @@ Açıkça istenirse (varsayılan kapalı) iki **yeni** mesaj — kart düzenlenm
 Core'daki `MentionPolicy` varsayılan olarak kullanıcı ping'ine izin vermez. Tek, açık bir ek: `MentionPolicy.ExplicitUsers(...)`
 → kablo tarafında yalnızca listelenen kimlikler `allowed_mentions.users` olur; `parse` boş (metinden kullanıcı/@everyone/
 @here ayrıştırılmaz), rol yok. Bunu kullanabilen **tek** yer `LfgNoticeRenderer`'dır ve yalnızca Joined oyuncuların
-kimliklerini verir (`LfgArchitectureTests.Explicit_user_pings_exist_only_in_the_lfg_notice_renderer`). Oyun adı/detaydaki
+kimliklerini verir (`LfgArchitectureTests.Explicit_user_pings_exist_only_in_the_lfg_notice_renderer`). `Users`
+kurucu parametresi değildir ve public setter'ı yoktur; başka bir yol derlenmez (`with { Users = … }` dahil). Oyun adı/detaydaki
 `@everyone`, `<@id>` gibi metinler etkisizleştirilir. TSQ Live'ın `@everyone` davranışı değişmedi.
 
 ## Ses kanalı
@@ -262,7 +265,7 @@ bildirim bayrakları kapalı, ses kanalı yok — V1 anlamı korunur (test).
 `/privacy export` açtığın ilanları (oyun, detay, durum, zamanlar, bildirim tercihleri), katıldığın/belki dediğin ilanları
 (cevabınla) ve seni etiketleyen, henüz silinmemiş bildirim sayısını içerir. `/privacy delete` katıldığın veya belki dediğin
 ilanlardan seni çıkarır (yalnızca Katılan silinince dolu ilan yeniden açılır; kart senin olmadan yeniden çizilir), açtığın
-ilanları oyuncularıyla siler, moderatör olarak kapattığın ilanlardaki "kapatan" kaydını temizler ve seni etiketleyen
+ilanları oyuncularıyla siler (gönderilmemiş bildirimleri de durdurulur), moderatör olarak kapattığın ilanlardaki "kapatan" kaydını temizler ve seni etiketleyen
 bildirim satırlarını kaldırır (o an gönderilmekte/uzlaştırılmakta olan bir satır bittikten 24 saat sonra silinir). Teslimi
 uzlaştırılamayıp bırakılan bildirim satırları da 24 saat sonra budanır. Sunucudan ayrılma sonrası saklama süresi
 dolunca guild'in tüm LFG verisi silinir.
