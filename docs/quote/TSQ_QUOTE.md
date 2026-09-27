@@ -7,36 +7,42 @@ harflerle, altında "— Görünen Ad" ve gri "@kullanıcıadı". Logo, çerçev
 Durumsuz bir yardımcı modüldür: tablo, migration, arka plan işi, sağlayıcı ve yapılandırma yoktur. Her sunucuda varsayılan
 kapalıdır: `/modules enable quote`.
 
-## Komut
+## Kullanım
 
-```
-/quote message:<mesaj ID'si veya mesaj bağlantısı> [channel:<kanal>]
-```
+1. Discord → Ayarlar → Gelişmiş → **Geliştirici Modu**'nu aç.
+2. Mesaja sağ tık → **Mesaj Kimliğini Kopyala**.
+3. Aynı kanalda: `/quote message:<mesaj-id>`
+   Başka kanaldaki mesaj: `/quote message:<mesaj-id> channel:<kanal>`
 
 | Girdi | Mesajın arandığı kanal |
 |---|---|
-| Ham ID, `channel` yok | Komutun çalıştırıldığı kanal |
-| Ham ID + `channel` | Seçilen kanal (metin, duyuru, ses/sahne sohbeti, herkese açık thread) |
-| Bağlantı `https://discord.com/channels/<sunucu>/<kanal>/<mesaj>` | Bağlantıdaki kanal (`channel` gerekmez, verilirse yok sayılır) |
+| Mesaj kimliği (ana kullanım), `channel` yok | Komutun çalıştırıldığı kanal |
+| Mesaj kimliği + `channel` | Seçilen kanal (metin, duyuru, ses/sahne sohbeti, herkese açık thread) |
+| Bağlantı `https://discord.com/channels/<sunucu>/<kanal>/<mesaj>` (ayrıca desteklenir) | Bağlantıdaki kanal (`channel` gerekmez, verilirse yok sayılır) |
 
-Kabul edilen bağlantı hostları: `discord.com`, `ptb.`/`canary.`/`www.` varyantları ve eski `discordapp.com`; yalnızca
-https, varsayılan port, kullanıcı bilgisi yok, yol tam olarak `channels/<sunucu>/<kanal>/<mesaj>`. ID'ler 17–20 haneli ASCII
-snowflake. Mesaj bulunmak için sunucudaki kanallar **taranmaz**: tek kanal, tek mesaj, tek okuma.
+Mesaj kimliği kanalı içermez; bu yüzden kimlik başka bir kanaldaysa `channel` verilmelidir — mesajı bulmak için sunucudaki
+kanallar **asla taranmaz**: tek kanal, tek mesaj, tek REST okuması (`GET /channels/{kanal}/messages/{mesaj}`). Kimlikler
+17–20 haneli ASCII snowflake. Kabul edilen bağlantı hostları: `discord.com`, `ptb.`/`canary.`/`www.` varyantları ve eski
+`discordapp.com`; yalnızca https, varsayılan port, kullanıcı bilgisi yok, yol tam olarak `channels/<sunucu>/<kanal>/<mesaj>`.
 
 ## Güvenlik (sunucu tarafında, istemciye güvenmeden)
 
 Sırasıyla; her adım geçmeden hiçbir mesaj okunmaz:
 
 1. Bağlantı başka bir sunucuya veya DM'e aitse → "Yalnızca bu sunucudaki mesajlar alıntılanabilir."
-2. Kanal bu sunucunun önbellekte bilinen bir **mesaj kanalı** olmalı (forum kanalının kendisi değil; özel thread'ler
+2. Komutun çalıştırıldığı kanalda botun **View Channel + Attach Files** izni olmalı (thread'de üst kanal;
+   `IGuildGateway.GetBotChannelAccessAsync`). Yoksa kaynak kanala bakılmadan, mesaj okunmadan ve kart çizilmeden →
+   "TSQ Bot'un bu kanalda dosya gönderme izni yok." Kart etkileşim webhook'uyla (takip mesajı) gittiği için Send
+   Messages gerekmez.
+3. Kaynak kanal bu sunucunun önbellekte bilinen bir **mesaj kanalı** olmalı (forum kanalının kendisi değil; özel thread'ler
    desteklenmez — thread üyeliği denetlenmediği için hiç alıntılanmaz).
-3. Komutu çalıştıran üyenin o kanalda (thread'de üst kanalda) **View Channel + Read Message History** izni olmalı —
+4. Komutu çalıştıran üyenin o kanalda (thread'de üst kanalda) **View Channel + Read Message History** izni olmalı —
    rolleri ve kanal izin üzerine yazmalarıyla, Discord.Net'in izin çözümlemesiyle (sahip ve Administrator dahil).
-4. Botun da aynı kanalda aynı iki izni olmalı (`IGuildGateway.GetBotChannelAccessAsync`).
-5. Yaş sınırlı (NSFW) bir kanaldaki mesaj, yaş sınırı olmayan bir kanala alıntılanmaz.
-6. Mesaj tek bir REST okumasıyla alınır.
+5. Botun da kaynak kanalda aynı iki izni olmalı (`IGuildGateway.GetBotChannelAccessAsync`).
+6. Yaş sınırlı (NSFW) bir kanaldaki mesaj, yaş sınırı olmayan bir kanala alıntılanmaz.
+7. Mesaj tek bir REST okumasıyla alınır.
 
-2–4 ve 6'daki her olumsuz sonuç (yok, silinmiş, erişim yok, bot okuyamıyor, Discord hatası) kullanıcıya **aynı** ephemeral
+3–5 ve 7'deki her olumsuz sonuç (yok, silinmiş, erişim yok, bot okuyamıyor, Discord hatası) kullanıcıya **aynı** ephemeral
 cevaptır: "Mesaj bulunamadı veya bu mesaja erişim iznin yok." — gizli bir kanalın veya mesajın varlığı sızmaz. Teknik
 ayrıntı yalnızca loga yazılır (kimlikler; mesaj metni asla).
 
@@ -52,10 +58,28 @@ Kartta mesajın okunabilir metni kullanılır: satır sonları korunur, baştaki
 ve kod içeriği aynen kalır; `2*3*4` ve `snake_case` bozulmaz. Ekler/görseller V1'de karta eklenmez. Metin boşsa: "Bu
 mesajda alıntılanabilecek bir metin yok."
 
-**Message Content intent**: Discord, bu ayrıcalıklı intent'i (Developer Portal) açık olmayan uygulamalara başka
-kullanıcıların mesaj metnini boş verir (REST dahil). TSQ Bot bugün yalnızca `Guilds` intent'iyle çalışır; intent kapalıyken
-`/quote` yalnızca botun kendi mesajlarında ve botu etiketleyen mesajlarda metin görür, diğerlerinde "Discord bu mesajın
-metnini bota göstermiyor…" der ve loga bir uyarı yazar. Intent'i açmak işletmeci kararıdır; gateway intent'leri değişmez.
+## Message Content erişimi
+
+Karar (2026-09-27): TSQ Quote için Message Content ayrıcalıklı erişimi kullanılır. İşletmeci Developer Portal'da
+**Bot → Privileged Gateway Intents → MESSAGE CONTENT INTENT**'i açar (10.000 kullanıcının altındaki uygulamalarda bu bir
+toggle'dır; üstünde Discord incelemesi gerekir). Kabul şartı: normal bir üyenin yazdığı, botu etiketlemeyen bir mesajın
+`/quote message:<id>` ile okunabilmesi.
+
+Discord'a göre (discord-api-docs, `gateway.mdx` → "Message Content Intent") bu intent hiçbir gateway olayına bağlı
+değildir; erişim, uygulamanın mesaj içeriğini **API'lerin genelinde** (REST dahil) almasını sağlar ve `content`,
+`embeds`, `attachments`, `components`, `poll` alanlarını kapsar. Bu yüzden **gateway'de hiçbir şey değişmez**:
+Identify yine yalnızca `Guilds`; `GuildMessages`/`MessageContent` bitleri, `MessageReceived` işleyicisi, mesaj önbelleği
+veya dinleyici eklenmedi. Bot hiçbir mesaj olayı almaz; yalnızca kullanıcının verdiği kimlikteki tek mesajı REST ile okur.
+
+Metin boş gelirse cevap, Discord'un döndürdüğü mesajın biçimine göre ayrılır (`QuoteMessageShape`):
+
+| Mesaj | Cevap |
+|---|---|
+| Ek/embed/anket var (bunlar da içerik alanı: geldiyse erişim çalışıyor), iletilmiş mesaj, sistem mesajı, botun kendi mesajı veya botu etiketleyen mesaj; erişim açıkken yalnız çıkartma | "Bu mesajda alıntılanabilecek bir metin yok." |
+| Normal bir üye mesajı ama hiçbir alanı gelmedi (Discord böyle bir mesajı saklamaz) | "Bu mesajın içeriği Discord tarafından bota iletilmedi. Message Content erişiminin açık olduğundan emin olun." + loga uygulamanın Message Content bayrağıyla birlikte bir uyarı (yalnızca kimlikler) |
+
+İkinci satır Discord verisinden kesin olarak kanıtlanamaz; bu yüzden metin bir neden iddia etmez, kontrol edilmesi
+gereken ayarı söyler.
 
 ## Kimlik ve avatar
 
@@ -92,10 +116,38 @@ vermez ama bu karakterler boş kutu olarak görünür.
 Komut önce **ephemeral** olarak ertelenir (avatar indirme + çizim 3 saniyeyi aşabilir). Her ret bu gizli cevapta kalır.
 Başarıda gizli cevap önce "Alıntı kartı gönderiliyor…" olarak düzenlenir (ertelenmiş cevabın ilk takip mesajı onun
 yerini — ve gizliliğini — almasın diye), sonra kart **herkese açık, metinsiz bir takip mesajı** olarak `quote.png` ekiyle
-gönderilir ve gizli not silinir. Tüm cevaplar `allowed_mentions` boş (hiçbir şey ping atmaz). Beklenmeyen hatalar mevcut
-TSQ hata yolundan (`error.internal` + takip kodu) geçer.
+gönderilir ve gizli not silinir. Tüm cevaplar `allowed_mentions` boş (hiçbir şey ping atmaz). Çizim hatası
+(`QuoteCardBuilder`) kullanıcıya `error.internal` + takip kodu olarak döner; diğer beklenmeyen hatalar mevcut TSQ hata
+yolundan geçer.
+
+## Gizlilik
+
+İçerik yalnızca istek sırasında işlenir: **oku (tek REST okuması) → düz metne çevir → çiz → at**. Mesaj metni, görünen
+ad, kullanıcı adı, avatar URL'si ve avatar baytları yalnızca o isteğin belleğinde yaşar; veritabanına, önbelleğe, dosyaya
+veya loga yazılmaz; alıntı geçmişi yoktur. Loglar yalnızca sunucu/kanal/mesaj kimliklerini ve sonucu (çözüldü, ret
+nedeni, metin yok, içerik iletilmedi, takip kodu + istisna türü) içerir — istisna mesajı bile yazılmaz, çünkü metni
+tekrarlayabilir (`QuoteFlowTests` her sonuç için bunu doğrular). Gönderilen kart normal bir kanal mesajıdır.
+
+## Canlı kabul testi (işletmeci)
+
+Ön koşullar: Developer Portal'da MESSAGE CONTENT INTENT açık; branch deploy edildi; `/quote` Sync-Commands ile senkronlandı
+(önce dry-run); `/modules enable quote`; bot rolünde (veya test kanalında) Attach Files.
+
+1. Botu **etiketlemeyen** normal bir üye (bot değil) kanala bir mesaj yazar — tercihen uzun, Türkçe karakterli.
+2. Mesaja sağ tık → Mesaj Kimliğini Kopyala.
+3. Aynı kanalda `/quote message:<id>`.
+
+Beklenen: gizli "Alıntı kartı gönderiliyor…" kısa süre görünür ve silinir; kanala **metinsiz, herkese açık** bir
+`quote.png` gelir; kartta mesajın metni boş değildir ve doğru satırlara bölünmüştür; avatar yazarınkidir ve siyah-beyazdır;
+"— sunucu takma adı / görünen ad" ve "@kullanıcıadı" doğrudur; kimse etiketlenmez. Loglarda `Quote resolved guild=… channel=…
+message=…` satırı vardır, mesaj metni yoktur. Bu adım geçerse Message Content erişimi **VERIFIED_LIVE** sayılır.
+
+Ek kontroller: `channel:` ile başka kanaldaki mesaj; erişemediğin bir kanalın kimliği → "Mesaj bulunamadı veya bu mesaja
+erişim iznin yok."; Attach Files'ı olmayan bir kanalda → "TSQ Bot'un bu kanalda dosya gönderme izni yok."; yalnız görsel
+eki olan bir mesaj → "Bu mesajda alıntılanabilecek bir metin yok.". Geri alma: `/modules disable quote`.
 
 ## Kapsam dışı (V1)
 
 Alıntı geçmişi/veritabanı, liderlik tablosu, tepkiler, rastgele/zamanlanmış alıntı, web paneli, tema/şablon sistemi,
-bağlam menüsü komutu, animasyonlu GIF, sunucu genelinde mesaj arama, eklerin karta eklenmesi.
+bağlam menüsü (Apps → Quote) komutu — bilerek yok, ana kullanım `/quote message:<id>` —, animasyonlu GIF, sunucu
+genelinde mesaj arama, eklerin karta eklenmesi.

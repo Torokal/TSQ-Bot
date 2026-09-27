@@ -1,10 +1,12 @@
 # Gizlilik ve veri saklama (teknik kayıt)
 
-TSQ Bot mesaj akışı okumaz (Message Content intent kapalı), üye listesi indirmez (Guild Members intent kapalı),
-presence izlemez. Profil, avatar, kullanıcı adı **saklanmaz**. Tek istisna TSQ Quote'tur: `/quote` bir üyenin açıkça
-verdiği **tek** mesajı (erişim denetimlerinden sonra) bir kez REST ile okur, yazarının görünen adını, kullanıcı adını ve
-profil fotoğrafını (Discord CDN) alır, görseli üretip kanala gönderir; mesaj metni, isim ve avatar yalnızca o isteğin
-belleğinde yaşar, veritabanına ve loglara yazılmaz ([quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md)).
+TSQ Bot mesaj akışı okumaz (mesaj olayları dinlenmez; gateway intent'i yalnızca Guilds), üye listesi indirmez (Guild
+Members intent kapalı), presence izlemez. Profil, avatar, kullanıcı adı **saklanmaz**. Tek istisna TSQ Quote'tur: uygulama
+bunun için Message Content erişimini (Developer Portal) kullanır ve `/quote` bir üyenin açıkça verdiği **tek** mesajı
+(erişim denetimlerinden sonra) bir kez REST ile okur, yazarının görünen adını, kullanıcı adını ve profil fotoğrafını
+(Discord CDN) alır, görseli üretip kanala gönderir. Akış: oku → düz metne çevir → çiz → at. Mesaj metni, isim, avatar URL'si
+ve baytları yalnızca o isteğin belleğinde yaşar; veritabanına, önbelleğe ve loglara yazılmaz (loglarda yalnızca
+kimlikler ve sonuç) ([quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md)).
 
 ## Tutulan kayıtlar
 
