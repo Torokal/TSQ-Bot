@@ -87,19 +87,19 @@ public sealed class LfgFormCommands(
     public async Task SubmitFormAsync(string id, LfgFormModal modal)
     {
         var L = await TextAsync();
-        var draft = drafts.Update(id, Actor, d => d with { Values = modal.ToValues(), Preview = null });
+        var voice = LfgFormUi.ReadVoice(((IModalInteraction)Context.Interaction).Data.Components);
+        var draft = drafts.Update(id, Actor, d => d with { Values = modal.ToValues(d.Values.Duration), VoiceChannel = voice, Preview = null });
         if (draft is null)
         {
             await ShowAsync(L("lfg.form.expired"), new ComponentBuilder().Build());
             return;
         }
 
+        // Checked with the voice channel from the modal; the notices are chosen (and checked on save) in the next step.
         var check = draft.Kind == LfgFormKind.Create
-            ? await lfg.CheckCreateAsync(Actor, Here, draft.ToCreateInput() with { NotifyBeforeStart = false, NotifyAtStart = false, VoiceChannel = null },
-                CancellationToken.None)
-            : await lfg.CheckEditAsync(Actor, draft.ListingId!.Value,
-                draft.ToEditInput() with { NotifyBeforeStart = false, NotifyAtStart = false, VoiceChannel = null, OpenedSettings = null },
-                CancellationToken.None); // the settings are chosen (and checked on save) in the next step
+            ? await lfg.CheckCreateAsync(Actor, Here, draft.ToCreateInput() with { NotifyBeforeStart = false, NotifyAtStart = false }, CancellationToken.None)
+            : await lfg.CheckEditAsync(Actor, draft.ListingId!.Value, draft.ToEditInput() with { NotifyBeforeStart = false, NotifyAtStart = false },
+                CancellationToken.None);
         if (!check.Result.Succeeded || check.Preview is null)
         {
             var reason = await T(check.Result.MessageKey, check.Result.Args.ToArray()) + await TraceLineAsync(check.Result);
@@ -120,7 +120,7 @@ public sealed class LfgFormCommands(
             return;
         }
 
-        var (content, components) = LfgFormUi.Settings(draft, Services.Clock.GetUtcNow(), L);
+        var (content, components) = LfgFormUi.Settings(draft, Services.Clock.GetUtcNow(), DefaultMinutes, L);
         await ShowAsync(content, components);
     }
 
@@ -132,14 +132,19 @@ public sealed class LfgFormCommands(
             NotifyAtStart = values.Contains(LfgFormUi.NotifyStart),
         }));
 
-    [ComponentInteraction(LfgFormUi.VoicePrefix + "*", ignoreGroupNames: true)]
-    public async Task ChooseVoiceAsync(string id, string[] values)
-    {
-        ChannelId? voice = values.Length > 0 && ulong.TryParse(values[0], NumberStyles.None, CultureInfo.InvariantCulture, out var channel)
-            ? new ChannelId(channel)
-            : null;
-        await UpdateSettingsAsync(drafts.Update(id, Actor, d => d with { VoiceChannel = voice }));
-    }
+    /// <summary>The listing duration (settings step); the summary shows it at once, the save checks it.</summary>
+    [ComponentInteraction(LfgFormUi.DurationPrefix + "*", ignoreGroupNames: true)]
+    public async Task ChooseDurationAsync(string id, string[] values) =>
+        await UpdateSettingsAsync(drafts.Update(id, Actor, d =>
+        {
+            if (values.FirstOrDefault() is not { } option)
+                return d;
+            var duration = LfgFormUi.DurationValue(option);
+            var minutes = LfgFormText.DurationMinutes(duration) ?? DefaultMinutes;
+            return minutes <= 0
+                ? d
+                : d with { Values = d.Values with { Duration = duration }, Preview = d.Preview is { } p ? p with { Duration = TimeSpan.FromMinutes(minutes) } : null };
+        }));
 
     /// <summary>Back into the same form, filled with what was typed.</summary>
     [ComponentInteraction(LfgFormUi.BackPrefix + "*", ignoreGroupNames: true)]
@@ -237,6 +242,8 @@ public sealed class LfgFormCommands(
     private ChannelId Here => new(Context.Interaction.ChannelId ?? Context.Channel.Id);
 
     private int MaxPlayers => Math.Min(options.Value.MaxPlayersPerListing, LfgRules.HardMaxPlayers);
+
+    private int DefaultMinutes => options.Value.DefaultExpirationMinutes;
 
     private async Task<LfgFormUi.Text> TextAsync()
     {
@@ -353,7 +360,7 @@ public sealed class LfgFormCommands(
     {
         var L = await TextAsync();
         var (content, components) = draft?.Preview is not null
-            ? LfgFormUi.Settings(draft, Services.Clock.GetUtcNow(), L)
+            ? LfgFormUi.Settings(draft, Services.Clock.GetUtcNow(), DefaultMinutes, L)
             : (L("lfg.form.expired"), new ComponentBuilder().Build());
         await ((IComponentInteraction)Context.Interaction).UpdateAsync(m =>
         {

@@ -24,21 +24,19 @@ public static class LfgForm
     public const string PlayersField = "players";
     public const string DetailsField = "details";
     public const string StartField = "start";
-    public const string DurationField = "duration";
 
     public const int PlayersMaxLength = 3;
+    /// <summary>The voice channel select inside the modal (not a text field).</summary>
+    public const string VoiceField = "voice";
+
     public const int StartMaxLength = 40;
-    public const int DurationMaxLength = 12;
 
     /// <summary>How a stored start is shown in the form: the main custom date format, in the guild's time zone.</summary>
     public const string DateFormat = "dd.MM.yyyy HH:mm";
 
-    public static LfgCreateInput ToCreateInput(LfgFormValues form, bool notifyBeforeStart, bool notifyAtStart, ChannelId? voice)
-    {
-        var start = LfgStartText.Parse(form.Start);
-        return new LfgCreateInput(form.Game, LfgFormText.Players(form.Players), form.Details, LfgFormText.DurationMinutes(form.Duration),
-            start.Minutes, notifyBeforeStart, notifyAtStart, voice, start.At);
-    }
+    public static LfgCreateInput ToCreateInput(LfgFormValues form, bool notifyBeforeStart, bool notifyAtStart, ChannelId? voice) =>
+        new(form.Game, LfgFormText.Players(form.Players), form.Details, LfgFormText.DurationMinutes(form.Duration), notifyBeforeStart, notifyAtStart, voice,
+            LfgRules.Normalize(form.Start));
 
     /// <summary>
     /// The form of an existing listing: its texts, size, start (in the guild's time zone; empty for a listing that started
@@ -74,16 +72,14 @@ public static class LfgForm
         string.Equals(LfgRules.Normalize(a), LfgRules.Normalize(b), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The start field was left as it was: the same text, the same wall-clock minute written another way
-    /// ("5.10.2026 21:30" for "05.10.2026 21:30"), or "now" typed where the form showed no start.
+    /// The start field was left as it was: the same text, or the same wall-clock minute written another way
+    /// ("5.10.26 21:30" for "05.10.2026 21:30"; <paramref name="referenceYear"/> resolves a two-digit year).
     /// </summary>
-    public static bool SameStart(string? typed, string? shown)
+    public static bool SameStart(string? typed, string? shown, int referenceYear)
     {
         if (SameText(typed, shown))
             return true;
-        if (LfgRules.Normalize(shown) is null)
-            return LfgStartText.Parse(typed).IsNow;
-        return LfgEventDate.TryReadWallClock(typed, out var a) && LfgEventDate.TryReadWallClock(shown, out var b) && a == b;
+        return LfgEventDate.TryReadWallClock(typed, referenceYear, out var a) && LfgEventDate.TryReadWallClock(shown, referenceYear, out var b) && a == b;
     }
 }
 

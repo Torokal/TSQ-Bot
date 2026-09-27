@@ -4,9 +4,9 @@ using ToroSquad.Modules.Lfg.Domain;
 namespace ToroSquad.Tests.Unit;
 
 /// <summary>
-/// Custom start dates: explicit culture-independent formats, wall-clock time in the guild's time zone (DST gaps and
-/// overlaps refused, never guessed), a 1-minute minimum lead and a 1-year horizon — and the rule that a relative choice and a
-/// custom date never both define the start. Every start ends as the same <c>EventAt</c>.
+/// Start dates: only a full date and time (GG.AA.YYYY SS:DD, GG.AA.YY SS:DD, ISO), parsed explicitly — a two-digit year from
+/// the reference year, never a culture or platform setting — as wall-clock time in the guild's time zone (DST gaps and
+/// overlaps refused, never guessed), a 1-minute minimum lead and a 1-year horizon. No relative times. Empty = now.
 /// </summary>
 public sealed class LfgEventDateTests
 {
@@ -27,6 +27,10 @@ public sealed class LfgEventDateTests
     [InlineData("  27.09.2026 19:01  ", "2026-09-27T16:01:00Z")]
     [InlineData("01.01.2027 00:30", "2026-12-31T21:30:00Z")]
     [InlineData("2026-10-05 21:30", "2026-10-05T18:30:00Z")]
+    [InlineData("05.10.26 21:30", "2026-10-05T18:30:00Z")]
+    [InlineData("5.10.26 21:30", "2026-10-05T18:30:00Z")]
+    [InlineData("27.09.26 21:30", "2026-09-27T18:30:00Z")]
+    [InlineData("01.01.27 00:30", "2026-12-31T21:30:00Z")]
     public void Istanbul_wall_clock_times_become_exact_instants(string input, string expectedUtc)
     {
         var (at, error) = LfgEventDate.Resolve(input, Istanbul, Now);
@@ -47,8 +51,19 @@ public sealed class LfgEventDateTests
     [InlineData("05/10/2026 21:30")]
     [InlineData("05.10.2026")]
     [InlineData("21:30")]
-    [InlineData("05.10.26 21:30")]
     [InlineData("31.02.2026 21:00")]
+    [InlineData("31.02.26 21:00")]
+    [InlineData("2")]
+    [InlineData("3")]
+    [InlineData("30 dk")]
+    [InlineData("2 saat")]
+    [InlineData("1 gün")]
+    [InlineData("2 saat sonra")]
+    [InlineData("1,5 saat")]
+    [InlineData("akşam 9")]
+    [InlineData("05.10.026 21:30")]
+    [InlineData("05.10.2026 21:3")]
+    [InlineData("١٥.١٠.٢٠٢٦ ٢١:٣٠")]
     [InlineData("05.13.2026 21:30")]
     [InlineData("05.10.2026 24:30")]
     [InlineData("yarın 21:30")]
@@ -81,17 +96,40 @@ public sealed class LfgEventDateTests
     public void Clock_change_gaps_and_overlaps_are_refused_not_guessed(string zone, string input, LfgDraftError expected) =>
         LfgEventDate.Resolve(input, Zone(zone), Now).Error.Should().Be(expected);
 
+    [Theory]
+    [InlineData(26, 2026, 2026)]
+    [InlineData(27, 2026, 2027)]
+    [InlineData(25, 2026, 2025)]
+    [InlineData(0, 2099, 2100)]
+    [InlineData(99, 2100, 2099)]
+    [InlineData(75, 2026, 2075)] // the window is reference - 50 … reference + 49
+    [InlineData(76, 2026, 1976)]
+    public void A_two_digit_year_is_the_nearest_year_to_the_reference(int twoDigits, int reference, int expected) =>
+        LfgEventDate.TwoDigitYear(twoDigits, reference).Should().Be(expected);
+
     [Fact]
-    public void Relative_and_custom_starts_are_alternatives_enforced_by_the_domain()
+    public void A_two_digit_year_never_depends_on_the_culture_or_the_platform()
     {
-        LfgRules.Validate("Deadlock", null, 6, null, 20, 120, startMinutes: 120, startAt: "05.10.2026 21:30", zone: Istanbul, now: Now)
-            .Error.Should().Be(LfgDraftError.StartConflict);
-        LfgRules.Validate("Deadlock", null, 6, null, 20, 120, startMinutes: 0, startAt: "05.10.2026 21:30", zone: Istanbul, now: Now)
-            .Error.Should().Be(LfgDraftError.StartConflict, "an explicit 'now' is a choice too");
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            var odd = (System.Globalization.CultureInfo)System.Globalization.CultureInfo.GetCultureInfo("tr-TR").Clone();
+            odd.Calendar.TwoDigitYearMax = 1999; // 26 would be 1926 for DateTime parsing with this culture
+            System.Globalization.CultureInfo.CurrentCulture = odd;
 
-        var relative = LfgRules.Validate("Deadlock", null, 6, 120, 20, 120, startMinutes: 120, zone: Istanbul, now: Now).Draft!;
-        relative.Schedule(Now).Should().Be(((DateTimeOffset?)Now.AddHours(2), Now.AddHours(4)));
+            LfgEventDate.Resolve("27.09.26 21:30", Istanbul, Now).At.Should().Be(new DateTimeOffset(2026, 9, 27, 18, 30, 0, TimeSpan.Zero));
+            LfgEventDate.TryReadWallClock("27.09.26 21:30", 2026, out var local).Should().BeTrue();
+            local.Year.Should().Be(2026);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
 
+    [Fact]
+    public void A_start_is_now_or_a_date_and_ends_as_the_same_EventAt()
+    {
         var custom = LfgRules.Validate("Deadlock", null, 6, 120, 20, 120, startAt: "05.10.2026 21:30", zone: Istanbul, now: Now).Draft!;
         var eventAt = new DateTimeOffset(2026, 10, 5, 18, 30, 0, TimeSpan.Zero);
         custom.Schedule(Now).Should().Be(((DateTimeOffset?)eventAt, eventAt.AddHours(2)), "ExpiresAt = EventAt + duration");
