@@ -19,25 +19,31 @@ katılım, geçmiş/itibar, otomatik eşleştirme.
 `/ekip` parametresizdir: yazınca ilan **açılmaz**, bir form açılır. Discord bir modalda en fazla **5** üst düzey bileşene
 izin verir (Discord API: modal `components` 1–5; her alan bir `Label` içindedir), bu yüzden akış iki adımdır:
 
-1. **Form (modal)** — *Ekip İlanı Oluştur*
+1. **Ana form (modal)** — *Ekip İlanı Oluştur*; tam olarak 5 bileşen, hepsi Discord'un belgelenmiş modal bileşenleri:
 
-   | Alan | Kural |
-   |---|---|
-   | Oyun / Etkinlik | serbest metin, 2–50 karakter (kontrol/format karakterleri atılır, boşluklar sadeleşir) |
-   | Kişi sayısı | toplam ekip, **sahip dahil**; 2 … `Lfg:MaxPlayersPerListing` (varsayılan 20, üst sınır 50); yalnızca rakam |
-   | Detay | isteğe bağlı, en fazla 200 karakter |
-   | Başlangıç Tarihi | isteğe bağlı. **Boş = şimdi**; yoksa tam tarih ve saat: `27.09.2026 21:30` (GG.AA.YYYY SS:DD) veya kısa yıl `27.09.26 21:30` (GG.AA.YY SS:DD); baştaki sıfırlar gerekmez (`5.10.26 20:00`). Uyumluluk için ISO `2026-09-27 21:30` de kabul edilir. Göreli süreler (`2 saat`, `30 dk`, `1 gün`, `2`), kelimeler (`yarın 21:00`) ve eksik tarih/saat (`27.09.2026`, `21:30`) **kabul edilmez** → `Tarih/saat anlaşılamadı. Örnek: 27.09.2026 21:30 veya 27.09.26 21:30` |
-   | Ses Kanalı | isteğe bağlı, Discord'un yerel kanal seçicisi (yalnızca ses kanalları, 0–1 seçim); sunucu tarafında bu guild'in gerçek bir ses kanalı mı diye yeniden denetlenir |
+   | Alan | Bileşen | Kural |
+   |---|---|---|
+   | Oyun / Etkinlik | Text Input | serbest metin, 2–50 karakter (kontrol/format karakterleri atılır, boşluklar sadeleşir) |
+   | Kişi Sayısı | String Select (1 seçim, zorunlu) | toplam ekip, **sahip dahil**; seçenekler koddan üretilir: `LfgRules.MinPlayers` (2) … `Lfg:MaxPlayersPerListing` (varsayılan 20). Discord bir seçicide en fazla **25** seçenek gösterir; aralık sığmıyorsa (`MaxPlayersPerListing` > 26) seçenekler kesilmez, metne dönülmez: yapılandırma başlangıçta hata verir. Seçilen değer sunucuda yeniden doğrulanır (sahte `234`, `1` → `Ekip büyüklüğü 2 ile 20 kişi arasında olmalı (sen dahil).`) |
+   | Başlangıç Tarihi | Text Input | Discord'un herkese açık API'sinde tarih seçici bileşeni yoktur, bu yüzden metin alanı. Açıklama `Boş = şimdi • Örn: 27.09.2026 21:30`, örnek metin `27.09.2026 21:30`. Kural: | isteğe bağlı. **Boş = şimdi**; yoksa tam tarih ve saat: `27.09.2026 21:30` (GG.AA.YYYY SS:DD) veya kısa yıl `27.09.26 21:30` (GG.AA.YY SS:DD); baştaki sıfırlar gerekmez (`5.10.26 20:00`). Uyumluluk için ISO `2026-09-27 21:30` de kabul edilir. Göreli süreler (`2 saat`, `30 dk`, `1 gün`, `2`), kelimeler (`yarın 21:00`) ve eksik tarih/saat (`27.09.2026`, `21:30`) **kabul edilmez** → `Tarih/saat anlaşılamadı. Örnek: 27.09.2026 21:30 veya 27.09.26 21:30` |
+   | Ses Kanalı | Channel Select | isteğe bağlı, Discord'un yerel kanal seçicisi (yalnızca ses kanalları, 0–1 seçim); sunucu tarafında bu guild'in gerçek bir ses kanalı mı diye yeniden denetlenir |
+   | Bildirimler | Checkbox Group (0–2, isteğe bağlı) | *⏰ 30 dk önce katılanları etiketle* (`before`), *🚀 Başlangıçta katılanları etiketle* (`start`); oluştururken ikisi de işaretsiz, düzenlemede mevcut tercihler işaretli. Modal kutuları dinamik olarak kapatamaz: başlangıç boşken işaretlenirse seçim **sessizce atılmaz**, form reddedilir → `Bildirim kullanmak için bir başlangıç tarihi seçmelisin.` + *✏️ Formu Düzenle* (taslak korunur) |
 
-2. **Ayarlar (yalnızca formu gönderene görünür mesaj)** — formun özeti ve Discord'un yerel seçicileri: **İlan süresi**
-   (1 / 2 / 3 saat; varsayılan `Lfg:DefaultExpirationMinutes` seçili — 120 dk — ve seçeneklerden biri değilse "(varsayılan)"
-   olarak eklenir; planlı ilanda **başlangıçtan itibaren** sayılır), bildirimler (çoklu seçim: *⏰ 30 dk önce hatırlat*,
-   *🚀 Başladığında etiketle*; **yalnızca bir başlangıç tarihi varsa** gösterilir) ve **[İlanı Oluştur] [✏️ Formu Düzenle]
-   [İptal]**. *Formu Düzenle* aynı formu yazılanlarla ve seçilen ses kanalıyla yeniden açar; süre ve bildirim seçimleri
-   taslakta korunur.
+2. **Ayarlar (yalnızca formu gönderene görünür mesaj)** — formun özeti (oyun, kişi, başlangıç, süre, ses kanalı,
+   bildirimler, `📝 Detay: …` ya da `📝 Detay eklenmedi`) ve: **İlan süresi** seçicisi (1 / 2 / 3 saat; varsayılan
+   `Lfg:DefaultExpirationMinutes` seçili — 120 dk — ve seçeneklerden biri değilse "(varsayılan)", düzenlemede 1/2/3 dışı
+   mevcut süre "(mevcut)" olarak eklenir; planlı ilanda **başlangıçtan itibaren** sayılır), **[📝 Detay Ekle]** /
+   **[📝 Detayı Düzenle]** ve **[İlanı Oluştur]** (düzenlemede **[Kaydet]**) **[✏️ Ana Formu Düzenle] [İptal]**.
+   Ses kanalı ve bildirimler artık bu adımda değil, ana formdadır.
+3. **Detay (ayrı küçük modal)** — *İlan Detayı*, tek alan *Detay* (isteğe bağlı paragraf, en fazla 200 karakter, aynı
+   normalizasyon). Ayarlar mesajındaki düğmeyle açılır (Discord bir modal gönderimine modal ile cevap veremez; düğme
+   tıklaması açabilir). Boş gönderim detayı siler. Gönderince yeniden denetlenir ve ayarlar mesajına dönülür.
+
+Ana form → ayarlar → detay → ayarlar → *Ana Formu Düzenle* → ayarlar turunda hiçbir alan kaybolmaz: ana form yazılanları,
+seçilen kişi sayısını, ses kanalını ve bildirim kutularını yeniden doldurur; süre ve detay taslakta kalır.
 
 Form gönderilince hiçbir şey kaydedilmez: yazılanlar oluşturma kurallarının aynısıyla (`LfgService.CheckCreateAsync`)
-denetlenir; hata varsa Türkçe neden ve *Formu Düzenle* düğmesi gösterilir. **İlanı Oluştur** mevcut
+denetlenir; hata varsa Türkçe neden ve *✏️ Formu Düzenle* / *📝 Detay* / *İptal* düğmeleri gösterilir. **İlanı Oluştur** mevcut
 `LfgService.CreateAsync` akışını çalıştırır (kanal kısıtı, kişi başı aktif ilan sınırı, sahip ilk Katılan, `BEGIN
 IMMEDIATE`, özel tarih/saat dilimi, bildirimler, ses doğrulaması) ve kart kanala herkese açık bir takip mesajı olarak
 **ping'siz** gönderilir; mesaj kimliği kaydedilir (bot kartı sonra kendisi düzenler). İlan yalnızca Discord kartı
@@ -54,8 +60,8 @@ denetlenir; kimse boşuna form doldurmaz.
 128 bit rastgele kimlik, yalnızca açan kullanıcı + sunucu için geçerli (kopyalanan/tahmin edilen kimlik başkası için
 yoktur), son kullanımdan 30 dk sonra düşer, kullanıcı başına en fazla 3 ve toplamda en fazla 2000; restart'ta kaybolur
 (kullanıcı formu yeniden açar). Kaydederken taslak alınır: çift tıklama tek kayıt yapar; reddedilirse taslak geri konur.
-Özel kimliklerde (`tsq:lfg:form:<taslak>`, `tsq:lfg:draft:save|back|cancel|notify|duration:<taslak>`) yalnızca taslak
-kimliği bulunur; ne yapılabileceğine her adımda sunucu karar verir.
+Özel kimliklerde (`tsq:lfg:form:<taslak>`, `tsq:lfg:details:<taslak>`, `tsq:lfg:draft:save|back|cancel|details|duration:<taslak>`)
+yalnızca taslak kimliği bulunur; ne yapılabileceğine her adımda sunucu karar verir.
 
 ### İlanı düzenle
 
@@ -64,9 +70,11 @@ ama yetki sunucu tarafında: **yalnızca ilan sahibi** (`actor == OwnerUserId`).
 içeriğini değiştiremez → `Bu ilanı yalnızca ilan sahibi düzenleyebilir.` Başka sunucunun ilanı "yok" sayılır.
 Kapalı / süresi dolmuş / Orphaned ilan → `Bu ilan artık düzenlenemez.`
 
-Sahip aynı formu **mevcut değerlerle dolu** açar (başlangıç sunucunun saat diliminde `GG.AA.YYYY SS:DD`; "şimdi"
-ilanlarında boş; mevcut ses kanalı seçili, seçim kaldırılabilir), ardından aynı ayarlar adımı mevcut süre (1/2/3 saat
-değilse "(mevcut)" olarak) ve bildirim tercihleriyle gelir → **Kaydet**. Değişebilenler: oyun, detay, kişi sayısı, başlangıç, süre, iki bildirim tercihi, ses kanalı.
+Sahip aynı formu **mevcut değerlerle dolu** açar (mevcut kişi sayısı seçili; başlangıç sunucunun saat diliminde
+`GG.AA.YYYY SS:DD`, "şimdi" ilanlarında boş; mevcut ses kanalı seçili, seçim kaldırılabilir; bildirim kutuları mevcut
+tercihlerle işaretli), ardından aynı ayarlar adımı mevcut süre (1/2/3 saat değilse "(mevcut)" olarak) ve detayla gelir
+(**📝 Detayı Düzenle**) → **Kaydet**. Yapılandırılan üst sınır sonradan düşürülmüşse ilanın kendi kişi sayısı seçicide
+kalır (dokunulmamış değer geçerli kalır). Değişebilenler: oyun, detay, kişi sayısı, başlangıç, süre, iki bildirim tercihi, ses kanalı.
 Sahip, katılımcılar ve durum düzenlenemez. Başarılıysa sahibe `✅ İlan güncellendi.` ve **aynı kart** bot tarafından
 yeniden çizilir (yeni mesaj yok, kanala "güncellendi" duyurusu yok, ping yok, katılımcı listesi korunur).
 
@@ -140,13 +148,15 @@ Katılanlar
 🤔 Belki
 @Arif · @Shotgun
 
-🗓️ Başlangıç: 5 Ekim 2026 Pazartesi 21:30 • 8 gün içinde
+🗓️ Başlangıç: 5 Ekim 2026 Pazartesi 21:30 • 8 gün içinde    ("şimdi" ilanında: 🕘 Başlangıç: Şimdi)
 🔊 Ses Odası: #Deadlock
 ⏰ 4 saat içinde kapanır
 [Katıl] [Belki] [Ayrıl] [🔊 Ses Odası]
 [✏️ Düzenle] [İlanı Kapat]
 ```
 
+- Başlangıç satırı **her zaman** gösterilir: planlı ilanda `🗓️ Başlangıç: <t:…:F> • <t:…:R>`, başlangıcı boş ilanda
+  `🕘 Başlangıç: Şimdi` (en: `🕘 Start: Now`); veritabanında `EventAt` yine `null` kalır ve kapanış geri sayımı değişmez.
 - Kapasite yalnızca **Katılanlar** sayısıdır (`3 / 6`); Belki listesi ayrı gösterilir ve sayılmaz. Belki listesinin ilk 20
   kişisi gösterilir (`(+N)`).
 - Dolu: `✅ Ekip tamamlandı`, `[Katıl]` devre dışı; `[Belki]`, `[Ayrıl]`, `[🔊 Ses Odası]`, `[✏️ Düzenle]`, `[İlanı Kapat]` açık.
@@ -312,7 +322,7 @@ tıkla taşıma). İsteğe bağlılar olmadan özellikler zarifçe geri çekilir
 |---|---|---|
 | `DefaultExpirationMinutes` | `120` | 15–720 |
 | `MaxActiveListingsPerUser` | `2` | 1–10 |
-| `MaxPlayersPerListing` | `20` | 2–50 |
+| `MaxPlayersPerListing` | `20` | 2–26 (kural üst sınırı 50; ama form her kişi sayısını tek bir seçicide sunar ve Discord en fazla 25 seçenek gösterir → 26 üstü başlangıçta yapılandırma hatası, seçenekler asla kesilmez) |
 
 Hatırlatma öncesi süre (30 dk) ve başlangıç toleransı (5 dk) sabittir (`LfgRules`), yapılandırma değildir. Modül **her
 sunucuda varsayılan kapalıdır** (`EnabledByDefault=false`) ve depodaki standart mekanizmayla açılır: `/modules enable lfg`.

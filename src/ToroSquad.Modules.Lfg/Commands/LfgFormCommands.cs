@@ -82,45 +82,34 @@ public sealed class LfgFormCommands(
         await RespondWithModalAsync(LfgFormUi.Modal(draft, MaxPlayers, await TextAsync()));
     }
 
-    /// <summary>The modal was submitted: checked with the service's rules (nothing stored), then the settings step.</summary>
+    /// <summary>The main modal was submitted: checked with the service's rules (nothing stored), then the settings step.</summary>
     [ModalInteraction(LfgForm.ModalPrefix + "*", ignoreGroupNames: true)]
     public async Task SubmitFormAsync(string id, LfgFormModal modal)
     {
-        var L = await TextAsync();
-        var voice = LfgFormUi.ReadVoice(((IModalInteraction)Context.Interaction).Data.Components);
-        var draft = drafts.Update(id, Actor, d => LfgFormUi.WithModal(d, modal, voice));
-        if (draft is null)
-        {
-            await ShowAsync(L("lfg.form.expired"), new ComponentBuilder().Build());
-            return;
-        }
-
-        // Checked with the voice channel from the modal; the notices are chosen (and checked on save) in the next step.
-        var check = draft.Kind == LfgFormKind.Create
-            ? await lfg.CheckCreateAsync(Actor, Here, draft.ToCreateInput() with { NotifyBeforeStart = false, NotifyAtStart = false }, CancellationToken.None)
-            : await lfg.CheckEditAsync(Actor, draft.ListingId!.Value, draft.ToEditInput() with { NotifyBeforeStart = false, NotifyAtStart = false },
-                CancellationToken.None);
-        if (!check.Result.Succeeded || check.Preview is null)
-        {
-            var reason = await T(check.Result.MessageKey, check.Result.Args.ToArray()) + await TraceLineAsync(check.Result);
-            await ShowAsync(reason, LfgFormUi.Retry(draft, L));
-            return;
-        }
-
-        draft = drafts.Update(id, Actor, d => LfgFormUi.WithCheck(d, check.Preview));
-        if (draft is null)
-        {
-            await ShowAsync(L("lfg.form.expired"), new ComponentBuilder().Build());
-            return;
-        }
-
-        var (content, components) = LfgFormUi.Settings(draft, Services.Clock.GetUtcNow(), DefaultMinutes, L);
-        await ShowAsync(content, components);
+        var components = ((IModalInteraction)Context.Interaction).Data.Components;
+        var (before, atStart) = LfgFormUi.ReadNotices(components);
+        var draft = drafts.Update(id, Actor, d => LfgFormUi.WithModal(d, modal, LfgFormUi.ReadValue(components, LfgForm.PlayersField),
+            LfgFormUi.ReadVoice(components), before, atStart));
+        await CheckAndShowAsync(id, draft);
     }
 
-    [ComponentInteraction(LfgFormUi.NotifyPrefix + "*", ignoreGroupNames: true)]
-    public async Task ChooseNoticesAsync(string id, string[] values) =>
-        await UpdateSettingsAsync(drafts.Update(id, Actor, d => LfgFormUi.WithNotices(d, values)));
+    /// <summary>📝 Detay Ekle / Detayı Düzenle (settings message): the small details modal, filled with the draft's details.</summary>
+    [ComponentInteraction(LfgFormUi.DetailsPrefix + "*", ignoreGroupNames: true)]
+    public async Task OpenDetailsAsync(string id)
+    {
+        if (drafts.Get(id, Actor) is not { } draft)
+        {
+            await ReplyTextAsync("lfg.form.expired");
+            return;
+        }
+
+        await RespondWithModalAsync(LfgFormUi.DetailsModal(draft, await TextAsync()));
+    }
+
+    /// <summary>The details modal was submitted (empty clears them): checked again, then back to the settings step.</summary>
+    [ModalInteraction(LfgFormUi.DetailsModalPrefix + "*", ignoreGroupNames: true)]
+    public async Task SubmitDetailsAsync(string id, LfgDetailsModal modal) =>
+        await CheckAndShowAsync(id, drafts.Update(id, Actor, d => LfgFormUi.WithDetails(d, modal.Details)));
 
     /// <summary>The listing duration (settings step); the summary shows it at once, the save checks it.</summary>
     [ComponentInteraction(LfgFormUi.DurationPrefix + "*", ignoreGroupNames: true)]
@@ -218,6 +207,40 @@ public sealed class LfgFormCommands(
         Posted,
         NotPosted,
         Unknown,
+    }
+
+    /// <summary>
+    /// Checks the draft exactly like saving would (nothing stored) and shows the settings step — or the reason and the way
+    /// back into the form, keeping everything in the draft. Notices with an empty start (now) are refused, never dropped.
+    /// </summary>
+    private async Task CheckAndShowAsync(string id, LfgFormDraft? draft)
+    {
+        var L = await TextAsync();
+        if (draft is null)
+        {
+            await ShowAsync(L("lfg.form.expired"), new ComponentBuilder().Build());
+            return;
+        }
+
+        var check = draft.Kind == LfgFormKind.Create
+            ? await lfg.CheckCreateAsync(Actor, Here, draft.ToCreateInput(), CancellationToken.None)
+            : await lfg.CheckEditAsync(Actor, draft.ListingId!.Value, draft.ToEditInput(), CancellationToken.None);
+        if (!check.Result.Succeeded || check.Preview is null)
+        {
+            var reason = await T(check.Result.MessageKey, check.Result.Args.ToArray()) + await TraceLineAsync(check.Result);
+            await ShowAsync(reason, LfgFormUi.Retry(draft, L));
+            return;
+        }
+
+        draft = drafts.Update(id, Actor, d => LfgFormUi.WithCheck(d, check.Preview));
+        if (draft is null)
+        {
+            await ShowAsync(L("lfg.form.expired"), new ComponentBuilder().Build());
+            return;
+        }
+
+        var (content, components) = LfgFormUi.Settings(draft, Services.Clock.GetUtcNow(), DefaultMinutes, L);
+        await ShowAsync(content, components);
     }
 
     private ChannelId Here => new(Context.Interaction.ChannelId ?? Context.Channel.Id);

@@ -15,139 +15,216 @@ using GuildPermission = ToroSquad.Core.Security.GuildPermission;
 namespace ToroSquad.Tests.Contract;
 
 /// <summary>
-/// The listing form as Discord receives it (Discord.Net 3.20 builders, Discord's documented modal limits: at most five
-/// top-level components, Label ≤ 45 / description ≤ 100, text input placeholder ≤ 100, custom ids ≤ 100; modals cannot hold
-/// disabled components; a channel select inside a Label may be optional with min 0) and as the Interaction Framework reads
-/// it back: the same field ids, nothing but a random draft id in any custom id, every text defused.
+/// The listing form as Discord receives it (Discord.Net 3.20 builders and serializer; Discord's documented modal limits: at
+/// most five top-level components, each in a Label ≤ 45 / description ≤ 100; text input placeholder ≤ 100; custom ids ≤ 100;
+/// a string select holds ≤ 25 options; a checkbox group 1–10 options; modals cannot hold disabled components) and as it is
+/// read back: the same field ids, nothing but a random draft id in any custom id, every text defused.
 /// </summary>
 public sealed class LfgModalContractTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 9, 27, 18, 0, 0, TimeSpan.Zero);
     private static readonly LocalizationCatalog Catalog = new([new LocalizationSource(typeof(ToroSquad.Modules.Lfg.LfgModule).Assembly, "ToroSquad.Modules.Lfg.Localization")]);
-    private static readonly string[] TextFields = [LfgForm.GameField, LfgForm.PlayersField, LfgForm.DetailsField, LfgForm.StartField];
+
+    /// <summary>The production configuration (<c>Lfg:MaxPlayersPerListing</c>).</summary>
+    private const int MaxPlayers = 20;
 
     private static LfgFormUi.Text L(string language) => (key, args) => Catalog.Get(language, key, args);
 
-    private static LfgFormDraft Draft(LfgFormKind kind = LfgFormKind.Create, LfgFormValues? values = null, ChannelId? voice = null, bool before = false) =>
+    private static LfgFormDraft Draft(LfgFormKind kind = LfgFormKind.Create, LfgFormValues? values = null, ChannelId? voice = null, bool before = false,
+        bool atStart = false) =>
         new LfgFormDrafts(new FakeTimeProvider(T0)).Open(new ActorContext(new GuildId(1), new UserId(10), GuildPermission.ViewChannel, [], false, 1),
-            new ChannelId(2), kind, kind == LfgFormKind.Edit ? 7 : null, values ?? LfgFormValues.Empty, before, false, voice);
+            new ChannelId(2), kind, kind == LfgFormKind.Edit ? 7 : null, values ?? LfgFormValues.Empty, before, atStart, voice);
 
     private static List<LabelComponent> Labels(Modal modal) => modal.Component.Components.Select(c => c.Should().BeOfType<LabelComponent>().Subject).ToList();
 
-    private static List<(LabelComponent Label, TextInputComponent Input)> Inputs(Modal modal) =>
-        Labels(modal).Take(TextFields.Length).Select(l => (l, l.Component.Should().BeOfType<TextInputComponent>().Subject)).ToList();
+    private static TextInputComponent Input(Modal modal, string id) =>
+        Labels(modal).Select(l => l.Component).OfType<TextInputComponent>().Single(t => t.CustomId == id);
 
-    private static SelectMenuComponent VoiceSelect(Modal modal) => Labels(modal)[^1].Component.Should().BeOfType<SelectMenuComponent>().Subject;
+    private static SelectMenuComponent Select(Modal modal, string id) =>
+        Labels(modal).Select(l => l.Component).OfType<SelectMenuComponent>().Single(s => s.CustomId == id);
 
-    private static LfgFormDraft Checked(LfgFormDraft draft, DateTimeOffset? eventAt, TimeSpan? duration = null) => draft with
+    private static CheckboxGroupComponent Notices(Modal modal) => Labels(modal).Select(l => l.Component).OfType<CheckboxGroupComponent>().Single();
+
+    private static LfgFormDraft Checked(LfgFormDraft draft, DateTimeOffset? eventAt, TimeSpan? duration = null, string? details = "Casual") => draft with
     {
-        Preview = new LfgFormPreview("Deadlock", "Casual", 6, eventAt is { } at ? LfgStart.AtInstant(at) : LfgStart.Now, eventAt, duration ?? TimeSpan.FromHours(2)),
+        Preview = new LfgFormPreview("Deadlock", details, 6, eventAt is { } at ? LfgStart.AtInstant(at) : LfgStart.Now, eventAt, duration ?? TimeSpan.FromHours(2)),
     };
 
     [Theory]
     [InlineData("tr")]
     [InlineData("en")]
-    public void The_create_form_fits_discords_modal_limits(string language)
+    public void The_main_form_holds_game_team_size_start_voice_and_notices(string language)
     {
         var draft = Draft();
-        var modal = LfgFormUi.Modal(draft, 20, L(language));
+        var modal = LfgFormUi.Modal(draft, MaxPlayers, L(language));
 
         modal.Title.Length.Should().BeInRange(1, LfgFormUi.MaxTitleLength);
         modal.CustomId.Should().Be(LfgForm.ModalPrefix + draft.Id).And.HaveLength(LfgForm.ModalPrefix.Length + 22);
-        modal.CustomId.Length.Should().BeLessThanOrEqualTo(ComponentBuilder.MaxCustomIdLength);
         var labels = Labels(modal);
-        labels.Should().HaveCount(LfgFormUi.MaxModalComponents);
+        labels.Select(l => l.Component.Type).Should().Equal(
+            ComponentType.TextInput, ComponentType.SelectMenu, ComponentType.TextInput, ComponentType.ChannelSelect, ComponentType.CheckboxGroup);
         foreach (var label in labels)
         {
             label.Label.Length.Should().BeInRange(1, LfgFormUi.MaxLabelLength, label.Label);
             label.Description!.Length.Should().BeInRange(1, LfgFormUi.MaxDescriptionLength, label.Description);
         }
 
-        var inputs = Inputs(modal);
-        inputs.Select(i => i.Input.CustomId).Should().Equal(TextFields, "game, players, details, start date — no duration in the modal");
-        foreach (var (_, input) in inputs)
-        {
-            input.Placeholder!.Length.Should().BeInRange(1, TextInputBuilder.MaxPlaceholderLength, input.Placeholder);
-            input.Value.Should().BeNull("a new form is empty");
-        }
+        var game = Input(modal, LfgForm.GameField);
+        (game.MinLength, game.MaxLength, game.Required).Should().Be(((int?)LfgRules.GameNameMinLength, (int?)LfgRules.GameNameMaxLength, (bool?)true));
+        game.Value.Should().BeNull("a new form is empty");
+        var start = Input(modal, LfgForm.StartField);
+        (start.MaxLength, start.Required).Should().Be(((int?)LfgForm.StartMaxLength, (bool?)false), "empty = now");
+        start.Value.Should().BeNull();
+        labels.Select(l => l.Component).OfType<TextInputComponent>().Should().NotContain(t => t.CustomId == LfgForm.DetailsField, "details have their own modal");
 
-        var byId = inputs.ToDictionary(i => i.Input.CustomId, i => i.Input);
-        (byId["game"].MinLength, byId["game"].MaxLength, byId["game"].Required).Should().Be(((int?)LfgRules.GameNameMinLength, (int?)LfgRules.GameNameMaxLength, (bool?)true));
-        (byId["players"].MaxLength, byId["players"].Required).Should().Be(((int?)LfgForm.PlayersMaxLength, (bool?)true));
-        (byId["details"].MaxLength, byId["details"].Required, byId["details"].Style).Should().Be(((int?)LfgRules.DetailsMaxLength, (bool?)false, TextInputStyle.Paragraph));
-        (byId["start"].MaxLength, byId["start"].Required).Should().Be(((int?)LfgForm.StartMaxLength, (bool?)false), "empty = now");
-
-        var voice = VoiceSelect(modal);
-        (voice.Type, voice.CustomId, voice.MinValues, voice.MaxValues).Should().Be((ComponentType.ChannelSelect, LfgForm.VoiceField, 0, 1));
+        var voice = Select(modal, LfgForm.VoiceField);
+        (voice.MinValues, voice.MaxValues, voice.IsRequired).Should().Be((0, 1, false));
         voice.ChannelTypes.Should().Equal(ChannelType.Voice);
-        voice.IsRequired.Should().BeFalse("the voice channel is optional");
         voice.DefaultValues.Should().BeEmpty();
-        voice.Placeholder!.Length.Should().BeInRange(1, SelectMenuBuilder.MaxPlaceholderLength);
+
+        var notices = Notices(modal);
+        (notices.CustomId, notices.MinValues, notices.MaxValues, notices.IsRequired).Should().Be((LfgForm.NoticesField, (int?)0, (int?)2, (bool?)false));
+        notices.Options.Select(o => (o.Value, o.DefaultState == true)).Should().Equal([(LfgFormUi.NotifyBefore, false), (LfgFormUi.NotifyStart, false)],
+            "nothing is ticked on create");
     }
 
     [Fact]
-    public void The_create_form_explains_every_field_in_turkish()
+    public void The_team_size_is_a_select_of_exactly_the_allowed_sizes()
     {
-        var modal = LfgFormUi.Modal(Draft(), 20, L("tr"));
-        var labels = Labels(modal);
+        var players = Select(LfgFormUi.Modal(Draft(), MaxPlayers, L("tr")), LfgForm.PlayersField);
 
-        modal.Title.Should().Be("Ekip İlanı Oluştur");
-        labels.Select(l => l.Label).Should().Equal("Oyun / Etkinlik", "Kişi sayısı", "Detay", "Başlangıç Tarihi", "Ses Kanalı");
-        labels[1].Description.Should().Be("Sen dahil toplam ekip: 2–20");
-        labels[3].Description.Should().Be("Boş = şimdi • Örn: 27.09.2026 21:30");
-        Inputs(modal)[3].Input.Placeholder.Should().Be("27.09.2026 21:30");
-        string.Join(" ", labels.Select(l => l.Description)).Should().NotContainAny("saat sonra", "30 dk", "2 saat", "1 gün");
+        (players.Type, players.MinValues, players.MaxValues, players.IsRequired).Should().Be((ComponentType.SelectMenu, 1, 1, true));
+        players.Options.Select(o => o.Value).Should().Equal(Enumerable.Range(LfgRules.MinPlayers, MaxPlayers - LfgRules.MinPlayers + 1).Select(n => n.ToString()));
+        (players.Options.First().Value, players.Options.Last().Value).Should().Be(("2", "20"), "LfgRules.MinPlayers … Lfg:MaxPlayersPerListing");
+        players.Options.Should().HaveCountLessThanOrEqualTo(LfgFormUi.MaxSelectOptions);
+        players.Options.Should().NotContain(o => o.IsDefault == true, "a new form makes the user choose");
+        LfgFormUi.PlayerChoices(LfgRules.HardMaxPlayers, null).Should().HaveCount(LfgRules.HardMaxPlayers - LfgRules.MinPlayers + 1,
+            "never cut: a range that does not fit one select is refused by the options validation instead");
+    }
+
+    [Fact]
+    public void A_team_size_range_that_does_not_fit_one_select_is_a_configuration_error()
+    {
+        var fits = LfgRules.MinPlayers + LfgFormUi.MaxSelectOptions - 1; // 26: 2…26 = 25 options
+
+        LfgOptions.MaxTeamSizeChoices.Should().Be(LfgFormUi.MaxSelectOptions);
+        new LfgOptions { MaxPlayersPerListing = fits }.Validate().Should().BeEmpty();
+        new LfgOptions { MaxPlayersPerListing = fits + 1 }.Validate().Should().ContainSingle().Which.Should().Contain("Lfg:MaxPlayersPerListing");
+        new LfgOptions { MaxPlayersPerListing = LfgRules.HardMaxPlayers }.Validate().Should().NotBeEmpty();
+        new LfgOptions().Validate().Should().BeEmpty("the defaults fit");
     }
 
     [Fact]
     public void The_edit_form_is_the_same_form_filled_with_the_listing()
     {
-        var values = new LfgFormValues("Deadlock", "6", "Casual oynayacağız", "05.10.2026 21:30", "2");
-        var modal = LfgFormUi.Modal(Draft(LfgFormKind.Edit, values, voice: new ChannelId(8802)), 20, L("tr"));
+        var values = new LfgFormValues("Deadlock", "12", "Casual", "05.10.2026 21:30", "2");
+        var modal = LfgFormUi.Modal(Draft(LfgFormKind.Edit, values, voice: new ChannelId(8802), before: true), MaxPlayers, L("tr"));
 
         modal.Title.Should().Be("Ekip İlanını Düzenle");
-        Inputs(modal).Select(i => i.Input.Value).Should().Equal("Deadlock", "6", "Casual oynayacağız", "05.10.2026 21:30");
-        Inputs(modal).Select(i => i.Input.CustomId).Should().Equal(TextFields, "create and edit share one form");
-        VoiceSelect(modal).DefaultValues.Should().ContainSingle().Which.Id.Should().Be(8802UL, "the current voice channel is preselected; min 0 lets it be cleared");
+        (Input(modal, LfgForm.GameField).Value, Input(modal, LfgForm.StartField).Value).Should().Be(("Deadlock", "05.10.2026 21:30"));
+        Select(modal, LfgForm.PlayersField).Options.Where(o => o.IsDefault == true).Select(o => o.Value).Should().Equal("12");
+        Select(modal, LfgForm.VoiceField).DefaultValues.Should().ContainSingle().Which.Id.Should().Be(8802UL, "min 0 lets it be cleared");
+        Notices(modal).Options.Select(o => o.DefaultState == true).Should().Equal(true, false);
+        Notices(LfgFormUi.Modal(Draft(LfgFormKind.Edit, values, atStart: true), MaxPlayers, L("tr"))).Options.Select(o => o.DefaultState == true)
+            .Should().Equal(false, true);
+        Notices(LfgFormUi.Modal(Draft(LfgFormKind.Edit, values, before: true, atStart: true), MaxPlayers, L("tr"))).Options.Select(o => o.DefaultState == true)
+            .Should().Equal(true, true);
+        Labels(modal).Select(l => l.Component).OfType<TextInputComponent>().Should().NotContain(t => t.CustomId == LfgForm.DetailsField);
+
+        var outside = Select(LfgFormUi.Modal(Draft(LfgFormKind.Edit, values with { Players = "30" }), MaxPlayers, L("tr")), LfgForm.PlayersField);
+        outside.Options.Select(o => o.Value).Should().Contain("30", "a listing's own size stays selectable if the maximum was lowered; the server checks it");
+        outside.Options.Single(o => o.IsDefault == true).Value.Should().Be("30");
     }
 
     [Fact]
-    public void The_bound_modal_reads_exactly_the_text_fields_and_the_voice_select_is_read_by_id()
+    public void The_form_explains_every_field_in_turkish()
     {
-        var bound = typeof(LfgFormModal).GetProperties().Select(p => p.GetCustomAttribute<ModalTextInputAttribute>()?.CustomId).OfType<string>();
+        var modal = LfgFormUi.Modal(Draft(), MaxPlayers, L("tr"));
+        var labels = Labels(modal);
 
-        bound.Should().BeEquivalentTo(TextFields);
-        new LfgFormModal { Game = "g", Players = "2", Details = "d", Start = "s" }.ToValues("3").Should().Be(new LfgFormValues("g", "2", "d", "s", "3"),
-            "the duration is carried over from the settings step");
-        LfgFormUi.ReadVoice([Data(LfgForm.GameField), Data(LfgForm.VoiceField, "8802")]).Should().Be(new ChannelId(8802));
+        modal.Title.Should().Be("Ekip İlanı Oluştur");
+        labels.Select(l => l.Label).Should().Equal("Oyun / Etkinlik", "Kişi Sayısı", "Başlangıç Tarihi", "Ses Kanalı", "Bildirimler");
+        labels[1].Description.Should().Be("Sen dahil toplam ekip: 2–20");
+        labels[2].Description.Should().Be("Boş = şimdi • Örn: 27.09.2026 21:30");
+        Input(modal, LfgForm.StartField).Placeholder.Should().Be("27.09.2026 21:30");
+        Notices(modal).Options.Select(o => o.Label).Should().Equal("⏰ 30 dk önce katılanları etiketle", "🚀 Başlangıçta katılanları etiketle");
+        string.Join(" ", labels.Select(l => l.Description)).Should().NotContainAny("saat sonra", "30 dk sonra", "1 gün");
+    }
+
+    [Fact]
+    public void The_submitted_selects_and_checkboxes_are_read_by_id()
+    {
+        IComponentInteractionData[] submitted =
+        [
+            Data(LfgForm.GameField), Data(LfgForm.PlayersField, "6"), Data(LfgForm.VoiceField, "8802"), Data(LfgForm.NoticesField, "before", "start"),
+        ];
+
+        LfgFormUi.ReadValue(submitted, LfgForm.PlayersField).Should().Be("6");
+        LfgFormUi.ReadValue([Data(LfgForm.PlayersField)], LfgForm.PlayersField).Should().BeNull();
+        LfgFormUi.ReadVoice(submitted).Should().Be(new ChannelId(8802));
         LfgFormUi.ReadVoice([Data(LfgForm.VoiceField)]).Should().BeNull("nothing selected = no voice channel (cleared)");
-        LfgFormUi.ReadVoice([Data(LfgForm.GameField)]).Should().BeNull();
         LfgFormUi.ReadVoice([Data(LfgForm.VoiceField, "not-a-channel")]).Should().BeNull();
+        LfgFormUi.ReadNotices(submitted).Should().Be((true, true));
+        LfgFormUi.ReadNotices([Data(LfgForm.NoticesField, "before")]).Should().Be((true, false));
+        LfgFormUi.ReadNotices([Data(LfgForm.NoticesField, "start")]).Should().Be((false, true));
+        LfgFormUi.ReadNotices([Data(LfgForm.NoticesField)]).Should().Be((false, false), "nothing ticked");
+        LfgFormUi.ReadNotices([Data(LfgForm.GameField)]).Should().Be((false, false));
+        LfgFormUi.ReadNotices([Data(LfgForm.NoticesField, "everyone")]).Should().Be((false, false), "unknown values are ignored");
+
+        typeof(LfgFormModal).GetProperties().Select(p => p.GetCustomAttribute<ModalTextInputAttribute>()?.CustomId).OfType<string>()
+            .Should().BeEquivalentTo(LfgForm.GameField, LfgForm.StartField);
+        typeof(LfgDetailsModal).GetProperties().Select(p => p.GetCustomAttribute<ModalTextInputAttribute>()?.CustomId).OfType<string>()
+            .Should().Equal(LfgForm.DetailsField);
     }
 
     [Fact]
-    public void The_settings_step_holds_the_duration_and_the_notices_and_carries_only_the_draft_id()
+    public void The_details_modal_is_its_own_small_form()
     {
-        var draft = Checked(Draft(voice: new ChannelId(8802), before: true), T0.AddHours(2));
+        var edit = Draft(LfgFormKind.Edit, new LfgFormValues("Deadlock", "6", "Rank fark etmez", null, "2"));
+        var modal = LfgFormUi.DetailsModal(edit, L("tr"));
+
+        modal.Title.Should().Be("İlan Detayı");
+        modal.CustomId.Should().Be(LfgFormUi.DetailsModalPrefix + edit.Id);
+        modal.CustomId.Length.Should().BeLessThanOrEqualTo(ComponentBuilder.MaxCustomIdLength);
+        var label = Labels(modal).Should().ContainSingle().Subject;
+        label.Label.Should().Be("Detay");
+        var input = label.Component.Should().BeOfType<TextInputComponent>().Subject;
+        (input.CustomId, input.Style, input.Required, input.Value).Should().Be((LfgForm.DetailsField, TextInputStyle.Paragraph, (bool?)false, "Rank fark etmez"));
+        input.MaxLength.Should().Be(LfgRules.DetailsMaxLength * LfgFormUi.EditInputLengthFactor);
+        var create = Labels(LfgFormUi.DetailsModal(Draft(), L("tr"))).Single().Component.Should().BeOfType<TextInputComponent>().Subject;
+        create.MaxLength.Should().Be(LfgRules.DetailsMaxLength);
+        create.Value.Should().BeNull();
+    }
+
+    [Fact]
+    public void The_settings_step_holds_the_duration_the_details_and_the_actions()
+    {
+        var draft = Checked(Draft(voice: new ChannelId(8802), before: true) with { Values = LfgFormValues.Empty with { Details = "Casual" } }, T0.AddHours(2));
 
         var (content, components) = LfgFormUi.Settings(draft, T0, 120, L("tr"));
 
-        content.Should().Contain("🎮 **Deadlock** · 👥 6 kişi").And.Contain("⏳ Süre: 2 saat").And.Contain("🔊 Ses Odası: <#8802>").And.Contain("İlanı Oluştur");
+        content.Should().Contain("🎮 **Deadlock** · 👥 6 kişi").And.Contain("⏳ Süre: 2 saat").And.Contain("🔊 Ses Odası: <#8802>")
+            .And.Contain("🔔 Bildirimler: ⏰ 30 dk önce katılanları etiketle").And.Contain("📝 Detay: Casual");
         var rows = components.Components.Cast<ActionRowComponent>().ToList();
         rows.Should().HaveCount(3);
         var duration = rows[0].Components.Should().ContainSingle().Which.Should().BeOfType<SelectMenuComponent>().Subject;
         (duration.CustomId, duration.MinValues, duration.MaxValues).Should().Be((LfgFormUi.DurationPrefix + draft.Id, 1, 1));
         duration.Options.Select(o => (o.Label, o.Value, o.IsDefault)).Should().Equal(
             ("1 saat", "1", (bool?)false), ("2 saat", "2", (bool?)true), ("3 saat", "3", (bool?)false));
-        var notify = rows[1].Components.Should().ContainSingle().Which.Should().BeOfType<SelectMenuComponent>().Subject;
-        notify.CustomId.Should().Be(LfgFormUi.NotifyPrefix + draft.Id);
-        (notify.MinValues, notify.MaxValues).Should().Be((0, 2));
-        notify.Options.Select(o => (o.Value, o.IsDefault)).Should().Equal(("before", (bool?)true), ("start", (bool?)false));
-        rows[2].Components.Cast<ButtonComponent>().Select(b => b.CustomId).Should().Equal(
-            LfgFormUi.SavePrefix + draft.Id, LfgFormUi.BackPrefix + draft.Id, LfgFormUi.CancelPrefix + draft.Id);
-        rows.SelectMany(r => r.Components).OfType<SelectMenuComponent>().Should().NotContain(s => s.Type == ComponentType.ChannelSelect, "the voice channel is in the modal");
+        rows[1].Components.Cast<ButtonComponent>().Select(b => (b.Label, b.CustomId)).Should().Equal([("📝 Detayı Düzenle", LfgFormUi.DetailsPrefix + draft.Id)]);
+        rows[2].Components.Cast<ButtonComponent>().Select(b => (b.Label, b.CustomId)).Should().Equal(
+            ("İlanı Oluştur", LfgFormUi.SavePrefix + draft.Id), ("✏️ Ana Formu Düzenle", LfgFormUi.BackPrefix + draft.Id), ("İptal", LfgFormUi.CancelPrefix + draft.Id));
+        rows.SelectMany(r => r.Components).OfType<SelectMenuComponent>().Should().ContainSingle("no voice or notice select in the settings step");
         rows.SelectMany(r => r.Components).OfType<IInteractableComponent>().Select(c => c.CustomId)
             .Should().OnlyContain(id => id.EndsWith(":" + draft.Id, StringComparison.Ordinal) && id.Length <= ComponentBuilder.MaxCustomIdLength);
+
+        var (plain, buttons) = LfgFormUi.Settings(Checked(Draft(), null, details: null), T0, 120, L("tr"));
+        plain.Should().Contain("📝 Detay eklenmedi").And.Contain("🔔 Bildirimler: yok").And.Contain("🗓️ Başlangıç: Şimdi");
+        buttons.Components.Cast<ActionRowComponent>().ElementAt(1).Components.Cast<ButtonComponent>().Single().Label.Should().Be("📝 Detay Ekle");
+
+        var edit = Checked(Draft(LfgFormKind.Edit, new LfgFormValues("Deadlock", "6", null, null, "2")), null, details: null);
+        LfgFormUi.Settings(edit, T0, 120, L("tr")).Components.Components.Cast<ActionRowComponent>().Last().Components.Cast<ButtonComponent>()
+            .Select(b => b.Label).Should().Equal("Kaydet", "✏️ Ana Formu Düzenle", "İptal");
     }
 
     [Fact]
@@ -162,27 +239,13 @@ public sealed class LfgModalContractTests
         var edit = Draft(LfgFormKind.Edit, new LfgFormValues("Deadlock", "6", null, null, "90 dk"));
         var editOptions = LfgFormUi.Settings(Checked(edit, null, TimeSpan.FromMinutes(90)), T0, 120, L("tr")).Components.Components
             .Cast<ActionRowComponent>().First().Components.OfType<SelectMenuComponent>().Single().Options;
-        editOptions.Select(o => (o.Value, o.IsDefault)).Should().Equal(("1", (bool?)false), ("2", (bool?)false), ("3", (bool?)false), ("90 dk", (bool?)true));
+        editOptions.Select(o => (o.Label, o.Value, o.IsDefault)).Should().Equal(
+            ("1 saat", "1", (bool?)false), ("2 saat", "2", (bool?)false), ("3 saat", "3", (bool?)false), ("1 saat 30 dk (mevcut)", "90 dk", (bool?)true));
 
         var afterChoice = edit with { Values = edit.Values with { Duration = "2" } };
         LfgFormUi.Settings(Checked(afterChoice, null), T0, 120, L("tr")).Components.Components.Cast<ActionRowComponent>().First().Components
             .OfType<SelectMenuComponent>().Single().Options.Select(o => (o.Value, o.IsDefault))
             .Should().Equal([("1", (bool?)false), ("2", (bool?)true), ("3", (bool?)false), ("90 dk", (bool?)false)], "the listing's own duration stays offered after another choice");
-        var createAfterChoice = Checked(Draft() with { Values = LfgFormValues.Empty with { Duration = "3" } }, T0.AddHours(2));
-        LfgFormUi.Settings(createAfterChoice, T0, 90, L("tr")).Components.Components.Cast<ActionRowComponent>().First().Components
-            .OfType<SelectMenuComponent>().Single().Options.Select(o => o.Value).Should().Contain(LfgFormUi.DefaultDuration, "the default stays offered");
-    }
-
-    [Fact]
-    public void A_listing_that_starts_now_offers_no_notices()
-    {
-        var draft = Checked(Draft(), null);
-
-        var (content, components) = LfgFormUi.Settings(draft, T0, 120, L("tr"));
-
-        content.Should().Contain("🗓️ Başlangıç: Şimdi").And.Contain("yalnızca ileri bir başlangıç");
-        components.Components.Cast<ActionRowComponent>().SelectMany(r => r.Components).OfType<SelectMenuComponent>()
-            .Should().ContainSingle().Which.CustomId.Should().Be(LfgFormUi.DurationPrefix + draft.Id, "only the duration");
     }
 
     [Fact]
@@ -204,12 +267,11 @@ public sealed class LfgModalContractTests
     public void A_stored_text_with_emoji_is_prefilled_whole()
     {
         var game = string.Concat(Enumerable.Repeat("🎮", LfgRules.GameNameMaxLength)); // 50 characters, 100 UTF-16 units
-        var modal = LfgFormUi.Modal(Draft(LfgFormKind.Edit, new LfgFormValues(game, "6", null, null, "2")), 20, L("tr"));
+        var modal = LfgFormUi.Modal(Draft(LfgFormKind.Edit, new LfgFormValues(game, "6", null, null, "2")), MaxPlayers, L("tr"));
 
-        Inputs(modal)[0].Input.Value.Should().Be(game, "never cut in the middle of a character");
-        Inputs(modal)[0].Input.MaxLength.Should().Be(LfgRules.GameNameMaxLength * LfgFormUi.EditInputLengthFactor,
+        Input(modal, LfgForm.GameField).Value.Should().Be(game, "never cut in the middle of a character");
+        Input(modal, LfgForm.GameField).MaxLength.Should().Be(LfgRules.GameNameMaxLength * LfgFormUi.EditInputLengthFactor,
             "Discord counts UTF-16 units, the rule counts characters; the server applies the real limit");
-        Inputs(modal)[2].Input.MaxLength.Should().Be(LfgRules.DetailsMaxLength * LfgFormUi.EditInputLengthFactor);
         LfgRules.Length(game).Should().Be(LfgRules.GameNameMaxLength);
     }
 
@@ -219,8 +281,8 @@ public sealed class LfgModalContractTests
         string[] prefixes =
         [
             LfgCardRenderer.JoinPrefix, LfgCardRenderer.MaybePrefix, LfgCardRenderer.LeavePrefix, LfgCardRenderer.VoicePrefix, LfgCardRenderer.ClosePrefix,
-            LfgCardRenderer.EditPrefix, LfgForm.ModalPrefix, LfgFormUi.NotifyPrefix, LfgFormUi.DurationPrefix, LfgFormUi.SavePrefix, LfgFormUi.BackPrefix,
-            LfgFormUi.CancelPrefix, LfgCommands.ConfirmClosePrefix, LfgCommands.KeepOpenPrefix,
+            LfgCardRenderer.EditPrefix, LfgForm.ModalPrefix, LfgFormUi.DetailsModalPrefix, LfgFormUi.DurationPrefix, LfgFormUi.DetailsPrefix,
+            LfgFormUi.SavePrefix, LfgFormUi.BackPrefix, LfgFormUi.CancelPrefix, LfgCommands.ConfirmClosePrefix, LfgCommands.KeepOpenPrefix,
         ];
 
         foreach (var a in prefixes)
@@ -243,50 +305,62 @@ public sealed class LfgModalContractTests
         return JsonDocument.Parse(writer.ToString()).RootElement.Clone();
     }
 
+    private static bool IsTrue(JsonElement element, string property) => element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
+
     [Theory]
     [InlineData("tr")]
     [InlineData("en")]
-    public void The_modal_goes_out_as_discords_label_text_input_and_channel_select_json(string language)
+    public void The_main_modal_goes_out_as_discords_documented_components(string language)
     {
-        var values = new LfgFormValues("Deadlock", "6", "Casual", "05.10.2026 21:30", "2");
-        var wire = Wire(LfgFormUi.Modal(Draft(LfgFormKind.Edit, values, voice: new ChannelId(8802)), 20, L(language)).Component.Components).EnumerateArray().ToList();
+        var values = new LfgFormValues("Deadlock", "6", null, "05.10.2026 21:30", "2");
+        var wire = Wire(LfgFormUi.Modal(Draft(LfgFormKind.Edit, values, voice: new ChannelId(8802), before: true), MaxPlayers, L(language)).Component.Components)
+            .EnumerateArray().ToList();
 
         wire.Should().HaveCount(LfgFormUi.MaxModalComponents);
-        var ids = new List<string>();
         foreach (var label in wire)
         {
             label.GetProperty("type").GetInt32().Should().Be(18, "Label");
             label.GetProperty("label").GetString()!.Length.Should().BeInRange(1, LfgFormUi.MaxLabelLength);
             label.GetProperty("description").GetString()!.Length.Should().BeInRange(1, LfgFormUi.MaxDescriptionLength);
-            var component = label.GetProperty("component");
-            if (component.TryGetProperty("disabled", out var disabled))
-                disabled.ValueKind.Should().BeOneOf([JsonValueKind.False, JsonValueKind.Null], "modals cannot hold disabled components");
+            IsTrue(label.GetProperty("component"), "disabled").Should().BeFalse("modals cannot hold disabled components");
         }
 
-        foreach (var label in wire.Take(TextFields.Length))
+        var parts = wire.Select(l => l.GetProperty("component")).ToList();
+        parts.Select(c => c.GetProperty("type").GetInt32()).Should().Equal([4, 3, 4, 8, 22], "text input, string select, text input, channel select, checkbox group");
+        parts.Select(c => c.GetProperty("custom_id").GetString()).Should().Equal(
+            LfgForm.GameField, LfgForm.PlayersField, LfgForm.StartField, LfgForm.VoiceField, LfgForm.NoticesField);
+
+        foreach (var input in new[] { parts[0], parts[2] })
         {
-            var input = label.GetProperty("component");
-            input.GetProperty("type").GetInt32().Should().Be(4, "Text Input inside the Label");
-            input.GetProperty("style").GetInt32().Should().BeOneOf(1, 2);
+            input.GetProperty("style").GetInt32().Should().Be(1, "short");
             input.GetProperty("placeholder").GetString()!.Length.Should().BeInRange(1, 100);
             var max = input.GetProperty("max_length").GetInt32();
             max.Should().BeInRange(1, 4000);
-            if (input.TryGetProperty("min_length", out var min))
-                min.GetInt32().Should().BeInRange(0, max);
             input.GetProperty("value").GetString()!.Length.Should().BeLessThanOrEqualTo(max);
             if (input.TryGetProperty("label", out var deprecated))
                 deprecated.ValueKind.Should().Be(JsonValueKind.Null, "the deprecated text-input label is never set; the Label carries it");
-            ids.Add(input.GetProperty("custom_id").GetString()!);
         }
 
-        ids.Should().Equal(TextFields);
-        var voice = wire[^1].GetProperty("component");
-        (voice.GetProperty("type").GetInt32(), voice.GetProperty("custom_id").GetString()).Should().Be((8, LfgForm.VoiceField), "Channel Select inside the Label");
+        var players = parts[1];
+        (players.GetProperty("min_values").GetInt32(), players.GetProperty("max_values").GetInt32()).Should().Be((1, 1));
+        var sizes = players.GetProperty("options").EnumerateArray().ToList();
+        sizes.Should().HaveCount(MaxPlayers - LfgRules.MinPlayers + 1).And.HaveCountLessThanOrEqualTo(25);
+        sizes.Select(o => o.GetProperty("value").GetString()).Should().Equal(Enumerable.Range(LfgRules.MinPlayers, MaxPlayers - LfgRules.MinPlayers + 1).Select(n => n.ToString()));
+        sizes.Where(o => IsTrue(o, "default")).Select(o => o.GetProperty("value").GetString()).Should().Equal(["6"], "the listing's size is preselected");
+
+        var voice = parts[3];
         (voice.GetProperty("min_values").GetInt32(), voice.GetProperty("max_values").GetInt32(), voice.GetProperty("required").GetBoolean())
             .Should().Be((0, 1, false), "optional: min_values 0 needs required false");
         voice.GetProperty("channel_types").EnumerateArray().Select(t => t.GetInt32()).Should().Equal([2], "GUILD_VOICE only");
         var chosen = voice.GetProperty("default_values")[0];
         (chosen.GetProperty("id").GetString(), chosen.GetProperty("type").GetString()).Should().Be(("8802", "channel"));
+
+        var notices = parts[4];
+        (notices.GetProperty("min_values").GetInt32(), notices.GetProperty("max_values").GetInt32(), notices.GetProperty("required").GetBoolean())
+            .Should().Be((0, 2, false), "optional: min_values 0 needs required false");
+        var ticks = notices.GetProperty("options").EnumerateArray().ToList();
+        ticks.Should().HaveCount(2);
+        ticks.Select(o => (o.GetProperty("value").GetString(), IsTrue(o, "default"))).Should().Equal([(LfgFormUi.NotifyBefore, true), (LfgFormUi.NotifyStart, false)]);
     }
 
     [Fact]
@@ -299,11 +373,20 @@ public sealed class LfgModalContractTests
         var duration = rows[0].GetProperty("components")[0];
         (duration.GetProperty("type").GetInt32(), duration.GetProperty("min_values").GetInt32(), duration.GetProperty("max_values").GetInt32()).Should().Be((3, 1, 1));
         duration.GetProperty("options").EnumerateArray().Select(o => o.GetProperty("value").GetString()).Should().Equal("1", "2", "3");
-        var notify = rows[1].GetProperty("components")[0];
-        (notify.GetProperty("type").GetInt32(), notify.GetProperty("min_values").GetInt32(), notify.GetProperty("max_values").GetInt32()).Should().Be((3, 0, 2));
-        notify.GetProperty("options").EnumerateArray().Select(o => o.GetProperty("value").GetString()).Should().Equal("before", "start");
+        rows[1].GetProperty("components").EnumerateArray().Select(b => b.GetProperty("custom_id").GetString()).Should().Equal([LfgFormUi.DetailsPrefix + draft.Id]);
         rows[2].GetProperty("components").EnumerateArray().Select(b => b.GetProperty("custom_id").GetString()).Should().Equal(
             LfgFormUi.SavePrefix + draft.Id, LfgFormUi.BackPrefix + draft.Id, LfgFormUi.CancelPrefix + draft.Id);
+    }
+
+    [Fact]
+    public void The_details_modal_goes_out_as_one_label_with_a_paragraph()
+    {
+        var wire = Wire(LfgFormUi.DetailsModal(Draft(), L("tr")).Component.Components).EnumerateArray().Should().ContainSingle().Subject;
+
+        wire.GetProperty("type").GetInt32().Should().Be(18, "Label");
+        var input = wire.GetProperty("component");
+        (input.GetProperty("type").GetInt32(), input.GetProperty("style").GetInt32(), input.GetProperty("custom_id").GetString(), input.GetProperty("max_length").GetInt32())
+            .Should().Be((4, 2, LfgForm.DetailsField, LfgRules.DetailsMaxLength));
     }
 
     [Fact]
@@ -313,14 +396,15 @@ public sealed class LfgModalContractTests
 
         var buttons = LfgFormUi.Retry(draft, L("tr")).Components.Cast<ActionRowComponent>().Single().Components.Cast<ButtonComponent>().ToList();
 
-        buttons.Select(b => (b.Label, b.CustomId)).Should().Equal(("✏️ Formu Düzenle", LfgFormUi.BackPrefix + draft.Id), ("İptal", LfgFormUi.CancelPrefix + draft.Id));
+        buttons.Select(b => (b.Label, b.CustomId)).Should().Equal(
+            ("✏️ Formu Düzenle", LfgFormUi.BackPrefix + draft.Id), ("📝 Detay Ekle", LfgFormUi.DetailsPrefix + draft.Id), ("İptal", LfgFormUi.CancelPrefix + draft.Id));
     }
 
     private static IComponentInteractionData Data(string customId, params string[] values) => new FakeComponentData(customId, values);
 
     private sealed record FakeComponentData(string CustomId, IReadOnlyCollection<string> Values) : IComponentInteractionData
     {
-        public ComponentType Type => ComponentType.ChannelSelect;
+        public ComponentType Type => ComponentType.SelectMenu;
         public IReadOnlyCollection<IChannel> Channels => [];
         public IReadOnlyCollection<IUser> Users => [];
         public IReadOnlyCollection<IRole> Roles => [];

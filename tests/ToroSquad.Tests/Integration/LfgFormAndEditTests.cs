@@ -226,78 +226,141 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         (await CreateAsync(Form(start: In(120)), voice: TextNotVoice, owner: 11)).Result.MessageKey.Should().Be("lfg.create.voice_invalid");
     }
 
-    /// <summary>The modal submit path without Discord: the draft, the bound text fields, the service check, the settings step.</summary>
-    private async Task<(LfgFormCheck Check, string Shown)> SubmitAsync(string start)
+    private const string Games = "Deadlock";
+
+    /// <summary>
+    /// The form steps without Discord, through the same draft functions and service checks the handlers use: returns the
+    /// check result and what the user sees (the settings step, or the localized reason).
+    /// </summary>
+    private async Task<(LfgFormCheck Check, string Shown, LfgFormDraft? Draft)> StepAsync(string id, Func<LfgFormDraft, LfgFormDraft> change)
     {
         var drafts = _host.Services.GetRequiredService<LfgFormDrafts>();
-        var draft = drafts.Open(User(Owner), Channel, LfgFormKind.Create, null, LfgFormValues.Empty);
-        var modal = new ToroSquad.Modules.Lfg.Commands.LfgFormModal { Game = "Deadlock", Players = "6", Details = "Rank fark etmez", Start = start };
-        draft = drafts.Update(draft.Id, User(Owner), d => d with { Values = modal.ToValues(d.Values.Duration), VoiceChannel = Voice })!;
-        var check = await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, draft.ToCreateInput() with { NotifyBeforeStart = false, NotifyAtStart = false }, Ct));
         var catalog = _host.Services.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>();
+        var draft = drafts.Update(id, User(Owner), change)!;
+        var check = draft.Kind == LfgFormKind.Create
+            ? await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, draft.ToCreateInput(), Ct))
+            : await Lfg(s => s.CheckEditAsync(User(Owner), draft.ListingId!.Value, draft.ToEditInput(), Ct));
         if (!check.Result.Succeeded)
-            return (check, catalog.Get("tr", check.Result.MessageKey, check.Result.Args.ToArray()));
-        draft = drafts.Update(draft.Id, User(Owner), d => d with { Preview = check.Preview })!;
-        return (check, LfgFormUi.Settings(draft, _host.Clock.GetUtcNow(), 120, (key, args) => catalog.Get("tr", key, args)).Content);
+            return (check, catalog.Get("tr", check.Result.MessageKey, check.Result.Args.ToArray()), drafts.Get(id, User(Owner)));
+        draft = drafts.Update(id, User(Owner), d => LfgFormUi.WithCheck(d, check.Preview!))!;
+        return (check, LfgFormUi.Settings(draft, _host.Clock.GetUtcNow(), 120, (key, args) => catalog.Get("tr", key, args)).Content, draft);
     }
 
-    /// <summary>What the Back modal shows, submitted again unchanged (the texts it prefills and the voice channel it preselects).</summary>
-    private static (ToroSquad.Modules.Lfg.Commands.LfgFormModal Modal, ChannelId? Voice) Resubmit(global::Discord.Modal modal)
+    private static ToroSquad.Modules.Lfg.Commands.LfgFormModal MainForm(string? start, string game = Games) => new() { Game = game, Start = start };
+
+    private string NewDraft() => _host.Services.GetRequiredService<LfgFormDrafts>().Open(User(Owner), Channel, LfgFormKind.Create, null, LfgFormValues.Empty).Id;
+
+    private async Task<(LfgFormCheck Check, string Shown)> SubmitAsync(string start, bool before = false)
     {
-        var labels = modal.Component.Components.Cast<global::Discord.LabelComponent>().ToList();
-        string? Text(string id) => labels.Select(l => l.Component).OfType<global::Discord.TextInputComponent>().Single(t => t.CustomId == id).Value;
-        var voice = labels.Select(l => l.Component).OfType<global::Discord.SelectMenuComponent>().Single(s => s.CustomId == LfgForm.VoiceField)
-            .DefaultValues.Select(v => (ChannelId?)new ChannelId(v.Id)).FirstOrDefault();
-        return (new ToroSquad.Modules.Lfg.Commands.LfgFormModal
-        {
-            Game = Text(LfgForm.GameField),
-            Players = Text(LfgForm.PlayersField),
-            Details = Text(LfgForm.DetailsField),
-            Start = Text(LfgForm.StartField),
-        }, voice);
+        var (check, shown, _) = await StepAsync(NewDraft(), d => LfgFormUi.WithModal(d, MainForm(start), "6", Voice, before, false));
+        return (check, shown);
     }
+
+    /// <summary>What a modal shows, submitted again unchanged (prefilled texts, selected team size, preselected channel, ticked notices).</summary>
+    private static (ToroSquad.Modules.Lfg.Commands.LfgFormModal Modal, string? Players, ChannelId? Voice, bool Before, bool AtStart) Resubmit(global::Discord.Modal modal)
+    {
+        var parts = modal.Component.Components.Cast<global::Discord.LabelComponent>().Select(l => l.Component).ToList();
+        string? Text(string id) => parts.OfType<global::Discord.TextInputComponent>().Single(t => t.CustomId == id).Value;
+        var selects = parts.OfType<global::Discord.SelectMenuComponent>().ToList();
+        var players = selects.Single(s => s.CustomId == LfgForm.PlayersField).Options.SingleOrDefault(o => o.IsDefault == true)?.Value;
+        var voice = selects.Single(s => s.CustomId == LfgForm.VoiceField).DefaultValues.Select(v => (ChannelId?)new ChannelId(v.Id)).FirstOrDefault();
+        var notices = parts.OfType<global::Discord.CheckboxGroupComponent>().Single(c => c.CustomId == LfgForm.NoticesField).Options;
+        bool Ticked(string value) => notices.Single(o => o.Value == value).DefaultState == true;
+        return (new ToroSquad.Modules.Lfg.Commands.LfgFormModal { Game = Text(LfgForm.GameField), Start = Text(LfgForm.StartField) }, players, voice,
+            Ticked(LfgFormUi.NotifyBefore), Ticked(LfgFormUi.NotifyStart));
+    }
+
+    private static string? Details(global::Discord.Modal modal) =>
+        modal.Component.Components.Cast<global::Discord.LabelComponent>().Select(l => l.Component).OfType<global::Discord.TextInputComponent>().Single().Value;
 
     [Fact]
-    public async Task Back_to_the_form_and_again_to_the_settings_loses_nothing()
+    public async Task Main_form_details_and_back_again_lose_nothing()
     {
         var drafts = _host.Services.GetRequiredService<LfgFormDrafts>();
-        var id = drafts.Open(User(Owner), Channel, LfgFormKind.Create, null, LfgFormValues.Empty).Id;
+        var id = NewDraft();
         string Text(string key, object?[] args) => key;
 
-        async Task<LfgFormDraft> SubmitAsync(ToroSquad.Modules.Lfg.Commands.LfgFormModal modal, ChannelId? voice)
-        {
-            var draft = drafts.Update(id, User(Owner), d => LfgFormUi.WithModal(d, modal, voice))!;
-            var check = await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, draft.ToCreateInput() with { NotifyBeforeStart = false, NotifyAtStart = false }, Ct));
-            check.Result.Succeeded.Should().BeTrue(check.Result.MessageKey);
-            return drafts.Update(id, User(Owner), d => LfgFormUi.WithCheck(d, check.Preview!))!;
-        }
-
-        // Modal: date + voice; settings: 3 hours and the reminder.
-        await SubmitAsync(new ToroSquad.Modules.Lfg.Commands.LfgFormModal { Game = "Deadlock", Players = "5", Details = "Rank fark etmez", Start = "25.09.26 21:30" }, Voice);
+        // Main modal: date, size, voice, reminder; settings: 3 hours; details modal: added.
+        await StepAsync(id, d => LfgFormUi.WithModal(d, MainForm("25.09.26 21:30"), "5", Voice, true, false));
         drafts.Update(id, User(Owner), d => LfgFormUi.WithDuration(d, ["3"], 120));
-        var chosen = drafts.Update(id, User(Owner), d => LfgFormUi.WithNotices(d, [LfgFormUi.NotifyBefore]))!;
-        chosen.Preview!.Duration.Should().Be(TimeSpan.FromHours(3), "the summary shows the chosen duration at once");
+        var withDetails = (await StepAsync(id, d => LfgFormUi.WithDetails(d, "Rank fark etmez"))).Draft!;
+        withDetails.Preview!.Details.Should().Be("Rank fark etmez");
 
-        // ✏️ Formu Düzenle: the modal comes back with everything; submitted unchanged it leads to the same settings.
-        var back = LfgFormUi.Modal(chosen, 20, Text);
-        var (modal, voice) = Resubmit(back);
-        (modal.Game, modal.Players, modal.Details, modal.Start, voice).Should().Be(("Deadlock", "5", "Rank fark etmez", "25.09.26 21:30", (ChannelId?)Voice));
-        var again = await SubmitAsync(modal, voice);
+        // ✏️ Ana Formu Düzenle: the main modal comes back with everything; submitted unchanged it leads to the same settings.
+        var (modal, players, voice, before, atStart) = Resubmit(LfgFormUi.Modal(withDetails, 20, Text));
+        (modal.Game, modal.Start, players, voice, before, atStart).Should().Be((Games, "25.09.26 21:30", "5", (ChannelId?)Voice, true, false));
+        var again = (await StepAsync(id, d => LfgFormUi.WithModal(d, modal, players, voice, before, atStart))).Draft!;
 
-        (again.Values.Duration, again.NotifyBeforeStart, again.NotifyAtStart, again.VoiceChannel).Should().Be(("3", true, false, (ChannelId?)Voice));
-        again.Preview!.Duration.Should().Be(TimeSpan.FromHours(3));
-        var settings = LfgFormUi.Settings(again, _host.Clock.GetUtcNow(), 120, Text).Components.Components.Cast<global::Discord.ActionRowComponent>()
-            .SelectMany(r => r.Components).OfType<global::Discord.SelectMenuComponent>().ToList();
-        settings[0].Options.Single(o => o.IsDefault == true).Value.Should().Be("3", "the duration select shows the choice again");
-        settings[1].Options.Where(o => o.IsDefault == true).Select(o => o.Value).Should().Equal(LfgFormUi.NotifyBefore);
+        (again.Values.Duration, again.Values.Details, again.NotifyBeforeStart, again.NotifyAtStart, again.VoiceChannel)
+            .Should().Be(("3", "Rank fark etmez", true, false, (ChannelId?)Voice));
+        (again.Preview!.Duration, again.Preview.Details, again.Preview.MaxPlayers).Should().Be((TimeSpan.FromHours(3), "Rank fark etmez", 5));
+        LfgFormUi.Settings(again, _host.Clock.GetUtcNow(), 120, Text).Components.Components.Cast<global::Discord.ActionRowComponent>().SelectMany(r => r.Components)
+            .OfType<global::Discord.SelectMenuComponent>().Single().Options.Single(o => o.IsDefault == true).Value.Should().Be("3");
+        Details(LfgFormUi.DetailsModal(again, Text)).Should().Be("Rank fark etmez", "the details modal opens with them again");
 
-        // Cleared in the modal = no voice channel; emptied start = now, so the notices are dropped (hidden), the duration stays.
-        var cleared = await SubmitAsync(new ToroSquad.Modules.Lfg.Commands.LfgFormModal { Game = modal.Game, Players = modal.Players, Details = modal.Details, Start = "" }, null);
-        (cleared.VoiceChannel, cleared.NotifyBeforeStart, cleared.Values.Duration).Should().Be(((ChannelId?)null, false, "3"));
+        // Details cleared (empty submit): gone, everything else stays.
+        var cleared = (await StepAsync(id, d => LfgFormUi.WithDetails(d, "   "))).Draft!;
+        (cleared.Values.Details, cleared.Preview!.Details, cleared.Values.Duration, cleared.VoiceChannel, cleared.NotifyBeforeStart)
+            .Should().Be(((string?)null, (string?)null, "3", (ChannelId?)Voice, true));
 
         // Saved: the listing gets exactly what the form holds.
         var saved = await Lfg(s => s.CreateAsync(User(Owner), Channel, drafts.Take(id, User(Owner))!.ToCreateInput(), Ct));
-        (saved.Listing!.EventAt, saved.Listing.ExpiresAt, saved.Listing.VoiceChannel).Should().Be(((DateTimeOffset?)null, T0.AddHours(3), (ChannelId?)null));
+        var at = new DateTimeOffset(2026, 9, 25, 18, 30, 0, TimeSpan.Zero);
+        (saved.Listing!.EventAt, saved.Listing.ExpiresAt, saved.Listing.VoiceChannel, saved.Listing.MaxPlayers, saved.Listing.Details, saved.Listing.NotifyBeforeStart)
+            .Should().Be(((DateTimeOffset?)at, at.AddHours(3), (ChannelId?)Voice, 5, (string?)null, true));
+    }
+
+    [Fact]
+    public async Task Notices_with_an_empty_start_are_refused_not_dropped_and_the_draft_survives()
+    {
+        var id = NewDraft();
+
+        var (check, shown, draft) = await StepAsync(id, d => LfgFormUi.WithModal(d, MainForm(""), "6", Voice, true, true));
+
+        check.Result.MessageKey.Should().Be("lfg.create.notice_needs_start");
+        shown.Should().Be("Bildirim kullanmak için bir başlangıç tarihi seçmelisin.");
+        (draft!.NotifyBeforeStart, draft.NotifyAtStart, draft.VoiceChannel, draft.Values.Players).Should().Be((true, true, (ChannelId?)Voice, "6"),
+            "✏️ Formu Düzenle reopens the form with what was chosen");
+        (await StepAsync(id, d => LfgFormUi.WithModal(d, MainForm("25.09.2026 21:30"), "6", Voice, true, true))).Check.Result.Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task The_details_modal_keeps_the_rules_of_the_details()
+    {
+        var id = NewDraft();
+        await StepAsync(id, d => LfgFormUi.WithModal(d, MainForm(""), "6", null, false, false));
+
+        var (tooLong, shown, _) = await StepAsync(id, d => LfgFormUi.WithDetails(d, new string('a', LfgRules.DetailsMaxLength + 1)));
+        tooLong.Result.MessageKey.Should().Be("lfg.create.details_too_long");
+        shown.Should().Contain(LfgRules.DetailsMaxLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var ok = (await StepAsync(id, d => LfgFormUi.WithDetails(d, "  Rank\u202E   fark  etmez "))).Check;
+        ok.Preview!.Details.Should().Be("Rank fark etmez", "normalized like on create");
+
+        // The details step goes through the same user+guild bound draft: nobody else can change it, and a stale one is gone.
+        var drafts = _host.Services.GetRequiredService<LfgFormDrafts>();
+        drafts.Update(id, User(20), d => LfgFormUi.WithDetails(d, "hijack")).Should().BeNull("only the opener's draft");
+        drafts.Update(id, User(Owner, new GuildId(999)), d => LfgFormUi.WithDetails(d, "hijack")).Should().BeNull("only in the guild it was opened in");
+        drafts.Get(id, User(Owner))!.Values.Details.Should().Be("  Rank‮   fark  etmez ");
+        _host.Clock.Advance(LfgFormDrafts.Lifetime + TimeSpan.FromSeconds(1));
+        drafts.Update(id, User(Owner), d => LfgFormUi.WithDetails(d, "late")).Should().BeNull("a stale draft cannot be changed");
+    }
+
+    [Theory]
+    [InlineData("234")]
+    [InlineData("1")]
+    [InlineData("0")]
+    [InlineData("21")]
+    [InlineData("-3")]
+    [InlineData("6 kişi")]
+    public async Task A_forged_team_size_is_refused_on_the_server(string players)
+    {
+        var (check, shown, _) = await StepAsync(NewDraft(), d => LfgFormUi.WithModal(d, MainForm(""), players, null, false, false));
+
+        check.Result.MessageKey.Should().Be("lfg.create.players_range");
+        shown.Should().Be("Ekip büyüklüğü 2 ile 20 kişi arasında olmalı (sen dahil).");
+        (await Lfg(s => s.CreateAsync(User(Owner), Channel, LfgForm.ToCreateInput(Form(players: players), false, false, null), Ct))).Result.MessageKey
+            .Should().Be("lfg.create.players_range", "saving refuses it too");
     }
 
     [Theory]
@@ -340,7 +403,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
             Preview = check.Preview,
         };
         LfgFormUi.Settings(draft, T0, 120, (key, _) => key).Components.Components.Cast<global::Discord.ActionRowComponent>().SelectMany(r => r.Components)
-            .OfType<global::Discord.SelectMenuComponent>().Select(c => c.CustomId).Should().Equal(LfgFormUi.DurationPrefix + draft.Id, LfgFormUi.NotifyPrefix + draft.Id);
+            .OfType<global::Discord.SelectMenuComponent>().Select(c => c.CustomId).Should().Equal([LfgFormUi.DurationPrefix + draft.Id], "only the duration");
         check.Preview.Duration.Should().Be(TimeSpan.FromHours(3));
         (await ListingCountAsync()).Should().Be(0);
         (await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, LfgForm.ToCreateInput(Form(players: "x"), false, false, null), Ct)))

@@ -78,6 +78,14 @@ invite link and no global command registration. The source code is public under 
   **✏️ Düzenle** (second row, via the additive `MessageButton.NewRow`): owner-only, same form prefilled; size never below
   the Joined players, start only before the event, `ExpiresAt = (EventAt ?? CreatedAt) + duration`, handled notices never
   repeat or revive, same card redrawn without pings. No migration.
+- **Modal UX V3 IMPLEMENTED / TESTED_OFFLINE** (`feat/lfg-modal-edit`, follow-up PR): the main modal is exactly game (text),
+  team size (string select generated from 2 … `Lfg:MaxPlayersPerListing`; a range over 25 options is a startup config error,
+  never cut), start date (text; no public date picker), voice (channel select) and the two notices (checkbox group, off on
+  create, current flags on edit; notices with an empty start are refused with a way back, never dropped). Details moved to
+  their own small modal opened from the settings step (📝 Detay Ekle / Detayı Düzenle; empty clears). The card always shows
+  the start (`🕘 Başlangıç: Şimdi` for "now"). No migration, command manifest unchanged.
+- **NOT VERIFIED_LIVE (V3)**: the string select and the checkbox group inside the modal in Discord clients (rendering,
+  preselection on edit, the submitted values), the details modal opened from the settings message.
 - **NOT VERIFIED_LIVE**: the voice channel select inside the modal (rendering, clearing, and Discord echoing the preselected
   channel on submit — an edit that only changes the details must keep the voice channel), the duration select in the settings
   step; the modal and settings step in Discord clients, the public follow-up card after the settings step

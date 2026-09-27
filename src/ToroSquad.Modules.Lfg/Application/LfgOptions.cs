@@ -19,6 +19,9 @@ public sealed class LfgOptions
     /// <summary>Largest team size, owner included (2..<see cref="LfgRules.HardMaxPlayers"/>).</summary>
     public int MaxPlayersPerListing { get; set; } = 20;
 
+    /// <summary>The /ekip form offers every allowed team size in one select; Discord allows at most 25 options.</summary>
+    public const int MaxTeamSizeChoices = 25;
+
     public TimeSpan DefaultDuration => TimeSpan.FromMinutes(DefaultExpirationMinutes);
 
     public IReadOnlyList<string> Validate()
@@ -30,6 +33,8 @@ public sealed class LfgOptions
             errors.Add("Lfg:MaxActiveListingsPerUser must be between 1 and 10");
         if (MaxPlayersPerListing < LfgRules.MinPlayers || MaxPlayersPerListing > LfgRules.HardMaxPlayers)
             errors.Add($"Lfg:MaxPlayersPerListing must be between {LfgRules.MinPlayers} and {LfgRules.HardMaxPlayers}");
+        else if (MaxPlayersPerListing - LfgRules.MinPlayers + 1 > MaxTeamSizeChoices)
+            errors.Add($"Lfg:MaxPlayersPerListing must be at most {LfgRules.MinPlayers + MaxTeamSizeChoices - 1}: the /ekip form offers every team size as one of at most {MaxTeamSizeChoices} choices");
         return errors;
     }
 }

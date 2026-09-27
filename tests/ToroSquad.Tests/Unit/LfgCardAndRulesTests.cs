@@ -37,7 +37,8 @@ public sealed class LfgCardAndRulesTests
         card.Embed!.Title.Should().Be("🎮 " + game);
         var description = card.Embed.Description!;
         description.Should().StartWith("<@1> ekip arıyor\n👥 **2 / " + max + "**\n📝 ");
-        description.Should().Contain("**Katılanlar**\n<@1> · <@2>").And.NotContain("Belki").And.NotContain("Başlangıç").And.NotContain("Ses Odası");
+        description.Should().Contain("**Katılanlar**\n<@1> · <@2>").And.NotContain("Belki").And.NotContain("Ses Odası");
+        description.Should().Contain("\n\n🕘 Başlangıç: Şimdi\n⏰ <t:", "a listing without a start date started when it was opened");
         description.Should().EndWith("⏰ <t:" + T0.AddHours(2).ToUnixTimeSeconds() + ":R> kapanır");
         card.Embed.Footer.Should().Be("TSQ LFG · Oyuncu Bul");
         card.Buttons!.Select(b => (b.Label, b.CustomId, b.Disabled, b.Style, b.NewRow)).Should().Equal(
@@ -81,6 +82,33 @@ public sealed class LfgCardAndRulesTests
         DiscordText.RawMentionPattern().Matches(visible).Select(m => m.Value).Should().OnlyContain(m => m == "<@1>", "only the owner's rendered mention");
         visible.Should().NotContain("https://").And.NotContain("**bold**").And.NotContain("||x||");
         card.Mentions.PingsAnything.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("tr", "🕘 Başlangıç: Şimdi", "⏰ <t:1790539200:R> kapanır")]
+    [InlineData("en", "🕘 Start: Now", "⏰ Closes <t:1790539200:R>")]
+    public void A_listing_without_a_start_date_says_it_starts_now_and_still_counts_down(string language, string start, string expires)
+    {
+        var listing = Listing("Deadlock", null, 4) with { EventAt = null, ExpiresAt = T0.AddHours(2) };
+
+        var lines = Renderer().Render(listing, language).Embed!.Description!.Split('\n');
+
+        lines.Should().Contain(start).And.Contain(expires);
+        Array.IndexOf(lines, start).Should().Be(Array.IndexOf(lines, expires) - 1, "the start line comes right before the countdown");
+        lines.Should().NotContain(l => l.Contains("🗓️", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("tr", "🗓️ Başlangıç: ")]
+    [InlineData("en", "🗓️ Starts: ")]
+    public void A_scheduled_listing_shows_its_start_date(string language, string prefix)
+    {
+        var at = T0.AddHours(3);
+        var listing = Listing("Deadlock", null, 4) with { EventAt = at, ExpiresAt = at.AddHours(2) };
+
+        var description = Renderer().Render(listing, language).Embed!.Description!;
+
+        description.Should().Contain(prefix + "<t:" + at.ToUnixTimeSeconds() + ":F> • <t:" + at.ToUnixTimeSeconds() + ":R>").And.NotContain("🕘");
     }
 
     [Fact]

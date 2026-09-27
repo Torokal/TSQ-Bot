@@ -10,17 +10,22 @@ namespace ToroSquad.Modules.Lfg.Commands;
 
 /// <summary>
 /// The listing form's Discord surface, shared by create and edit. Discord allows at most five top-level components in a
-/// modal, so the modal holds game, players, details, the start date (empty = now) and the voice channel (a native channel
-/// select, voice channels only); the listing duration and the two notice opt-ins follow in a private settings message with
-/// native selects. Every custom id carries only the random draft id; what a click may do is decided server-side.
+/// modal; the main modal holds game (text), team size (a select of the allowed sizes only), start date (text; there is no
+/// public date picker component), voice channel (channel select) and the two notice opt-ins (checkbox group). The private
+/// settings message holds the duration, the optional details (their own small modal, opened by a button — a modal cannot
+/// answer a modal submit) and the actions. Every custom id carries only the random draft id; what a click may do is decided
+/// server-side.
 /// </summary>
 public static class LfgFormUi
 {
-    public const string NotifyPrefix = "tsq:lfg:draft:notify:";
     public const string DurationPrefix = "tsq:lfg:draft:duration:";
+    public const string DetailsPrefix = "tsq:lfg:draft:details:";
     public const string SavePrefix = "tsq:lfg:draft:save:";
     public const string BackPrefix = "tsq:lfg:draft:back:";
     public const string CancelPrefix = "tsq:lfg:draft:cancel:";
+
+    /// <summary>The details modal (opened from the settings message); custom id = prefix + draft id.</summary>
+    public const string DetailsModalPrefix = "tsq:lfg:details:";
 
     public const string NotifyBefore = "before";
     public const string NotifyStart = "start";
@@ -33,6 +38,9 @@ public static class LfgFormUi
     public const int MaxTitleLength = 45;
     public const int MaxLabelLength = 45;
     public const int MaxDescriptionLength = 100;
+
+    /// <summary>Discord: a string select holds at most 25 options.</summary>
+    public const int MaxSelectOptions = 25;
 
     /// <summary>
     /// The edit form's text inputs allow twice the rule's length: Discord counts UTF-16 units, the rules count characters (an
@@ -47,6 +55,19 @@ public static class LfgFormUi
     {
         var values = draft.Values;
         var factor = draft.Kind == LfgFormKind.Edit ? EditInputLengthFactor : 1;
+
+        var players = new SelectMenuBuilder()
+            .WithCustomId(LfgForm.PlayersField)
+            .WithPlaceholder(L("lfg.form.players_placeholder"))
+            .WithMinValues(1)
+            .WithMaxValues(1)
+            .WithRequired(true);
+        foreach (var size in PlayerChoices(maxPlayers, values.Players))
+        {
+            var value = size.ToString(CultureInfo.InvariantCulture);
+            players.AddOption(value, value, isDefault: value == LfgRules.Normalize(values.Players));
+        }
+
         var voice = new SelectMenuBuilder()
             .WithType(ComponentType.ChannelSelect)
             .WithCustomId(LfgForm.VoiceField)
@@ -58,34 +79,69 @@ public static class LfgFormUi
         if (draft.VoiceChannel is { } channel)
             voice.WithDefaultValues(new SelectMenuDefaultValue(channel.Value, SelectDefaultValueType.Channel));
 
+        var notices = new CheckboxGroupBuilder()
+            .WithCustomId(LfgForm.NoticesField)
+            .WithMinValues(0)
+            .WithMaxValues(2)
+            .WithRequired(false)
+            .AddOption(L("lfg.form.notice_before"), NotifyBefore, null, draft.NotifyBeforeStart)
+            .AddOption(L("lfg.form.notice_start"), NotifyStart, null, draft.NotifyAtStart);
+
         return new ModalBuilder()
             .WithTitle(L(draft.Kind == LfgFormKind.Create ? "lfg.form.title_create" : "lfg.form.title_edit"))
             .WithCustomId(LfgForm.ModalPrefix + draft.Id)
             .AddLabel(L("lfg.form.game"), Input(LfgForm.GameField, TextInputStyle.Short, L("lfg.form.game_placeholder"), LfgRules.GameNameMinLength,
                 LfgRules.GameNameMaxLength * factor, required: true, values.Game), L("lfg.form.game_hint"))
-            .AddLabel(L("lfg.form.players"), Input(LfgForm.PlayersField, TextInputStyle.Short, "6", 1, LfgForm.PlayersMaxLength, required: true,
-                values.Players), L("lfg.form.players_hint", LfgRules.MinPlayers, maxPlayers))
-            .AddLabel(L("lfg.form.details"), Input(LfgForm.DetailsField, TextInputStyle.Paragraph, L("lfg.form.details_placeholder"), null,
-                LfgRules.DetailsMaxLength * factor, required: false, values.Details), L("lfg.form.details_hint"))
+            .AddLabel(L("lfg.form.players"), players, L("lfg.form.players_hint", LfgRules.MinPlayers, maxPlayers))
             .AddLabel(L("lfg.form.start"), Input(LfgForm.StartField, TextInputStyle.Short, L("lfg.form.start_placeholder"), null, LfgForm.StartMaxLength,
                 required: false, values.Start), L("lfg.form.start_hint"))
             .AddLabel(L("lfg.form.voice"), voice, L("lfg.form.voice_hint"))
+            .AddLabel(L("lfg.form.notices"), notices, L("lfg.form.notices_hint"))
             .Build();
     }
 
-    /// <summary>The voice channel chosen in the modal's channel select (none when nothing is selected).</summary>
-    public static ChannelId? ReadVoice(IEnumerable<IComponentInteractionData> components)
+    /// <summary>The small details modal (opened from the settings message), prefilled with the draft's details.</summary>
+    public static Modal DetailsModal(LfgFormDraft draft, Text L)
     {
-        var values = components.FirstOrDefault(c => c.CustomId == LfgForm.VoiceField)?.Values;
-        return values?.FirstOrDefault() is { } id && ulong.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var channel)
-            ? new ChannelId(channel)
-            : null;
+        var factor = draft.Kind == LfgFormKind.Edit ? EditInputLengthFactor : 1;
+        return new ModalBuilder()
+            .WithTitle(L("lfg.form.details_title"))
+            .WithCustomId(DetailsModalPrefix + draft.Id)
+            .AddLabel(L("lfg.form.details"), Input(LfgForm.DetailsField, TextInputStyle.Paragraph, L("lfg.form.details_placeholder"), null,
+                LfgRules.DetailsMaxLength * factor, required: false, draft.Values.Details), L("lfg.form.details_hint"))
+            .Build();
     }
 
     /// <summary>
-    /// The second step: what the form will open (or change to), the listing duration (1/2/3 h; the configured default, or an
-    /// edited listing's current duration, is also offered when it is not one of them) and, for a later start, the notices.
+    /// The team sizes offered: every allowed size (<see cref="LfgRules.MinPlayers"/> … the configured maximum; the options
+    /// validation keeps that within <see cref="MaxSelectOptions"/>), plus an edited listing's own size if it lies outside.
     /// </summary>
+    public static IReadOnlyList<int> PlayerChoices(int maxPlayers, string? current)
+    {
+        var choices = Enumerable.Range(LfgRules.MinPlayers, Math.Max(0, maxPlayers - LfgRules.MinPlayers + 1)).ToList();
+        if (LfgFormText.Players(current) is var size and > 0 && !choices.Contains(size))
+            choices = [.. choices.Append(size).Order()];
+        return choices;
+    }
+
+    /// <summary>The value chosen in the modal's select or channel select with this custom id (none when nothing is selected).</summary>
+    public static string? ReadValue(IEnumerable<IComponentInteractionData> components, string customId) =>
+        components.FirstOrDefault(c => c.CustomId == customId)?.Values?.FirstOrDefault();
+
+    /// <summary>The voice channel chosen in the modal's channel select (none when nothing is selected).</summary>
+    public static ChannelId? ReadVoice(IEnumerable<IComponentInteractionData> components) =>
+        ReadValue(components, LfgForm.VoiceField) is { } id && ulong.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var channel)
+            ? new ChannelId(channel)
+            : null;
+
+    /// <summary>The notice opt-ins ticked in the modal's checkbox group.</summary>
+    public static (bool Before, bool AtStart) ReadNotices(IEnumerable<IComponentInteractionData> components)
+    {
+        var values = components.FirstOrDefault(c => c.CustomId == LfgForm.NoticesField)?.Values ?? [];
+        return (values.Contains(NotifyBefore), values.Contains(NotifyStart));
+    }
+
+    /// <summary>The second step: what the form will open (or change to), the listing duration, the details and the actions.</summary>
     public static (string Content, MessageComponent Components) Settings(LfgFormDraft draft, DateTimeOffset now, int defaultMinutes, Text L)
     {
         var preview = draft.Preview ?? throw new ArgumentException("A checked form is required.", nameof(draft));
@@ -98,32 +154,25 @@ public static class LfgFormUi
         };
         if (draft.VoiceChannel is { } voice)
             lines.Add(L("lfg.card.voice", LfgCardRenderer.ChannelMention(voice)));
-        if (!string.IsNullOrEmpty(preview.Details))
-            lines.Add("📝 " + DiscordText.Untrusted(preview.Details, 300));
+        var notices = new List<string>();
+        if (draft.NotifyBeforeStart)
+            notices.Add(L("lfg.form.notice_before"));
+        if (draft.NotifyAtStart)
+            notices.Add(L("lfg.form.notice_start"));
+        lines.Add(L("lfg.form.summary_notices", notices.Count == 0 ? L("lfg.form.notices_none") : string.Join(" · ", notices)));
+        lines.Add(string.IsNullOrEmpty(preview.Details)
+            ? L("lfg.form.summary_no_details")
+            : L("lfg.form.summary_details", DiscordText.Untrusted(preview.Details, 300)));
         lines.Add("");
-
-        var notices = preview.EventAt > now || draft.NotifyBeforeStart || draft.NotifyAtStart;
         lines.Add(L(draft.Kind == LfgFormKind.Create ? "lfg.form.settings_hint_create" : "lfg.form.settings_hint_edit"));
-        if (!notices)
-            lines.Add(L("lfg.form.notices_need_start"));
 
-        var builder = new ComponentBuilder();
-        var row = 0;
-        builder.WithSelectMenu(DurationSelect(draft, defaultMinutes, L), row++);
-        if (notices)
-        {
-            builder.WithSelectMenu(new SelectMenuBuilder()
-                .WithCustomId(NotifyPrefix + draft.Id)
-                .WithPlaceholder(L("lfg.form.notices_placeholder"))
-                .WithMinValues(0)
-                .WithMaxValues(2)
-                .AddOption(L("lfg.form.notice_before"), NotifyBefore, L("lfg.form.notice_before_hint"), isDefault: draft.NotifyBeforeStart)
-                .AddOption(L("lfg.form.notice_start"), NotifyStart, L("lfg.form.notice_start_hint"), isDefault: draft.NotifyAtStart), row++);
-        }
-
-        builder.WithButton(L(draft.Kind == LfgFormKind.Create ? "lfg.form.create" : "lfg.form.save"), SavePrefix + draft.Id, ButtonStyle.Success, row: row);
-        builder.WithButton(L("lfg.form.back"), BackPrefix + draft.Id, ButtonStyle.Secondary, row: row);
-        builder.WithButton(L("lfg.form.cancel"), CancelPrefix + draft.Id, ButtonStyle.Secondary, row: row);
+        var builder = new ComponentBuilder()
+            .WithSelectMenu(DurationSelect(draft, defaultMinutes, L), 0)
+            .WithButton(L(string.IsNullOrEmpty(draft.Values.Details) ? "lfg.form.details_add" : "lfg.form.details_edit"), DetailsPrefix + draft.Id,
+                ButtonStyle.Secondary, row: 1)
+            .WithButton(L(draft.Kind == LfgFormKind.Create ? "lfg.form.create" : "lfg.form.save"), SavePrefix + draft.Id, ButtonStyle.Success, row: 2)
+            .WithButton(L("lfg.form.back_main"), BackPrefix + draft.Id, ButtonStyle.Secondary, row: 2)
+            .WithButton(L("lfg.form.cancel"), CancelPrefix + draft.Id, ButtonStyle.Secondary, row: 2);
         return (string.Join("\n", lines), builder.Build());
     }
 
@@ -132,23 +181,26 @@ public static class LfgFormUi
 
     // The draft transitions of the steps (used by the handlers; pure, so a whole modal ↔ settings round trip is testable).
 
-    /// <summary>The modal was submitted: its texts and voice channel; the duration chosen in the settings step is kept.</summary>
-    public static LfgFormDraft WithModal(LfgFormDraft draft, LfgFormModal modal, ChannelId? voice) =>
-        draft with { Values = modal.ToValues(draft.Values.Duration), VoiceChannel = voice, Preview = null };
+    /// <summary>
+    /// The main modal was submitted: game, start, team size, voice channel and notice opt-ins; the details and the duration
+    /// (settings step) are kept.
+    /// </summary>
+    public static LfgFormDraft WithModal(LfgFormDraft draft, LfgFormModal modal, string? players, ChannelId? voice, bool notifyBeforeStart, bool notifyAtStart) =>
+        draft with
+        {
+            Values = new LfgFormValues(modal.Game, players, draft.Values.Details, modal.Start, draft.Values.Duration),
+            VoiceChannel = voice,
+            NotifyBeforeStart = notifyBeforeStart,
+            NotifyAtStart = notifyAtStart,
+            Preview = null,
+        };
 
-    /// <summary>The submitted form was checked: its preview; notices that no longer apply (start = now) are dropped.</summary>
-    public static LfgFormDraft WithCheck(LfgFormDraft draft, LfgFormPreview preview) => draft with
-    {
-        Preview = preview,
-        NotifyBeforeStart = draft.NotifyBeforeStart && preview.EventAt is not null,
-        NotifyAtStart = draft.NotifyAtStart && preview.EventAt is not null,
-    };
+    /// <summary>The details modal was submitted (empty = no details); everything else is kept.</summary>
+    public static LfgFormDraft WithDetails(LfgFormDraft draft, string? details) =>
+        draft with { Values = draft.Values with { Details = LfgRules.Normalize(details) is null ? null : details }, Preview = null };
 
-    public static LfgFormDraft WithNotices(LfgFormDraft draft, IReadOnlyCollection<string> values) => draft with
-    {
-        NotifyBeforeStart = values.Contains(NotifyBefore),
-        NotifyAtStart = values.Contains(NotifyStart),
-    };
+    /// <summary>The form was checked: its preview.</summary>
+    public static LfgFormDraft WithCheck(LfgFormDraft draft, LfgFormPreview preview) => draft with { Preview = preview };
 
     /// <summary>A duration option was chosen: stored in the draft and shown at once (an unreadable option changes nothing).</summary>
     public static LfgFormDraft WithDuration(LfgFormDraft draft, IReadOnlyCollection<string> values, int defaultMinutes)
@@ -162,9 +214,10 @@ public static class LfgFormUi
             : draft with { Values = draft.Values with { Duration = duration }, Preview = draft.Preview is { } p ? p with { Duration = TimeSpan.FromMinutes(minutes) } : null };
     }
 
-    /// <summary>A refused form: the reason and the way back into the same form (with what was typed) or out.</summary>
+    /// <summary>A refused form: the reason and the ways back (main form, details) or out; the draft keeps everything.</summary>
     public static MessageComponent Retry(LfgFormDraft draft, Text L) => new ComponentBuilder()
         .WithButton(L("lfg.form.back"), BackPrefix + draft.Id, ButtonStyle.Primary)
+        .WithButton(L(string.IsNullOrEmpty(draft.Values.Details) ? "lfg.form.details_add" : "lfg.form.details_edit"), DetailsPrefix + draft.Id, ButtonStyle.Secondary)
         .WithButton(L("lfg.form.cancel"), CancelPrefix + draft.Id, ButtonStyle.Secondary)
         .Build();
 
@@ -225,9 +278,9 @@ public static class LfgFormUi
 }
 
 /// <summary>
-/// The submitted form's text fields as the Interaction Framework binds them (by field custom id). The modal itself is built
-/// by <see cref="LfgFormUi.Modal"/>; the voice channel select is read with <see cref="LfgFormUi.ReadVoice"/>. Everything is
-/// re-validated server-side.
+/// The main modal's text fields as the Interaction Framework binds them (by field custom id). The modal itself is built by
+/// <see cref="LfgFormUi.Modal"/>; the selects (team size, voice channel, notices) are read with the <c>LfgFormUi.Read*</c>
+/// helpers. Everything is re-validated server-side.
 /// </summary>
 public sealed class LfgFormModal : IModal
 {
@@ -236,17 +289,17 @@ public sealed class LfgFormModal : IModal
     [ModalTextInput(LfgForm.GameField)]
     public string? Game { get; set; }
 
-    [ModalTextInput(LfgForm.PlayersField)]
-    public string? Players { get; set; }
+    [RequiredInput(false)]
+    [ModalTextInput(LfgForm.StartField)]
+    public string? Start { get; set; }
+}
+
+/// <summary>The details modal's one field (opened from the settings message).</summary>
+public sealed class LfgDetailsModal : IModal
+{
+    public string Title => "TSQ LFG";
 
     [RequiredInput(false)]
     [ModalTextInput(LfgForm.DetailsField, TextInputStyle.Paragraph)]
     public string? Details { get; set; }
-
-    [RequiredInput(false)]
-    [ModalTextInput(LfgForm.StartField)]
-    public string? Start { get; set; }
-
-    /// <summary>The typed texts; the duration is not in the modal (settings step) and is carried over from the draft.</summary>
-    public LfgFormValues ToValues(string? duration) => new(Game, Players, Details, Start, duration);
 }
