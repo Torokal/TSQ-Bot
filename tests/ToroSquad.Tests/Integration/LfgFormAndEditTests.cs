@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core;
+using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
@@ -529,6 +530,77 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         (await NoticesAsync()).Should().ContainSingle();
     }
 
+    [Fact]
+    public async Task A_queued_reminder_that_names_the_old_time_is_cancelled_when_the_start_moves()
+    {
+        var listing = await OpenAsync(Form(start: "40 dk"), before: true);
+        _host.Clock.Advance(TimeSpan.FromMinutes(11));
+        await _host.Services.GetRequiredService<LfgExpiryWorker>().RunOnceAsync(Ct); // queued (e.g. delivery retrying), not delivered
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Pending);
+
+        (await EditAsync(listing.Id, f => f with { Start = "3 saat" })).Result.MessageKey.Should().Be("lfg.edit.done");
+
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Cancelled, "its text names the old start");
+        (await RowAsync(listing.Id)).ReminderState.Should().Be(LfgNoticeState.Queued, "handled once: not planned again");
+        _host.Clock.Advance(TimeSpan.FromMinutes(160));
+        await TickAsync();
+        Delivered().Should().BeEmpty();
+    }
+
+    // ---- untouched fields, stale forms, time zone ----
+
+    [Fact]
+    public async Task A_start_written_another_way_is_still_untouched()
+    {
+        var now = await OpenAsync(Form(duration: "2"));
+        var scheduled = await OpenAsync(Form(game: "CS2", start: "05.10.2026 21:30"));
+        _host.Clock.Advance(TimeSpan.FromMinutes(5));
+
+        (await EditAsync(now.Id, f => f with { Start = "şimdi", Details = "a" })).Result.MessageKey.Should().Be("lfg.edit.done", "'now' where no start is shown");
+        (await EditAsync(scheduled.Id, f => f with { Start = "5.10.2026 21:30", Details = "b" })).Result.MessageKey.Should().Be("lfg.edit.done");
+        (await GetAsync(scheduled.Id))!.EventAt.Should().Be(new DateTimeOffset(2026, 10, 5, 18, 30, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task A_stale_form_never_undoes_a_newer_start()
+    {
+        var listing = await OpenAsync(Form(start: "2 saat"));
+        var stale = (await OpenEditAsync(listing.Id)).Prefill!; // form A opened
+        (await EditAsync(listing.Id, f => f with { Start = "3 saat" })).Result.Succeeded.Should().BeTrue(); // form B saved
+
+        var saved = await Lfg(s => s.EditAsync(User(Owner), listing.Id, new LfgEditInput(stale with { Details = "A" }, false, false, null, Opened: stale), Ct));
+
+        saved.Result.MessageKey.Should().Be("lfg.edit.done");
+        (saved.Listing!.Details, saved.Listing.EventAt).Should().Be(("A", (DateTimeOffset?)T0.AddHours(3)), "form A left its start as shown: B's start stays");
+    }
+
+    [Fact]
+    public async Task A_typed_date_is_refused_when_the_guild_time_zone_is_unknown()
+    {
+        var listing = await OpenAsync(Form(start: "2 saat"));
+        await _host.InScopeAsync(sp => sp.GetRequiredService<IGuildSettingsStore>()
+            .SaveAsync(GuildSettings.Default(Guild) with { TimeZoneId = "Mars/Olympus" }, new UserId(1), Ct));
+
+        (await EditAsync(listing.Id, f => f with { Start = "05.10.2026 21:30" })).Result.MessageKey.Should().Be("lfg.create.timezone_invalid");
+        (await EditAsync(listing.Id, f => f with { Start = "3 saat" })).Result.MessageKey.Should().Be("lfg.edit.done", "a relative start needs no zone");
+    }
+
+    [Fact]
+    public async Task Checking_an_edit_form_writes_nothing()
+    {
+        var listing = await OpenAsync(Form(duration: "1"));
+        var form = (await OpenEditAsync(listing.Id)).Prefill!;
+        var version = (await GetAsync(listing.Id))!.Version;
+
+        (await Lfg(s => s.CheckEditAsync(User(Owner), listing.Id, new LfgEditInput(form with { Game = "CS2" }, false, false, null, form), Ct)))
+            .Result.MessageKey.Should().Be("lfg.form.checked");
+        _host.Clock.Advance(TimeSpan.FromMinutes(61));
+        (await Lfg(s => s.CheckEditAsync(User(Owner), listing.Id, new LfgEditInput(form, false, false, null, form), Ct))).Result.MessageKey.Should().Be("lfg.edit.ended");
+
+        var row = await RowAsync(listing.Id);
+        (row.GameName, row.Status, row.Version).Should().Be(("Deadlock", LfgStatus.Open, version), "the check is read only; the worker expires it");
+    }
+
     // ---- voice ----
 
     [Fact]
@@ -559,6 +631,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         (await EditAsync(listing.Id, voice: new ChannelId(8999))).Result.MessageKey.Should().Be("lfg.create.voice_invalid", "another guild's channel");
 
         _host.Guilds.RemoveVoiceChannel(Guild, Voice);
+        (await OpenEditAsync(listing.Id)).Voice.Should().BeNull("a deleted channel is not offered again in the settings step");
         (await EditAsync(listing.Id, f => f with { Details = "yeni" })).Result.MessageKey.Should().Be("lfg.create.voice_invalid", "the kept channel is gone");
         (await GetAsync(listing.Id))!.Details.Should().BeNull();
         (await EditAsync(listing.Id, f => f with { Details = "yeni" }, voice: new Optional<ChannelId?>(null))).Result.Succeeded.Should().BeTrue();

@@ -142,5 +142,7 @@
   "lfg.edit.ended": "Bu ilan artık düzenlenemez.",
   "lfg.edit.start_locked": "Etkinlik başladıktan sonra başlangıç zamanı değiştirilemez.",
   "lfg.edit.players_below_joined": "Kişi sayısı, katılmış oyuncu sayısından ({0}) az olamaz.",
-  "lfg.edit.expiry_passed": "Bu süreyle ilanın bitişi geçmişte kalıyor. Daha uzun bir süre seç."
+  "lfg.edit.expiry_passed": "Bu süreyle ilanın bitişi geçmişte kalıyor. Daha uzun bir süre seç.",
+  "lfg.form.card_uncertain": "İlan kartı gönderilirken bağlantı sorunu oldu; kart kanala düşmüş olabilir. Kanalda görmüyorsan ilan en geç süresi dolunca kapanır.",
+  "lfg.form.unavailable": "Bu form artık kullanılamıyor: kaydedildi, iptal edildi ya da süresi doldu."
 }

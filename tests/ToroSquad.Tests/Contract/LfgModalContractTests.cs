@@ -58,9 +58,10 @@ public sealed class LfgModalContractTests
         }
 
         var byId = inputs.ToDictionary(i => i.Input.CustomId, i => i.Input);
-        (byId["game"].MinLength, byId["game"].MaxLength, byId["game"].Required).Should().Be(((int?)LfgRules.GameNameMinLength, (int?)LfgRules.GameNameMaxLength, (bool?)true));
+        (byId["game"].MinLength, byId["game"].MaxLength, byId["game"].Required).Should().Be(((int?)LfgRules.GameNameMinLength, (int?)(LfgRules.GameNameMaxLength * 2), (bool?)true),
+            "Discord counts UTF-16 units, the rule counts characters; the server applies the real limit");
         (byId["players"].MaxLength, byId["players"].Required).Should().Be(((int?)LfgForm.PlayersMaxLength, (bool?)true));
-        (byId["details"].MaxLength, byId["details"].Required, byId["details"].Style).Should().Be(((int?)LfgRules.DetailsMaxLength, (bool?)false, TextInputStyle.Paragraph));
+        (byId["details"].MaxLength, byId["details"].Required, byId["details"].Style).Should().Be(((int?)(LfgRules.DetailsMaxLength * 2), (bool?)false, TextInputStyle.Paragraph));
         (byId["start"].MaxLength, byId["start"].Required).Should().Be(((int?)LfgForm.StartMaxLength, (bool?)false));
         (byId["duration"].MaxLength, byId["duration"].Required).Should().Be(((int?)LfgForm.DurationMaxLength, (bool?)false));
     }
@@ -85,6 +86,16 @@ public sealed class LfgModalContractTests
         modal.Title.Should().Be("Ekip İlanını Düzenle");
         Inputs(modal).Select(i => i.Input.Value).Should().Equal("Deadlock", "6", "Casual oynayacağız", "05.10.2026 21:30", "2");
         Inputs(modal).Select(i => i.Input.CustomId).Should().Equal(Fields, "create and edit share one form");
+    }
+
+    [Fact]
+    public void A_stored_text_with_emoji_is_prefilled_whole()
+    {
+        var game = string.Concat(Enumerable.Repeat("🎮", LfgRules.GameNameMaxLength)); // 50 characters, 100 UTF-16 units
+        var modal = LfgFormUi.Modal(Draft(LfgFormKind.Edit, new LfgFormValues(game, "6", null, null, "2")), 20, L("tr"));
+
+        Inputs(modal)[0].Input.Value.Should().Be(game, "never cut in the middle of a character");
+        LfgRules.Length(game).Should().Be(LfgRules.GameNameMaxLength);
     }
 
     [Fact]

@@ -119,6 +119,31 @@ public sealed class LfgFormTests
     }
 
     [Fact]
+    public void An_untouched_start_is_recognized_however_it_is_written()
+    {
+        LfgForm.SameStart("5.10.2026 21:30", "05.10.2026 21:30").Should().BeTrue();
+        LfgForm.SameStart("2026-10-05 21:30", "05.10.2026 21:30").Should().BeTrue();
+        LfgForm.SameStart("şimdi", null).Should().BeTrue();
+        LfgForm.SameStart("", null).Should().BeTrue();
+        LfgForm.SameStart("2 saat", null).Should().BeFalse();
+        LfgForm.SameStart("05.10.2026 21:31", "05.10.2026 21:30").Should().BeFalse();
+        LfgForm.SameStart("şimdi", "05.10.2026 21:30").Should().BeFalse();
+    }
+
+    [Fact]
+    public void An_edit_draft_keeps_the_form_it_was_opened_with()
+    {
+        var drafts = new LfgFormDrafts(new FakeTimeProvider(T0));
+        var shown = new LfgFormValues("Deadlock", "6", null, "05.10.2026 21:30", "2");
+        var draft = drafts.Open(User(1), Channel, LfgFormKind.Edit, 77, shown);
+
+        var typed = drafts.Update(draft.Id, User(1), d => d with { Values = shown with { Start = "3 saat" }, Opened = null })!;
+
+        typed.ToEditInput().Opened.Should().Be(shown);
+        drafts.Open(User(1), Channel, LfgFormKind.Create, null, shown).Opened.Should().BeNull();
+    }
+
+    [Fact]
     public void Untouched_fields_are_recognized_regardless_of_spacing_and_case()
     {
         LfgForm.SameText("05.10.2026 21:30", " 05.10.2026  21:30 ").Should().BeTrue();

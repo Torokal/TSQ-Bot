@@ -142,5 +142,7 @@
   "lfg.edit.ended": "This listing can no longer be edited.",
   "lfg.edit.start_locked": "The start time cannot change once the event has started.",
   "lfg.edit.players_below_joined": "The team size cannot be lower than the players who already joined ({0}).",
-  "lfg.edit.expiry_passed": "With this duration the listing would end in the past. Choose a longer duration."
+  "lfg.edit.expiry_passed": "With this duration the listing would end in the past. Choose a longer duration.",
+  "lfg.form.card_uncertain": "There was a connection problem while posting the listing card; it may have been posted. If you do not see it in the channel, the listing closes by itself when it expires.",
+  "lfg.form.unavailable": "This form can no longer be used: it was saved, cancelled or has expired."
 }

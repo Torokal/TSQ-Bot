@@ -29,6 +29,12 @@ public static class LfgFormUi
     public const int MaxLabelLength = 45;
     public const int MaxDescriptionLength = 100;
 
+    /// <summary>
+    /// Text inputs allow twice the rule's length: Discord counts UTF-16 units, the rules count characters (an emoji is two
+    /// units), so a stored name is never cut when the edit form is prefilled. The server applies the real limit.
+    /// </summary>
+    public const int InputLengthFactor = 2;
+
     public delegate string Text(string key, params object?[] args);
 
     public static Modal Modal(LfgFormDraft draft, int maxPlayers, Text L)
@@ -38,11 +44,11 @@ public static class LfgFormUi
             .WithTitle(L(draft.Kind == LfgFormKind.Create ? "lfg.form.title_create" : "lfg.form.title_edit"))
             .WithCustomId(LfgForm.ModalPrefix + draft.Id)
             .AddLabel(L("lfg.form.game"), Input(LfgForm.GameField, TextInputStyle.Short, L("lfg.form.game_placeholder"), LfgRules.GameNameMinLength,
-                LfgRules.GameNameMaxLength, required: true, values.Game), L("lfg.form.game_hint"))
+                LfgRules.GameNameMaxLength * InputLengthFactor, required: true, values.Game), L("lfg.form.game_hint"))
             .AddLabel(L("lfg.form.players"), Input(LfgForm.PlayersField, TextInputStyle.Short, "6", 1, LfgForm.PlayersMaxLength, required: true,
                 values.Players), L("lfg.form.players_hint", LfgRules.MinPlayers, maxPlayers))
             .AddLabel(L("lfg.form.details"), Input(LfgForm.DetailsField, TextInputStyle.Paragraph, L("lfg.form.details_placeholder"), null,
-                LfgRules.DetailsMaxLength, required: false, values.Details), L("lfg.form.details_hint"))
+                LfgRules.DetailsMaxLength * InputLengthFactor, required: false, values.Details), L("lfg.form.details_hint"))
             .AddLabel(L("lfg.form.start"), Input(LfgForm.StartField, TextInputStyle.Short, L("lfg.form.start_placeholder"), null, LfgForm.StartMaxLength,
                 required: false, values.Start), L("lfg.form.start_hint"))
             .AddLabel(L("lfg.form.duration"), Input(LfgForm.DurationField, TextInputStyle.Short, "2", null, LfgForm.DurationMaxLength, required: false,
@@ -134,8 +140,8 @@ public static class LfgFormUi
             .WithRequired(required);
         if (minLength is { } min)
             input.WithMinLength(min);
-        if (!string.IsNullOrEmpty(value))
-            input.WithValue(value.Length <= maxLength ? value : value[..maxLength]);
+        if (!string.IsNullOrEmpty(value) && value.Length <= maxLength)
+            input.WithValue(value); // a longer value is not prefilled (never cut mid-character); the owner retypes it
         return input;
     }
 }

@@ -154,10 +154,14 @@ public sealed class LfgService(
             return new(No(OperationError.Forbidden, "lfg.edit.forbidden"), null, null);
         if (!listing.IsActive || listing.ExpiresAt <= now)
             return new(No(OperationError.Conflict, "lfg.edit.ended"), null, null);
-        return new(OperationResult.Ok("lfg.edit.open"), listing, LfgForm.Prefill(listing, await ZoneAsync(actor.GuildId, ct)));
+        var voice = listing.VoiceChannel is { } v && (await guilds.GetVoiceChannelAccessAsync(actor.GuildId, v, ct)).Usable ? v : (ChannelId?)null;
+        return new(OperationResult.Ok("lfg.edit.open"), listing, LfgForm.Prefill(listing, (await ZoneAsync(actor.GuildId, ct)).Zone), voice);
     }
 
-    /// <summary>The submitted edit form checked exactly like <see cref="EditAsync"/> would, without storing anything.</summary>
+    /// <summary>
+    /// The submitted edit form checked exactly like <see cref="EditAsync"/> would, without storing anything and without the
+    /// write lock (it answers a modal within Discord's 3 seconds); the save decides again under the lock.
+    /// </summary>
     public async Task<LfgFormCheck> CheckEditAsync(ActorContext actor, long listingId, LfgEditInput input, CancellationToken ct)
     {
         var (result, preview) = await EditCoreAsync(actor, listingId, input, save: false, ct);
@@ -183,12 +187,12 @@ public sealed class LfgService(
     private async Task<(OperationResult Result, LfgFormPreview? Preview)> EditCoreAsync(ActorContext actor, long listingId, LfgEditInput input, bool save, CancellationToken ct)
     {
         var o = options.Value;
-        var zone = await ZoneAsync(actor.GuildId, ct);
+        var (zone, zoneKnown) = await ZoneAsync(actor.GuildId, ct);
         // Must be a plain voice channel of THIS guild as the bot sees it; checked on every save, changed or not.
         if (input.VoiceChannel is { } voice && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, voice, ct)).Usable)
             return (No(OperationError.InvalidInput, "lfg.create.voice_invalid"), null);
 
-        return await WriteAsync(async () =>
+        async Task<(OperationResult, LfgFormPreview?)> Work()
         {
             var now = clock.GetUtcNow();
             var listing = await FindAsync(actor, listingId, ct);
@@ -196,7 +200,8 @@ public sealed class LfgService(
                 return (NotFound(), (LfgFormPreview?)null);
             if (listing.OwnerUserId != actor.UserId.Value)
                 return (No(OperationError.Forbidden, "lfg.edit.forbidden"), null);
-            if (await ExpireIfDueAsync(listing, now, cardStale: true, ct) || Ended(listing) is not null)
+            var expired = save ? await ExpireIfDueAsync(listing, now, cardStale: true, ct) : listing.ExpiresAt <= now;
+            if (expired || Ended(listing) is not null)
                 return (No(OperationError.Conflict, "lfg.edit.ended"), null);
 
             var form = input.Form;
@@ -210,18 +215,20 @@ public sealed class LfgService(
                 return (No(OperationError.InvalidInput, "lfg.edit.players_below_joined", joined), null);
 
             var current = ToView(listing, members);
-            var prefill = LfgForm.Prefill(current, zone);
+            var shown = input.Opened ?? LfgForm.Prefill(current, zone); // "untouched" = as the form showed it
 
             // Start: untouched, or new while the start is still ahead. Started = its moment passed (a "now" listing started
             // at creation) or its start notice was already handled.
             var started = (listing.EventAt ?? listing.CreatedAt) <= now || listing.StartNoticeState != LfgNoticeState.Pending;
             var eventAt = listing.EventAt;
             var start = listing.EventAt is { } at ? LfgStart.AtInstant(at) : LfgStart.Now;
-            if (!LfgForm.SameText(form.Start, prefill.Start))
+            if (!LfgForm.SameStart(form.Start, shown.Start))
             {
                 if (started)
                     return (Refusal(LfgDraftError.StartLocked), null);
                 var typed = LfgStartText.Parse(form.Start);
+                if (typed.At is not null && !zoneKnown)
+                    return (Refusal(LfgDraftError.TimeZoneInvalid), null); // like create: never guess a zone for a typed date
                 var (resolved, startError) = LfgRules.ResolveStart(typed.Minutes, typed.At, zone, now);
                 if (resolved is null)
                     return (Refusal(startError), null);
@@ -231,7 +238,7 @@ public sealed class LfgService(
 
             // Duration: untouched keeps the current one (even a configured default that is not one of the choices).
             var duration = LfgForm.Duration(current);
-            if (!LfgForm.SameText(form.Duration, prefill.Duration))
+            if (!LfgForm.SameText(form.Duration, shown.Duration))
             {
                 var minutes = LfgFormText.DurationMinutes(form.Duration);
                 if (minutes is { } m && !LfgRules.DurationChoicesMinutes.Contains(m))
@@ -255,9 +262,12 @@ public sealed class LfgService(
             if (unchanged)
                 return (OperationResult.Ok("lfg.edit.unchanged"), preview);
 
-            // Notices: handled once. Off while waiting in the outbox -> cancelled (the existing close semantics); on after
-            // its moment -> consumed as skipped; a queued or skipped notice is never reset by a new start or a re-enable.
-            if (listing.NotifyBeforeStart && !input.NotifyBeforeStart && listing.ReminderState == LfgNoticeState.Queued)
+            // Notices: handled once. Off while waiting in the outbox, or its start moved -> the undelivered one is cancelled
+            // (the existing close semantics; its text names the old time); on after its moment -> consumed as skipped; a
+            // queued or skipped notice is never reset by a new start or a re-enable.
+            if (eventAt != listing.EventAt && listing.ReminderState == LfgNoticeState.Queued)
+                await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "start_moved", now, ct, LfgNoticePlanner.KindReminder);
+            else if (listing.NotifyBeforeStart && !input.NotifyBeforeStart && listing.ReminderState == LfgNoticeState.Queued)
                 await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "reminder_switched_off", now, ct, LfgNoticePlanner.KindReminder);
             if (listing.NotifyAtStart && !input.NotifyAtStart && listing.StartNoticeState == LfgNoticeState.Queued)
                 await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "start_notice_switched_off", now, ct, LfgNoticePlanner.KindStart);
@@ -289,7 +299,12 @@ public sealed class LfgService(
             logger.LogInformation("LFG listing {Listing} edited by its owner: {Max} players, starts {EventAt:O}, expires {ExpiresAt:O}",
                 listing.Id, maxPlayers, eventAt ?? listing.CreatedAt, expiresAt);
             return (OperationResult.Ok("lfg.edit.done"), preview);
-        }, ct);
+        }
+
+        if (save)
+            return await WriteAsync(Work, ct);
+        db.ChangeTracker.Clear();
+        return await Work(); // read only: nothing is saved on this path
     }
 
     /// <summary>
@@ -326,12 +341,15 @@ public sealed class LfgService(
             : null;
     }
 
-    /// <summary>The guild's time zone (existing /setup setting; an unknown id falls back to the default zone, then UTC).</summary>
-    private async Task<TimeZoneInfo> ZoneAsync(GuildId guild, CancellationToken ct)
+    /// <summary>
+    /// The guild's time zone (existing /setup setting). An unknown id is reported (<c>Known = false</c>: a typed date is then
+    /// refused, like on create); the default zone (then UTC) is only used to show a stored start.
+    /// </summary>
+    private async Task<(TimeZoneInfo Zone, bool Known)> ZoneAsync(GuildId guild, CancellationToken ct)
     {
         if (GuildTime.TryResolve((await settings.GetAsync(guild, ct)).TimeZoneId, out var zone))
-            return zone;
-        return GuildTime.TryResolve(GuildSettings.Default(guild).TimeZoneId, out var fallback) ? fallback : TimeZoneInfo.Utc;
+            return (zone, true);
+        return (GuildTime.TryResolve(GuildSettings.Default(guild).TimeZoneId, out var fallback) ? fallback : TimeZoneInfo.Utc, false);
     }
 
     private OperationResult Refusal(LfgDraftError error)

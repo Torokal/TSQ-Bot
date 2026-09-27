@@ -1,6 +1,7 @@
 using System.Globalization;
 using Discord;
 using Discord.Interactions;
+using Discord.Net;
 using Discord.WebSocket;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -32,6 +33,9 @@ public sealed class LfgFormCommands(
     IOptions<LfgOptions> options,
     ILogger<LfgFormCommands> logger) : ToroInteractionModule(services)
 {
+    /// <summary>How far back a failed card post is looked for.</summary>
+    private const int RecentMessages = 20;
+
     /// <summary>Bound for the at-limit card check: the form must still open within Discord's 3 seconds.</summary>
     private static readonly TimeSpan LimitRecheckBudget = TimeSpan.FromMilliseconds(1500);
 
@@ -73,7 +77,7 @@ public sealed class LfgFormCommands(
         }
 
         var draft = drafts.Open(Actor, listing.Channel, LfgFormKind.Edit, listing.Id, prefill, listing.NotifyBeforeStart, listing.NotifyAtStart,
-            listing.VoiceChannel);
+            opened.Voice); // a deleted voice channel is not offered again
         await RespondWithModalAsync(LfgFormUi.Modal(draft, MaxPlayers, await TextAsync()));
     }
 
@@ -107,7 +111,13 @@ public sealed class LfgFormCommands(
             Preview = check.Preview,
             NotifyBeforeStart = d.NotifyBeforeStart && (check.Preview.EventAt is not null),
             NotifyAtStart = d.NotifyAtStart && (check.Preview.EventAt is not null),
-        }) ?? draft;
+        });
+        if (draft is null)
+        {
+            await ShowAsync(L("lfg.form.expired"), new ComponentBuilder().Build());
+            return;
+        }
+
         var (content, components) = LfgFormUi.Settings(draft, Services.Clock.GetUtcNow(), L);
         await ShowAsync(content, components);
     }
@@ -160,7 +170,9 @@ public sealed class LfgFormCommands(
         await DeferEphemeralAsync();
         if (drafts.Take(id, Actor) is not { } draft)
         {
-            await EditFormMessageAsync(await T("lfg.form.expired"));
+            // A second click while the first is saving (or an expired draft): the first click's answer stands; restart-lost
+            // drafts are answered privately without touching the form message.
+            await ReplyTextAsync("lfg.form.unavailable");
             return;
         }
 
@@ -175,7 +187,7 @@ public sealed class LfgFormCommands(
             }
 
             if (edited.RefreshCard)
-                await cards.SyncAsync(draft.ListingId.Value, CancellationToken.None); // edits the same card, never a new message
+                await RedrawCardAsync(draft.ListingId.Value); // edits the same card, never a new message
             await EditFormMessageAsync(await T(edited.Result.MessageKey));
             return;
         }
@@ -197,14 +209,27 @@ public sealed class LfgFormCommands(
             return;
         }
 
-        if (!await PostCardAsync(listing))
+        switch (await PostCardAsync(listing))
         {
-            drafts.Return(draft); // nothing was opened: the same settings can be saved again
-            await ReplyTextAsync("lfg.form.card_failed");
-            return;
+            case CardPost.Posted:
+                await EditFormMessageAsync(await T("lfg.create.done"));
+                break;
+            case CardPost.NotPosted:
+                drafts.Return(draft); // nothing was opened: the same settings can be saved again
+                await ReplyTextAsync("lfg.form.card_failed");
+                break;
+            default:
+                // Maybe posted: the listing is kept (a first click on its card records the card), never a second card.
+                await EditFormMessageAsync(await T("lfg.form.card_uncertain"));
+                break;
         }
+    }
 
-        await EditFormMessageAsync(await T("lfg.create.done"));
+    private enum CardPost
+    {
+        Posted,
+        NotPosted,
+        Unknown,
     }
 
     private ChannelId Here => new(Context.Interaction.ChannelId ?? Context.Channel.Id);
@@ -218,27 +243,69 @@ public sealed class LfgFormCommands(
     }
 
     /// <summary>
-    /// The public card, as a follow-up of the save click (the form itself is private). A card that could not be posted is
-    /// removed with its listing (it never existed for anyone); a posted one is recorded so the bot can edit it later.
+    /// The public card, as a follow-up of the save click (the form itself is private); a posted one is recorded so the bot
+    /// can edit it later. When the post failed, Discord may still have created it (lost response): the recent channel
+    /// history is checked for this listing's card (its Katıl button id). Only a card proven absent — Discord refused the
+    /// request (4xx), or it is not in the history — removes the listing (nobody saw it); otherwise it is kept.
     /// </summary>
-    private async Task<bool> PostCardAsync(LfgListingView listing)
+    private async Task<CardPost> PostCardAsync(LfgListingView listing)
     {
         var card = renderer.Render(listing, await LangAsync());
-        IUserMessage posted;
         try
         {
-            posted = await FollowupAsync(embed: DiscordConversions.ToEmbed(card.Embed), components: DiscordConversions.ToComponents(card.Buttons),
+            var posted = await FollowupAsync(embed: DiscordConversions.ToEmbed(card.Embed), components: DiscordConversions.ToComponents(card.Buttons),
                 ephemeral: false, allowedMentions: NoPings);
+            await lfg.AttachMessageAsync(listing.Id, Actor.GuildId, Here, new MessageId(posted.Id), CancellationToken.None);
+            return CardPost.Posted;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException or TaskCanceledException) // a request timeout is a TaskCanceledException
+        {
+            logger.LogWarning(ex, "LFG listing {Listing}: posting its card failed", listing.Id);
+            var refused = ex is HttpException { HttpCode: var code } && (int)code is >= 400 and < 500;
+            var (known, message) = refused ? (true, null) : await FindPostedCardAsync(listing.Id);
+            if (message is { } posted)
+            {
+                await lfg.AttachMessageAsync(listing.Id, Actor.GuildId, Here, posted, CancellationToken.None);
+                return CardPost.Posted;
+            }
+
+            if (!known)
+                return CardPost.Unknown;
+            await lfg.DiscardAsync(listing.Id, CancellationToken.None);
+            return CardPost.NotPosted;
+        }
+    }
+
+    /// <summary>The listing's card among the channel's latest messages (Known = false: the history could not be read).</summary>
+    private async Task<(bool Known, MessageId? Message)> FindPostedCardAsync(long listingId)
+    {
+        var join = LfgCardRenderer.JoinPrefix + listingId.ToString(CultureInfo.InvariantCulture);
+        try
+        {
+            var recent = await Context.Channel.GetMessagesAsync(RecentMessages).FlattenAsync();
+            var card = recent.FirstOrDefault(m => m.Author.Id == Context.Client.CurrentUser.Id &&
+                                                  m.Components.OfType<ActionRowComponent>().SelectMany(r => r.Components).OfType<ButtonComponent>()
+                                                      .Any(b => b.CustomId == join));
+            return (true, card is null ? null : new MessageId(card.Id));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "LFG listing {Listing}: its card could not be posted", listing.Id);
-            await lfg.DiscardAsync(listing.Id, CancellationToken.None);
-            return false;
+            logger.LogWarning(ex, "LFG listing {Listing}: could not check the channel for its card", listingId);
+            return (false, null); // e.g. no Read Message History: cannot tell
         }
+    }
 
-        await lfg.AttachMessageAsync(listing.Id, Actor.GuildId, Here, new MessageId(posted.Id), CancellationToken.None);
-        return true;
+    /// <summary>The edit is saved; a failed redraw only leaves the card to the worker (it stays marked stale).</summary>
+    private async Task RedrawCardAsync(long listingId)
+    {
+        try
+        {
+            await cards.SyncAsync(listingId, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "LFG listing {Listing}: card redraw after the edit failed; the worker redraws it", listingId);
+        }
     }
 
     /// <summary>

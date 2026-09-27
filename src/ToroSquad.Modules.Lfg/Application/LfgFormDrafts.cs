@@ -27,11 +27,12 @@ public sealed record LfgFormDraft(
     bool NotifyAtStart,
     ChannelId? VoiceChannel,
     DateTimeOffset TouchedAt,
-    LfgFormPreview? Preview = null)
+    LfgFormPreview? Preview = null,
+    LfgFormValues? Opened = null)
 {
     public LfgCreateInput ToCreateInput() => LfgForm.ToCreateInput(Values, NotifyBeforeStart, NotifyAtStart, VoiceChannel);
 
-    public LfgEditInput ToEditInput() => new(Values, NotifyBeforeStart, NotifyAtStart, VoiceChannel);
+    public LfgEditInput ToEditInput() => new(Values, NotifyBeforeStart, NotifyAtStart, VoiceChannel, Opened);
 }
 
 /// <summary>
@@ -51,11 +52,12 @@ public sealed class LfgFormDrafts(TimeProvider clock)
 
     public int Count => _drafts.Count;
 
+    /// <summary>A new draft; for an edit, <paramref name="values"/> is also kept as the form as it was shown.</summary>
     public LfgFormDraft Open(ActorContext actor, ChannelId channel, LfgFormKind kind, long? listingId, LfgFormValues values,
         bool notifyBeforeStart = false, bool notifyAtStart = false, ChannelId? voice = null)
     {
         var draft = new LfgFormDraft(NewId(), actor.GuildId, channel, actor.UserId, kind, listingId, values, notifyBeforeStart, notifyAtStart, voice,
-            clock.GetUtcNow());
+            clock.GetUtcNow(), Opened: kind == LfgFormKind.Edit ? values : null);
         lock (_gate)
         {
             Prune();
@@ -91,7 +93,16 @@ public sealed class LfgFormDrafts(TimeProvider clock)
         {
             if (Get(id, actor) is not { } draft)
                 return null;
-            var updated = change(draft) with { Id = draft.Id, Guild = draft.Guild, User = draft.User, Kind = draft.Kind, ListingId = draft.ListingId, TouchedAt = clock.GetUtcNow() };
+            var updated = change(draft) with
+            {
+                Id = draft.Id,
+                Guild = draft.Guild,
+                User = draft.User,
+                Kind = draft.Kind,
+                ListingId = draft.ListingId,
+                Opened = draft.Opened,
+                TouchedAt = clock.GetUtcNow(),
+            };
             _drafts[id] = updated;
             return updated;
         }

@@ -69,6 +69,19 @@ public static class LfgForm
     /// <summary>Same text for the form's purposes (whitespace and letter case do not count).</summary>
     public static bool SameText(string? a, string? b) =>
         string.Equals(LfgRules.Normalize(a), LfgRules.Normalize(b), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The start field was left as it was: the same text, the same wall-clock minute written another way
+    /// ("5.10.2026 21:30" for "05.10.2026 21:30"), or "now" typed where the form showed no start.
+    /// </summary>
+    public static bool SameStart(string? typed, string? shown)
+    {
+        if (SameText(typed, shown))
+            return true;
+        if (LfgRules.Normalize(shown) is null)
+            return LfgStartText.Parse(typed).IsNow;
+        return LfgEventDate.TryReadWallClock(typed, out var a) && LfgEventDate.TryReadWallClock(shown, out var b) && a == b;
+    }
 }
 
 /// <summary>What the settings step shows about a checked form (the listing it would open or become).</summary>
@@ -77,8 +90,15 @@ public sealed record LfgFormPreview(string GameName, string? Details, int MaxPla
 /// <summary>Result of checking a submitted form without storing anything.</summary>
 public sealed record LfgFormCheck(OperationResult Result, LfgFormPreview? Preview);
 
-/// <summary>What the owner saves in the edit form: the texts plus the settings of the second step.</summary>
-public sealed record LfgEditInput(LfgFormValues Form, bool NotifyBeforeStart, bool NotifyAtStart, ChannelId? VoiceChannel);
+/// <summary>
+/// What the owner saves in the edit form: the texts plus the settings of the second step. <see cref="Opened"/> is the form
+/// as it was shown when opened: a start or duration left as shown there stays as stored now (a newer edit is not undone,
+/// a time-zone change does not shift it).
+/// </summary>
+public sealed record LfgEditInput(LfgFormValues Form, bool NotifyBeforeStart, bool NotifyAtStart, ChannelId? VoiceChannel, LfgFormValues? Opened = null);
 
-/// <summary>The edit form of a listing, opened only for its owner while it is active.</summary>
-public sealed record LfgEditOpening(OperationResult Result, LfgListingView? Listing, LfgFormValues? Prefill);
+/// <summary>
+/// The edit form of a listing, opened only for its owner while it is active. <see cref="Voice"/> is the listing's voice
+/// channel if it is still usable (a deleted one is not offered again).
+/// </summary>
+public sealed record LfgEditOpening(OperationResult Result, LfgListingView? Listing, LfgFormValues? Prefill, ChannelId? Voice = null);

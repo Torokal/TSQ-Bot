@@ -163,12 +163,21 @@ public static class LfgEventDate
     /// <summary>At most this far ahead.</summary>
     public static readonly TimeSpan MaxAhead = TimeSpan.FromDays(365);
 
+    /// <summary>The wall-clock date and time written in one of the <see cref="Formats"/> (no time zone, no range check).</summary>
+    public static bool TryReadWallClock(string? text, out DateTime local)
+    {
+        local = default;
+        if (string.IsNullOrWhiteSpace(text) || !DateTime.TryParseExact(text.Trim(), Formats.ToArray(), System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var parsed))
+            return false;
+        local = DateTime.SpecifyKind(parsed, DateTimeKind.Unspecified);
+        return true;
+    }
+
     public static (DateTimeOffset? At, LfgDraftError Error) Resolve(string text, TimeZoneInfo zone, DateTimeOffset now)
     {
-        if (!DateTime.TryParseExact(text.Trim(), Formats.ToArray(), System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out var local))
+        if (!TryReadWallClock(text, out var local))
             return (null, LfgDraftError.DateFormat);
-        local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
         if (zone.IsInvalidTime(local))
             return (null, LfgDraftError.DateNotInTimeZone);
         if (zone.IsAmbiguousTime(local))
