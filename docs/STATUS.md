@@ -48,6 +48,17 @@ invite link and no global command registration. The source code is public under 
   Railway limitation); EventSub WebSocket requires a user access token + refresh-token lifecycle (owner decision).
 - Off by default (`Live:Enabled=false`, module gate off); no production change without owner approval.
 
+## TSQ LFG — Oyuncu Bul (new, 2026-09-27, branch `feat/lfg`)
+
+- Scope and rules: [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md). One generic listing lifecycle for any game (no game-specific model).
+- **IMPLEMENTED / TESTED_OFFLINE**: `/ekip` (free-text game + details, team size, optional 1/2/3 h), join/leave/full/reopen,
+  owner/moderator close with confirmation, lazy + worker expiry, restart recovery, deleted-card handling (`Orphaned`),
+  per-user active limit, optional listing channel (`/lfg-admin`), privacy export/delete/retention, race tests (last slot,
+  many joins, double click, concurrent creates), migration `LfgModule`.
+- **NOT VERIFIED_LIVE**: no real Discord interaction yet (commands not synced; module not enabled). In particular the bot
+  editing its own `/ekip` response through the channel endpoint (expiry/close) has not been observed live.
+- Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

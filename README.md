@@ -5,7 +5,8 @@ cards (reminder, match started, result and schedule changes) into a server chann
 A separate **Formula 1** module posts confirmed session starts, results (with in-place corrections) and championship
 standings ([docs/FORMULA1.md](docs/FORMULA1.md)). A **Volleyball** module follows only Türkiye's women's senior national team
 ("Filenin Sultanları") ([docs/volleyball/VOLLEYBALL.md](docs/volleyball/VOLLEYBALL.md)). **TSQ Live** announces the configured
-creators' Twitch/Kick streams ([docs/live/TSQ_LIVE.md](docs/live/TSQ_LIVE.md)).
+creators' Twitch/Kick streams ([docs/live/TSQ_LIVE.md](docs/live/TSQ_LIVE.md)). **TSQ LFG — Oyuncu Bul** lets members
+open quick group listings for any game with `/ekip` ([docs/lfg/TSQ_LFG.md](docs/lfg/TSQ_LFG.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
 **BOT Greg** and reuses adapted portions of the open-source
@@ -29,6 +30,9 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 - **TSQ Live** (separate module, off by default and `Live:Enabled=false`): Twitch + Kick live announcements for configured
   creators via the official APIs — one `@everyone` per new creator session (multistream = one message), title/platform
   changes and the end of the stream edit the same message without pinging; restart, reconnect and provider-outage safe.
+- **TSQ LFG — Oyuncu Bul** (separate module, off by default): `/ekip` opens a group listing for any game or activity (free-text
+  game name and details, team size, optional duration); members join/leave with buttons, the owner or a moderator closes
+  it, it expires on its own; one generic lifecycle for every game, no pings, restart- and race-safe.
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
@@ -53,6 +57,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | Volleyball | `/volleyball next\|schedule` | everyone (module on) |
 | Volleyball admin | `/volleyball-admin configure channel\|notifications\|role`, `/volleyball-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
 | TSQ Live admin | `/live-admin doctor` | Manage Server |
+| TSQ LFG | `/ekip` (buttons: Katıl · Ayrıl · İlanı Kapat) | everyone (module on) |
+| TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
 [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md). The generated, test-checked schema is
@@ -117,6 +123,7 @@ Step-by-step setup (Turkish): [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md). Ad
 | `Formula1:Provider:Mode` | `Fixture` | synthetic TEST/DEMO race weekend; `Live` for Jolpica + OpenF1 |
 | `Volleyball:Provider:Mode` | `Fixture` | synthetic TEST/DEMO match; `Live` for FIVB VIS |
 | `Live:Enabled` | `false` | TSQ Live off; needs `Live:DiscordChannelId` and Twitch/Kick credentials ([docs/live/TSQ_LIVE.md](docs/live/TSQ_LIVE.md)) |
+| `Lfg:*` | `120` min, `2`, `20` | default listing duration, active listings per user, max team size ([docs/lfg/TSQ_LFG.md](docs/lfg/TSQ_LFG.md)) |
 | `Discord:AllowedGuildIds` | `[]` | when set, the bot only serves these servers (enforced server-side) |
 | `Discord:AllowGlobalCommandSync` | `false` | global command registration is a separate, explicit step |
 | `Bot:SourceUrl` | `https://github.com/Torokal/TSQ-Bot` | shown by `/bot source` |
@@ -151,6 +158,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Formula1` | The Formula 1 module (provider capabilities, lifecycle state machine, planner, commands) |
 | `ToroSquad.Modules.Volleyball` | The volleyball module (Türkiye women's senior team only: identity filter, match state machine, FIVB VIS provider, planner, commands) |
 | `ToroSquad.Modules.Live` | TSQ Live (Twitch + Kick stream announcements: creator session state machine, official-API reconciliation, planner) |
+| `ToroSquad.Modules.Lfg` | TSQ LFG — Oyuncu Bul (generic group-finder listings: create/join/leave/close/expire, race-safe persistence, card sync) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |
 

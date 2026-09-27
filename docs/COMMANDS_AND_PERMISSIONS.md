@@ -65,6 +65,18 @@ Başka takım seçtiren komut yoktur. Ayrıntı: [volleyball/VOLLEYBALL.md](voll
 Duyuru gönderen, yayıncı ekleyen veya ping atan komut yoktur (yayıncılar ve kanal yapılandırmadır). Ayrıntı:
 [live/TSQ_LIVE.md](live/TSQ_LIVE.md).
 
+## TSQ LFG — Oyuncu Bul (modül açıkken)
+
+| Komut / etkileşim | Ne yapar |
+|---|---|
+| `/ekip oyun kisi [detay] [sure]` | Herkes: herhangi bir oyun için ekip ilanı açar (kart, komutun herkese açık yanıtıdır; ping yok). Kişi başı aktif ilan sınırı, isteğe bağlı kanal kısıtı |
+| Buton `Katıl` · `Ayrıl` (`tsq:lfg:join:<id>`, `tsq:lfg:leave:<id>`) | Herkes; her tıklamada sunucu tarafında guild, durum, süre, üyelik ve boş slot yeniden denetlenir; sonuç ephemeral |
+| Buton `İlanı Kapat` (`tsq:lfg:close:<id>`) → `Evet, kapat` / `Vazgeç` | Yalnızca ilan sahibi veya **Manage Messages** (ya da Administrator) yetkili moderatör (`Authorize.Require`); ephemeral onay |
+| `/lfg-admin channel [channel]` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): `/ekip`'i tek kanala kısıtlar; boş = her kanal |
+| `/lfg-admin status` | Yönetici: modül durumu, kanal, aktif ilan sayıları, sınırlar, bekleyen kart düzenlemeleri |
+
+Ayrıntı: [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md).
+
 ## Esports (modül açıkken)
 
 | Komut | Seçenekler |

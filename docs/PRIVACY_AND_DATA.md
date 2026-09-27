@@ -15,6 +15,9 @@ presence izlemez. Profil, avatar, kullanıcı adı **saklanmaz**.
 | `esports_match_snapshot`, `esports_known_team`, `esports_provider_state` | Herkese açık maç/takım/sıralama verisi | — | 14 gün görülmeyen maçlar silinir |
 | `f1_guild_config` | Formula 1 sunucu ayarları; değiştiren yöneticinin kullanıcı ID'si | sunucu | bot sunucudan çıkarıldıktan 30 gün sonra |
 | `f1_session_snapshot`, `f1_result_snapshot`, `f1_standings_snapshot`, `f1_provider_state` | Herkese açık F1 takvim, seans durumu, sonuç ve puan durumu verisi (kişisel veri yok) | — | — |
+| `lfg_listing` | TSQ LFG ekip ilanı: ilan sahibinin kullanıcı ID'si, kendi yazdığı oyun adı ve detay, kanal/mesaj ID, durum ve zamanlar | kullanıcı (sahip) | `/privacy delete` (ilan oyuncularıyla silinir), sunucu verisiyle birlikte |
+| `lfg_participant` | İlan ID + oyuncunun kullanıcı ID'si + katılma zamanı (görünen ad saklanmaz) | kullanıcı | ayrılınca / `/privacy delete`, sunucu verisiyle birlikte |
+| `lfg_guild_config` | İsteğe bağlı LFG kanalı; değiştiren yöneticinin kullanıcı ID'si | sunucu | bot sunucudan çıkarıldıktan 30 gün sonra |
 
 Discord ID'leri kayıpsız (64-bit) saklanır.
 
