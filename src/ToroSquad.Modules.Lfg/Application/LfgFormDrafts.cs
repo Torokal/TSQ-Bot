@@ -28,11 +28,12 @@ public sealed record LfgFormDraft(
     ChannelId? VoiceChannel,
     DateTimeOffset TouchedAt,
     LfgFormPreview? Preview = null,
-    LfgFormValues? Opened = null)
+    LfgFormValues? Opened = null,
+    LfgFormSettings? OpenedSettings = null)
 {
     public LfgCreateInput ToCreateInput() => LfgForm.ToCreateInput(Values, NotifyBeforeStart, NotifyAtStart, VoiceChannel);
 
-    public LfgEditInput ToEditInput() => new(Values, NotifyBeforeStart, NotifyAtStart, VoiceChannel, Opened);
+    public LfgEditInput ToEditInput() => new(Values, NotifyBeforeStart, NotifyAtStart, VoiceChannel, Opened, OpenedSettings);
 }
 
 /// <summary>
@@ -52,12 +53,15 @@ public sealed class LfgFormDrafts(TimeProvider clock)
 
     public int Count => _drafts.Count;
 
-    /// <summary>A new draft; for an edit, <paramref name="values"/> is also kept as the form as it was shown.</summary>
+    /// <summary>
+    /// A new draft; for an edit, <paramref name="values"/> and <paramref name="stored"/> are also kept as the listing the
+    /// form found (to tell untouched fields from edited ones on save).
+    /// </summary>
     public LfgFormDraft Open(ActorContext actor, ChannelId channel, LfgFormKind kind, long? listingId, LfgFormValues values,
-        bool notifyBeforeStart = false, bool notifyAtStart = false, ChannelId? voice = null)
+        bool notifyBeforeStart = false, bool notifyAtStart = false, ChannelId? voice = null, LfgFormSettings? stored = null)
     {
         var draft = new LfgFormDraft(NewId(), actor.GuildId, channel, actor.UserId, kind, listingId, values, notifyBeforeStart, notifyAtStart, voice,
-            clock.GetUtcNow(), Opened: kind == LfgFormKind.Edit ? values : null);
+            clock.GetUtcNow(), Opened: kind == LfgFormKind.Edit ? values : null, OpenedSettings: kind == LfgFormKind.Edit ? stored : null);
         lock (_gate)
         {
             Prune();
@@ -97,10 +101,12 @@ public sealed class LfgFormDrafts(TimeProvider clock)
             {
                 Id = draft.Id,
                 Guild = draft.Guild,
+                Channel = draft.Channel,
                 User = draft.User,
                 Kind = draft.Kind,
                 ListingId = draft.ListingId,
                 Opened = draft.Opened,
+                OpenedSettings = draft.OpenedSettings,
                 TouchedAt = clock.GetUtcNow(),
             };
             _drafts[id] = updated;

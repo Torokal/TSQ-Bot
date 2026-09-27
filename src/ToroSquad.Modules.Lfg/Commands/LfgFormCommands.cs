@@ -77,7 +77,8 @@ public sealed class LfgFormCommands(
         }
 
         var draft = drafts.Open(Actor, listing.Channel, LfgFormKind.Edit, listing.Id, prefill, listing.NotifyBeforeStart, listing.NotifyAtStart,
-            opened.Voice); // a deleted voice channel is not offered again
+            opened.Voice, // a deleted voice channel is not offered again (keeping "none" then removes it)
+            new LfgFormSettings(listing.NotifyBeforeStart, listing.NotifyAtStart, listing.VoiceChannel));
         await RespondWithModalAsync(LfgFormUi.Modal(draft, MaxPlayers, await TextAsync()));
     }
 
@@ -96,7 +97,8 @@ public sealed class LfgFormCommands(
         var check = draft.Kind == LfgFormKind.Create
             ? await lfg.CheckCreateAsync(Actor, Here, draft.ToCreateInput() with { NotifyBeforeStart = false, NotifyAtStart = false, VoiceChannel = null },
                 CancellationToken.None)
-            : await lfg.CheckEditAsync(Actor, draft.ListingId!.Value, draft.ToEditInput() with { NotifyBeforeStart = false, NotifyAtStart = false, VoiceChannel = null },
+            : await lfg.CheckEditAsync(Actor, draft.ListingId!.Value,
+                draft.ToEditInput() with { NotifyBeforeStart = false, NotifyAtStart = false, VoiceChannel = null, OpenedSettings = null },
                 CancellationToken.None); // the settings are chosen (and checked on save) in the next step
         if (!check.Result.Succeeded || check.Preview is null)
         {

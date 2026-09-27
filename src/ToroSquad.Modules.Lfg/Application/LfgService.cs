@@ -204,11 +204,26 @@ public sealed class LfgService(
             if (expired || Ended(listing) is not null)
                 return (No(OperationError.Conflict, "lfg.edit.ended"), null);
 
+            // Untouched (as the form found it) = the value stored NOW: a stale form never reverts a newer edit.
             var form = input.Form;
-            var (game, details, textError) = LfgRules.ValidateTexts(form.Game, form.Details, LfgFormText.Players(form.Players), o.MaxPlayersPerListing);
+            var opened = input.Opened;
+            var typedGame = opened is not null && LfgForm.SameValue(form.Game, opened.Game) ? listing.GameName : form.Game;
+            var typedDetails = opened is not null && LfgForm.SameValue(form.Details, opened.Details) ? listing.Details : form.Details;
+            var playersUntouched = opened is not null && LfgForm.SameValue(form.Players, opened.Players);
+            var maxPlayers = playersUntouched ? listing.MaxPlayers : LfgFormText.Players(form.Players);
+            // An untouched size stays valid even if the configured maximum was lowered after the listing was opened.
+            var sizeLimit = playersUntouched ? Math.Max(o.MaxPlayersPerListing, listing.MaxPlayers) : o.MaxPlayersPerListing;
+            var (game, details, textError) = LfgRules.ValidateTexts(typedGame, typedDetails, maxPlayers, sizeLimit);
             if (textError != LfgDraftError.None)
                 return (Refusal(textError), null);
-            var maxPlayers = LfgFormText.Players(form.Players);
+            var settings = input.OpenedSettings;
+            var notifyBefore = settings is not null && input.NotifyBeforeStart == settings.NotifyBeforeStart ? listing.NotifyBeforeStart : input.NotifyBeforeStart;
+            var notifyAtStart = settings is not null && input.NotifyAtStart == settings.NotifyAtStart ? listing.NotifyAtStart : input.NotifyAtStart;
+            var storedVoice = listing.VoiceChannelId is { } sv ? new ChannelId(sv) : (ChannelId?)null;
+            var voice = settings is not null && input.VoiceChannel == settings.VoiceChannel ? storedVoice : input.VoiceChannel;
+            // The channel that will be stored must still be a voice channel of this guild (a typed one was checked above).
+            if (voice is { } kept && voice != input.VoiceChannel && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, kept, ct)).Usable)
+                return (No(OperationError.InvalidInput, "lfg.create.voice_invalid"), null);
             var members = await Participants.Where(p => p.ListingId == listing.Id).ToListAsync(ct);
             var joined = members.Count(p => p.Response == LfgResponse.Joined); // Maybe never counts
             if (maxPlayers < joined)
@@ -249,14 +264,14 @@ public sealed class LfgService(
             var expiresAt = (eventAt ?? listing.CreatedAt) + duration;
             if (expiresAt <= now)
                 return (Refusal(LfgDraftError.ExpiryPassed), null);
-            if ((input.NotifyBeforeStart || input.NotifyAtStart) && eventAt is null)
+            if ((notifyBefore || notifyAtStart) && eventAt is null)
                 return (Refusal(LfgDraftError.NoticeNeedsStart), null);
 
             var preview = new LfgFormPreview(game!, details, maxPlayers, start, eventAt, duration);
-            var voiceId = input.VoiceChannel?.Value;
+            var voiceId = voice?.Value;
             var unchanged = listing.GameName == game && listing.Details == details && listing.MaxPlayers == maxPlayers && listing.EventAt == eventAt &&
-                            listing.ExpiresAt == expiresAt && listing.NotifyBeforeStart == input.NotifyBeforeStart &&
-                            listing.NotifyAtStart == input.NotifyAtStart && listing.VoiceChannelId == voiceId;
+                            listing.ExpiresAt == expiresAt && listing.NotifyBeforeStart == notifyBefore &&
+                            listing.NotifyAtStart == notifyAtStart && listing.VoiceChannelId == voiceId;
             if (!save)
                 return (OperationResult.Ok("lfg.form.checked"), preview);
             if (unchanged)
@@ -267,17 +282,17 @@ public sealed class LfgService(
             // queued or skipped notice is never reset by a new start or a re-enable.
             if (eventAt != listing.EventAt && listing.ReminderState == LfgNoticeState.Queued)
                 await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "start_moved", now, ct, LfgNoticePlanner.KindReminder);
-            else if (listing.NotifyBeforeStart && !input.NotifyBeforeStart && listing.ReminderState == LfgNoticeState.Queued)
+            else if (listing.NotifyBeforeStart && !notifyBefore && listing.ReminderState == LfgNoticeState.Queued)
                 await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "reminder_switched_off", now, ct, LfgNoticePlanner.KindReminder);
-            if (listing.NotifyAtStart && !input.NotifyAtStart && listing.StartNoticeState == LfgNoticeState.Queued)
+            if (listing.NotifyAtStart && !notifyAtStart && listing.StartNoticeState == LfgNoticeState.Queued)
                 await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "start_notice_switched_off", now, ct, LfgNoticePlanner.KindStart);
-            if (input.NotifyBeforeStart && !listing.NotifyBeforeStart && listing.ReminderState == LfgNoticeState.Pending && eventAt <= now)
+            if (notifyBefore && !listing.NotifyBeforeStart && listing.ReminderState == LfgNoticeState.Pending && eventAt <= now)
             {
                 listing.ReminderState = LfgNoticeState.Skipped;
                 listing.ReminderHandledAt = now;
             }
 
-            if (input.NotifyAtStart && !listing.NotifyAtStart && listing.StartNoticeState == LfgNoticeState.Pending && eventAt <= now)
+            if (notifyAtStart && !listing.NotifyAtStart && listing.StartNoticeState == LfgNoticeState.Pending && eventAt <= now)
             {
                 listing.StartNoticeState = LfgNoticeState.Skipped;
                 listing.StartNoticeHandledAt = now;
@@ -288,8 +303,8 @@ public sealed class LfgService(
             listing.MaxPlayers = maxPlayers;
             listing.EventAt = eventAt;
             listing.ExpiresAt = expiresAt;
-            listing.NotifyBeforeStart = input.NotifyBeforeStart;
-            listing.NotifyAtStart = input.NotifyAtStart;
+            listing.NotifyBeforeStart = notifyBefore;
+            listing.NotifyAtStart = notifyAtStart;
             listing.VoiceChannelId = voiceId;
             listing.Status = joined >= maxPlayers ? LfgStatus.Full : LfgStatus.Open;
             listing.CardStale = listing.MessageId is not null; // the form lives in another (ephemeral) message: the card is edited separately
@@ -384,6 +399,8 @@ public sealed class LfgService(
     /// <summary>The card could not be posted at all: the listing never existed for anyone, so it is removed (frees the owner's slot).</summary>
     public async Task DiscardAsync(long listingId, CancellationToken ct)
     {
+        // A notice planned in the meantime (short start) never goes out for a listing nobody saw.
+        await LfgNoticePlanner.CancelPendingAsync(db, listingId, "listing_discarded", clock.GetUtcNow(), ct);
         await Participants.Where(p => p.ListingId == listingId).ExecuteDeleteAsync(ct);
         await Listings.Where(x => x.Id == listingId).ExecuteDeleteAsync(ct);
         logger.LogWarning("LFG listing {Listing} discarded: its card could not be posted", listingId);

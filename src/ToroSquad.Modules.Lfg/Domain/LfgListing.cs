@@ -341,9 +341,10 @@ public sealed record LfgStartText(int? Minutes, string? At)
     public static LfgStartText Parse(string? text)
     {
         var value = LfgRules.Normalize(text);
-        if (value is null || NowWords.Contains(value.ToLowerInvariant()))
+        var lower = value is null ? null : LfgFormText.Lower(value);
+        if (lower is null || NowWords.Contains(lower))
             return Now;
-        var match = LfgFormText.RelativePattern().Match(value.ToLowerInvariant());
+        var match = LfgFormText.RelativePattern().Match(lower);
         if (!match.Success)
             return new LfgStartText(null, value);
         var minutes = LfgFormText.ToMinutes(match.Groups["n"].Value, match.Groups["unit"].Value, defaultUnitMinutes: 1);
@@ -375,9 +376,12 @@ public static partial class LfgFormText
         var value = LfgRules.Normalize(text);
         if (value is null)
             return null;
-        var match = DurationPattern().Match(value.ToLowerInvariant());
+        var match = DurationPattern().Match(Lower(value));
         return match.Success ? ToMinutes(match.Groups["n"].Value, match.Groups["unit"].Value, defaultUnitMinutes: 60) ?? Invalid : Invalid;
     }
+
+    /// <summary>Lower case for unit words, with the Turkish dotted capital I ("ŞİMDİ", "DAKİKA") read as i.</summary>
+    internal static string Lower(string value) => value.Replace('İ', 'i').ToLowerInvariant();
 
     /// <summary>Whole minutes of "number unit", or null when it is not a whole number of minutes (or absurdly large).</summary>
     internal static int? ToMinutes(string number, string unit, int defaultUnitMinutes)
@@ -389,7 +393,7 @@ public static partial class LfgFormText
             "" => defaultUnitMinutes,
             "dk" or "dak" or "dakika" or "min" or "m" => 1,
             "sa" or "saat" or "s" or "h" => 60,
-            _ => 1440, // gün / gun / g / d
+            _ => 1440, // gün / gun / g
         };
         var minutes = n * factor;
         return minutes != decimal.Truncate(minutes) || minutes > int.MaxValue ? null : (int)minutes;
@@ -401,6 +405,6 @@ public static partial class LfgFormText
     [GeneratedRegex(@"^(?<n>[0-9]{1,3}(?:[.,][0-9]{1,2})?)\s*(?<unit>dk|dak|dakika|min|m|sa|saat|s|h|)\.?$", RegexOptions.CultureInvariant)]
     private static partial Regex DurationPattern();
 
-    [GeneratedRegex(@"^(?<n>[0-9]{1,6}(?:[.,][0-9]{1,2})?)\s*(?<unit>dk|dak|dakika|min|m|sa|saat|s|h|gün|gun|g|d)\.?(?:\s*sonra)?$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(?<n>[0-9]{1,6}(?:[.,][0-9]{1,2})?)\s*(?<unit>dk|dak|dakika|min|m|sa|saat|s|h|gün|gun|g)\.?(?:\s*sonra)?$", RegexOptions.CultureInvariant)]
     internal static partial Regex RelativePattern();
 }

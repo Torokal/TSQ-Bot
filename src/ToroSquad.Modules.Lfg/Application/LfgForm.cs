@@ -66,6 +66,9 @@ public static class LfgForm
             : minutes.ToString(CultureInfo.InvariantCulture) + " dk";
     }
 
+    /// <summary>The same value as stored text (whitespace does not count; letter case does — "casual" → "Casual" is an edit).</summary>
+    public static bool SameValue(string? a, string? b) => string.Equals(LfgRules.Normalize(a), LfgRules.Normalize(b), StringComparison.Ordinal);
+
     /// <summary>Same text for the form's purposes (whitespace and letter case do not count).</summary>
     public static bool SameText(string? a, string? b) =>
         string.Equals(LfgRules.Normalize(a), LfgRules.Normalize(b), StringComparison.OrdinalIgnoreCase);
@@ -90,12 +93,17 @@ public sealed record LfgFormPreview(string GameName, string? Details, int MaxPla
 /// <summary>Result of checking a submitted form without storing anything.</summary>
 public sealed record LfgFormCheck(OperationResult Result, LfgFormPreview? Preview);
 
+/// <summary>The settings of a listing as the edit form found them (notice opt-ins and voice channel, as stored).</summary>
+public sealed record LfgFormSettings(bool NotifyBeforeStart, bool NotifyAtStart, ChannelId? VoiceChannel);
+
 /// <summary>
-/// What the owner saves in the edit form: the texts plus the settings of the second step. <see cref="Opened"/> is the form
-/// as it was shown when opened: a start or duration left as shown there stays as stored now (a newer edit is not undone,
-/// a time-zone change does not shift it).
+/// What the owner saves in the edit form: the texts plus the settings of the second step. <see cref="Opened"/> and
+/// <see cref="OpenedSettings"/> are the listing as the form found it when opened: every field left as it was there stays as
+/// stored NOW — a stale form never undoes a newer edit of a field it did not touch (and a time-zone change does not shift
+/// an untouched start). Without them (no snapshot) every field is taken as typed.
 /// </summary>
-public sealed record LfgEditInput(LfgFormValues Form, bool NotifyBeforeStart, bool NotifyAtStart, ChannelId? VoiceChannel, LfgFormValues? Opened = null);
+public sealed record LfgEditInput(LfgFormValues Form, bool NotifyBeforeStart, bool NotifyAtStart, ChannelId? VoiceChannel, LfgFormValues? Opened = null,
+    LfgFormSettings? OpenedSettings = null);
 
 /// <summary>
 /// The edit form of a listing, opened only for its owner while it is active. <see cref="Voice"/> is the listing's voice

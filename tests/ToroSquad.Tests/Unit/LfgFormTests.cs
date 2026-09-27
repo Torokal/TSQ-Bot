@@ -47,6 +47,10 @@ public sealed class LfgFormTests
     [InlineData("2 h", 120, null)]
     [InlineData("90 min", 90, null)]
     [InlineData("1 gün", 1440, null)]
+    [InlineData("ŞİMDİ", null, null)]
+    [InlineData("SİMDİ", null, null)]
+    [InlineData("30 DAKİKA", 30, null)]
+    [InlineData("30 d", null, "30 d")] // "d" could be dakika or day: not a unit, refused as a date
     [InlineData("1,33 saat", LfgStartText.Unusable, null)]
     [InlineData("05.10.2026 21:30", null, "05.10.2026 21:30")]
     [InlineData("2026-10-05 21:30", null, "2026-10-05 21:30")]

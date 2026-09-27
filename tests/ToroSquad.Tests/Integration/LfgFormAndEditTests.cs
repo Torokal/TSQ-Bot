@@ -574,6 +574,86 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         (saved.Listing!.Details, saved.Listing.EventAt).Should().Be(("A", (DateTimeOffset?)T0.AddHours(3)), "form A left its start as shown: B's start stays");
     }
 
+    /// <summary>The form as the save step sends it: typed values plus the snapshot of the listing the form was opened on.</summary>
+    private Task<LfgResult> SaveFormAsync(long id, LfgEditOpening opened, LfgFormValues typed, bool before, bool atStart, ChannelId? voice) =>
+        Lfg(s => s.EditAsync(User(Owner), id, new LfgEditInput(typed, before, atStart, voice, opened.Prefill,
+            new LfgFormSettings(opened.Listing!.NotifyBeforeStart, opened.Listing.NotifyAtStart, opened.Listing.VoiceChannel)), Ct));
+
+    [Fact]
+    public async Task A_stale_form_never_reverts_any_field_it_did_not_touch()
+    {
+        var listing = await OpenAsync(Form(details: "casual", start: "2 saat"), before: true, voice: Voice);
+        var formA = await OpenEditAsync(listing.Id);
+        var formB = await OpenEditAsync(listing.Id);
+
+        (await SaveFormAsync(listing.Id, formB, formB.Prefill! with { Game = "Valheim", Players = "4" }, before: false, atStart: true, voice: Voice2))
+            .Result.MessageKey.Should().Be("lfg.edit.done");
+        (await SaveFormAsync(listing.Id, formA, formA.Prefill! with { Details = "Casual" }, before: true, atStart: false, voice: Voice))
+            .Result.MessageKey.Should().Be("lfg.edit.done", "only the details were changed in form A (letter case counts)");
+
+        var after = (await GetAsync(listing.Id))!;
+        (after.GameName, after.MaxPlayers, after.Details).Should().Be(("Valheim", 4, (string?)"Casual"));
+        (after.NotifyBeforeStart, after.NotifyAtStart, after.VoiceChannel).Should().Be((false, true, (ChannelId?)Voice2), "form B's settings stay");
+        after.EventAt.Should().Be(T0.AddHours(2));
+    }
+
+    [Fact]
+    public async Task A_deleted_voice_channel_is_removed_when_the_form_keeps_none()
+    {
+        var listing = await OpenAsync(voice: Voice);
+        _host.Guilds.RemoveVoiceChannel(Guild, Voice);
+        var opened = await OpenEditAsync(listing.Id);
+        opened.Voice.Should().BeNull();
+
+        (await SaveFormAsync(listing.Id, opened, opened.Prefill! with { Details = "yeni" }, false, false, opened.Voice)).Result.MessageKey.Should().Be("lfg.edit.done");
+
+        var after = (await GetAsync(listing.Id))!;
+        (after.Details, after.VoiceChannel).Should().Be(("yeni", (ChannelId?)null));
+    }
+
+    [Fact]
+    public async Task A_kept_voice_channel_that_vanished_since_the_form_opened_is_refused()
+    {
+        var listing = await OpenAsync(voice: Voice);
+        var opened = await OpenEditAsync(listing.Id);
+        _host.Guilds.RemoveVoiceChannel(Guild, Voice);
+
+        (await SaveFormAsync(listing.Id, opened, opened.Prefill! with { Details = "yeni" }, false, false, Voice)).Result.MessageKey.Should().Be("lfg.create.voice_invalid");
+        (await GetAsync(listing.Id))!.Details.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task An_untouched_team_size_survives_a_lowered_maximum()
+    {
+        var listing = await OpenAsync(Form(players: "6"));
+        await _host.InScopeAsync(async sp => await sp.GetRequiredService<ToroDbContext>().Set<LfgListingEntity>().Where(x => x.Id == listing.Id)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.MaxPlayers, 30), Ct)); // above Lfg:MaxPlayersPerListing (20), e.g. lowered later
+        var opened = await OpenEditAsync(listing.Id);
+
+        (await SaveFormAsync(listing.Id, opened, opened.Prefill! with { Details = "yeni" }, false, false, null)).Result.MessageKey.Should().Be("lfg.edit.done");
+        (await SaveFormAsync(listing.Id, opened, opened.Prefill! with { Players = "25" }, false, false, null)).Result.MessageKey.Should().Be("lfg.create.players_range");
+        (await GetAsync(listing.Id))!.MaxPlayers.Should().Be(30);
+    }
+
+    [Fact]
+    public async Task A_discarded_listing_never_sends_a_notice_planned_meanwhile()
+    {
+        var listing = await OpenAsync(Form(start: "40 dk"), before: true);
+        _host.Clock.Advance(TimeSpan.FromMinutes(11));
+        await _host.Services.GetRequiredService<LfgExpiryWorker>().RunOnceAsync(Ct);
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Pending);
+
+        await Lfg(async s =>
+        {
+            await s.DiscardAsync(listing.Id, Ct);
+            return 0;
+        });
+        await TickAsync();
+
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Cancelled);
+        Delivered().Should().BeEmpty();
+    }
+
     [Fact]
     public async Task A_typed_date_is_refused_when_the_guild_time_zone_is_unknown()
     {
