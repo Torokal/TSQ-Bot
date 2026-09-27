@@ -42,12 +42,19 @@ public sealed class LfgCommands(
         [Summary("oyun", "Game or activity (e.g. Deadlock, CS2, Valheim)"), MinLength(LfgRules.GameNameMinLength), MaxLength(LfgRules.GameNameMaxLength)] string oyun,
         [Summary("kisi", "Total team size including you"), MinValue(LfgRules.MinPlayers), MaxValue(LfgRules.HardMaxPlayers)] int kisi,
         [Summary("detay", "Short details: mode, rank, roles, plan…"), MaxLength(LfgRules.DetailsMaxLength)] string? detay = null,
-        [Summary("sure", "How long the listing stays open (empty: default duration)"), Choice("1 hour", 60), Choice("2 hours", 120), Choice("3 hours", 180)] int? sure = null)
+        [Summary("baslangic", "When it starts (empty: now)"), Choice("Now", 0), Choice("In 30 minutes", 30), Choice("In 1 hour", 60), Choice("In 1.5 hours", 90),
+         Choice("In 2 hours", 120), Choice("In 3 hours", 180), Choice("In 4 hours", 240), Choice("In 6 hours", 360), Choice("In 8 hours", 480),
+         Choice("In 12 hours", 720), Choice("In 24 hours", 1440)] int? baslangic = null,
+        [Summary("sure", "How long the listing stays open (from the start; empty: default)"), Choice("1 hour", 60), Choice("2 hours", 120), Choice("3 hours", 180)] int? sure = null,
+        [Summary("hatirlat_30dk", "Ping the joined players 30 minutes before the start")] bool remindBefore = false,
+        [Summary("baslangicta_etiketle", "Ping the joined players when it starts")] bool pingAtStart = false,
+        [Summary("ses_kanali", "Voice channel for the group"), ChannelTypes(ChannelType.Voice)] IChannel? voiceChannel = null)
     {
         // No defer: validation and the insert take milliseconds, and a refusal must stay private while the card is public.
-        var created = await lfg.CreateAsync(Actor, Here, oyun, kisi, detay, sure, CancellationToken.None);
+        var input = new LfgCreateInput(oyun, kisi, detay, sure, baslangic, remindBefore, pingAtStart, voiceChannel is null ? null : new ChannelId(voiceChannel.Id));
+        var created = await lfg.CreateAsync(Actor, Here, input, CancellationToken.None);
         if (created.Result.MessageKey == "lfg.create.limit" && await OwnerCardWasDeletedAsync())
-            created = await lfg.CreateAsync(Actor, Here, oyun, kisi, detay, sure, CancellationToken.None);
+            created = await lfg.CreateAsync(Actor, Here, input, CancellationToken.None);
         if (!created.Result.Succeeded || created.Listing is not { } listing)
         {
             await ReplyResultAsync(created.Result);
@@ -82,8 +89,34 @@ public sealed class LfgCommands(
     [ComponentInteraction(LfgCardRenderer.JoinPrefix + "*", ignoreGroupNames: true)]
     public Task JoinAsync(string id) => CardActionAsync(id, lfg.JoinAsync);
 
+    [ComponentInteraction(LfgCardRenderer.MaybePrefix + "*", ignoreGroupNames: true)]
+    public Task MaybeAsync(string id) => CardActionAsync(id, lfg.MaybeAsync);
+
     [ComponentInteraction(LfgCardRenderer.LeavePrefix + "*", ignoreGroupNames: true)]
     public Task LeaveAsync(string id) => CardActionAsync(id, lfg.LeaveAsync);
+
+    /// <summary>
+    /// "🔊 Ses Odası" on the card and on the event notices (same handler). Moves a Joined player who is already in voice when
+    /// the bot may; otherwise answers privately with the channel and a link that opens it — it never claims a connection it
+    /// did not make. No card backfill here: a notice is not the card.
+    /// </summary>
+    [ComponentInteraction(LfgCardRenderer.VoicePrefix + "*", ignoreGroupNames: true)]
+    public async Task VoiceAsync(string id)
+    {
+        await DeferEphemeralAsync();
+        if (!long.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var listingId))
+        {
+            await ReplyTextAsync("lfg.not_found");
+            return;
+        }
+
+        var result = await lfg.VoiceAsync(Actor, listingId, CancellationToken.None);
+        var text = await T(result.Result.MessageKey, result.Result.Args.ToArray());
+        var components = result.OpenChannelUrl is { } url
+            ? new ComponentBuilder().WithButton(await T("lfg.voice.open_button"), url: url, style: ButtonStyle.Link).Build()
+            : null;
+        await SendEphemeralAsync(text, null, components);
+    }
 
     /// <summary>Close, step 1: only the owner or a moderator gets the private confirmation.</summary>
     [ComponentInteraction(LfgCardRenderer.ClosePrefix + "*", ignoreGroupNames: true)]

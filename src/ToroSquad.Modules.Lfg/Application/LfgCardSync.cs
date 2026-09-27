@@ -176,7 +176,10 @@ public sealed class LfgCardSync(
         listing.CardStale = false;
         listing.CardSyncAttempts = 0;
         listing.Version++;
-        return await SaveAsync(ct);
+        if (!await SaveAsync(ct))
+            return false;
+        await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "listing_orphaned", clock.GetUtcNow(), ct);
+        return true;
     }
 
     /// <summary>A concurrent state change wins (its card is stale again or was redrawn interactively); retried next pass.</summary>

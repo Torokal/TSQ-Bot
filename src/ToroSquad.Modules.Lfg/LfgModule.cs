@@ -23,6 +23,12 @@ public sealed class LfgModule : IToroModule
     public const string ModuleIdValue = "lfg";
     public static readonly ModuleId ModuleIdTyped = new(ModuleIdValue);
 
+    /// <summary>
+    /// Read Message History: notice a card deleted in Discord early. Move Members (+ Connect on the voice channel): move a
+    /// member who is already in voice with one click. Without them those features fall back gracefully.
+    /// </summary>
+    public const GuildPermission OptionalPermissions = GuildPermission.ReadMessageHistory | GuildPermission.MoveMembers | GuildPermission.Connect;
+
     public ModuleDescriptor Descriptor { get; } = new(
         ModuleIdTyped,
         new Version(0, 1, 0),
@@ -31,7 +37,7 @@ public sealed class LfgModule : IToroModule
         IsCore: false,
         EnabledByDefault: false, // explicit activation: /modules enable lfg
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks, // the bot edits its cards on expiry/close
-        OptionalBotPermissions: GuildPermission.ReadMessageHistory, // lets the worker notice a card deleted in Discord
+        OptionalBotPermissions: OptionalPermissions,
         AdminCommands: ["lfg-admin"]);
 
     public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LfgCommands), typeof(LfgAdminCommands)];
@@ -43,9 +49,11 @@ public sealed class LfgModule : IToroModule
         services.AddSingleton<IModelContributor, LfgModelContributor>();
 
         services.AddSingleton<LfgCardRenderer>();
+        services.AddSingleton<LfgNoticeRenderer>();
         services.AddSingleton<LfgExpiryWorker>();
         services.AddScoped<LfgService>();
         services.AddScoped<LfgCardSync>();
+        services.AddScoped<LfgNoticePlanner>();
         services.AddScoped<LfgConfigService>();
         services.AddScoped<IUserDataContributor, LfgUserData>();
     }

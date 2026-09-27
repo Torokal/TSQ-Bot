@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "dc3d45f2c80b11c9f7e0efa4c86c0cf76b112e8af11f7bd2a221eb97de3d1995",
+  "hash": "de663c543228924a1948eeaecdb309ad1656dcc57b96f68852fd1a2d219bd167",
   "commands": [
     {
       "module": "core",
@@ -99,10 +99,98 @@
           },
           {
             "type": 4,
-            "name": "sure",
-            "description": "How long the listing stays open (empty: default duration)",
+            "name": "baslangic",
+            "description": "When it starts (empty: now)",
             "description_localizations": {
-              "tr": "İlan ne kadar açık kalsın (boş: varsayılan süre)"
+              "tr": "Ne zaman başlıyor (boş: şimdi)"
+            },
+            "required": false,
+            "choices": [
+              {
+                "name": "Now",
+                "name_localizations": {
+                  "tr": "Şimdi"
+                },
+                "value": 0
+              },
+              {
+                "name": "In 30 minutes",
+                "name_localizations": {
+                  "tr": "30 dakika sonra"
+                },
+                "value": 30
+              },
+              {
+                "name": "In 1 hour",
+                "name_localizations": {
+                  "tr": "1 saat sonra"
+                },
+                "value": 60
+              },
+              {
+                "name": "In 1.5 hours",
+                "name_localizations": {
+                  "tr": "1,5 saat sonra"
+                },
+                "value": 90
+              },
+              {
+                "name": "In 2 hours",
+                "name_localizations": {
+                  "tr": "2 saat sonra"
+                },
+                "value": 120
+              },
+              {
+                "name": "In 3 hours",
+                "name_localizations": {
+                  "tr": "3 saat sonra"
+                },
+                "value": 180
+              },
+              {
+                "name": "In 4 hours",
+                "name_localizations": {
+                  "tr": "4 saat sonra"
+                },
+                "value": 240
+              },
+              {
+                "name": "In 6 hours",
+                "name_localizations": {
+                  "tr": "6 saat sonra"
+                },
+                "value": 360
+              },
+              {
+                "name": "In 8 hours",
+                "name_localizations": {
+                  "tr": "8 saat sonra"
+                },
+                "value": 480
+              },
+              {
+                "name": "In 12 hours",
+                "name_localizations": {
+                  "tr": "12 saat sonra"
+                },
+                "value": 720
+              },
+              {
+                "name": "In 24 hours",
+                "name_localizations": {
+                  "tr": "24 saat sonra"
+                },
+                "value": 1440
+              }
+            ]
+          },
+          {
+            "type": 4,
+            "name": "sure",
+            "description": "How long the listing stays open (from the start; empty: default)",
+            "description_localizations": {
+              "tr": "İlan ne kadar açık kalsın (planlıysa başlangıçtan itibaren; boş: varsayılan)"
             },
             "required": false,
             "choices": [
@@ -127,6 +215,36 @@
                 },
                 "value": 180
               }
+            ]
+          },
+          {
+            "type": 5,
+            "name": "hatirlat_30dk",
+            "description": "Ping the joined players 30 minutes before the start",
+            "description_localizations": {
+              "tr": "Başlangıçtan 30 dakika önce katılanları etiketle"
+            },
+            "required": false
+          },
+          {
+            "type": 5,
+            "name": "baslangicta_etiketle",
+            "description": "Ping the joined players when it starts",
+            "description_localizations": {
+              "tr": "Başladığında katılanları etiketle"
+            },
+            "required": false
+          },
+          {
+            "type": 7,
+            "name": "ses_kanali",
+            "description": "Voice channel for the group",
+            "description_localizations": {
+              "tr": "Ekip için ses kanalı"
+            },
+            "required": false,
+            "channel_types": [
+              2
             ]
           }
         ]

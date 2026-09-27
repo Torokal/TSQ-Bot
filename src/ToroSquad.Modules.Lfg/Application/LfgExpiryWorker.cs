@@ -6,7 +6,8 @@ namespace ToroSquad.Modules.Lfg.Application;
 
 /// <summary>
 /// One loop for all listings (no timer per listing): about once a minute it expires every active listing whose time is up —
-/// on the first pass after a restart that includes everything that expired while the bot was down — and redraws stale
+/// on the first pass after a restart that includes everything that expired while the bot was down — queues the event
+/// notices that became due (<see cref="LfgNoticePlanner"/>, about minute resolution), and redraws stale
 /// cards; every <see cref="VerifyInterval"/> it also checks that active cards still exist (one read each, orphaning deleted
 /// ones). Listings are state in the database, so nothing is lost across deploys. Expiry also runs while the module is
 /// disabled in a guild: it only retires cards that would otherwise keep looking joinable.
@@ -27,6 +28,8 @@ public sealed class LfgExpiryWorker(IServiceScopeFactory scopes, TimeProvider cl
     {
         await using var scope = scopes.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<LfgService>().ExpireDueAsync(cancellationToken);
+        var notices = scope.ServiceProvider.GetRequiredService<LfgNoticePlanner>();
+        await notices.PlanDueAsync(cancellationToken); // 30-minute reminders and start notices that became due
         var cards = scope.ServiceProvider.GetRequiredService<LfgCardSync>();
         await cards.SyncStaleAsync(cancellationToken);
 
@@ -35,6 +38,7 @@ public sealed class LfgExpiryWorker(IServiceScopeFactory scopes, TimeProvider cl
         {
             _lastVerify = now;
             await cards.VerifyActiveCardsAsync(cancellationToken);
+            await notices.PruneAsync(cancellationToken);
         }
     }
 

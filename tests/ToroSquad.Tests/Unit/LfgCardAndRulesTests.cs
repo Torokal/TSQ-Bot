@@ -37,11 +37,12 @@ public sealed class LfgCardAndRulesTests
         card.Embed!.Title.Should().Be("🎮 " + game);
         var description = card.Embed.Description!;
         description.Should().StartWith("<@1> ekip arıyor\n👥 **2 / " + max + "**\n📝 ");
-        description.Should().Contain("**Oyuncular**\n<@1> · <@2>");
+        description.Should().Contain("**Katılanlar**\n<@1> · <@2>").And.NotContain("Belki").And.NotContain("Başlangıç").And.NotContain("Ses Odası");
         description.Should().EndWith("⏰ <t:" + T0.AddHours(2).ToUnixTimeSeconds() + ":R> kapanır");
         card.Embed.Footer.Should().Be("TSQ LFG · Oyuncu Bul");
         card.Buttons!.Select(b => (b.Label, b.CustomId, b.Disabled, b.Style)).Should().Equal(
             ("Katıl", "tsq:lfg:join:7", false, MessageButtonStyle.Success),
+            ("Belki", "tsq:lfg:maybe:7", false, MessageButtonStyle.Secondary),
             ("Ayrıl", "tsq:lfg:leave:7", false, MessageButtonStyle.Secondary),
             ("İlanı Kapat", "tsq:lfg:close:7", false, MessageButtonStyle.Danger));
         DiscordLimits.Validate(card).Should().BeEmpty();
@@ -53,7 +54,7 @@ public sealed class LfgCardAndRulesTests
         var card = Renderer().Render(Listing("Deadlock", null, 2, LfgStatus.Full, 1, 2), "tr");
 
         card.Embed!.Description.Should().Contain("✅ **Ekip tamamlandı**").And.Contain("kapanır").And.NotContain("📝");
-        card.Buttons!.Select(b => b.Disabled).Should().Equal(true, false, false);
+        card.Buttons!.Select(b => b.Disabled).Should().Equal(true, false, false, false); // Katıl off; Belki, Ayrıl, Kapat on
         card.Embed.Color.Should().Be(LfgCardRenderer.FullColor);
     }
 
@@ -87,7 +88,7 @@ public sealed class LfgCardAndRulesTests
         var card = Renderer().Render(Listing("Minecraft", null, 4), "en");
 
         card.Embed!.Description.Should().StartWith("<@1> is looking for players").And.Contain("⏰ Closes <t:");
-        card.Buttons!.Select(b => b.Label).Should().Equal("Join", "Leave", "Close listing");
+        card.Buttons!.Select(b => b.Label).Should().Equal("Join", "Maybe", "Leave", "Close listing");
     }
 
     [Theory]

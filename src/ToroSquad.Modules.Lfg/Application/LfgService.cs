@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ToroSquad.Core;
+using ToroSquad.Core.Roles;
 using ToroSquad.Core.Security;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Lfg.Domain;
@@ -15,13 +16,34 @@ namespace ToroSquad.Modules.Lfg.Application;
 public sealed record LfgResult(OperationResult Result, LfgListingView? Listing, bool RefreshCard);
 
 /// <summary>
-/// The LFG business rules: create, join, leave, close, expire. Every operation re-reads the listing and re-checks guild,
-/// state, expiry, membership, capacity and permission server-side — the state of a button in Discord is never trusted.
-/// Every state change runs in a write transaction that takes SQLite's write lock before reading (BEGIN IMMEDIATE), so
-/// check-then-write (free slot, membership, active-listing limit) is serialized across connections; the (ListingId, UserId)
-/// primary key and the listing's version token are the backstops.
+/// What /ekip asked for. <see cref="StartMinutes"/>: one of <see cref="LfgRules.StartChoicesMinutes"/> (null/0 = now).
+/// The notices are explicit opt-ins and need a later start. <see cref="VoiceChannel"/>: optional guild voice channel.
 /// </summary>
-public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, TimeProvider clock, ILogger<LfgService> logger)
+public sealed record LfgCreateInput(
+    string? Game,
+    int Players,
+    string? Details = null,
+    int? DurationMinutes = null,
+    int? StartMinutes = null,
+    bool NotifyBeforeStart = false,
+    bool NotifyAtStart = false,
+    ChannelId? VoiceChannel = null);
+
+/// <summary>
+/// Outcome of the voice button. <see cref="OpenChannelUrl"/> is set when the bot did not move the member (not connected to
+/// voice, or the bot may not move members): a link that OPENS the channel in Discord — it connects nobody by itself.
+/// </summary>
+public sealed record LfgVoiceResult(OperationResult Result, string? OpenChannelUrl = null);
+
+/// <summary>
+/// The LFG business rules: create, join / maybe / leave, close, expire, the voice action. Every operation re-reads the
+/// listing and re-checks guild, state, expiry, membership, capacity and permission server-side — the state of a button in
+/// Discord is never trusted. Only Joined players fill slots (Maybe never counts). Every state change runs in a write
+/// transaction that takes SQLite's write lock before reading (BEGIN IMMEDIATE), so check-then-write (free slot,
+/// membership, active-listing limit) is serialized across connections; the (ListingId, UserId) primary key and the
+/// listing's version token are the backstops.
+/// </summary>
+public sealed class LfgService(ToroDbContext db, IGuildGateway guilds, IOptions<LfgOptions> options, TimeProvider clock, ILogger<LfgService> logger)
 {
     /// <summary>Guild moderators (Discord's "Manage Messages", or Administrator) may close any listing.</summary>
     public const GuildPermission ModeratorPermission = GuildPermission.ManageMessages;
@@ -33,10 +55,14 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
     private DbSet<LfgListingEntity> Listings => db.Set<LfgListingEntity>();
     private DbSet<LfgParticipantEntity> Participants => db.Set<LfgParticipantEntity>();
 
-    public async Task<LfgResult> CreateAsync(ActorContext actor, ChannelId channel, string? game, int players, string? details, int? durationMinutes, CancellationToken ct)
+    public Task<LfgResult> CreateAsync(ActorContext actor, ChannelId channel, string? game, int players, string? details, int? durationMinutes, CancellationToken ct) =>
+        CreateAsync(actor, channel, new LfgCreateInput(game, players, details, durationMinutes), ct);
+
+    public async Task<LfgResult> CreateAsync(ActorContext actor, ChannelId channel, LfgCreateInput input, CancellationToken ct)
     {
         var o = options.Value;
-        var (draft, error) = LfgRules.Validate(game, details, players, durationMinutes, o.MaxPlayersPerListing, o.DefaultExpirationMinutes);
+        var (draft, error) = LfgRules.Validate(input.Game, input.Details, input.Players, input.DurationMinutes, o.MaxPlayersPerListing, o.DefaultExpirationMinutes,
+            input.StartMinutes, input.NotifyBeforeStart || input.NotifyAtStart);
         if (draft is null)
             return Refused(error switch
             {
@@ -44,6 +70,8 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
                 LfgDraftError.GameTooLong => No(OperationError.InvalidInput, "lfg.create.game_too_long", LfgRules.GameNameMaxLength),
                 LfgDraftError.DetailsTooLong => No(OperationError.InvalidInput, "lfg.create.details_too_long", LfgRules.DetailsMaxLength),
                 LfgDraftError.PlayersOutOfRange => No(OperationError.InvalidInput, "lfg.create.players_range", LfgRules.MinPlayers, Math.Min(o.MaxPlayersPerListing, LfgRules.HardMaxPlayers)),
+                LfgDraftError.StartInvalid => No(OperationError.InvalidInput, "lfg.create.start_invalid"),
+                LfgDraftError.NoticeNeedsStart => No(OperationError.InvalidInput, "lfg.create.notice_needs_start"),
                 _ => No(OperationError.InvalidInput, "lfg.create.duration_invalid"),
             });
 
@@ -51,7 +79,12 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
         if (config?.ChannelId is { } only && only != channel.Value)
             return Refused(No(OperationError.InvalidInput, "lfg.create.wrong_channel", "<#" + only.ToString(CultureInfo.InvariantCulture) + ">"));
 
+        // Must be a plain voice channel of THIS guild as the bot sees it (another guild's id is simply unknown here).
+        if (input.VoiceChannel is { } voice && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, voice, ct)).Usable)
+            return Refused(No(OperationError.InvalidInput, "lfg.create.voice_invalid"));
+
         var now = clock.GetUtcNow();
+        var (eventAt, expiresAt) = draft.Schedule(now);
         var guild = actor.GuildId.Value;
         var owner = actor.UserId.Value;
         var id = await WriteAsync(async () =>
@@ -70,8 +103,12 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
                 MaxPlayers = draft.MaxPlayers,
                 Status = LfgStatus.Open,
                 CreatedAt = now,
-                ExpiresAt = now + draft.Duration,
-                Participants = [new LfgParticipantEntity { UserId = owner, JoinedAt = now }], // the owner is the first player
+                EventAt = eventAt,
+                ExpiresAt = expiresAt,
+                VoiceChannelId = input.VoiceChannel?.Value,
+                NotifyBeforeStart = input.NotifyBeforeStart,
+                NotifyAtStart = input.NotifyAtStart,
+                Participants = [new LfgParticipantEntity { UserId = owner, Response = LfgResponse.Joined, JoinedAt = now }], // the owner is the first player
             };
             Listings.Add(listing);
             await db.SaveChangesAsync(ct);
@@ -80,8 +117,8 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
 
         if (id == 0)
             return Refused(No(OperationError.Conflict, "lfg.create.limit", o.MaxActiveListingsPerUser));
-        logger.LogInformation("LFG listing {Listing} created in guild {Guild} channel {Channel}: {Max} players, expires {ExpiresAt:O}",
-            id, guild, channel, draft.MaxPlayers, now + draft.Duration);
+        logger.LogInformation("LFG listing {Listing} created in guild {Guild} channel {Channel}: {Max} players, starts {EventAt:O}, expires {ExpiresAt:O}",
+            id, guild, channel, draft.MaxPlayers, eventAt ?? now, expiresAt);
         return new LfgResult(OperationResult.Ok("lfg.create.done"), await GetAsync(id, ct), RefreshCard: true);
     }
 
@@ -98,6 +135,7 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
         logger.LogWarning("LFG listing {Listing} discarded: its card could not be posted", listingId);
     }
 
+    /// <summary>"Katıl": a new player, or a Maybe who commits. Only Joined players count against <c>MaxPlayers</c>.</summary>
     public async Task<LfgResult> JoinAsync(ActorContext actor, long listingId, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
@@ -112,10 +150,12 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
             if (Ended(listing) is { } ended)
                 return (ended, true);
 
-            var players = await Participants.Where(p => p.ListingId == listing.Id).Select(p => p.UserId).ToListAsync(ct);
-            if (players.Contains(user))
+            var members = await Participants.Where(p => p.ListingId == listing.Id).ToListAsync(ct);
+            var mine = members.FirstOrDefault(p => p.UserId == user);
+            if (mine is { Response: LfgResponse.Joined })
                 return (No(OperationError.Conflict, "lfg.join.already"), false);
-            if (players.Count >= listing.MaxPlayers)
+            var joined = members.Count(p => p.Response == LfgResponse.Joined); // only confirmed players fill slots
+            if (joined >= listing.MaxPlayers)
             {
                 if (listing.Status != LfgStatus.Full)
                 {
@@ -124,11 +164,21 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
                     await db.SaveChangesAsync(ct);
                 }
 
-                return (No(OperationError.Conflict, "lfg.join.full"), true); // the clicked card still offered a slot
+                // A Maybe stays Maybe; the clicked card still offered a slot.
+                return (No(OperationError.Conflict, mine is null ? "lfg.join.full" : "lfg.join.full_stays_maybe"), true);
             }
 
-            Participants.Add(new LfgParticipantEntity { ListingId = listing.Id, UserId = user, JoinedAt = now });
-            var full = players.Count + 1 >= listing.MaxPlayers;
+            if (mine is null)
+            {
+                Participants.Add(new LfgParticipantEntity { ListingId = listing.Id, UserId = user, Response = LfgResponse.Joined, JoinedAt = now });
+            }
+            else
+            {
+                mine.Response = LfgResponse.Joined; // Maybe -> Joined
+                mine.JoinedAt = now;
+            }
+
+            var full = joined + 1 >= listing.MaxPlayers;
             if (full)
                 listing.Status = LfgStatus.Full;
             listing.Version++;
@@ -149,6 +199,57 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
         return new LfgResult(result, await GetAsync(listingId, ct), refresh);
     }
 
+    /// <summary>
+    /// "Belki": not a confirmed player — no slot, not counted for Full, never pinged. From Joined it frees the slot (Full
+    /// reopens). Allowed while Full. The owner is always Joined.
+    /// </summary>
+    public async Task<LfgResult> MaybeAsync(ActorContext actor, long listingId, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var user = actor.UserId.Value;
+        var (result, refresh) = await WriteAsync(async () =>
+        {
+            var listing = await FindAsync(actor, listingId, ct);
+            if (listing is null)
+                return (NotFound(), false);
+            if (await ExpireIfDueAsync(listing, now, cardStale: false, ct))
+                return (Expired(), true);
+            if (Ended(listing) is { } ended)
+                return (ended, true);
+            if (listing.OwnerUserId == user)
+                return (No(OperationError.InvalidInput, "lfg.maybe.owner"), false);
+
+            var mine = await Participants.FirstOrDefaultAsync(p => p.ListingId == listing.Id && p.UserId == user, ct);
+            if (mine is { Response: LfgResponse.Maybe })
+                return (No(OperationError.Conflict, "lfg.maybe.already"), false);
+            if (mine is null)
+            {
+                Participants.Add(new LfgParticipantEntity { ListingId = listing.Id, UserId = user, Response = LfgResponse.Maybe, JoinedAt = now });
+            }
+            else
+            {
+                mine.Response = LfgResponse.Maybe; // Joined -> Maybe frees the slot
+                mine.JoinedAt = now;
+                if (listing.Status == LfgStatus.Full)
+                    listing.Status = LfgStatus.Open;
+            }
+
+            listing.Version++;
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: SqliteConstraint })
+            {
+                return (No(OperationError.Conflict, "lfg.maybe.already"), false);
+            }
+
+            return (OperationResult.Ok("lfg.maybe.done"), true);
+        }, ct);
+        return new LfgResult(result, await GetAsync(listingId, ct), refresh);
+    }
+
+    /// <summary>"Ayrıl": removes a Joined or Maybe member completely; a Joined one frees a slot (Full reopens).</summary>
     public async Task<LfgResult> LeaveAsync(ActorContext actor, long listingId, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
@@ -170,7 +271,7 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
                 return (No(OperationError.NotFound, "lfg.leave.not_member"), false);
 
             Participants.Remove(participant);
-            if (listing.Status == LfgStatus.Full)
+            if (participant.Response == LfgResponse.Joined && listing.Status == LfgStatus.Full)
                 listing.Status = LfgStatus.Open; // a slot is free again and the listing has not expired
             listing.Version++;
             await db.SaveChangesAsync(ct);
@@ -201,7 +302,8 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
 
     /// <summary>
     /// Owner or moderator closes the listing. Idempotent: closing a closed listing succeeds without a change. The message
-    /// is kept (history); the card is marked stale so it is redrawn as closed with disabled buttons.
+    /// is kept (history); the card is marked stale so it is redrawn as closed with disabled buttons; a notice still waiting
+    /// in the outbox is cancelled.
     /// </summary>
     public async Task<LfgResult> CloseAsync(ActorContext actor, long listingId, CancellationToken ct)
     {
@@ -227,6 +329,7 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
             listing.CardSyncAttempts = 0;
             listing.Version++;
             await db.SaveChangesAsync(ct);
+            await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "listing_closed", now, ct);
             logger.LogInformation("LFG listing {Listing} closed by its {Who}", listing.Id, listing.OwnerUserId == actor.UserId.Value ? "owner" : "moderator");
             return (OperationResult.Ok("lfg.close.done"), true);
         }, ct);
@@ -257,6 +360,53 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
         return expired.Select(x => x.Id).ToList();
     }
 
+    /// <summary>
+    /// The voice button (card or notice). Re-reads everything: guild, active listing, the caller is a Joined player, the
+    /// voice channel still exists as a voice channel of this guild. A member who is already connected to voice is moved there
+    /// when the bot may (Move Members + Connect) and the member may connect themselves. Discord gives bots no way to connect a
+    /// member who is not in voice: then (or without Move Members) the answer is the channel and a link that opens it — never a
+    /// claimed "join". A vanished channel only disables the voice feature; the listing itself is untouched.
+    /// </summary>
+    public async Task<LfgVoiceResult> VoiceAsync(ActorContext actor, long listingId, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var listing = await Listings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == listingId && x.GuildId == actor.GuildId.Value, ct);
+        if (listing is null)
+            return new(NotFound());
+        if ((Ended(listing) ?? (listing.ExpiresAt <= now ? Expired() : null)) is { } ended)
+            return new(ended);
+        if (listing.VoiceChannelId is not { } voiceId)
+            return new(No(OperationError.NotFound, "lfg.voice.none"));
+        var response = await Participants.AsNoTracking().Where(p => p.ListingId == listing.Id && p.UserId == actor.UserId.Value)
+            .Select(p => (LfgResponse?)p.Response).FirstOrDefaultAsync(ct);
+        if (response != LfgResponse.Joined)
+            return new(No(OperationError.Forbidden, "lfg.voice.join_first")); // Maybe or not in the team
+
+        var channel = new ChannelId(voiceId);
+        var mention = "<#" + voiceId.ToString(CultureInfo.InvariantCulture) + ">";
+        var access = await guilds.GetVoiceChannelAccessAsync(actor.GuildId, channel, ct);
+        if (!access.Usable)
+            return await VoiceGoneAsync(listing.Id, voiceId, ct);
+
+        if (access.BotCanMove)
+        {
+            switch (await guilds.MoveMemberToVoiceAsync(actor.GuildId, actor.UserId, channel, ct))
+            {
+                case VoiceMoveOutcome.Moved:
+                    return new(OperationResult.Ok("lfg.voice.moved", mention));
+                case VoiceMoveOutcome.MemberCannotConnect:
+                    return new(No(OperationError.Forbidden, "lfg.voice.no_access", mention));
+                case VoiceMoveOutcome.ChannelUnavailable:
+                    return await VoiceGoneAsync(listing.Id, voiceId, ct);
+                default:
+                    break; // not connected to voice, permission race, transient failure: the link below
+            }
+        }
+
+        var url = string.Create(CultureInfo.InvariantCulture, $"https://discord.com/channels/{listing.GuildId}/{voiceId}");
+        return new(OperationResult.Ok(access.BotCanMove ? "lfg.voice.open_not_connected" : "lfg.voice.open", mention), url);
+    }
+
     /// <summary>An interactive card update failed: the worker takes over.</summary>
     public async Task MarkCardStaleAsync(long listingId, CancellationToken ct) =>
         await Listings.Where(x => x.Id == listingId).ExecuteUpdateAsync(s => s.SetProperty(x => x.CardStale, true), ct);
@@ -270,21 +420,47 @@ public sealed class LfgService(ToroDbContext db, IOptions<LfgOptions> options, T
         return ToView(listing, players);
     }
 
-    public static LfgListingView ToView(LfgListingEntity listing, IEnumerable<LfgParticipantEntity> players) => new(
-        listing.Id,
-        new GuildId(listing.GuildId),
-        new ChannelId(listing.ChannelId),
-        listing.MessageId is { } m ? new MessageId(m) : null,
-        new UserId(listing.OwnerUserId),
-        listing.GameName,
-        listing.Details,
-        listing.MaxPlayers,
-        listing.Status,
-        listing.CreatedAt,
-        listing.ExpiresAt,
-        listing.ClosedAt,
-        players.OrderBy(p => p.UserId == listing.OwnerUserId ? 0 : 1).ThenBy(p => p.JoinedAt).ThenBy(p => p.UserId).Select(p => new UserId(p.UserId)).ToList(),
-        listing.Version);
+    public static LfgListingView ToView(LfgListingEntity listing, IEnumerable<LfgParticipantEntity> players)
+    {
+        var all = players.ToList();
+        return new LfgListingView(
+            listing.Id,
+            new GuildId(listing.GuildId),
+            new ChannelId(listing.ChannelId),
+            listing.MessageId is { } m ? new MessageId(m) : null,
+            new UserId(listing.OwnerUserId),
+            listing.GameName,
+            listing.Details,
+            listing.MaxPlayers,
+            listing.Status,
+            listing.CreatedAt,
+            listing.ExpiresAt,
+            listing.ClosedAt,
+            Ordered(listing, all, LfgResponse.Joined),
+            listing.Version,
+            Ordered(listing, all, LfgResponse.Maybe),
+            listing.EventAt,
+            listing.VoiceChannelId is { } v ? new ChannelId(v) : null);
+    }
+
+    /// <summary>Owner first, then in the order of their answer.</summary>
+    private static List<UserId> Ordered(LfgListingEntity listing, IEnumerable<LfgParticipantEntity> players, LfgResponse response) =>
+        players.Where(p => p.Response == response)
+            .OrderBy(p => p.UserId == listing.OwnerUserId ? 0 : 1).ThenBy(p => p.JoinedAt).ThenBy(p => p.UserId)
+            .Select(p => new UserId(p.UserId)).ToList();
+
+    /// <summary>The chosen voice channel is gone: the voice feature is dropped (card redrawn without it); the listing stays.</summary>
+    private async Task<LfgVoiceResult> VoiceGoneAsync(long listingId, ulong voiceId, CancellationToken ct)
+    {
+        var cleared = await Listings.Where(x => x.Id == listingId && x.VoiceChannelId == voiceId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.VoiceChannelId, (ulong?)null)
+                .SetProperty(x => x.CardStale, x => x.MessageId != null)
+                .SetProperty(x => x.CardSyncAttempts, 0)
+                .SetProperty(x => x.Version, x => x.Version + 1), ct);
+        if (cleared > 0)
+            logger.LogInformation("LFG listing {Listing}: its voice channel no longer exists; voice feature removed", listingId);
+        return new(No(OperationError.NotFound, "lfg.voice.gone"));
+    }
 
     private async Task<T> WriteAsync<T>(Func<Task<T>> work, CancellationToken ct)
     {

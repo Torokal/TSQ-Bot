@@ -70,12 +70,38 @@ public sealed partial class LfgArchitectureTests
         AssertNoViolations(Types().That().ResideInNamespaceMatching(@"^ToroSquad\.Modules\.Lfg(\..*)?$")
             .And().DoNotHaveNameMatching(@"^LfgCardSync$")
             .Should().NotDependOnAny(Types().That().HaveNameMatching(@"^IMessageTransport$")));
+        // Only the notice planner stages outbox rows (the scheduled pinging notices); the card never goes through the outbox.
         AssertNoViolations(Types().That().ResideInNamespaceMatching(@"^ToroSquad\.Modules\.Lfg(\..*)?$")
+            .And().DoNotHaveNameMatching(@"^LfgNoticePlanner$")
             .Should().NotDependOnAny(Types().That().HaveNameMatching(@"^(INotificationOutbox|NotificationRequest)$")));
 
         // Only the two primitives on an EXISTING message: an edit and a single read. Never a send, never a channel scan.
         var sync = File.ReadAllText(Path.Combine(Root(), "Application", "LfgCardSync.cs"));
         Regex.Matches(sync, @"transport\.(\w+)\(").Select(m => m.Groups[1].Value).Distinct().Should().BeEquivalentTo("EditAsync", "GetPresenceAsync");
+    }
+
+    [Fact]
+    public void Explicit_user_pings_exist_only_in_the_lfg_notice_renderer()
+    {
+        var src = Path.Combine(CommandManifestTests.RepoRoot(), "src");
+        var allowed = new[]
+        {
+            Path.Combine("ToroSquad.Core", "Messaging", "OutgoingMessage.cs"), // the definition
+            Path.Combine("ToroSquad.Discord", "Transport", "DiscordConversions.cs"), // the wire mapping (allowed_mentions.users)
+            Path.Combine("ToroSquad.Modules.Lfg", "Application", "LfgNoticeRenderer.cs"), // the only producer
+        };
+        foreach (var file in Directory.GetFiles(src, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p is "bin" or "obj")))
+        {
+            var relative = Path.GetRelativePath(src, file);
+            if (allowed.Contains(relative))
+                continue;
+            UserPingOptIn().IsMatch(File.ReadAllText(file)).Should().BeFalse($"{relative} must not opt in to user pings");
+        }
+
+        var producer = File.ReadAllText(Path.Combine(src, allowed[2]));
+        producer.Should().Contain("MentionPolicy.ExplicitUsers(listing.Players)", "exactly the Joined players, never Maybe or text");
+        Regex.Matches(producer, @"ExplicitUsers\(").Should().ContainSingle();
     }
 
     [Fact]
@@ -108,7 +134,10 @@ public sealed partial class LfgArchitectureTests
         var entities = new[] { typeof(ToroSquad.Modules.Lfg.Persistence.LfgListingEntity), typeof(ToroSquad.Modules.Lfg.Persistence.LfgParticipantEntity) };
         entities.SelectMany(e => e.GetProperties().Select(p => p.Name)).Should().BeEquivalentTo(
             "Id", "GuildId", "ChannelId", "MessageId", "OwnerUserId", "GameName", "Details", "MaxPlayers", "Status", "CreatedAt", "ExpiresAt", "ClosedAt",
-            "ClosedByUserId", "CardStale", "CardSyncAttempts", "Version", "Participants", "ListingId", "UserId", "JoinedAt");
+            "ClosedByUserId", "CardStale", "CardSyncAttempts", "Version", "Participants", "ListingId", "UserId", "JoinedAt",
+            // generic event features only: when it starts, a voice channel, the creator's ping opt-ins and their handled-once markers, RSVP
+            "EventAt", "VoiceChannelId", "NotifyBeforeStart", "NotifyAtStart", "ReminderState", "ReminderHandledAt", "StartNoticeState",
+            "StartNoticeHandledAt", "Response");
     }
 
     [Fact]
@@ -182,6 +211,10 @@ public sealed partial class LfgArchitectureTests
             .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p is "bin" or "obj"));
 
     private static IEnumerable<string> Placeholders(string text) => PlaceholderPattern().Matches(text).Select(m => m.Value).Distinct().Order();
+
+    /// <summary>Any way to make a user id ping: the factory, the record's Users slot (except clearing it), Discord.Net's UserIds or AllowedMentionTypes.Users.</summary>
+    [GeneratedRegex(@"ExplicitUsers\(|\bUsers\s*:\s*(?!null)|\bUsers\s*=\s*(?!null)[^=\s]|UserIds\s*=|AllowedMentionTypes\.Users")]
+    private static partial Regex UserPingOptIn();
 
     [GeneratedRegex(@"\{\d+\}")]
     private static partial Regex PlaceholderPattern();

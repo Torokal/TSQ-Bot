@@ -19,10 +19,34 @@ public enum LfgStatus
 }
 
 /// <summary>
+/// A member's answer to a listing. Only <see cref="Joined"/> players fill slots, count for Full and are pinged by event
+/// notices; <see cref="Maybe"/> is shown separately and never counts. The owner is always <see cref="Joined"/>.
+/// </summary>
+public enum LfgResponse
+{
+    Joined = 0,
+    Maybe = 1,
+}
+
+/// <summary>
+/// Progress of one optional event notice (30-minute reminder or start). Handled exactly once: <see cref="Queued"/> = staged
+/// in the outbox together with this marker (one transaction); <see cref="Skipped"/> = consumed without a message (too
+/// late, module disabled, guild not allowed) so a restart or a re-enabled module never sends it late.
+/// </summary>
+public enum LfgNoticeState
+{
+    Pending = 0,
+    Queued = 1,
+    Skipped = 2,
+}
+
+/// <summary>
 /// One group-finder listing as the rest of the module sees it. Game-agnostic by design: the bot only knows that
 /// <see cref="Owner"/> looks for <see cref="MaxPlayers"/> players for <see cref="GameName"/> and wrote <see cref="Details"/>
-/// — it never interprets either text. <see cref="Players"/> are Discord user ids (owner first, then join order); display
-/// names are never stored. <see cref="Version"/> changes with every stored state change (used to detect a card drawn from an older state).
+/// — it never interprets either text. <see cref="Players"/> are the Joined players (owner first, then join order),
+/// <see cref="Maybe"/> the undecided ones; both are Discord user ids, display names are never stored. <see cref="EventAt"/> is
+/// when the activity starts (null = now); <see cref="ExpiresAt"/> is when the listing stops being usable (a separate
+/// concept). <see cref="VoiceChannel"/> is an optional guild voice channel. <see cref="Version"/> changes with every stored state change (used to detect a card drawn from an older state).
 /// </summary>
 public sealed record LfgListingView(
     long Id,
@@ -38,9 +62,14 @@ public sealed record LfgListingView(
     DateTimeOffset ExpiresAt,
     DateTimeOffset? ClosedAt,
     IReadOnlyList<UserId> Players,
-    long Version = 0)
+    long Version = 0,
+    IReadOnlyList<UserId>? Maybe = null,
+    DateTimeOffset? EventAt = null,
+    ChannelId? VoiceChannel = null)
 {
     public bool IsActive => Status is LfgStatus.Open or LfgStatus.Full;
+
+    public IReadOnlyList<UserId> MaybePlayers => Maybe ?? [];
 }
 
 public enum LfgDraftError
@@ -52,10 +81,23 @@ public enum LfgDraftError
     DetailsTooLong = 4,
     PlayersOutOfRange = 5,
     DurationInvalid = 6,
+    StartInvalid = 7,
+    NoticeNeedsStart = 8,
 }
 
-/// <summary>A validated request to open a listing (normalized texts, bounded size, one of the offered durations).</summary>
-public sealed record LfgDraft(string GameName, string? Details, int MaxPlayers, TimeSpan Duration);
+/// <summary>
+/// A validated request to open a listing (normalized texts, bounded size, one of the offered durations/starts).
+/// <see cref="StartsIn"/> null = starts now.
+/// </summary>
+public sealed record LfgDraft(string GameName, string? Details, int MaxPlayers, TimeSpan Duration, TimeSpan? StartsIn = null)
+{
+    /// <summary>The event starts at creation + <see cref="StartsIn"/>; the listing stays usable <see cref="Duration"/> after the start.</summary>
+    public (DateTimeOffset? EventAt, DateTimeOffset ExpiresAt) Schedule(DateTimeOffset now)
+    {
+        DateTimeOffset? eventAt = StartsIn is { } delay ? now + delay : null;
+        return (eventAt, (eventAt ?? now) + Duration);
+    }
+}
 
 /// <summary>
 /// Input rules shared by the slash command (Discord's own option bounds) and the server-side check (never trust the client).
@@ -77,9 +119,19 @@ public static class LfgRules
     /// <summary>The optional durations offered by /ekip (no free minute input); no choice = the configured default.</summary>
     public static IReadOnlyList<int> DurationChoicesMinutes { get; } = [60, 120, 180];
 
+    /// <summary>Relative start choices (no date/time-zone parsing): 0 = now (the default).</summary>
+    public static IReadOnlyList<int> StartChoicesMinutes { get; } = [0, 30, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
+
+    /// <summary>The optional reminder goes out this long before the start, and only before the start.</summary>
+    public static readonly TimeSpan ReminderLead = TimeSpan.FromMinutes(30);
+
+    /// <summary>A start notice is still sent this long after the start (bot briefly down); later it is skipped, never sent stale.</summary>
+    public static readonly TimeSpan StartGrace = TimeSpan.FromMinutes(5);
+
     private const int ZeroWidthJoiner = 0x200D;
 
-    public static (LfgDraft? Draft, LfgDraftError Error) Validate(string? game, string? details, int players, int? durationMinutes, int maxPlayers, int defaultMinutes)
+    public static (LfgDraft? Draft, LfgDraftError Error) Validate(string? game, string? details, int players, int? durationMinutes, int maxPlayers, int defaultMinutes,
+        int? startMinutes = null, bool notices = false)
     {
         var name = Normalize(game);
         if (name is null)
@@ -100,7 +152,13 @@ public static class LfgRules
         if (durationMinutes is { } minutes && !DurationChoicesMinutes.Contains(minutes))
             return (null, LfgDraftError.DurationInvalid);
 
-        return (new LfgDraft(name, text, players, TimeSpan.FromMinutes(durationMinutes ?? defaultMinutes)), LfgDraftError.None);
+        if (startMinutes is { } start && !StartChoicesMinutes.Contains(start))
+            return (null, LfgDraftError.StartInvalid);
+        TimeSpan? startsIn = startMinutes is > 0 ? TimeSpan.FromMinutes(startMinutes.Value) : null;
+        if (notices && startsIn is null)
+            return (null, LfgDraftError.NoticeNeedsStart); // "now" has no reminder window and nothing to announce later
+
+        return (new LfgDraft(name, text, players, TimeSpan.FromMinutes(durationMinutes ?? defaultMinutes), startsIn), LfgDraftError.None);
     }
 
     /// <summary>Drops control/format characters, collapses whitespace runs to one space and trims; null when nothing is left.</summary>

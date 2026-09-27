@@ -3,7 +3,9 @@ using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using ToroSquad.Core;
 using ToroSquad.Core.Modules;
+using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
+using ToroSquad.Infrastructure.Delivery;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Lfg.Domain;
 using ToroSquad.Modules.Lfg.Persistence;
@@ -12,8 +14,10 @@ namespace ToroSquad.Modules.Lfg.Application;
 
 /// <summary>
 /// /privacy for TSQ LFG: the listings a user created (with their own game/details text) and the listings they joined, in
-/// one guild. Deletion removes both; listings the user only joined lose them as a player (a full one reopens) and their
-/// cards are redrawn by the worker. Guild retention purges every LFG row of the guild.
+/// one guild, with their answer (Joined / Maybe). Deletion removes both; listings the user only joined lose them (a full one
+/// reopens when a Joined player goes) and their cards are redrawn by the worker. Event notices that list the user as a
+/// pinged player are removed as well (they are otherwise pruned 24 h after delivery). Guild retention purges every LFG row
+/// of the guild.
 /// </summary>
 public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
 {
@@ -29,7 +33,7 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
                             join l in Listings.AsNoTracking() on p.ListingId equals l.Id
                             where l.GuildId == guild.Value && p.UserId == user.Value && l.OwnerUserId != user.Value
                             orderby l.Id
-                            select new { l.Id, l.GameName, p.JoinedAt }).ToListAsync(cancellationToken);
+                            select new { l.Id, l.GameName, p.Response, p.JoinedAt }).ToListAsync(cancellationToken);
 
         var listings = new JsonArray();
         foreach (var l in owned)
@@ -42,15 +46,19 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
                 ["maxPlayers"] = l.MaxPlayers,
                 ["status"] = l.Status.ToString(),
                 ["createdAtUtc"] = Iso(l.CreatedAt),
+                ["eventAtUtc"] = l.EventAt is { } e ? Iso(e) : null,
                 ["expiresAtUtc"] = Iso(l.ExpiresAt),
+                ["notifyBeforeStart"] = l.NotifyBeforeStart,
+                ["notifyAtStart"] = l.NotifyAtStart,
                 ["closedAtUtc"] = l.ClosedAt is { } c ? Iso(c) : null,
             });
         }
 
         var participations = new JsonArray();
         foreach (var j in joined)
-            participations.Add(new JsonObject { ["listingId"] = j.Id, ["game"] = j.GameName, ["joinedAtUtc"] = Iso(j.JoinedAt) });
-        return new JsonObject { ["listings"] = listings, ["joinedListings"] = participations };
+            participations.Add(new JsonObject { ["listingId"] = j.Id, ["game"] = j.GameName, ["response"] = j.Response.ToString(), ["respondedAtUtc"] = Iso(j.JoinedAt) });
+        var notices = (await NoticesMentioningAsync(guild, user, cancellationToken)).Count;
+        return new JsonObject { ["listings"] = listings, ["joinedListings"] = participations, ["eventNoticesPingingYou"] = notices };
     }
 
     public async Task<IReadOnlyList<DeletionPreviewItem>> PreviewDeletionAsync(GuildId guild, UserId user, CancellationToken cancellationToken)
@@ -73,10 +81,11 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
         // Listings the user only joined: remove them as a player; the card is redrawn without them.
         var memberships = await JoinedElsewhere(guild, user).ToListAsync(cancellationToken);
         var affected = memberships.Select(p => p.ListingId).ToHashSet();
+        var freedSlot = memberships.Where(p => p.Response == LfgResponse.Joined).Select(p => p.ListingId).ToHashSet();
         foreach (var listing in await Listings.Where(x => affected.Contains(x.Id)).ToListAsync(cancellationToken))
         {
-            if (listing.Status == LfgStatus.Full)
-                listing.Status = LfgStatus.Open;
+            if (listing.Status == LfgStatus.Full && freedSlot.Contains(listing.Id))
+                listing.Status = LfgStatus.Open; // a Maybe never held a slot
             listing.CardStale = listing.MessageId is not null;
             listing.CardSyncAttempts = 0;
             listing.Version++;
@@ -92,6 +101,10 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
         await Participants.Where(p => owned.Any(l => l.Id == p.ListingId)).ExecuteDeleteAsync(cancellationToken);
         deleted += await owned.ExecuteDeleteAsync(cancellationToken);
 
+        // Event notices whose payload lists the user as a pinged player (not those Discord may be receiving right now).
+        var notices = await NoticesMentioningAsync(guild, user, cancellationToken);
+        deleted += await db.Outbox.Where(o => notices.Contains(o.Id)).ExecuteDeleteAsync(cancellationToken);
+
         await transaction.CommitAsync(cancellationToken);
         return new DeletionReport(Module, deleted, []);
     }
@@ -103,6 +116,14 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
         n += await listings.ExecuteDeleteAsync(cancellationToken);
         n += await db.Set<LfgGuildConfigEntity>().Where(c => c.GuildId == guild.Value).ExecuteDeleteAsync(cancellationToken);
         return n;
+    }
+
+    private async Task<List<long>> NoticesMentioningAsync(GuildId guild, UserId user, CancellationToken ct)
+    {
+        var rows = await db.Outbox.AsNoTracking()
+            .Where(o => o.GuildId == guild.Value && o.ModuleId == LfgModule.ModuleIdValue && o.Status != OutboxStatus.InFlight && o.Status != OutboxStatus.DeliveryUnknown)
+            .Select(o => new { o.Id, o.PayloadJson }).ToListAsync(ct);
+        return rows.Where(r => PayloadSerializer.Deserialize(r.PayloadJson).Mentions.Users?.Contains(user) == true).Select(r => r.Id).ToList();
     }
 
     private IQueryable<LfgParticipantEntity> JoinedElsewhere(GuildId guild, UserId user) =>
