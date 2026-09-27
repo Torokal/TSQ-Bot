@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 using Discord;
 using Discord.Interactions;
 using Microsoft.Extensions.Time.Testing;
@@ -178,6 +179,77 @@ public sealed class LfgModalContractTests
 
         foreach (var a in prefixes)
             prefixes.Where(b => b != a).Should().NotContain(b => b.StartsWith(a, StringComparison.Ordinal), $"{a} would also match another handler");
+    }
+
+    /// <summary>
+    /// The JSON Discord actually receives: the same conversion (<c>MessageComponentExtension.ToModel</c>) and serializer
+    /// (<c>DiscordRestClient.Serializer</c>) Discord.Net 3.20.1 uses for an interaction response, reached by reflection.
+    /// </summary>
+    private static JsonElement Wire(IEnumerable<IMessageComponent> components)
+    {
+        var rest = typeof(global::Discord.Rest.DiscordRestClient);
+        var toModel = rest.Assembly.GetType("Discord.Rest.MessageComponentExtension")!
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(m => m.Name == "ToModel" && m.GetParameters() is [{ ParameterType: var type }] && type == typeof(IMessageComponent) && m.ReturnType == typeof(IMessageComponent));
+        var serializer = (Newtonsoft.Json.JsonSerializer)rest.GetField("Serializer", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        using var writer = new StringWriter();
+        serializer.Serialize(writer, components.Select(c => toModel.Invoke(null, [c])).ToArray());
+        return JsonDocument.Parse(writer.ToString()).RootElement.Clone();
+    }
+
+    [Theory]
+    [InlineData("tr")]
+    [InlineData("en")]
+    public void The_modal_goes_out_as_discords_label_and_text_input_json(string language)
+    {
+        var values = new LfgFormValues("Deadlock", "6", "Casual", "05.10.2026 21:30", "2");
+        var wire = Wire(LfgFormUi.Modal(Draft(LfgFormKind.Edit, values), 20, L(language)).Component.Components);
+
+        wire.GetArrayLength().Should().Be(LfgFormUi.MaxModalComponents);
+        var ids = new List<string>();
+        foreach (var label in wire.EnumerateArray())
+        {
+            label.GetProperty("type").GetInt32().Should().Be(18, "Label");
+            label.GetProperty("label").GetString()!.Length.Should().BeInRange(1, LfgFormUi.MaxLabelLength);
+            label.GetProperty("description").GetString()!.Length.Should().BeInRange(1, LfgFormUi.MaxDescriptionLength);
+            var input = label.GetProperty("component");
+            input.GetProperty("type").GetInt32().Should().Be(4, "Text Input inside the Label");
+            input.GetProperty("style").GetInt32().Should().BeOneOf(1, 2);
+            input.GetProperty("placeholder").GetString()!.Length.Should().BeInRange(1, 100);
+            var max = input.GetProperty("max_length").GetInt32();
+            max.Should().BeInRange(1, 4000);
+            if (input.TryGetProperty("min_length", out var min))
+                min.GetInt32().Should().BeInRange(0, max);
+            input.GetProperty("value").GetString()!.Length.Should().BeLessThanOrEqualTo(max);
+            input.TryGetProperty("disabled", out _).Should().BeFalse("modals cannot hold disabled components");
+            if (input.TryGetProperty("label", out var deprecated))
+                deprecated.ValueKind.Should().Be(JsonValueKind.Null, "the deprecated text-input label is never set; the Label carries it");
+            ids.Add(input.GetProperty("custom_id").GetString()!);
+        }
+
+        ids.Should().Equal(Fields);
+    }
+
+    [Fact]
+    public void The_settings_step_goes_out_as_discords_select_and_button_json()
+    {
+        var draft = Draft(voice: new ChannelId(8802), before: true) with
+        {
+            Preview = new LfgFormPreview("Deadlock", null, 6, LfgStart.After(TimeSpan.FromHours(2)), T0.AddHours(2), TimeSpan.FromHours(2)),
+        };
+        var rows = Wire(LfgFormUi.Settings(draft, T0, L("tr")).Components.Components).EnumerateArray().ToList();
+
+        rows.Should().HaveCount(3).And.OnlyContain(r => r.GetProperty("type").GetInt32() == 1, "action rows");
+        var notify = rows[0].GetProperty("components")[0];
+        (notify.GetProperty("type").GetInt32(), notify.GetProperty("min_values").GetInt32(), notify.GetProperty("max_values").GetInt32()).Should().Be((3, 0, 2));
+        notify.GetProperty("options").EnumerateArray().Select(o => o.GetProperty("value").GetString()).Should().Equal("before", "start");
+        var voice = rows[1].GetProperty("components")[0];
+        (voice.GetProperty("type").GetInt32(), voice.GetProperty("min_values").GetInt32(), voice.GetProperty("max_values").GetInt32()).Should().Be((8, 0, 1), "channel select");
+        voice.GetProperty("channel_types").EnumerateArray().Select(t => t.GetInt32()).Should().Equal([2], "GUILD_VOICE only");
+        var chosen = voice.GetProperty("default_values")[0];
+        (chosen.GetProperty("id").GetString(), chosen.GetProperty("type").GetString()).Should().Be(("8802", "channel"));
+        rows[2].GetProperty("components").EnumerateArray().Select(b => b.GetProperty("custom_id").GetString()).Should().Equal(
+            LfgFormUi.SavePrefix + draft.Id, LfgFormUi.BackPrefix + draft.Id, LfgFormUi.CancelPrefix + draft.Id);
     }
 
     [Fact]
