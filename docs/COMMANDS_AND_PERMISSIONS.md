@@ -85,6 +85,17 @@ taşıma — davet izinlerinde yok, isteğe bağlı olarak yalnızca ilgili ses 
 
 Ayrıntı: [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md).
 
+## TSQ Quote (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/quote message:<mesaj ID'si veya bağlantısı> [channel]` | Herkes: mesajı siyah-beyaz alıntı görseline (`quote.png`) çevirip **bu kanala** gönderir. Yalnızca ID verilirse mesaj `channel` seçeneğindeki kanalda, seçenek yoksa komutun çalıştığı kanalda aranır; bağlantı verilirse kanal bağlantıdan alınır. Sunucu tarafında: mesaj **bu sunucuya** ait olmalı; üyenin ve botun kaynak kanalda `ViewChannel` + `ReadMessageHistory` izni olmalı (thread'de üst kanal; özel thread desteklenmez); yaş sınırlı kanaldan yaş sınırı olmayan kanala alıntı yapılmaz. Tüm "yok/erişim yok" durumları tek, ephemeral cevaptır; kart ping'sizdir |
+
+Bot izinleri: kaynak kanalda `ViewChannel` + `ReadMessageHistory`; kartın gönderildiği kanalda dosya eki (etkileşim
+takip mesajı). Başka kullanıcıların mesaj metni için uygulamanın **Message Content** intent'i (Developer Portal) açık
+olmalıdır; kapalıyken Discord metni bota boş verir ve `/quote` bunu kullanıcıya açıkça söyler. Gateway intent'i değişmez.
+Ayrıntı: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md).
+
 ## Esports (modül açıkken)
 
 | Komut | Seçenekler |

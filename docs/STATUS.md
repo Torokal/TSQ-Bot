@@ -81,6 +81,22 @@ invite link and no global command registration. The source code is public under 
   and the bot's later edit of that card.
 - Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
 
+## TSQ Quote (new, 2026-09-27, branch `feat/quote`)
+
+- Scope and rules: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md). Stateless utility module: no table, no migration, no worker.
+- **IMPLEMENTED / TESTED_OFFLINE**: `/quote message:<id or link> [channel]`; reference parsing (snowflake, discord.com /
+  ptb / canary / discordapp.com links, DM and other-server links refused); server-side checks (same guild, message channel
+  of this guild, member and bot `ViewChannel` + `ReadMessageHistory` on the channel or the thread's parent, no private
+  threads, no age-restricted text into other channels) with one answer for every "no"; Discord text → plain text (mentions,
+  markdown, code, timestamps, escapes); ImageSharp card renderer (embedded Noto fonts, greyscale avatar fade, wrapping,
+  font shrink, grapheme-safe ellipsis, fallback panel); bounded avatar download (Discord CDN only, 5 s, 4 MB).
+- **BLOCKED (owner decision)**: Discord withholds other users' message text from apps without the **Message Content**
+  intent (Developer Portal; privileged). With it off, `/quote` works for the bot's own messages and messages that mention
+  the bot, and otherwise answers with `quote.content_unavailable`. The gateway intents stay `Guilds` either way.
+- **NOT VERIFIED_LIVE**: the whole command in Discord (private defer → public `quote.png` follow-up, attachment permission
+  in restricted channels, the real Discord CDN download, Discord.Net permission resolution on real overwrites).
+- Off by default (module gate off); `/quote` is in the manifest but not synced.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.
