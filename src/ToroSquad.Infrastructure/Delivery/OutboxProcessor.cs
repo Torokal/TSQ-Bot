@@ -53,25 +53,26 @@ public sealed class OutboxProcessor(
 {
     private readonly DeliveryOptions _options = options.Value;
 
-    /// <summary>Crash recovery at startup: anything still InFlight may or may not have reached Discord.</summary>
+    /// <summary>
+    /// Crash recovery at startup: anything still InFlight may or may not have reached Discord. One atomic update, so a
+    /// concurrent change to such a row (e.g. a module moving its deadline) cannot make startup fail with a version conflict.
+    /// </summary>
     public async Task<int> RecoverAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ToroDbContext>();
         var now = clock.GetUtcNow();
-        var rows = await db.Outbox.Where(x => x.Status == OutboxStatus.InFlight).ToListAsync(cancellationToken);
-        foreach (var row in rows)
-        {
-            row.Status = OutboxStatus.DeliveryUnknown;
-            row.NextAttemptAt = now + _options.ReconcileDelay;
-            row.LastError = "recovered_after_restart";
-            row.UpdatedAt = now;
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-        if (rows.Count > 0)
-            logger.LogWarning("Outbox recovery: {Count} in-flight notifications marked DeliveryUnknown", rows.Count);
-        return rows.Count;
+        var next = now + _options.ReconcileDelay;
+        var count = await db.Outbox.Where(x => x.Status == OutboxStatus.InFlight)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.Status, OutboxStatus.DeliveryUnknown)
+                .SetProperty(x => x.NextAttemptAt, (DateTimeOffset?)next)
+                .SetProperty(x => x.LastError, "recovered_after_restart")
+                .SetProperty(x => x.UpdatedAt, now)
+                .SetProperty(x => x.Version, x => x.Version + 1), cancellationToken);
+        if (count > 0)
+            logger.LogWarning("Outbox recovery: {Count} in-flight notifications marked DeliveryUnknown", count);
+        return count;
     }
 
     public async Task<int> ProcessOnceAsync(CancellationToken cancellationToken)

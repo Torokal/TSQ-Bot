@@ -103,8 +103,10 @@ public sealed partial class LfgArchitectureTests
         foreach (var bad in new[]
                  {
                      "MentionPolicy.ExplicitUsers(ids)", "allowed.UserIds = ids", "new AllowedMentions { UserIds = ids }", "allowed.UserIds.Add(id)",
-                     "allowed.UserIds .AddRange(ids)", "AllowedMentions.All", "new AllowedMentions(AllowedMentionTypes.Users)", "AllowedMentionTypes.All",
-                     "(AllowedMentionTypes)7",
+                     "allowed.UserIds .AddRange(ids)", "allowed.UserIds?.Add(id)", "allowed.UserIds!.Add(id)", "allowed.UserIds.InsertRange(0, ids)",
+                     "AllowedMentions.All", "new AllowedMentions(AllowedMentionTypes.Users)", "AllowedMentionTypes.All",
+                     "(AllowedMentionTypes)7", "(Discord.AllowedMentionTypes)4", "(global::Discord.AllowedMentionTypes)7",
+                     "JsonSerializer.Deserialize<MentionPolicy>(json)",
                  })
             UserPingOptIn().IsMatch(bad).Should().BeTrue(bad);
         foreach (var fine in new[]
@@ -118,8 +120,8 @@ public sealed partial class LfgArchitectureTests
         // has no public setter (so neither `new MentionPolicy(..., users)` nor `policy with { Users = ... }` compiles outside it).
         var policy = typeof(ToroSquad.Core.Messaging.MentionPolicy);
         var users = policy.GetProperty(nameof(ToroSquad.Core.Messaging.MentionPolicy.Users))!;
-        users.SetMethod!.IsPublic.Should().BeFalse();
-        policy.GetConstructors().SelectMany(c => c.GetParameters())
+        users.SetMethod!.IsPrivate.Should().BeTrue();
+        policy.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).SelectMany(c => c.GetParameters())
             .Should().NotContain(p => p.ParameterType != typeof(ToroSquad.Core.Messaging.MentionPolicy) &&
                                       typeof(IEnumerable<ToroSquad.Core.UserId>).IsAssignableFrom(p.ParameterType));
 
@@ -239,9 +241,9 @@ public sealed partial class LfgArchitectureTests
     /// <summary>
     /// Any way to make a user id ping: the only factory (<c>MentionPolicy.ExplicitUsers</c>; the record's Users slot has no
     /// other public way in), Discord.Net's UserIds (assigned or added to), AllowedMentionTypes.Users/All, a numeric
-    /// AllowedMentionTypes cast or AllowedMentions.All.
+    /// AllowedMentionTypes cast, AllowedMentions.All, or building a policy from JSON outside the outbox payload serializer.
     /// </summary>
-    [GeneratedRegex(@"ExplicitUsers\(|\bUserIds\s*=(?!=)|\.UserIds\s*\.\s*(Add|AddRange|Insert)\b|AllowedMentionTypes\.(Users|All)|\(\s*AllowedMentionTypes\s*\)|AllowedMentions\.All")]
+    [GeneratedRegex(@"ExplicitUsers\(|\bUserIds\s*=(?!=)|\bUserIds\s*[?!]?\s*\.\s*(Add|AddRange|Insert|InsertRange)\b|AllowedMentionTypes\.(Users|All)|AllowedMentionTypes\s*\)|AllowedMentions\.All|Deserialize<MentionPolicy>")]
     private static partial Regex UserPingOptIn();
 
     [GeneratedRegex(@"\{\d+\}")]
