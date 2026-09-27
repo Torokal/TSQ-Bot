@@ -236,7 +236,7 @@ public sealed class EsportsDeliveryPolicy(ToroDbContext db, TimeProvider clock) 
             return new DeliveryDecision.Cancel("channel_changed");
         if (config.ChannelProblem is not null)
             return new DeliveryDecision.Cancel("channel_problem");
-        // Schedule-related cards (reminder, started, postponed, rescheduled, cancelled) follow the reminders switch.
+        // Schedule-related cards (reminder, started, postponed, cancelled — and legacy "rescheduled-*" rows) follow the reminders switch.
         var scheduleKind = kind is NotificationPlanner.KindReminder or NotificationPlanner.KindStarted or NotificationPlanner.KindPostponed or NotificationPlanner.KindCancelled ||
                            kind.StartsWith(NotificationPlanner.KindRescheduledPrefix, StringComparison.Ordinal);
         if (scheduleKind && !config.NotifyReminders)

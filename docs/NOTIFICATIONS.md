@@ -2,35 +2,55 @@
 
 > Formula 1 bildirimleri (seans başladı, sonuç, puan durumu) ayrı modüldür; kuralları [FORMULA1.md](FORMULA1.md)'de.
 > Aynı outbox'ı kullanır: tek mantıksal anahtar, düzeltmeler aynı mesajı pingsiz düzenler, `allowed_mentions` kilitli.
+>
+> Voleybol (yalnızca Türkiye Kadın A Milli Takımı — hatırlatma, maç başladı, set, sonuç) ayrı modüldür; kurallar ve kart düzeni
+> [volleyball/VOLLEYBALL.md](volleyball/VOLLEYBALL.md)'de. Aynı outbox, watermark ve `allowed_mentions` kuralları geçerlidir; takım
+> logosu/küçük resim kuralı ortak `ThumbnailPolicy` (Core) ile esports'la paylaşılır.
 
 ## Bildirim türleri
 
 | Tür (outbox) | Ne zaman | Ping | Not |
 |---|---|---|---|
-| `reminder` | Planlanan başlangıçtan `ReminderLeadMinutes` önce, başlangıç + 10 dk'ya kadar | hatırlatma rolleri | "Planlanan saattir; maçın başladığı doğrulanmamıştır." Saat değişirse **aynı mesaj** ping'siz düzenlenir |
+| `reminder` | Planlanan başlangıçtan `ReminderLeadMinutes` önce, başlangıç + 10 dk'ya kadar | hatırlatma rolleri | "Planlanan saattir; maçın başladığı doğrulanmamıştır." Saat değişirse **aynı mesaj** ping'siz düzenlenir (aşağıdaki "Saat değişikliği") |
 | `started` | Sağlayıcı maçı **running** bildirdiğinde, daha önce planlandı/ertelendi olarak **görülmüşse** | hatırlatma rolleri | Saatin gelmesi başlama değildir. Liquipedia hiç "running" vermez → bu kart yalnızca PandaScore ile |
 | `result` | Maç bitti (ilk görülme `FinishedObservedAt`) veya hükmen | sonuç rolleri | Düzeltmeler 24 saat aynı mesajı ping'siz düzenler; iptal (oynanmadı) sonuç değildir |
 | `postponed` | Planlandı → ertelendi (yeni tarih bilinmiyor) | **yok** | "Yeni tarih henüz açıklanmadı." |
-| `rescheduled-<yyyyMMddHHmm>` | Sağlayıcı `rescheduled=true` ve saat ≥ `RescheduleThresholdMinutes` (vars. 15) kaydı; ya da ertelenmiş maça yeni tarih | **yok** | Yeni saat başına bir kart; "Yeni Saat" sunucunun saat diliminde (vars. Europe/Istanbul) |
 | `cancelled` | Planlandı/ertelendi/oynanıyor → iptal (hükmen değil) | **yok** | Sağlayıcı hatası asla iptal sayılmaz |
 
-Başladı/ertelendi/saat değişti/iptal kartları **hatırlatma anahtarına** bağlıdır (`/esports-admin configure reminders`),
+Başladı/ertelendi/iptal kartları **hatırlatma anahtarına** bağlıdır (`/esports-admin configure reminders`),
 hem planlamada hem gönderimden hemen önce. Bu kartlar yalnızca geçiş **iki bilinen sağlayıcı durumu arasında gözlendiğinde**
 ve `LifecycleFreshMinutes` (vars. 90) içinde gönderilir. `Unknown` durum son bilinen durumu silmez, geçiş üretmez.
 Ayrıntı: [adr/0006-pandascore-lifecycle-and-match-links.md](adr/0006-pandascore-lifecycle-and-match-links.md).
+
+### Saat değişikliği (ayrı kart yok — 2026-09-26)
+
+Bir maçın planlanan başlangıcı değişince (sağlayıcının `rescheduled` bayrağı olsun ya da olmasın, kayma küçük ya da büyük):
+
+1. O maç için **hatırlatma mesajı varsa** aynı mesaj **ping'siz düzenlenir**: yeni planlanan başlangıç Discord'un göreli
+   zamanıyla, altında "🕒 Başlangıç saati güncellendi (önceki: …)". Ayrı bir kart gönderilmez.
+2. Saat **tekrar** değişirse yine aynı mesaj düzenlenir; "önceki" her zaman son bilinen bir önceki resmi saattir.
+3. Aynı veri yeniden tarandığında ya da bot yeniden başladığında yeni mesaj, gereksiz düzenleme ve ping olmaz.
+4. **Hatırlatma henüz yoksa** hiçbir şey gönderilmez: yeni saat maç durumu olarak kaydedilir; zamanı gelince normal
+   hatırlatma yeni saate göre gider.
+5. Ertelenme (`postponed`, yeni tarih bilinmiyor) ayrı bir olaydır ve kartı korunur; ertelenmiş maça yeni tarih gelince
+   yine yukarıdaki kural işler. Başladı / bitti / iptal / hükmen kartları değişmez.
+
+Sağlayıcının bayrağı anlık görüntüde (`RescheduledObservedAt`/`RescheduledToUtc`) iç durum olarak tutulmaya devam eder;
+bildirim üretmez. 2026-09-26'dan önce gönderilmiş ayrı "Maçın saati değişti" kartlarına ve eski `rescheduled-*` outbox
+satırlarına dokunulmaz (silinmez, düzenlenmez).
 
 ## Kart düzeni (sahibin BOT Greg ekran görüntüsüne göre)
 
 ```
 Natus Vincere [0] - [2] Aurora          ← başlık; doğrulanmış maç sayfası varsa başlık ona bağlanır
-🏆 Aurora maçı kazandı                  ← TEK durum satırı (🔴 Maç başladı · 3 dakika önce / ⏸️ / 🕒 / ❌ / 🏳️ / ⏰)
-Etkinlik                     Format      (Yeni Saat)   ← satır içi alanlar
+🏆 Aurora maçı kazandı                  ← TEK durum satırı (🔴 Maç başladı · 3 dakika önce / ⏸️ / ❌ / 🏳️ / ⏰)
+Etkinlik                     Format                    ← satır içi alanlar
 StarLadder StarSeries Fall 2026   bo3
 Maç Sayfası                             ← alanların altında, yalnızca güvenli bağlantı varsa
 Kaynak: PandaScore · 17/09/2026 20:46   ← zorunlu atıf + zaman damgası (iç referans/ref YOK)
 ```
 
-Tüm v2 türlerinde aynı düzen: başladı, bitti, ertelendi, saat değişti, iptal, hükmen. TEST/DEMO kartlarında başlık yine
+Tüm v2 türlerinde aynı düzen: başladı, bitti, ertelendi, iptal, hükmen. TEST/DEMO kartlarında başlık yine
 yalnızca maçtır ("Nordic Owls vs Crimson Esports"); demo olduğu **yalnızca footer'da** yazar: "TEST/DEMO — sentetik veri,
 gerçek maç değil" (bağlantı yok, gerçek kaynak adı yok). Gerçek (production) kartlarda TEST/DEMO footer'ı yoktur. Teslimat
 referansı (`ref`) kullanıcıya gösterilmez; yalnızca veritabanı ve loglarda durur.
@@ -38,19 +58,21 @@ referansı (`ref`) kullanıcıya gösterilmez; yalnızca veritabanı ve loglarda
 Bilinçli farklar: "hltv.org" başlık satırı yok (veri HLTV'den gelmiyor), "Stars" yok (güvenilir kaynak yok → DEFERRED).
 
 Yok: harita skorları, yayın listesi, aşama, "son veri" satırı, iç kimlikler, "yıldız" (güvenilir kaynak yok → DEFERRED).
-Renkler: başladı/hatırlatma mavi, sonuç yeşil (kazanana göre değişmez), ertelendi/saat değişti amber, iptal kırmızı.
+Renkler: başladı/hatırlatma mavi, sonuç yeşil (kazanana göre değişmez), ertelendi amber, iptal kırmızı.
 
 ## Maç Sayfası bağlantısı
 
 Öncelik: **doğrulanmış HLTV** → resmî organizatör sayfası → sağlayıcı sayfası (izinli host) → **hiç** (yer tutucu yok).
-HLTV bağlantısı yalnızca `https://www.hltv.org/matches/<sayı>/<ad>` biçiminde ve güvenilir bir kaynaktan gelir:
-Liquipedia maç verisindeki `links.hltv` (Liquipedia sağlayıcısı seçiliyken otomatik) veya `Esports:VerifiedMatchLinks`; sayfa indirilmez, kimlik tahmin edilmez, HLTV olmayan bağlantı "HLTV" diye
-etiketlenmez. PandaScore HLTV kimliği vermediği için PandaScore maçlarının HLTV bağlantısı Liquipedia'dan eşleştirilir: aynı iki takım
-(sıra önemsiz, ad normalizasyonu) + başlangıç farkı ≤ 90 dk + **tek** geçerli HLTV adresi; aksi hâlde bağlantı yok
-(yanlış bağlantı hiç olmamasından kötüdür). Bağlantı sonradan bulunursa gönderilmiş kart ping'siz düzenlenir. Liquipedia
-anahtarı olmadan bu kaynak kapalıdır (BLOCKED/OPTIONAL; başvuru yayın aşamasında, depo public olduktan sonra): bildirimler
-aynen çalışır, HLTV bağlantısı yalnızca elle eklenen `Esports:VerifiedMatchLinks` ile gelir. Liquipedia yanıtı 30 dakikalık
-aralıkla alınır ve veritabanında önbelleğe alınır (yeniden başlatma ek istek yapmaz).
+HLTV bağlantısı **tamamen otomatiktir** (elle bağlantı girme yolu yoktur) ve yalnızca Liquipedia editörlerinin girdiği HLTV
+maç kimliğinden gelir: (1) onaylı anahtar varsa LiquipediaDB API, (2) LPDB kullanılamıyorsa ücretsiz Liquipedia **MediaWiki
+API**'si (yalnızca API, HTML yok, HLTV'ye hiç istek yok), (3) ikisi de yoksa bağlantı ve "Maç Sayfası" alanı **yok**.
+Eşleşme kuralı: iki takım da eşleşmeli (sıra önemsiz, normalize ad veya kısaltma), başlangıç farkı ≤ 90 dk ve **tam olarak
+bir** geçerli sayısal HLTV kimliği; 0 veya 2+ farklı aday → bağlantı yok (yanlış bağlantı hiç olmamasından kötüdür). Adres
+`https://www.hltv.org/matches/<id>/match` olarak kurulur, sayfa indirilmez. MediaWiki yalnızca sunucunun takım filtresindeki
+takımların yakın maçları için sorulur (≥ 2 sn aralık, saatlik sınır, önbellek; bulunamayan maç 30 dk → 4 saate kadar artan
+aralıkla yeniden kontrol edilir). Bağlantı sonradan bulunursa gönderilmiş kart ping'siz düzenlenir ve altbilgi
+"Kaynak: PandaScore · Link: Liquipedia" olur; Liquipedia bağlantısı yoksa altbilgi yalnızca "Kaynak: PandaScore". Liquipedia'da
+bir kesinti veya belirsiz eşleşme PandaScore bildirimlerini ve bilinen bağlantıları etkilemez. Ayrıntı: docs/PROVIDERS.md.
 Demo kartları gerçek hiçbir siteye bağlantı vermez. Tek istisna RFC 2606 ile ayrılmış test alanı `example.com`: demo hükmen
 kartı Maç Sayfası görünümünü göstermek için `https://example.com/tsq-bot-demo-match-page` adresine bağlanır (HLTV değil,
 indirilmez, gerçek maç sayfası olamaz; footer TEST/DEMO der).
@@ -67,7 +89,7 @@ arka plan yok. Kural: **doğruluk süsten önce gelir** — yanıltabilecek her 
 |---|---|
 | Sonuç (normal) ve hükmen | Sağlayıcının belirttiği **kazananın** logosu. Beraberlik, bilinmeyen kazanan veya kazananın logosu yoksa **yok** (kaybedenin logosu kazanan gibi görünmesin) |
 | Sonuç (spoiler) | Kazanan logosu **asla** (sonucu sızdırır). Yalnızca aşağıdaki "takip edilen takım" kuralı |
-| Hatırlatma, başladı, ertelendi, saat değişti, iptal | Sunucunun takım filtresinde (`/esports-admin filters team`) bu maçtaki **tek** takım varsa onun logosu; hiç yoksa veya iki takım da takipteyse **yok** |
+| Hatırlatma, başladı, ertelendi, iptal | Sunucunun takım filtresinde (`/esports-admin filters team`) bu maçtaki **tek** takım varsa onun logosu; hiç yoksa veya iki takım da takipteyse **yok** |
 | TEST/DEMO kartları | Yok |
 
 Kaynak yalnızca maç sağlayıcısının kendi takım verisidir: PandaScore `dark_mode_image_url` (Discord çoğunlukla koyu temada
@@ -133,8 +155,15 @@ adı) → 3) "team/esports/gaming/clan/club/gg" ayıklanmış ad **tek adaya** d
 
 ## Mesaj güvenliği
 
-- `allowed_mentions = { parse: [], roles: [izinli roller] }`; kullanıcı ve @everyone/@here ping'i asla. Önizleme,
-  düzenleme ve tekrar denemeler ping atmaz.
+- `allowed_mentions = { parse: [], roles: [izinli roller] }`; @here ping'i asla, metinden kullanıcı ping'i asla. Açıkça
+  listelenen kullanıcı kimlikleri (`allowed_mentions.users`) yalnızca tek bir yerde: TSQ LFG'nin isteğe bağlı etkinlik
+  bildirimleri, ilanın Joined oyuncularına (`MentionPolicy.ExplicitUsers`, yalnızca `LfgNoticeRenderer`; mimari test) —
+  [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md); belirsiz bir teslimden sonraki yeniden gönderim bu ping'leri de taşımaz. @everyone
+  yalnızca tek bir yerde: TSQ Live'ın yeni yayın oturumu için ilk duyurusu (`MentionPolicy.EveryoneOnly`, yalnızca `LiveCardRenderer`;
+  mimari test) — [live/TSQ_LIVE.md](live/TSQ_LIVE.md). Önizleme ve düzenlemeler ping atmaz. `@everyone` en fazla bir
+  kez: yalnızca kesin başarısız (429, bağlantı yok, 4xx) bir ilk denemenin tekrarı onu taşıyabilir; Discord'a ulaşmış
+  olabilecek bir denemeden (zaman aşımı, her 5xx, yanıt kaybı, gönderim sırasında çökme) sonraki her yeniden gönderimden
+  outbox `@everyone`'ı kaldırır (rol ping'leri bu kuraldan etkilenmez).
 - Sağlayıcı metinleri güvenilmez kabul edilir: mention sözdizimi etkisizleştirilir, markdown kaçışlanır, spoiler sınırları
   kırılamaz, metindeki `scheme://` tıklanabilir bağlantıya dönüşemez; bağlantılar yalnızca doğrulanmış **https** adreslere (Maç Sayfası kuralları yukarıda; sağlayıcı bağlantıları izinli host listesiyle).
 - **Spoiler modu**: başlık yalnızca iki takımı kaynak sırasıyla yazar ("A vs B", skor yok); kazanan, skor ve hükmen bilgisi

@@ -152,6 +152,55 @@ public sealed class OutboxDeliveryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Identical_payload_delivered_by_another_row_is_never_adopted_by_an_ambiguous_row()
+    {
+        // Two independent logical deliveries, same guild, same channel, byte-identical content, created a second apart.
+        (await StageAsync(Request(GuildA, ChannelA, source: "liquipedia:counterstrike:M1"))).Should().Be(StageOutcome.Created);
+        _host.Clock.Advance(TimeSpan.FromSeconds(1));
+        (await StageAsync(Request(GuildA, ChannelA, source: "liquipedia:counterstrike:M2"))).Should().Be(StageOutcome.Created);
+        _host.Transport.ScriptSend(() => new SendOutcome.Ambiguous("timeout")); // A: request lost, nothing created
+        await Processor.ProcessOnceAsync(CancellationToken.None);               // A ambiguous, B delivered normally
+        var rows = await RowsAsync();
+        rows[0].Status.Should().Be(OutboxStatus.DeliveryUnknown);
+        var messageB = rows[1].DiscordMessageId!.Value;
+
+        _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await Processor.ProcessOnceAsync(CancellationToken.None); // A reconciles: B's identical message is owned → excluded
+        await Processor.ProcessOnceAsync(CancellationToken.None);
+
+        rows = await RowsAsync();
+        rows[0].DiscordMessageId.Should().NotBeNull().And.NotBe(messageB, "B's message is never adopted as A's");
+        rows[1].DiscordMessageId.Should().Be(messageB);
+        _host.Transport.Messages.Should().HaveCount(2, "each logical delivery owns exactly one message");
+    }
+
+    [Fact]
+    public async Task Identical_payload_of_two_unresolved_rows_is_never_adopted_or_resent()
+    {
+        (await StageAsync(Request(GuildA, ChannelA, source: "liquipedia:counterstrike:M1"))).Should().Be(StageOutcome.Created);
+        _host.Clock.Advance(TimeSpan.FromSeconds(1));
+        (await StageAsync(Request(GuildA, ChannelA, source: "liquipedia:counterstrike:M2"))).Should().Be(StageOutcome.Created);
+        _host.Transport.ScriptSend(() => new SendOutcome.Ambiguous("timeout")); // A: nothing reached Discord
+        _host.Transport.ScriptAcceptedButTimedOut();                             // B: Discord created it, response lost
+        await Processor.ProcessOnceAsync(CancellationToken.None);
+        (await RowsAsync()).Should().OnlyContain(r => r.Status == OutboxStatus.DeliveryUnknown);
+        var messageB = _host.Transport.Messages.Should().ContainSingle().Subject.Id.Value;
+
+        for (var i = 0; i < 6; i++)
+        {
+            _host.Clock.Advance(TimeSpan.FromMinutes(2));
+            await Processor.ProcessOnceAsync(CancellationToken.None);
+        }
+
+        var rows = await RowsAsync();
+        rows[0].DiscordMessageId.Should().BeNull("the identical message may be B's: A never adopts it");
+        rows.Select(r => r.DiscordMessageId).Should().NotContain(messageB, "an indistinguishable match is adopted by neither row");
+        rows.Should().OnlyContain(r => r.LastError!.Contains("identical payload", StringComparison.Ordinal));
+        _host.Transport.SendCalls.Should().Be(2, "an indistinguishable match is never resolved by resending (no duplicate, no second ping)");
+        _host.Transport.Messages.Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task Reconciliation_impossible_is_surfaced_not_retried_forever()
     {
         await StageAsync(Request(GuildA, ChannelA));

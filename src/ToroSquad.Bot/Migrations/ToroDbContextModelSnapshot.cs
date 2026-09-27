@@ -990,6 +990,564 @@ namespace ToroSquad.Bot.Migrations
 
                     b.ToTable("f1_guild_config", (string)null);
                 });
+
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgGuildConfigEntity", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedBy")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("GuildId");
+
+                    b.ToTable("lfg_guild_config", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgListingEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("CardStale")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CardSyncAttempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ClosedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ClosedByUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("EventAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("GameName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxPlayers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("MessageId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyAtStart")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyBeforeStart")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("OwnerUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ReminderHandledAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ReminderState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StartNoticeHandledAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StartNoticeState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("VoiceChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CardStale")
+                        .HasFilter("\"CardStale\" = 1");
+
+                    b.HasIndex("Status", "EventAt")
+                        .HasFilter("\"EventAt\" IS NOT NULL");
+
+                    b.HasIndex("Status", "ExpiresAt");
+
+                    b.HasIndex("GuildId", "OwnerUserId", "Status");
+
+                    b.ToTable("lfg_listing", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgParticipantEntity", b =>
+                {
+                    b.Property<long>("ListingId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("JoinedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Response")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ListingId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("lfg_participant", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Live.Domain.CreatorState", b =>
+                {
+                    b.Property<string>("CreatorKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Announced")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("AnnouncedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("AnnouncementChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("AnnouncementGuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AnnouncementKind")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("AnnouncementMessageId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("GraceSince")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("NotAnnouncedReason")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Phase")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Replacements")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SessionDetectedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SessionEndedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SessionNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SessionPlatforms")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("SessionStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("CreatorKey");
+
+                    b.ToTable("live_creator_state", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Live.Domain.PlatformState", b =>
+                {
+                    b.Property<string>("CreatorKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Platform")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AvatarUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastEventId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastLiveAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastOfflineAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Login")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("MetadataObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StatusObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StreamId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("TitleChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("CreatorKey", "Platform");
+
+                    b.ToTable("live_platform_state", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Live.Persistence.LiveProviderStateEntity", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastAttemptAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastDetail")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastErrorAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LastOutcome")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastSuccessAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("live_provider_state", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Volleyball.Persistence.VbMatchSnapshotEntity", b =>
+                {
+                    b.Property<string>("MatchKey")
+                        .HasMaxLength(96)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AwayCode")
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AwayLogoUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AwayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AwaySets")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BroadcastsJson")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Cancelled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompetitionId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompetitionName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CurrentSet")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CurrentSetAwayPoints")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CurrentSetHomePoints")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EventsJson")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Finished")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FirstSeenAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FollowedSide")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("HomeCode")
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HomeLogoUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HomeName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("HomeSets")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsBaseline")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastListedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastObservedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastProblem")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastProblemAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastProviderUpdateAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PendingCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PendingJson")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Postponed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Problems")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderMatchId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Round")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Season")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SetsJson")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Stage")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("StartTimeUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Started")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Venue")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("MatchKey");
+
+                    b.HasIndex("StartTimeUtc");
+
+                    b.HasIndex("Provider", "ProviderMatchId")
+                        .IsUnique();
+
+                    b.ToTable("vb_match_snapshot", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Volleyball.Persistence.VbProviderStateEntity", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DataJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastAttemptAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastDetail")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("LastOutcome")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastSuccessAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("NextAttemptAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("vb_provider_state", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Volleyball.Persistence.VolleyballGuildConfigEntity", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChannelProblem")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ChannelProblemAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyFinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyPostponedCancelled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyReminder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifySets")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyStarted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Paused")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("PingOnFinal")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("PingOnReminder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("PingRoleId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedBy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("WatermarkUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("GuildId");
+
+                    b.ToTable("vb_guild_config", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgParticipantEntity", b =>
+                {
+                    b.HasOne("ToroSquad.Modules.Lfg.Persistence.LfgListingEntity", null)
+                        .WithMany("Participants")
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgListingEntity", b =>
+                {
+                    b.Navigation("Participants");
+                });
 #pragma warning restore 612, 618
         }
     }

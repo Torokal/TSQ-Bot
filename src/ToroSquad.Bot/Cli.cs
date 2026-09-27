@@ -55,7 +55,7 @@ public static partial class Cli
         catch (Exception ex)
         {
             // Last line of defence: never print secrets.
-            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Username"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Password")]);
+            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Username"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Password"), Environment.GetEnvironmentVariable("TOROSQUAD_Volleyball__Fivb__AppId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Twitch__ClientId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Twitch__ClientSecret"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Kick__ClientId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Kick__ClientSecret")]);
             await Console.Error.WriteLineAsync("FATAL: " + redactor.Redact(ex.ToString()));
             return Failed;
         }
@@ -217,13 +217,11 @@ public static partial class Cli
 
         var guild = new ToroSquad.Core.GuildId(guildId);
         var settings = await sp.GetRequiredService<ToroSquad.Core.Guilds.IGuildSettingsStore>().GetAsync(guild, CancellationToken.None);
-        if (!ToroSquad.Core.Guilds.GuildTime.TryResolve(settings.TimeZoneId, out var zone))
-            ToroSquad.Core.Guilds.GuildTime.TryResolve(ToroSquad.Core.Guilds.GuildSettings.DefaultTimeZoneId, out zone);
         // Always the demo renderer: cards are labelled TEST/DEMO whatever the configured provider mode is.
         var renderer = new ToroSquad.Modules.Esports.Application.NotificationRenderer(sp.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>(),
             new EsportsDataMode(ProviderMode.Fixture));
         var now = sp.GetRequiredService<TimeProvider>().GetUtcNow();
-        var cards = ToroSquad.Modules.Esports.Application.EsportsDemoCards.Build(renderer, settings.Language, zone, now);
+        var cards = ToroSquad.Modules.Esports.Application.EsportsDemoCards.Build(renderer, settings.Language, now);
         if (options.TryGetValue("kind", out var only))
         {
             // Re-render just one card (e.g. demo-forfeit) so already approved demo messages are left untouched.
@@ -487,19 +485,22 @@ public static partial class Cli
             "PandaScore token: " + (pandaTokenSet ? "set (value hidden)" : "NOT SET (live PandaScore data BLOCKED)"));
         var apiKeySet = !string.IsNullOrWhiteSpace(config["Esports:Liquipedia:ApiKey"]);
         var hltvLinks = config.GetValue("Esports:HltvLinksFromLiquipedia", true);
-        Add(apiKeySet ? "OK" : liquipediaSelected || hltvLinks ? "BLOCKED" : "INFO", "Liquipedia API key: " + (apiKeySet ? "set (value hidden)" : "NOT SET" +
-            (liquipediaSelected ? " (live esports data NOT_CONFIGURED)" : hltvLinks ? " (OPTIONAL: only for automatic HLTV match-page links; PandaScore does not need it)" : " (not needed)")));
-        var verifiedLinks = config.GetSection("Esports:VerifiedMatchLinks").GetChildren().Count();
+        var wikiFallback = config.GetValue("Esports:HltvLinksFromWikiApi", true);
+        Add(apiKeySet ? "OK" : liquipediaSelected ? "BLOCKED" : "INFO", "Liquipedia API key: " + (apiKeySet ? "set (value hidden)" : "NOT SET" +
+            (liquipediaSelected ? " (live esports data NOT_CONFIGURED)" : hltvLinks && wikiFallback ? " (HLTV links use the free MediaWiki API fallback)" : hltvLinks ? " (no automatic HLTV match-page links)" : " (not needed)")));
         if (!liquipediaSelected)
         {
-            Add(!hltvLinks ? "INFO" : apiKeySet ? "OK" : "BLOCKED",
-                "HLTV match links via Liquipedia (optional): " + (!hltvLinks ? "off" : apiKeySet ? "enabled (unique team+time match only, cached)" : "waiting for an approved Liquipedia key"));
-            Add("OK", $"Manual match links (Esports:VerifiedMatchLinks): {verifiedLinks} entr{(verifiedLinks == 1 ? "y" : "ies")} (work without Liquipedia)");
+            // HLTV match links are fully automatic: LiquipediaDB (key) first, else the free MediaWiki API. No manual workflow.
+            Add(!hltvLinks ? "INFO" : apiKeySet || wikiFallback ? "OK" : "INFO",
+                "HLTV match links (automatic): " + (!hltvLinks ? "off"
+                    : apiKeySet ? "LiquipediaDB (unique team+time match only, cached)" + (wikiFallback ? "; MediaWiki API fallback if LPDB fails" : "")
+                    : wikiFallback ? "Liquipedia MediaWiki API fallback (followed teams only, unique team+time match, cached, <= 1 request / 2 s)"
+                    : "off (no LiquipediaDB key, MediaWiki fallback disabled)"));
         }
 
-        if (liquipediaSelected || (hltvLinks && apiKeySet))
+        if (liquipediaSelected || (hltvLinks && (apiKeySet || wikiFallback)))
         {
-            // The contact User-Agent is explicit in the MediaWiki API terms, not in the LiquipediaDB section: a hint, not a gate.
+            // The MediaWiki API terms require a contact User-Agent; the default names the public repository (add your e-mail for a direct contact).
             var ua = config["Esports:Liquipedia:UserAgent"];
             Add(LiquipediaClient.UserAgentHasContact(ua) ? "OK" : "INFO", "Liquipedia User-Agent: " + (string.IsNullOrWhiteSpace(ua)
                 ? "default '" + LiquipediaClient.DefaultUserAgent + "' (recommended: your own with contact)"
@@ -511,6 +512,19 @@ public static partial class Cli
         Add(openF1Set ? "OK" : f1Live ? "BLOCKED" : "INFO", "OpenF1 live credentials: " + (openF1Set
             ? "set (values hidden)"
             : "NOT SET (live session starts NOT_CONFIGURED; schedule, results and standings still work)"));
+        var vbLive = string.Equals(config.GetValue("Volleyball:Provider:Mode", "Fixture"), "Live", StringComparison.OrdinalIgnoreCase);
+        var vbProvider = config.GetValue("Volleyball:Provider:Name", "FivbVis");
+        Add(string.Equals(vbProvider, "None", StringComparison.OrdinalIgnoreCase) ? "INFO" : "OK", "Volleyball (Türkiye women's senior team only): " + (vbLive
+            ? "LIVE (" + vbProvider + ", public data; FIVB application id " + (string.IsNullOrWhiteSpace(config["Volleyball:Fivb:AppId"]) ? "not set — anonymous" : "set (value hidden)") + ")"
+            : "FIXTURE (TEST/DEMO synthetic match)"));
+        var liveEnabled = config.GetValue("Live:Enabled", false);
+        var twitchSet = !string.IsNullOrWhiteSpace(config["Live:Twitch:ClientId"]) && !string.IsNullOrWhiteSpace(config["Live:Twitch:ClientSecret"]);
+        var kickSet = !string.IsNullOrWhiteSpace(config["Live:Kick:ClientId"]) && !string.IsNullOrWhiteSpace(config["Live:Kick:ClientSecret"]);
+        Add(liveEnabled ? "OK" : "INFO", "TSQ Live (Twitch + Kick announcements): " + (liveEnabled
+            ? $"ON; channel {config.GetValue("Live:DiscordChannelId", 0UL)}; Twitch credentials {(twitchSet ? "set (values hidden)" : "NOT SET")}; Kick credentials {(kickSet ? "set (values hidden)" : "NOT SET")}"
+            : "off (Live:Enabled=false)"));
+        if (liveEnabled && !(twitchSet && kickSet))
+            Add("BLOCKED", "TSQ Live: " + (twitchSet ? "" : "Twitch ") + (kickSet ? "" : "Kick ") + "not tracked until TOROSQUAD_Live__<Platform>__ClientId / __ClientSecret are set");
 
         var bot = config.GetSection(BotOptions.Section).Get<BotOptions>() ?? new BotOptions();
         Add(string.IsNullOrWhiteSpace(bot.SourceUrl) ? "WARN" : "OK", "Bot:SourceUrl (AGPL Corresponding Source): " + (bot.SourceUrl ?? "NOT SET"));

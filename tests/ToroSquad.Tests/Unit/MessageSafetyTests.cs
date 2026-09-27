@@ -125,6 +125,28 @@ public sealed partial class MessageSafetyTests
     }
 
     [Fact]
+    public void Everyone_is_an_explicit_opt_in_that_never_adds_roles_users_or_here()
+    {
+        var everyone = DiscordConversions.ToAllowedMentions(MentionPolicy.EveryoneOnly);
+        everyone.AllowedTypes.Should().Be(AllowedMentionTypes.Everyone, "parse:[everyone] only — @here is the same flag in Discord and is never in our text");
+        (everyone.RoleIds ?? []).Should().BeEmpty();
+        (everyone.UserIds ?? []).Should().BeEmpty();
+        everyone.MentionRepliedUser.Should().BeFalse();
+        new OutgoingMessage("@everyone x", null, MentionPolicy.EveryoneOnly).WithoutPings().Mentions.Everyone.Should().BeFalse("edits and previews never ping");
+    }
+
+    [Fact]
+    public void The_everyone_flag_is_not_serialized_while_false_so_existing_payload_hashes_are_unchanged()
+    {
+        var plain = ToroSquad.Infrastructure.Delivery.PayloadSerializer.Serialize(new OutgoingMessage("x", null, MentionPolicy.None));
+        plain.Should().NotContain("everyone", "stored payloads of every existing module keep their exact JSON (no spurious edits after deploy)");
+        var opted = ToroSquad.Infrastructure.Delivery.PayloadSerializer.Serialize(new OutgoingMessage("x", null, MentionPolicy.EveryoneOnly));
+        opted.Should().Contain("\"everyone\":true");
+        ToroSquad.Infrastructure.Delivery.PayloadSerializer.Deserialize(opted).Mentions.Everyone.Should().BeTrue();
+        ToroSquad.Infrastructure.Delivery.PayloadSerializer.Deserialize(plain).Mentions.Everyone.Should().BeFalse();
+    }
+
+    [Fact]
     public void Edits_and_previews_strip_pings()
     {
         var message = new OutgoingMessage("<@&5>", null, new MentionPolicy([new RoleId(5)]));

@@ -30,7 +30,6 @@ public sealed class TeamLogoTests
     private const string LogoA = "https://cdn-api.pandascore.co/images/team/image/1/team_a.png";
     private const string LogoB = "https://cdn-api.pandascore.co/images/team/image/2/team_b.png";
     private static readonly DateTimeOffset Start = new(2026, 9, 17, 17, 0, 0, TimeSpan.Zero);
-    private static readonly TimeZoneInfo Istanbul = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
     private static readonly IReadOnlySet<string> FollowsA = new HashSet<string> { "ps-team:1" };
     private static readonly IReadOnlySet<string> FollowsB = new HashSet<string> { "ps-team:2" };
     private static readonly IReadOnlySet<string> FollowsBoth = new HashSet<string> { "ps-team:1", "ps-team:2" };
@@ -217,7 +216,6 @@ public sealed class TeamLogoTests
     [
         ("started", f => r.Started(Match(MatchStatus.Live), "tr", MentionPolicy.None, observed, f)),
         ("postponed", f => r.Postponed(Match(MatchStatus.Postponed), "tr", observed, f)),
-        ("rescheduled", f => r.Rescheduled(Match(), "tr", Start.AddDays(1), Istanbul, observed, f)),
         ("cancelled", f => r.Cancelled(Match(MatchStatus.Cancelled), "tr", observed, f)),
     ];
 

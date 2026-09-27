@@ -13,16 +13,16 @@ namespace ToroSquad.Tests.Integration;
 
 /// <summary>
 /// Fixture (TEST/DEMO) timelines must survive a bot restart. Found live 2026-09-25: the anchor was the process start, so
-/// every restart moved the demo match times and the planner correctly saw a "new time" → one new TEST/DEMO
-/// "Maçın saati değişti" card per restart in the test guild.
+/// every restart moved the demo match times and the planner correctly saw a "new time" (back then a separate TEST/DEMO
+/// "time changed" card per restart; today it would edit demo reminders). A restart must stage nothing at all.
 /// </summary>
 public sealed class FixtureRestartTests
 {
     private static readonly GuildId Guild = new(900_000_000_000_000_777);
     private static readonly ChannelId Channel = new(777);
 
-    private static Task<int> RescheduledRowsAsync(TestHost host) => host.InScopeAsync(sp =>
-        sp.GetRequiredService<ToroDbContext>().Outbox.CountAsync(o => o.Kind.StartsWith("rescheduled-")));
+    private static Task<List<string>> OutboxRowsAsync(TestHost host) => host.InScopeAsync(sp =>
+        sp.GetRequiredService<ToroDbContext>().Outbox.OrderBy(o => o.Id).Select(o => o.LogicalKey + "|" + o.PayloadHash).ToListAsync());
 
     [Fact]
     public async Task A_restart_keeps_the_fixture_timeline_and_posts_no_new_lifecycle_card()
@@ -31,7 +31,8 @@ public sealed class FixtureRestartTests
         await first.SetUpEsportsGuildAsync(Guild, Channel);
         await first.Services.GetRequiredService<EsportsPoller>().RefreshMatchesAsync(CancellationToken.None);
         var before = first.Services.GetRequiredService<EsportsCache>().Matches.Data!.ToDictionary(m => m.Key, m => m.ScheduledStartUtc);
-        var baseline = await RescheduledRowsAsync(first);
+        var baseline = await OutboxRowsAsync(first);
+        baseline.Should().NotContain(k => k.Contains("rescheduled-", StringComparison.Ordinal), "separate time-changed cards no longer exist");
 
         // "Restart" 40 minutes later: a new process (new DI container, new anchor object) on the same database.
         await using (var second = await TestHost.CreateAsync(
@@ -46,7 +47,7 @@ public sealed class FixtureRestartTests
 
             second.Services.GetRequiredService<EsportsCache>().Matches.Data!.Should().OnlyContain(m => m.ScheduledStartUtc == before[m.Key],
                 "the persisted anchor keeps every demo time where it was");
-            (await RescheduledRowsAsync(second)).Should().Be(baseline, "a restart is not a reschedule");
+            (await OutboxRowsAsync(second)).Should().Equal(baseline, "a restart neither stages a new row nor edits an existing one");
         }
     }
 

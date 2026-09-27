@@ -1,0 +1,16 @@
+{
+  "module.quote.name": "TSQ Quote — Alıntı Kartı",
+  "module.quote.description": "/quote ile bu sunucudaki bir mesajı, yazarının siyah-beyaz profil fotoğrafıyla alıntı görseline çevirir.",
+  "cmd.quote": "Bir mesajı siyah-beyaz alıntı kartına çevir",
+  "cmd.quote.message": "Mesaj kimliği (Mesaj Kimliğini Kopyala) veya mesaj bağlantısı",
+  "cmd.quote.channel": "Yalnızca ID verdiysen mesajın kanalı (varsayılan: bu kanal)",
+  "quote.invalid_reference": "Geçerli bir mesaj ID'si veya Discord mesaj bağlantısı gir.",
+  "quote.other_guild": "Yalnızca bu sunucudaki mesajlar alıntılanabilir.",
+  "quote.not_found": "Mesaj bulunamadı veya bu mesaja erişim iznin yok.",
+  "quote.no_text": "Bu mesajda alıntılanabilecek bir metin yok.",
+  "quote.content_unavailable": "Bu mesajın içeriği Discord tarafından bota iletilmedi. Message Content erişiminin açık olduğundan emin olun.",
+  "quote.bot_cannot_attach": "{product}'un bu kanalda dosya gönderme izni yok. Bir yönetici bota bu kanalda Dosya Ekle izni vermeli.",
+  "quote.age_restricted": "Yaş sınırlı bir kanaldaki mesaj, yaş sınırı olmayan bir kanala alıntılanamaz.",
+  "quote.posting": "Alıntı kartı gönderiliyor…",
+  "quote.post_failed": "Alıntı kartı bu kanala gönderilemedi. Botun bu kanalda dosya gönderme izni olduğundan emin ol."
+}

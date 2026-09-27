@@ -100,6 +100,20 @@ public sealed class FakeMessageTransport(ILogger<FakeMessageTransport>? logger =
         }
     }
 
+    public int PresenceCalls { get; private set; }
+
+    /// <summary>When set, every presence check answers this (e.g. Unknown for "no Read Message History").</summary>
+    public MessagePresence? ScriptedPresence { get; set; }
+
+    public Task<MessagePresence> GetPresenceAsync(ChannelId channel, MessageId message, CancellationToken cancellationToken)
+    {
+        PresenceCalls++;
+        if (ScriptedPresence is { } scripted)
+            return Task.FromResult(scripted);
+        lock (_gate)
+            return Task.FromResult(_messages.Any(m => m.Id == message && m.Channel == channel) ? MessagePresence.Present : MessagePresence.Missing);
+    }
+
     /// <summary>Test helper: delete a message as a moderator would.</summary>
     public void DeleteMessage(MessageId id)
     {

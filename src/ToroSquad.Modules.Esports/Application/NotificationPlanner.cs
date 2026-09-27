@@ -47,8 +47,10 @@ public static class MatchJson
 /// <item>Per guild, nothing that became due before the guild's watermark (enable/resume time) is sent.</item>
 /// <item>After a polling gap, result catch-up is limited in age and count.</item>
 /// <item>Reminders are "planned start" reminders — never claims of a live match.</item>
-/// <item>Lifecycle cards (started, postponed, rescheduled, cancelled) are sent once per guild+match+kind, only for
-/// transitions observed between two known provider states after the guild's watermark, and only while fresh.</item>
+/// <item>Lifecycle cards (started, postponed, cancelled) are sent once per guild+match+kind, only for transitions
+/// observed between two known provider states after the guild's watermark, and only while fresh.</item>
+/// <item>A changed start time is never a card of its own: an existing reminder is edited (new time + "previously …");
+/// without a reminder the new time is just match state until the normal reminder is due.</item>
 /// <item>One message per guild+match+channel+kind; later changes edit that message without pinging.</item>
 /// </list>
 /// </summary>
@@ -71,11 +73,11 @@ public sealed class NotificationPlanner(
     public const string KindStarted = "started";
     public const string KindPostponed = "postponed";
     public const string KindCancelled = "cancelled";
+    /// <summary>
+    /// Legacy prefix of the separate "time changed" cards produced until 2026-09-26. Nothing new is staged with it; it is
+    /// kept so rows that already exist in the outbox keep following the reminders switch at delivery time.
+    /// </summary>
     public const string KindRescheduledPrefix = "rescheduled-";
-
-    /// <summary>One rescheduled card per distinct new start time (a later second reschedule is a new message).</summary>
-    public static string KindRescheduled(DateTimeOffset newStartUtc) =>
-        KindRescheduledPrefix + newStartUtc.UtcDateTime.ToString("yyyyMMddHHmm", System.Globalization.CultureInfo.InvariantCulture);
 
     public async Task<PlanReport> PlanAsync(IReadOnlyList<EsportsMatch> matches, DateTimeOffset fetchedAt, bool afterGap, CancellationToken cancellationToken)
     {
@@ -135,8 +137,6 @@ public sealed class NotificationPlanner(
             var mappings = await db.Set<RoleMappingEntity>().AsNoTracking().Where(m => m.GuildId == config.GuildId).ToListAsync(cancellationToken);
             var settings = await guildSettings.GetAsync(guild, cancellationToken);
             var language = settings.Language;
-            if (!GuildTime.TryResolve(settings.TimeZoneId, out var zone))
-                GuildTime.TryResolve(GuildSettings.DefaultTimeZoneId, out zone);
             var catchUp = 0;
 
             foreach (var match in matches.OrderBy(m => m.ScheduledStartUtc))
@@ -203,7 +203,7 @@ public sealed class NotificationPlanner(
 
                 if (config.NotifyReminders)
                 {
-                    var lifecycle = await StageLifecycleAsync(match, snapshot, config, guild, channel, language, zone, mappings, filters.TeamKeys, existingKeys, dryRun, now, cancellationToken);
+                    var lifecycle = await StageLifecycleAsync(match, snapshot, config, guild, channel, language, mappings, filters.TeamKeys, existingKeys, dryRun, now, cancellationToken);
                     created += lifecycle.Created;
                     updated += lifecycle.Updated;
                 }
@@ -217,12 +217,13 @@ public sealed class NotificationPlanner(
     private readonly record struct Staged(int Created, int Updated);
 
     /// <summary>
-    /// Started / postponed / rescheduled / cancelled cards. Each needs (a) a transition recorded on the shared snapshot,
+    /// Started / postponed / cancelled cards (a changed start time edits the reminder instead, see above). Each needs (a) a
+    /// transition recorded on the shared snapshot,
     /// (b) the match still being in that state, (c) the transition observed after the guild's watermark and (d) within
     /// the freshness window. Only "started" may ping (reminder role mappings); schedule changes never ping.
     /// </summary>
     private async Task<Staged> StageLifecycleAsync(EsportsMatch match, MatchSnapshotEntity snapshot, EsportsGuildConfigEntity config, GuildId guild,
-        ChannelId channel, string language, TimeZoneInfo zone, IReadOnlyList<RoleMappingEntity> mappings, IReadOnlySet<string> followedTeams, HashSet<string> existingKeys, bool dryRun,
+        ChannelId channel, string language, IReadOnlyList<RoleMappingEntity> mappings, IReadOnlySet<string> followedTeams, HashSet<string> existingKeys, bool dryRun,
         DateTimeOffset now, CancellationToken ct)
     {
         int created = 0, updated = 0;
@@ -250,13 +251,6 @@ public sealed class NotificationPlanner(
             () => renderer.Postponed(match, language, snapshot.PostponedObservedAt!.Value, followedTeams));
         await StageAsync(KindCancelled, snapshot.CancelledObservedAt, match.Status == MatchStatus.Cancelled,
             () => renderer.Cancelled(match, language, snapshot.CancelledObservedAt!.Value, followedTeams));
-        if (snapshot.RescheduledToUtc is { } to)
-        {
-            await StageAsync(KindRescheduled(to), snapshot.RescheduledObservedAt,
-                match.Status == MatchStatus.Scheduled && match.ScheduledStartUtc == to,
-                () => renderer.Rescheduled(match, language, to, zone, snapshot.RescheduledObservedAt!.Value, followedTeams));
-        }
-
         return new Staged(created, updated);
     }
 
@@ -353,8 +347,9 @@ public sealed class NotificationPlanner(
 
     /// <summary>
     /// Records lifecycle transitions between two KNOWN provider states. Nothing is recorded on first sight (no previous
-    /// state), from/to Unknown, or from the clock. Reschedules need the provider's own "rescheduled" flag plus a move of
-    /// at least the threshold (demo re-anchoring or small corrections are not announcements).
+    /// state), from/to Unknown, or from the clock. The provider's own "rescheduled" flag (plus a move of at least the
+    /// threshold) is recorded as internal snapshot state only: since 2026-09-26 it produces no card — a changed start time
+    /// edits the reminder instead.
     /// </summary>
     public static void RecordTransitions(MatchSnapshotEntity snapshot, MatchStatus? previous, EsportsMatch match, DateTimeOffset? oldStartUtc, TimeSpan threshold, DateTimeOffset now)
     {

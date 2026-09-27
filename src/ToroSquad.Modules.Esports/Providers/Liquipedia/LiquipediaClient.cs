@@ -37,6 +37,15 @@ public sealed class LiquipediaOptions
     /// <summary>We plan to use at most this share of the hourly budget.</summary>
     public double BudgetShare { get; set; } = 0.8;
 
+    /// <summary>Free MediaWiki API (fallback HLTV link source when no LPDB key is available): https://liquipedia.net/&lt;wiki&gt;/api.php.</summary>
+    public string WikiBaseUrl { get; set; } = "https://liquipedia.net/";
+
+    /// <summary>MediaWiki API terms: at most 1 request per 2 seconds (validated ≥ 2).</summary>
+    public double WikiMinIntervalSeconds { get; set; } = 2.5;
+
+    /// <summary>Our own hourly cap for MediaWiki requests (far below what the spacing rule would allow).</summary>
+    public int WikiRequestsPerHour { get; set; } = 60;
+
     public int PageSize { get; set; } = 200;
     public int MaxPages { get; set; } = 5;
     public int TimeoutSeconds { get; set; } = 20;

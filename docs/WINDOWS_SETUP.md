@@ -46,8 +46,8 @@ Doctor yalnızca "set / NOT SET" yazar; loglar ve hata çıktıları bilinen tok
 2. Privileged Gateway Intents: **hepsi kapalı** kalsın.
 3. Uygulama kimliğini (Application ID) `appsettings` yerine user-secrets/env ile de verebilirsiniz:
    `dotnet user-secrets set "Discord:ApplicationId" "<id>" --project src\ToroSquad.Bot`.
-4. Davet: OAuth2 URL Generator → kapsamlar `bot`, `applications.commands`; izin tamsayısı **84992**
-   (self-service rolleri kullanacaksanız **268520448**). Administrator vermeyin. Botu önce **test sunucunuza** ekleyin.
+4. Davet: OAuth2 URL Generator → kapsamlar `bot`, `applications.commands`; izin tamsayısı **117760**
+   (TSQ Quote'un `Attach Files` izni dahil; self-service rolleri kullanacaksanız **268553216**). Administrator vermeyin. Botu önce **test sunucunuza** ekleyin.
 
 ## 5. Test sunucusunda canlı deneme (onay kapısı)
 
@@ -76,21 +76,21 @@ Token yoksa canlı PandaScore **BLOCKED** olur; fixture modu ve testler token ge
 
 **Liquipedia (isteğe bağlı: otomatik HLTV maç sayfası bağlantıları).** Bot Liquipedia olmadan normal çalışır; PandaScore
 verisi, hatırlatmalar ve sonuçlar Liquipedia'ya bağlı değildir. Onaylı bir LiquipediaDB anahtarı (`Esports:Liquipedia:ApiKey`,
-secret) varsa PandaScore maçlarının HLTV bağlantıları Liquipedia'dan eşleştirilir (Doctor: "HLTV match links via Liquipedia").
+secret) varsa PandaScore maçlarının HLTV bağlantıları LiquipediaDB'den eşleştirilir; anahtar yoksa aynı bilgi ücretsiz
+Liquipedia MediaWiki API'sinden otomatik alınır (Doctor: "HLTV match links (automatic)").
 Güncel durum (2026-09-25): LPDB en fazla **60 istek/saat**; TSQ Bot bağlantı kaynağı için 30 dakikada bir sorgular (en kötü
 ≈10 istek/saat) ve yanıtı veritabanında önbelleğe alır. Basic/Premium planlar **geçici olarak kullanılamıyor**; ticari
 tarafta Enterprise sunuluyor. Ücretsiz erişim açık kaynak eğitim / ticari olmayan kamu / topluluk projeleri için
 **başvuruya** bağlı ve çoğu zaman süreli. Depo public olduğu için başvuru yapılabilir; onaylı anahtar olmadan bu zenginleştirme **kapalıdır** (isteğe bağlı).
-User-Agent: Liquipedia koşullarında iletişim bilgili User-Agent şartı açıkça **MediaWiki API** bölümünde yer alır; LPDB
-bölümünde ayrıca belirtilmez. TSQ Bot yine de her istekte özel bir User-Agent gönderir (ayarlanmamışsa
-`TSQBot (https://github.com/Torokal/TSQ-Bot)`); kendi iletişiminizi eklemeniz **önerilir**, zorunlu değildir:
+User-Agent: Liquipedia koşullarında iletişim bilgili User-Agent şartı **MediaWiki API** bölümünde yer alır (MediaWiki yedeği
+bunu kullanır). TSQ Bot her istekte özel bir User-Agent gönderir (ayarlanmamışsa `TSQBot (https://github.com/Torokal/TSQ-Bot)`,
+yani herkese açık depo adresi); doğrudan iletişim için e-postanızı eklemeniz **önerilir**:
 `Esports:Liquipedia:UserAgent` = `TSQBot/0.1 (<sizin URL'niz>; <iletişim e-postanız>)`.
 **Liquipedia'yı maç sağlayıcısı yapmak (eski/isteğe bağlı).** `Esports:Provider:Name=Liquipedia` seçilirse onaylı anahtar
 gerekir ve `Esports:MatchPollMinutes` ≥ 10 olmalıdır (60 istek/saat bütçesi).
 
-**Doğrulanmış maç sayfaları (elle, her zaman çalışır).** HLTV kazınmaz; bir maç için doğrulanmış HLTV/resmî bağlantıyı elle
-ekleyebilirsiniz (`Esports:VerifiedMatchLinks`, docs/NOTIFICATIONS.md). Liquipedia anahtarı olmadan bu, HLTV bağlantısının
-tek yoludur. Doctor ve başlangıç doğrulaması eksikleri söyler.
+**HLTV maç sayfaları tamamen otomatiktir.** Elle bağlantı girme yolu yoktur; Liquipedia'da HLTV kimliği bulunamazsa kartta
+"Maç Sayfası" alanı olmaz. HLTV kazınmaz ve HLTV'ye hiç istek atılmaz.
 
 **TEST/DEMO kartları (Discord görünüm testi).** Bot `Start-Dev.ps1` ile çalışırken, **aynı veri klasörüyle**:
 ```powershell

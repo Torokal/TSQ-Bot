@@ -1,0 +1,16 @@
+{
+  "module.quote.name": "TSQ Quote — Quote Card",
+  "module.quote.description": "/quote turns a message from this server into a quote image with its author's black-and-white profile picture.",
+  "cmd.quote": "Turn a message into a black-and-white quote card",
+  "cmd.quote.message": "Message ID (Copy Message ID) or message link",
+  "cmd.quote.channel": "Channel of the message when you give a bare ID (default: this channel)",
+  "quote.invalid_reference": "Enter a valid message ID or Discord message link.",
+  "quote.other_guild": "Only messages from this server can be quoted.",
+  "quote.not_found": "Message not found, or you don't have access to it.",
+  "quote.no_text": "This message has no text that can be quoted.",
+  "quote.content_unavailable": "Discord did not pass this message's content to the bot. Make sure Message Content access is enabled.",
+  "quote.bot_cannot_attach": "{product} may not attach files in this channel. An admin needs to give the bot Attach Files here.",
+  "quote.age_restricted": "A message from an age-restricted channel cannot be quoted into a channel without the age restriction.",
+  "quote.posting": "Posting the quote card…",
+  "quote.post_failed": "The quote card could not be posted in this channel. Make sure the bot may attach files here."
+}

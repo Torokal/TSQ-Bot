@@ -12,7 +12,7 @@ namespace ToroSquad.Modules.Esports.Application;
 /// <summary>
 /// Builds compact match cards modelled on the owner's BOT Greg reference (docs/NOTIFICATIONS.md): a title that names the
 /// match (clickable when a safe match page exists), ONE status line with a relative time, the inline "Event" and "Format"
-/// fields (+ "New time" for reschedules), an optional "Match Page" link under the fields, and the source attribution.
+/// fields, an optional "Match Page" link under the fields, and the source attribution.
 /// No maps, streams, rosters, freshness lines or internal ids. Rules enforced here (and tested):
 /// <list type="bullet">
 /// <item>All provider text is untrusted: mentions/markdown/links defused; only validated URLs become links.</item>
@@ -40,6 +40,7 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
         IReadOnlySet<string>? followedTeamKeys = null)
     {
         // "Planned start" wording is the honesty guarantee: a reminder never claims that the match started.
+        // A changed start time is shown right here (new time + previous time) by editing this card: no separate card exists.
         var lines = new List<string>();
         if (match.ScheduledStartUtc is { } start)
             lines.Add(L(language, match.StartTimeExact ? "esports.card.reminder" : "esports.card.reminder_estimated", DiscordText.Timestamp(start, 'R')));
@@ -57,12 +58,6 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
 
     public OutgoingMessage Postponed(EsportsMatch match, string language, DateTimeOffset observedAt, IReadOnlySet<string>? followedTeamKeys = null) =>
         Card(match, language, Title(match, language), [L(language, "esports.card.postponed")], [], observedAt, ChangeColor, MentionPolicy.None,
-            LogoFor(match, followedTeamKeys, showWinner: false));
-
-    public OutgoingMessage Rescheduled(EsportsMatch match, string language, DateTimeOffset newStartUtc, TimeZoneInfo zone, DateTimeOffset observedAt,
-        IReadOnlySet<string>? followedTeamKeys = null) =>
-        Card(match, language, Title(match, language), [L(language, "esports.card.rescheduled")],
-            [new EmbedField(L(language, "esports.field.new_time"), LocalTime(newStartUtc, zone), true)], observedAt, ChangeColor, MentionPolicy.None,
             LogoFor(match, followedTeamKeys, showWinner: false));
 
     public OutgoingMessage Cancelled(EsportsMatch match, string language, DateTimeOffset observedAt, IReadOnlySet<string>? followedTeamKeys = null) =>
@@ -209,6 +204,12 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
     public string CardFooter(string language, string? source) =>
         mode.IsDemo ? L(language, "esports.card.demo_footer") : Footer(language, source);
 
+    /// <summary>Card footer plus " · Link: Liquipedia" when the shown Match Page is an HLTV link found via Liquipedia (CC BY-SA credit).</summary>
+    public string CardFooter(string language, string? source, MatchPage? page, MatchLinks? links) =>
+        !mode.IsDemo && page?.Kind == MatchPageKind.Hltv && links?.HltvVia == MatchLinks.ViaLiquipedia
+            ? CardFooter(language, source) + " · " + L(language, "esports.footer_link_liquipedia")
+            : CardFooter(language, source);
+
     /// <summary>Invisible field name for the "Match Page" field (Discord requires a non-empty name).</summary>
     public const string ZeroWidth = "\u200B";
 
@@ -237,9 +238,6 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
 
     public static string Format(int bestOf) => string.Create(CultureInfo.InvariantCulture, $"bo{bestOf}");
 
-    public static string LocalTime(DateTimeOffset utc, TimeZoneInfo zone) =>
-        TimeZoneInfo.ConvertTime(utc, zone).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
-
     private string Title(EsportsMatch match, string language) =>
         L(language, "esports.card.vs", Name(match.A, language), Name(match.B, language));
 
@@ -262,7 +260,7 @@ public sealed class NotificationRenderer(ILocalizer localizer, EsportsDataMode m
         return new OutgoingMessage(
             Content(pings),
             // The title is only the match; demo cards say TEST/DEMO in the footer (no prefix, no link, no real source).
-            new MessageEmbed(title, string.Join("\n", lines), page?.Url, fields, CardFooter(language, match.Key.Source), timestamp, color, logoUrl),
+            new MessageEmbed(title, string.Join("\n", lines), page?.Url, fields, CardFooter(language, match.Key.Source, page, match.Links), timestamp, color, logoUrl),
             pings);
     }
 

@@ -3,7 +3,11 @@
 A modular, self-hostable Discord bot. Its first module tracks **Counter-Strike 2 esports**: it posts compact match
 cards (reminder, match started, result and schedule changes) into a server channel and answers esports slash commands.
 A separate **Formula 1** module posts confirmed session starts, results (with in-place corrections) and championship
-standings ([docs/FORMULA1.md](docs/FORMULA1.md)).
+standings ([docs/FORMULA1.md](docs/FORMULA1.md)). A **Volleyball** module follows only Türkiye's women's senior national team
+("Filenin Sultanları") ([docs/volleyball/VOLLEYBALL.md](docs/volleyball/VOLLEYBALL.md)). **TSQ Live** announces the configured
+creators' Twitch/Kick streams ([docs/live/TSQ_LIVE.md](docs/live/TSQ_LIVE.md)). **TSQ LFG — Oyuncu Bul** lets members
+open quick group listings for any game with `/ekip` ([docs/lfg/TSQ_LFG.md](docs/lfg/TSQ_LFG.md)). **TSQ Quote** turns a
+message into a black-and-white quote card with `/quote` ([docs/quote/TSQ_QUOTE.md](docs/quote/TSQ_QUOTE.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
 **BOT Greg** and reuses adapted portions of the open-source
@@ -22,10 +26,28 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   follows, and server filters (team / tournament / tier / VRS top-N) set by server admins.
 - **Formula 1** (separate module, off by default): session started (only when a live provider confirms it — never
   from the clock), practice/sprint/race results, drivers' and constructors' standings, `/f1 next|schedule|results|now`.
+- **Volleyball — Filenin Sultanları** (separate module, off by default): Türkiye women's senior national team only;
+  15-minute reminder, match started, each set, final result (low spam, no point-by-point updates), `/volleyball next|schedule`.
+- **TSQ Live** (separate module, off by default and `Live:Enabled=false`): Twitch + Kick live announcements for configured
+  creators via the official APIs — one `@everyone` per new creator session (multistream = one message), title/platform
+  changes and the end of the stream edit the same message without pinging; restart, reconnect and provider-outage safe.
+- **TSQ LFG — Oyuncu Bul** (separate module, off by default): `/ekip` opens a form for a group listing for any game or
+  activity (free-text game name and details, team size, start — now or a date and time in the server's time zone —
+  and voice channel, then the duration and ping settings); members join/leave with buttons, the owner can edit the
+  listing (✏️ Düzenle), the owner or a moderator closes it, it expires on its own; Maybe RSVP, opt-in pings of the joined
+  players 30 minutes before / at the start, optional voice channel; one generic lifecycle for every game, restart- and
+  race-safe.
+- **TSQ Quote** (separate module, off by default): `/quote message:<message id> [channel]` (Copy Message ID; a message
+  link also works) posts one message of this server as a PNG quote card — the author's avatar in black and white fading
+  into black, the text in large white type, "— name" and "@username" below. The message is read once by id over REST
+  (no channel scan, no message events); server-side access checks (same server; the member and the bot may view the
+  channel and read its history; the bot may attach files where the command ran); stateless (nothing stored or logged).
+  Needs the application's Message Content access (Developer Portal) — the gateway intents stay `Guilds`.
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
-  (optional spoiler mode), postponed, time changed, cancelled, forfeit. Each is sent once; later corrections edit
-  the same message without pinging again.
-- **Opt-in pings**: role mentions only for roles an admin explicitly mapped; `allowed_mentions` is locked down.
+  (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
+  without pinging again — a changed start time updates the existing reminder instead of posting a new card.
+- **Opt-in pings**: role mentions only for roles an admin explicitly mapped; `allowed_mentions` is locked down. The only
+  `@everyone` is TSQ Live's first announcement of a new stream session (never on edits, replacements or restarts).
 - **Honest data**: provider errors are never shown as "no matches", a passed start time is never "started", and
   HLTV is never scraped (only verified match-page links are shown).
 - **Durable delivery**: persistent outbox with de-duplication, crash recovery and ambiguous-delivery reconciliation.
@@ -42,6 +64,12 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | Esports admin | `/esports-admin configure\|filters\|roles\|panel\|preview\|pause\|resume\|doctor` | Manage Server (+ Manage Roles for roles) |
 | Formula 1 | `/f1 next\|schedule\|results\|now`, `/f1 standings drivers\|constructors` | everyone (module on) |
 | Formula 1 admin | `/f1-admin configure channel\|notifications\|role\|spoilers`, `/f1-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
+| Volleyball | `/volleyball next\|schedule` | everyone (module on) |
+| Volleyball admin | `/volleyball-admin configure channel\|notifications\|role`, `/volleyball-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
+| TSQ Live admin | `/live-admin doctor` | Manage Server |
+| TSQ LFG | `/ekip` (opens the listing form; buttons: Katıl · Belki · Ayrıl · 🔊 Ses Odası · ✏️ Düzenle (owner only) · İlanı Kapat) | everyone (module on) |
+| TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
+| TSQ Quote | `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
 [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md). The generated, test-checked schema is
@@ -53,10 +81,10 @@ Commands are registered per server (guild commands) with a dry-run first. Permis
 |---|---|
 | **PandaScore** | Default match data (fixtures, live state, results). A free plan exists; a token is required. |
 | **Valve Regional Standings** | Rankings for `/esports rankings` and VRS filters. |
-| **Liquipedia** (optional) | Only used to find verified HLTV match-page links; needs an approved LiquipediaDB key. |
-| **HLTV** | Never scraped. Only verified match-page links are displayed. |
+| **Liquipedia** | Only used to find the editor-entered HLTV match id for a match page: LiquipediaDB with an approved key, otherwise the free MediaWiki API (API only, rate-limited, cached). |
+| **HLTV** | Never scraped or contacted. A "Maç Sayfası" link appears only when Liquipedia has the match's HLTV id. |
 
-Operators can also add verified match links manually (`Esports:VerifiedMatchLinks`). Limits, terms and attribution:
+HLTV links are fully automatic; there is no manual link workflow. Limits, terms and attribution:
 [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
 ## Formula 1 Providers
@@ -67,6 +95,14 @@ Operators can also add verified match links manually (`Esports:VerifiedMatchLink
 | **OpenF1** | Live session lifecycle (MQTT, paid sponsor access) and session results (free historical access); data CC BY-NC-SA 4.0. |
 
 Without OpenF1 live credentials the module runs honestly without start notifications. Details: [docs/FORMULA1.md](docs/FORMULA1.md).
+
+## Volleyball Provider
+
+| Provider | Role |
+|---|---|
+| **FIVB VIS** | Official FIVB web service (public data, no key): fixtures, results and set scores of Türkiye's women's senior team in FIVB/CEV tournaments. No logos are used. |
+
+Why FIVB VIS (and why not API-Sports, CEV, TVF or others): [docs/volleyball/PROVIDER_RESEARCH.md](docs/volleyball/PROVIDER_RESEARCH.md).
 
 ## Installation / Development
 
@@ -96,6 +132,9 @@ Step-by-step setup (Turkish): [docs/WINDOWS_SETUP.md](docs/WINDOWS_SETUP.md). Ad
 | `Esports:Provider:Name` | `PandaScore` | match data provider |
 | `Esports:Provider:Mode` | `Fixture` | synthetic data through the real client/parser, labelled TEST/DEMO |
 | `Formula1:Provider:Mode` | `Fixture` | synthetic TEST/DEMO race weekend; `Live` for Jolpica + OpenF1 |
+| `Volleyball:Provider:Mode` | `Fixture` | synthetic TEST/DEMO match; `Live` for FIVB VIS |
+| `Live:Enabled` | `false` | TSQ Live off; needs `Live:DiscordChannelId` and Twitch/Kick credentials ([docs/live/TSQ_LIVE.md](docs/live/TSQ_LIVE.md)) |
+| `Lfg:*` | `120` min, `2`, `20` | default listing duration, active listings per user, max team size ([docs/lfg/TSQ_LFG.md](docs/lfg/TSQ_LFG.md)) |
 | `Discord:AllowedGuildIds` | `[]` | when set, the bot only serves these servers (enforced server-side) |
 | `Discord:AllowGlobalCommandSync` | `false` | global command registration is a separate, explicit step |
 | `Bot:SourceUrl` | `https://github.com/Torokal/TSQ-Bot` | shown by `/bot source` |
@@ -128,6 +167,10 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Discord` | Interaction host, core commands, command manifest/sync, Discord transport |
 | `ToroSquad.Modules.Esports` | The esports module (providers, planner, commands) |
 | `ToroSquad.Modules.Formula1` | The Formula 1 module (provider capabilities, lifecycle state machine, planner, commands) |
+| `ToroSquad.Modules.Volleyball` | The volleyball module (Türkiye women's senior team only: identity filter, match state machine, FIVB VIS provider, planner, commands) |
+| `ToroSquad.Modules.Live` | TSQ Live (Twitch + Kick stream announcements: creator session state machine, official-API reconciliation, planner) |
+| `ToroSquad.Modules.Lfg` | TSQ LFG — Oyuncu Bul (generic group-finder listings: create/join/leave/close/expire, race-safe persistence, card sync) |
+| `ToroSquad.Modules.Quote` | TSQ Quote (`/quote`: message reference parsing, access checks, Discord text → plain text, ImageSharp card renderer with embedded fonts) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |
 
@@ -154,5 +197,5 @@ AGPL-3.0 §13 requires you to offer your modified source: set `Bot:SourceUrl` to
 ## Attribution
 
 Match data by PandaScore ("Kaynak: PandaScore" on every card). Rankings from Valve's public regional standings.
-Optional link data from Liquipedia (CC BY-SA 3.0). Portions of the data-access code adapted from BOT-Greg-v2_API
+Optional link data from Liquipedia (CC BY-SA 3.0). Volleyball data from the FIVB VIS web service ("Kaynak: FIVB"). Portions of the data-access code adapted from BOT-Greg-v2_API
 (AGPL-3.0). Details: [docs/PROVENANCE.md](docs/PROVENANCE.md).

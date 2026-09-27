@@ -109,6 +109,50 @@ public interface IGuildGateway
     Task<RoleOperationOutcome> AddRoleAsync(GuildId guild, UserId user, RoleId role, string auditReason, CancellationToken cancellationToken);
 
     Task<RoleOperationOutcome> RemoveRoleAsync(GuildId guild, UserId user, RoleId role, string auditReason, CancellationToken cancellationToken);
+
+    /// <summary>Whether <paramref name="channel"/> is a guild voice channel of THIS guild as the bot sees it, and the bot's permissions there.</summary>
+    Task<VoiceChannelAccess> GetVoiceChannelAccessAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Moves a member who is ALREADY connected to a voice channel of this guild into <paramref name="channel"/> (Discord:
+    /// Modify Guild Member channel_id; needs Move Members + Connect for the bot). Discord offers no way for a bot to connect
+    /// a member who is not in voice (<see cref="VoiceMoveOutcome.NotConnected"/>). Never moves a member into a channel they
+    /// could not join themselves.
+    /// </summary>
+    Task<VoiceMoveOutcome> MoveMemberToVoiceAsync(GuildId guild, UserId user, ChannelId channel, CancellationToken cancellationToken);
+}
+
+/// <summary>A voice channel as the bot sees it. Stage channels are not <see cref="IsVoice"/> (plain guild voice only).</summary>
+public sealed record VoiceChannelAccess(bool Exists, bool IsVoice, GuildPermission BotPermissions)
+{
+    public static VoiceChannelAccess Missing { get; } = new(false, false, GuildPermission.None);
+
+    public const GuildPermission RequiredToMove = GuildPermission.ViewChannel | GuildPermission.Connect | GuildPermission.MoveMembers;
+
+    public bool Usable => Exists && IsVoice;
+
+    public bool BotCanMove => Usable && BotPermissions.Grants(RequiredToMove);
+}
+
+public enum VoiceMoveOutcome
+{
+    Moved = 0,
+
+    /// <summary>The member is not connected to any voice channel (Discord 40032): only the member can connect themselves.</summary>
+    NotConnected = 1,
+
+    /// <summary>The member may not view/connect to the channel themselves; the bot's Move Members never bypasses that.</summary>
+    MemberCannotConnect = 2,
+
+    BotMissingPermissions = 3,
+    ChannelUnavailable = 4,
+    Failed = 5,
+
+    /// <summary>
+    /// The channel has a user limit. A bot with Move Members could move a member past it, and occupancy is unknown without
+    /// voice-state events, so the member joins themselves (Discord then enforces the limit).
+    /// </summary>
+    LimitedChannel = 6,
 }
 
 public sealed record BotChannelAccess(bool Exists, bool IsTextBased, GuildPermission Permissions)

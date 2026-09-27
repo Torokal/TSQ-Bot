@@ -7,17 +7,21 @@ namespace ToroSquad.Discord.Transport;
 public static class DiscordConversions
 {
     /// <summary>
-    /// allowed_mentions = { parse: [], roles: [explicitly permitted role ids] }. Users, @everyone and @here can never
-    /// ping from automated/bot messages.
+    /// allowed_mentions = { parse: [], roles: [explicitly permitted role ids], users: [explicitly listed user ids] }. @here
+    /// can never ping from automated/bot messages; @everyone only when the policy explicitly opts in (TSQ Live's first
+    /// announcement); users only when listed (TSQ LFG event notices). Edits always pass <see cref="MentionPolicy.None"/>.
     /// </summary>
     public static AllowedMentions ToAllowedMentions(MentionPolicy policy)
     {
-        var allowed = new AllowedMentions(AllowedMentionTypes.None)
+        var allowed = new AllowedMentions(policy.Everyone ? AllowedMentionTypes.Everyone : AllowedMentionTypes.None)
         {
             MentionRepliedUser = false,
         };
         if (policy.Roles.Count > 0)
             allowed.RoleIds = policy.Roles.Select(r => r.Value).Distinct().ToList();
+        // Users are never parsed from the text: only the explicitly listed ids (TSQ LFG notices) can ping.
+        if (policy.Users is { Count: > 0 } users)
+            allowed.UserIds = users.Select(u => u.Value).Distinct().ToList();
         return allowed;
     }
 
@@ -45,23 +49,43 @@ public static class DiscordConversions
         return builder.Build();
     }
 
+    /// <summary>Discord allows five rows of five buttons.</summary>
+    public const int ButtonsPerRow = 5;
+
+    public const int MaxRows = 5;
+
     public static MessageComponent? ToComponents(IReadOnlyList<MessageButton>? buttons)
     {
         if (buttons is null || buttons.Count == 0)
             return null;
         var builder = new ComponentBuilder();
         var row = 0;
-        for (var i = 0; i < buttons.Count && i < 25; i++)
+        var inRow = 0;
+        foreach (var b in buttons)
         {
-            var b = buttons[i];
-            if (i > 0 && i % 5 == 0)
+            if (inRow > 0 && (inRow == ButtonsPerRow || b.NewRow))
+            {
                 row++;
+                inRow = 0;
+            }
+
+            if (row == MaxRows)
+                break;
+            inRow++;
             if (b.Url is not null)
                 builder.WithButton(b.Label, url: b.Url, style: ButtonStyle.Link, disabled: b.Disabled, row: row);
             else
-                builder.WithButton(b.Label, b.CustomId, ButtonStyle.Secondary, disabled: b.Disabled, row: row);
+                builder.WithButton(b.Label, b.CustomId, ToStyle(b.Style), disabled: b.Disabled, row: row);
         }
 
         return builder.Build();
     }
+
+    private static ButtonStyle ToStyle(MessageButtonStyle style) => style switch
+    {
+        MessageButtonStyle.Primary => ButtonStyle.Primary,
+        MessageButtonStyle.Success => ButtonStyle.Success,
+        MessageButtonStyle.Danger => ButtonStyle.Danger,
+        _ => ButtonStyle.Secondary,
+    };
 }

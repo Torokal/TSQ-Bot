@@ -64,15 +64,20 @@ public sealed class EsportsModule : IToroModule
         var pandaBase = configuration.GetSection(PandaScoreOptions.Section).GetValue("BaseUrl", new PandaScoreOptions().BaseUrl)!;
         var panda = services.AddHttpClient<PandaScoreClient>(c => c.BaseAddress = new Uri(pandaBase));
         var valve = services.AddHttpClient<IRankingsProvider, ValveStandingsProvider>();
+        var wikiBase = section.GetSection("Liquipedia").GetValue("WikiBaseUrl", new LiquipediaOptions().WikiBaseUrl)!;
+        var wiki = services.AddHttpClient<LiquipediaWikiClient>(c => c.BaseAddress = new Uri(wikiBase));
         if (mode == ProviderMode.Live)
         {
             // Live: real network only. There is deliberately NO fallback to fixture data on errors.
             liquipedia.ConfigurePrimaryHttpMessageHandler(LiveHandler);
             panda.ConfigurePrimaryHttpMessageHandler(LiveHandler);
             valve.ConfigurePrimaryHttpMessageHandler(LiveHandler);
+            wiki.ConfigurePrimaryHttpMessageHandler(LiveHandler);
         }
         else
         {
+            // Demo data never links anywhere: the MediaWiki link source is off in fixture mode and has no network at all.
+            wiki.ConfigurePrimaryHttpMessageHandler(() => new OfflineHandler());
             // One anchor for the process (kept across restarts): IHttpClientFactory recycles handlers, so it cannot live in the handler.
             services.AddSingleton<IFixtureAnchorStore, ProviderStateFixtureAnchorStore>();
             services.AddSingleton<FixtureAnchor>();
@@ -89,6 +94,7 @@ public sealed class EsportsModule : IToroModule
         services.AddSingleton<MatchLinkCatalog>();
         services.AddSingleton<TeamDirectory>();
         services.AddSingleton<LiquipediaHltvLinkSource>();
+        services.AddSingleton<LiquipediaWikiLinkSource>();
 
         services.AddSingleton<EsportsCache>();
         services.AddSingleton<NotificationRenderer>();
@@ -112,6 +118,12 @@ public sealed class EsportsModule : IToroModule
         AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
         PooledConnectionLifetime = TimeSpan.FromMinutes(15),
     };
+
+    private sealed class OfflineHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+    }
 
     /// <summary>Background polling is registered separately so one-shot CLI verbs do not start it.</summary>
     public static void AddBackgroundJobs(IServiceCollection services) =>

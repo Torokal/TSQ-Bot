@@ -79,5 +79,5 @@ Bot şu an tek sunucuda çalışır (global komut ve herkese açık davet yok). 
 5. **Kod/Discord/sağlayıcı**: dağıtılacak commit = güncel `main`, tam testler yeşil, izinler asgari, ayrıcalıklı intent
    yok, davet URL'si doğru, global komut geçişi (dry-run → uygulama) gözden geçirildi, sağlayıcı koşulları (atıf,
    kota) teyitli, VRS canlı doğrulandı.
-6. Liquipedia ile HLTV bağlantı zenginleştirmesi isteğe bağlıdır; onaylı anahtar yoksa kapalı kalır,
-   `Esports:VerifiedMatchLinks` elle yedek olarak çalışır. Ayrıntı: docs/PROVIDERS.md "Access and plans".
+6. HLTV bağlantıları otomatiktir: onaylı LiquipediaDB anahtarı varsa LPDB, yoksa ücretsiz MediaWiki API (≤ 1 istek / 2 sn,
+   iletişim bilgili User-Agent). Elle bağlantı yolu yoktur. Ayrıntı: docs/PROVIDERS.md "MediaWiki API fallback".

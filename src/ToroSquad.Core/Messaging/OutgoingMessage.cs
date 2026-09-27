@@ -6,14 +6,52 @@ using System.Text.RegularExpressions;
 namespace ToroSquad.Core.Messaging;
 
 /// <summary>
-/// Which mentions may actually ping. Default is none. @everyone/@here and user pings are never allowed for
-/// automated messages; only explicitly configured and permitted role IDs can be listed.
-/// Wire mapping: allowed_mentions = { "parse": [], "roles": [..Roles] }.
+/// Which mentions may actually ping. Default is none. @here is never allowed for automated messages; role pings only for
+/// explicitly configured and permitted role IDs. Two separate, explicit opt-ins exist, each for exactly one producer
+/// (architecture tests): <see cref="Everyone"/> — the first message of a new TSQ Live stream announcement — and
+/// <see cref="Users"/> — the TSQ LFG event reminder/start notices, which ping exactly the listed confirmed players.
+/// Edits and retries after a proven non-delivery reuse the same payload; edits always go out with <see cref="None"/>
+/// (outbox + transport), and a resend after an uncertain delivery drops both opt-ins (at most one ping).
+/// Wire mapping: allowed_mentions = { "parse": Everyone ? ["everyone"] : [], "roles": [..Roles], "users": [..Users] } —
+/// user ids are never parsed from the text, only these listed ids can ping.
+/// <see cref="Everyone"/> and <see cref="Users"/> are left out of the stored payload while unset, so existing payload
+/// hashes are unchanged.
 /// </summary>
-public sealed record MentionPolicy(IReadOnlyList<RoleId> Roles)
+public sealed record MentionPolicy(
+    IReadOnlyList<RoleId> Roles,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Everyone = false)
 {
+    /// <summary>Discord's allowed_mentions accepts at most 100 user ids.</summary>
+    public const int MaxUsers = 100;
+
+    /// <summary>
+    /// Users allowed to be pinged. Deliberately not a constructor parameter and not publicly settable: the ONLY way to set it
+    /// is <see cref="ExplicitUsers"/> (plus reading a stored payload back), so no code can opt in by accident.
+    /// </summary>
+    [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<UserId>? Users { get; private init; }
+
     public static MentionPolicy None { get; } = new(Array.Empty<RoleId>());
-    public bool PingsAnything => Roles.Count > 0;
+
+    /// <summary>@everyone only (no roles). Only for the first send of a new live-stream announcement.</summary>
+    public static MentionPolicy EveryoneOnly { get; } = new(Array.Empty<RoleId>(), Everyone: true);
+
+    /// <summary>
+    /// Exactly these users may be pinged (no roles, no @everyone/@here). Only for TSQ LFG event notices to confirmed players.
+    /// </summary>
+    public static MentionPolicy ExplicitUsers(IEnumerable<UserId> users)
+    {
+        var list = users.Distinct().ToList();
+        if (list.Count > MaxUsers)
+            throw new ArgumentException($"At most {MaxUsers} users can be pinged by one message.", nameof(users));
+        return list.Count == 0 ? None : new MentionPolicy(Array.Empty<RoleId>()) { Users = list };
+    }
+
+    /// <summary>The same policy without the explicit user pings (a resend after an uncertain delivery never pings twice).</summary>
+    public MentionPolicy WithoutUserPings() => Users is null ? this : this with { Users = null };
+
+    public bool PingsAnything => Roles.Count > 0 || Everyone || Users is { Count: > 0 };
 }
 
 public sealed record EmbedField(string Name, string Value, bool Inline = false);
@@ -33,7 +71,26 @@ public sealed record MessageEmbed(
     uint? Color,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ThumbnailUrl = null);
 
-public sealed record MessageButton(string Label, string? CustomId, string? Url, bool Disabled = false);
+/// <summary>Colour of an interactive (custom id) button; link buttons are always grey. Discord's own style names.</summary>
+public enum MessageButtonStyle
+{
+    Secondary = 0,
+    Primary = 1,
+    Success = 2,
+    Danger = 3,
+}
+
+/// <summary>
+/// <see cref="Style"/> and <see cref="NewRow"/> are left out of the stored payload while they are the default, so existing
+/// payload hashes are unchanged. Buttons fill rows of five in order; <see cref="NewRow"/> starts a new row at this button.
+/// </summary>
+public sealed record MessageButton(
+    string Label,
+    string? CustomId,
+    string? Url,
+    bool Disabled = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] MessageButtonStyle Style = MessageButtonStyle.Secondary,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NewRow = false);
 
 /// <summary>SDK-agnostic outgoing message. Rendered by modules, delivered by an <see cref="IMessageTransport"/>.</summary>
 public sealed record OutgoingMessage(
