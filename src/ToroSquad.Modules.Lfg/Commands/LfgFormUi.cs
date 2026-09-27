@@ -62,7 +62,8 @@ public static class LfgFormUi
             .WithMinValues(1)
             .WithMaxValues(1)
             .WithRequired(true);
-        foreach (var size in PlayerChoices(maxPlayers, values.Players))
+        // Beyond the allowed range only an edited listing's own size (as opened) is offered — never a refused (forged) value.
+        foreach (var size in PlayerChoices(maxPlayers, draft.Opened?.Players))
         {
             var value = size.ToString(CultureInfo.InvariantCulture);
             players.AddOption(value, value, isDefault: value == LfgRules.Normalize(values.Players));

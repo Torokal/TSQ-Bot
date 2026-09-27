@@ -134,6 +134,11 @@ public sealed class LfgModalContractTests
         var outside = Select(LfgFormUi.Modal(Draft(LfgFormKind.Edit, values with { Players = "30" }), MaxPlayers, L("tr")), LfgForm.PlayersField);
         outside.Options.Select(o => o.Value).Should().Contain("30", "a listing's own size stays selectable if the maximum was lowered; the server checks it");
         outside.Options.Single(o => o.IsDefault == true).Value.Should().Be("30");
+
+        var forged = Draft(LfgFormKind.Edit, values) with { Values = values with { Players = "234" } };
+        var back = Select(LfgFormUi.Modal(forged, MaxPlayers, L("tr")), LfgForm.PlayersField);
+        back.Options.Select(o => o.Value).Should().NotContain("234", "only the listing's own size as opened, never a refused value");
+        back.Options.Should().NotContain(o => o.IsDefault == true);
     }
 
     [Fact]

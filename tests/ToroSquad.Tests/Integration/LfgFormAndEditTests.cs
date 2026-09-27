@@ -411,10 +411,14 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     [InlineData("6 kişi")]
     public async Task A_forged_team_size_is_refused_on_the_server(string players)
     {
-        var (check, shown, _) = await StepAsync(NewDraft(), d => LfgFormUi.WithModal(d, MainForm(""), players, null, false, false));
+        var (check, shown, draft) = await StepAsync(NewDraft(), d => LfgFormUi.WithModal(d, MainForm(""), players, null, false, false));
 
         check.Result.MessageKey.Should().Be("lfg.create.players_range");
         shown.Should().Be("❌ **Kişi Sayısı**\nKişi sayısı 2–20 arasında olmalı.");
+        var again = LfgFormUi.Modal(draft!, 20, (key, _) => key).Component.Components.Cast<global::Discord.LabelComponent>()
+            .Select(l => l.Component).OfType<global::Discord.SelectMenuComponent>().Single(s => s.CustomId == LfgForm.PlayersField);
+        again.Options.Select(o => o.Value).Should().Equal(Enumerable.Range(2, 19).Select(n => n.ToString()), "✏️ Formu Düzelt never offers the forged value");
+        again.Options.Should().NotContain(o => o.IsDefault == true, "the user chooses a valid size");
         (await Lfg(s => s.CreateAsync(User(Owner), Channel, LfgForm.ToCreateInput(Form(players: players), false, false, null), Ct))).Result.MessageKey
             .Should().Be("lfg.create.players_range", "saving refuses it too");
     }
