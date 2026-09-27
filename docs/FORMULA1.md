@@ -175,12 +175,14 @@ gerçekten bitene kadar yeni bağlantı açılmaz. Host kapanışı bu yüzden t
 
 ## Komutlar
 
-Genel (`/f1`, modül açık olmalı; tüm yanıtlar ephemeral, kaynak + güncellik gösterir):
+Genel (`/f1`, modül açık olmalı; yalnızca önbellekten okunur). `next`, `schedule`, `standings` ve `now` yanıtları **kanalda herkese
+halka açık**; `results` spoiler riski nedeniyle **ephemeral** kalır. "Veri yok" türü hatalar yalnızca çağırana görünür. Kartlarda
+sağlayıcı adı/"Kaynak" gösterilmez, güncellik ("Veri: …") gösterilir; `/f1-admin` komutlarının tümü ephemeral:
 
 | Komut | Ne yapar |
 |---|---|
 | `/f1 next` | Sıradaki (veya süren) Grand Prix: tur, pist, yarış saati, tüm seanslar |
-| `/f1 schedule [round]` | Hafta sonu programı (sprint/standart), seans durumları; canlı durum yoksa bunu açıkça belirtir |
+| `/f1 schedule [round]` | Parametresiz: güncel sezonun tam takvimi (round, GP, yarış tarihi, ⚡ Sprint; ✅ bitti · 🔴 yalnızca sağlayıcı doğruladıysa canlı · ➡️ sıradaki · ▫️ gelecek). `round:N`: o hafta sonunun ayrıntılı programı ve seans durumları. Sezon önbellekten seçilir (kodda yıl yok) |
 | `/f1 results [session] [spoiler]` | Önbellekteki son sınıflandırma (`latest`, `race`, `sprint`, `qualifying`, `sprint-qualifying`, `fp1`–`fp3`) |
 | `/f1 now` | Canlı sağlayıcıya göre süren seans; bilinmiyorsa "kullanılamıyor" (tahmin yok) |
 | `/f1 standings drivers` / `/f1 standings constructors` | Sağlayıcının tablosu, "N. yarış sonrası", güncellik, bayatlık uyarısı |

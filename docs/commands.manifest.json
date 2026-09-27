@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "471df0365a92b8685c700626c6e94789fda38a7324e9aca75189154ac86bd901",
+  "hash": "f2825e3d2c13738a56ab5d6d790758f234e2ee1ce4c6bfb9d42da7b23a0e95fa",
   "commands": [
     {
       "module": "core",
@@ -736,17 +736,17 @@
           {
             "type": 1,
             "name": "schedule",
-            "description": "Session schedule of the current/next weekend (or a given round)",
+            "description": "Full season calendar, or one round's weekend schedule",
             "description_localizations": {
-              "tr": "Mevcut/sıradaki hafta sonunun (veya bir yarışın) seans programı"
+              "tr": "Tüm sezon takvimi veya bir yarışın hafta sonu programı"
             },
             "options": [
               {
                 "type": 4,
                 "name": "round",
-                "description": "Round number (default: current or next weekend)",
+                "description": "Round number for its weekend schedule (default: the whole season)",
                 "description_localizations": {
-                  "tr": "Yarış numarası (varsayılan: mevcut veya sıradaki hafta sonu)"
+                  "tr": "Hafta sonu programı için yarış numarası (varsayılan: tüm sezon)"
                 },
                 "required": false,
                 "min_value": 1,

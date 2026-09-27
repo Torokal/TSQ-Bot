@@ -281,17 +281,6 @@ public sealed class Formula1NotificationRenderer(ILocalizer localizer, F1DataMod
     /// </summary>
     public string? CardFooter(string language) => mode.IsDemo ? L(language, "f1.demo_footer") : null;
 
-    /// <summary>Attribution footer of /f1 command answers (with the data freshness). Demo data is synthetic and names no real source.</summary>
-    public string Footer(string language, string primarySourceKey, string? secondarySourceKey)
-    {
-        if (mode.IsDemo)
-            return L(language, "f1.demo_footer");
-        var text = L(language, "f1.footer_source", L(language, primarySourceKey));
-        if (secondarySourceKey is not null && secondarySourceKey != primarySourceKey)
-            text += " · " + L(language, "f1.footer_standings_source", L(language, secondarySourceKey));
-        return text;
-    }
-
     public string Demo(string language) => mode.IsDemo ? L(language, "f1.demo_label") + " " : "";
 
     private string Title(F1SessionView view, string language, string key) =>

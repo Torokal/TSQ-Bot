@@ -26,7 +26,7 @@ bağlamında (`contexts=[0]`, `integration_types=[0]`); DM komutu ve DM bildirim
 | Komut | Ne yapar |
 |---|---|
 | `/f1 next` | Sıradaki (veya süren) Grand Prix: tur, pist, yarış saati, tüm seanslar (Discord zaman damgaları) |
-| `/f1 schedule [round]` | Hafta sonu programı ve seans durumları; canlı durum yoksa bunu açıkça yazar |
+| `/f1 schedule [round]` | Parametresiz tam sezon takvimi; `round:N` ile o hafta sonunun ayrıntılı programı. `next`/`schedule`/`standings`/`now` kanalda herkese açık, `results` ephemeral |
 | `/f1 results [session] [spoiler]` | Önbellekteki son sınıflandırma (latest, race, sprint, qualifying, sprint-qualifying, fp1–fp3) |
 | `/f1 now` | Canlı sağlayıcıya göre süren seans; bilinmiyorsa "kullanılamıyor" (programdan tahmin yok) |
 | `/f1 standings drivers` / `/f1 standings constructors` | Sağlayıcının puan tablosu, tur, güncellik |
