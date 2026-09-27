@@ -45,13 +45,14 @@ public sealed class LfgCommands(
         [Summary("baslangic", "When it starts (empty: now)"), Choice("Now", 0), Choice("In 30 minutes", 30), Choice("In 1 hour", 60), Choice("In 1.5 hours", 90),
          Choice("In 2 hours", 120), Choice("In 3 hours", 180), Choice("In 4 hours", 240), Choice("In 6 hours", 360), Choice("In 8 hours", 480),
          Choice("In 12 hours", 720), Choice("In 24 hours", 1440)] int? baslangic = null,
+        [Summary("tarih_saat", "Custom start, e.g. 05.10.2026 21:30 (server time zone)"), MaxLength(40)] string? tarihSaat = null,
         [Summary("sure", "How long the listing stays open (from the start; empty: default)"), Choice("1 hour", 60), Choice("2 hours", 120), Choice("3 hours", 180)] int? sure = null,
         [Summary("hatirlat_30dk", "Ping the joined players 30 minutes before the start")] bool remindBefore = false,
         [Summary("baslangicta_etiketle", "Ping the joined players when it starts")] bool pingAtStart = false,
         [Summary("ses_kanali", "Voice channel for the group"), ChannelTypes(ChannelType.Voice)] IChannel? voiceChannel = null)
     {
         // No defer: validation and the insert take milliseconds, and a refusal must stay private while the card is public.
-        var input = new LfgCreateInput(oyun, kisi, detay, sure, baslangic, remindBefore, pingAtStart, voiceChannel is null ? null : new ChannelId(voiceChannel.Id));
+        var input = new LfgCreateInput(oyun, kisi, detay, sure, baslangic, remindBefore, pingAtStart, voiceChannel is null ? null : new ChannelId(voiceChannel.Id), tarihSaat);
         var created = await lfg.CreateAsync(Actor, Here, input, CancellationToken.None);
         if (created.Result.MessageKey == "lfg.create.limit" && await OwnerCardWasDeletedAsync())
             created = await lfg.CreateAsync(Actor, Here, input, CancellationToken.None);

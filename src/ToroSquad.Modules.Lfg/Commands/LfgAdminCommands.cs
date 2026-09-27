@@ -54,6 +54,7 @@ public sealed class LfgAdminCommands(InteractionServices services, LfgConfigServ
             new(await T("lfg.status.limit"), o.MaxActiveListingsPerUser.ToString(CultureInfo.InvariantCulture), true),
             new(await T("lfg.status.max_players"), o.MaxPlayersPerListing.ToString(CultureInfo.InvariantCulture), true),
             new(await T("lfg.status.pending"), status.PendingCardUpdates.ToString(CultureInfo.InvariantCulture), true),
+            new(await T("lfg.status.timezone"), await T("lfg.status.timezone_value", status.TimeZoneId), true),
         };
         await ReplyEmbedAsync(new MessageEmbed(await T("lfg.status.title"), null, null, fields, null, null, NeutralColor));
     }

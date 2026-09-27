@@ -104,5 +104,15 @@
   "cmd.ekip.baslangic.1440": "In 24 hours",
   "cmd.ekip.hatirlat_30dk": "Ping the joined players 30 minutes before the start",
   "cmd.ekip.baslangicta_etiketle": "Ping the joined players when it starts",
-  "cmd.ekip.ses_kanali": "Voice channel for the group"
+  "cmd.ekip.ses_kanali": "Voice channel for the group",
+  "lfg.create.start_conflict": "Use either a ready-made start or the custom date/time, not both.",
+  "lfg.create.date_format": "Could not read the date/time. Format: DD.MM.YYYY HH:MM — e.g. 05.10.2026 21:30",
+  "lfg.create.date_not_in_zone": "This date/time does not exist in the server's time zone. Please pick another time.",
+  "lfg.create.date_ambiguous": "Because of a clock change this time occurs twice. Please pick a different time.",
+  "lfg.create.date_not_future": "The start must be in the future.",
+  "lfg.create.date_too_far": "The start can be at most 1 year ahead.",
+  "lfg.create.timezone_invalid": "Invalid time zone.",
+  "lfg.status.timezone": "Time zone",
+  "lfg.status.timezone_value": "{0} (/setup)",
+  "cmd.ekip.tarih_saat": "Custom start date. E.g. 05.10.2026 21:30"
 }

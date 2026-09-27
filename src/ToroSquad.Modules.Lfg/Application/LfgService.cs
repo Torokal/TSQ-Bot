@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ToroSquad.Core;
+using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Roles;
 using ToroSquad.Core.Security;
 using ToroSquad.Infrastructure.Persistence;
@@ -27,7 +28,8 @@ public sealed record LfgCreateInput(
     int? StartMinutes = null,
     bool NotifyBeforeStart = false,
     bool NotifyAtStart = false,
-    ChannelId? VoiceChannel = null);
+    ChannelId? VoiceChannel = null,
+    string? StartAt = null);
 
 /// <summary>
 /// Outcome of the voice button. <see cref="OpenChannelUrl"/> is set when the bot did not move the member (not connected to
@@ -43,7 +45,13 @@ public sealed record LfgVoiceResult(OperationResult Result, string? OpenChannelU
 /// membership, active-listing limit) is serialized across connections; the (ListingId, UserId) primary key and the
 /// listing's version token are the backstops.
 /// </summary>
-public sealed class LfgService(ToroDbContext db, IGuildGateway guilds, IOptions<LfgOptions> options, TimeProvider clock, ILogger<LfgService> logger)
+public sealed class LfgService(
+    ToroDbContext db,
+    IGuildGateway guilds,
+    IGuildSettingsStore settings,
+    IOptions<LfgOptions> options,
+    TimeProvider clock,
+    ILogger<LfgService> logger)
 {
     /// <summary>Guild moderators (Discord's "Manage Messages", or Administrator) may close any listing.</summary>
     public const GuildPermission ModeratorPermission = GuildPermission.ManageMessages;
@@ -61,8 +69,13 @@ public sealed class LfgService(ToroDbContext db, IGuildGateway guilds, IOptions<
     public async Task<LfgResult> CreateAsync(ActorContext actor, ChannelId channel, LfgCreateInput input, CancellationToken ct)
     {
         var o = options.Value;
+        var now = clock.GetUtcNow();
+        // A custom date is wall-clock time in the guild's (existing, /setup-managed) time zone — default Europe/Istanbul.
+        TimeZoneInfo? zone = null;
+        if (!string.IsNullOrWhiteSpace(input.StartAt) && GuildTime.TryResolve((await settings.GetAsync(actor.GuildId, ct)).TimeZoneId, out var guildZone))
+            zone = guildZone;
         var (draft, error) = LfgRules.Validate(input.Game, input.Details, input.Players, input.DurationMinutes, o.MaxPlayersPerListing, o.DefaultExpirationMinutes,
-            input.StartMinutes, input.NotifyBeforeStart || input.NotifyAtStart);
+            input.StartMinutes, input.NotifyBeforeStart || input.NotifyAtStart, input.StartAt, zone, now);
         if (draft is null)
             return Refused(error switch
             {
@@ -72,6 +85,13 @@ public sealed class LfgService(ToroDbContext db, IGuildGateway guilds, IOptions<
                 LfgDraftError.PlayersOutOfRange => No(OperationError.InvalidInput, "lfg.create.players_range", LfgRules.MinPlayers, Math.Min(o.MaxPlayersPerListing, LfgRules.HardMaxPlayers)),
                 LfgDraftError.StartInvalid => No(OperationError.InvalidInput, "lfg.create.start_invalid"),
                 LfgDraftError.NoticeNeedsStart => No(OperationError.InvalidInput, "lfg.create.notice_needs_start"),
+                LfgDraftError.StartConflict => No(OperationError.InvalidInput, "lfg.create.start_conflict"),
+                LfgDraftError.DateFormat => No(OperationError.InvalidInput, "lfg.create.date_format"),
+                LfgDraftError.DateNotInTimeZone => No(OperationError.InvalidInput, "lfg.create.date_not_in_zone"),
+                LfgDraftError.DateAmbiguous => No(OperationError.InvalidInput, "lfg.create.date_ambiguous"),
+                LfgDraftError.DateNotInFuture => No(OperationError.InvalidInput, "lfg.create.date_not_future"),
+                LfgDraftError.DateTooFar => No(OperationError.InvalidInput, "lfg.create.date_too_far"),
+                LfgDraftError.TimeZoneInvalid => No(OperationError.InvalidInput, "lfg.create.timezone_invalid"),
                 _ => No(OperationError.InvalidInput, "lfg.create.duration_invalid"),
             });
 
@@ -83,8 +103,7 @@ public sealed class LfgService(ToroDbContext db, IGuildGateway guilds, IOptions<
         if (input.VoiceChannel is { } voice && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, voice, ct)).Usable)
             return Refused(No(OperationError.InvalidInput, "lfg.create.voice_invalid"));
 
-        var now = clock.GetUtcNow();
-        var (eventAt, expiresAt) = draft.Schedule(now);
+        var (eventAt, expiresAt) = draft.Schedule(now); // the same instant the custom date was validated against
         var guild = actor.GuildId.Value;
         var owner = actor.UserId.Value;
         var id = await WriteAsync(async () =>

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using ToroSquad.Core;
+using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Roles;
 using ToroSquad.Core.Security;
 using ToroSquad.Infrastructure.Persistence;
@@ -9,14 +10,14 @@ using ToroSquad.Modules.Lfg.Persistence;
 
 namespace ToroSquad.Modules.Lfg.Application;
 
-/// <summary>What /lfg-admin status shows for one guild.</summary>
-public sealed record LfgGuildStatus(ulong? ChannelId, int Open, int Full, int PendingCardUpdates);
+/// <summary>What /lfg-admin status shows for one guild; <see cref="TimeZoneId"/> is the guild setting custom start dates are read in.</summary>
+public sealed record LfgGuildStatus(ulong? ChannelId, int Open, int Full, int PendingCardUpdates, string TimeZoneId);
 
 /// <summary>
 /// /lfg-admin: the optional listing channel of a guild. Every method authorizes the actor (Manage Server) and only touches
 /// the row of <c>actor.GuildId</c>.
 /// </summary>
-public sealed class LfgConfigService(ToroDbContext db, IGuildGateway guilds, TimeProvider clock)
+public sealed class LfgConfigService(ToroDbContext db, IGuildGateway guilds, IGuildSettingsStore settings, TimeProvider clock)
 {
     public async Task<LfgGuildConfigEntity?> GetAsync(GuildId guild, CancellationToken ct) =>
         await db.Set<LfgGuildConfigEntity>().AsNoTracking().FirstOrDefaultAsync(c => c.GuildId == guild.Value, ct);
@@ -72,6 +73,7 @@ public sealed class LfgConfigService(ToroDbContext db, IGuildGateway guilds, Tim
         var open = await listings.CountAsync(x => x.Status == LfgStatus.Open && x.ExpiresAt > now, ct);
         var full = await listings.CountAsync(x => x.Status == LfgStatus.Full && x.ExpiresAt > now, ct);
         var pending = await listings.CountAsync(x => x.CardStale, ct);
-        return (OperationResult.Ok("lfg.status.title"), new LfgGuildStatus(config?.ChannelId, open, full, pending));
+        var zone = (await settings.GetAsync(actor.GuildId, ct)).TimeZoneId;
+        return (OperationResult.Ok("lfg.status.title"), new LfgGuildStatus(config?.ChannelId, open, full, pending, zone));
     }
 }

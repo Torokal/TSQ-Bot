@@ -83,19 +83,90 @@ public enum LfgDraftError
     DurationInvalid = 6,
     StartInvalid = 7,
     NoticeNeedsStart = 8,
+    StartConflict = 9,
+    DateFormat = 10,
+    DateNotInTimeZone = 11,
+    DateAmbiguous = 12,
+    DateNotInFuture = 13,
+    DateTooFar = 14,
+    TimeZoneInvalid = 15,
 }
 
 /// <summary>
-/// A validated request to open a listing (normalized texts, bounded size, one of the offered durations/starts).
-/// <see cref="StartsIn"/> null = starts now.
+/// When the activity starts — exactly one source: now (null <c>EventAt</c>), a relative choice, or an absolute instant
+/// (a custom date already resolved in the guild's time zone). Every source ends as the same <c>EventAt</c>; nothing after
+/// this point (expiry, notices, card) knows or cares which one it was.
 /// </summary>
-public sealed record LfgDraft(string GameName, string? Details, int MaxPlayers, TimeSpan Duration, TimeSpan? StartsIn = null)
+public sealed record LfgStart
 {
-    /// <summary>The event starts at creation + <see cref="StartsIn"/>; the listing stays usable <see cref="Duration"/> after the start.</summary>
+    private LfgStart(TimeSpan? delay, DateTimeOffset? at)
+    {
+        Delay = delay;
+        At = at;
+    }
+
+    public static LfgStart Now { get; } = new(null, null);
+
+    public TimeSpan? Delay { get; }
+
+    public DateTimeOffset? At { get; }
+
+    public bool IsNow => Delay is null && At is null;
+
+    public static LfgStart After(TimeSpan delay) => delay > TimeSpan.Zero ? new LfgStart(delay, null) : Now;
+
+    public static LfgStart AtInstant(DateTimeOffset at) => new(null, at.ToUniversalTime());
+
+    public DateTimeOffset? EventAt(DateTimeOffset now) => Delay is { } delay ? now + delay : At;
+}
+
+/// <summary>A validated request to open a listing (normalized texts, bounded size, one of the offered durations, one start).</summary>
+public sealed record LfgDraft(string GameName, string? Details, int MaxPlayers, TimeSpan Duration, LfgStart? Start = null)
+{
+    /// <summary>
+    /// <c>EventAt</c> from the start (null = now); the listing stays usable <see cref="Duration"/> after the start:
+    /// <c>ExpiresAt = (EventAt ?? now) + Duration</c>, whichever way the start was given.
+    /// </summary>
     public (DateTimeOffset? EventAt, DateTimeOffset ExpiresAt) Schedule(DateTimeOffset now)
     {
-        DateTimeOffset? eventAt = StartsIn is { } delay ? now + delay : null;
+        var eventAt = (Start ?? LfgStart.Now).EventAt(now);
         return (eventAt, (eventAt ?? now) + Duration);
+    }
+}
+
+/// <summary>
+/// Custom start dates typed by the user ("05.10.2026 21:30"), read as wall-clock time in the guild's time zone. Parsing is
+/// explicit and culture-independent (never the machine locale). A wall-clock time that does not exist (clocks jump forward)
+/// or exists twice (clocks go back) in that zone is refused rather than guessed.
+/// </summary>
+public static class LfgEventDate
+{
+    /// <summary>Main format GG.AA.YYYY SS:DD (leading zeros optional); ISO "yyyy-MM-dd HH:mm" is also accepted.</summary>
+    public static IReadOnlyList<string> Formats { get; } = ["d.M.yyyy H:mm", "yyyy-M-d H:mm"];
+
+    /// <summary>At least this far ahead (clock skew, minute-precision input): no event "right now" through a date.</summary>
+    public static readonly TimeSpan MinLead = TimeSpan.FromMinutes(1);
+
+    /// <summary>At most this far ahead.</summary>
+    public static readonly TimeSpan MaxAhead = TimeSpan.FromDays(365);
+
+    public static (DateTimeOffset? At, LfgDraftError Error) Resolve(string text, TimeZoneInfo zone, DateTimeOffset now)
+    {
+        if (!DateTime.TryParseExact(text.Trim(), Formats.ToArray(), System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var local))
+            return (null, LfgDraftError.DateFormat);
+        local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        if (zone.IsInvalidTime(local))
+            return (null, LfgDraftError.DateNotInTimeZone);
+        if (zone.IsAmbiguousTime(local))
+            return (null, LfgDraftError.DateAmbiguous);
+
+        var at = new DateTimeOffset(local, zone.GetUtcOffset(local)).ToUniversalTime();
+        if (at < now + MinLead)
+            return (null, LfgDraftError.DateNotInFuture);
+        if (at > now + MaxAhead)
+            return (null, LfgDraftError.DateTooFar);
+        return (at, LfgDraftError.None);
     }
 }
 
@@ -130,8 +201,13 @@ public static class LfgRules
 
     private const int ZeroWidthJoiner = 0x200D;
 
+    /// <summary>
+    /// <paramref name="startMinutes"/> (a relative choice, 0 = now) and <paramref name="startAt"/> (a custom date, read in
+    /// <paramref name="zone"/> relative to <paramref name="now"/>) are alternatives: giving both is refused here, not only
+    /// in the command. A blank <paramref name="startAt"/> counts as not given.
+    /// </summary>
     public static (LfgDraft? Draft, LfgDraftError Error) Validate(string? game, string? details, int players, int? durationMinutes, int maxPlayers, int defaultMinutes,
-        int? startMinutes = null, bool notices = false)
+        int? startMinutes = null, bool notices = false, string? startAt = null, TimeZoneInfo? zone = null, DateTimeOffset? now = null)
     {
         var name = Normalize(game);
         if (name is null)
@@ -152,13 +228,35 @@ public static class LfgRules
         if (durationMinutes is { } minutes && !DurationChoicesMinutes.Contains(minutes))
             return (null, LfgDraftError.DurationInvalid);
 
-        if (startMinutes is { } start && !StartChoicesMinutes.Contains(start))
-            return (null, LfgDraftError.StartInvalid);
-        TimeSpan? startsIn = startMinutes is > 0 ? TimeSpan.FromMinutes(startMinutes.Value) : null;
-        if (notices && startsIn is null)
+        var custom = Normalize(startAt);
+        if (startMinutes is not null && custom is not null)
+            return (null, LfgDraftError.StartConflict);
+
+        LfgStart begin;
+        if (custom is not null)
+        {
+            if (zone is null || now is null)
+                return (null, LfgDraftError.TimeZoneInvalid);
+            var (at, dateError) = LfgEventDate.Resolve(custom, zone, now.Value);
+            if (at is null)
+                return (null, dateError);
+            begin = LfgStart.AtInstant(at.Value);
+        }
+        else if (startMinutes is { } start)
+        {
+            if (!StartChoicesMinutes.Contains(start))
+                return (null, LfgDraftError.StartInvalid);
+            begin = LfgStart.After(TimeSpan.FromMinutes(start));
+        }
+        else
+        {
+            begin = LfgStart.Now;
+        }
+
+        if (notices && begin.IsNow)
             return (null, LfgDraftError.NoticeNeedsStart); // "now" has no reminder window and nothing to announce later
 
-        return (new LfgDraft(name, text, players, TimeSpan.FromMinutes(durationMinutes ?? defaultMinutes), startsIn), LfgDraftError.None);
+        return (new LfgDraft(name, text, players, TimeSpan.FromMinutes(durationMinutes ?? defaultMinutes), begin), LfgDraftError.None);
     }
 
     /// <summary>Drops control/format characters, collapses whitespace runs to one space and trims; null when nothing is left.</summary>

@@ -104,5 +104,15 @@
   "cmd.ekip.baslangic.1440": "24 saat sonra",
   "cmd.ekip.hatirlat_30dk": "Başlangıçtan 30 dakika önce katılanları etiketle",
   "cmd.ekip.baslangicta_etiketle": "Başladığında katılanları etiketle",
-  "cmd.ekip.ses_kanali": "Ekip için ses kanalı"
+  "cmd.ekip.ses_kanali": "Ekip için ses kanalı",
+  "lfg.create.start_conflict": "Başlangıç için ya hazır süreyi ya da özel tarih/saat alanını kullan. İkisini aynı anda seçemezsin.",
+  "lfg.create.date_format": "Tarih/saat anlaşılamadı. Biçim: GG.AA.YYYY SS:DD — örn. 05.10.2026 21:30",
+  "lfg.create.date_not_in_zone": "Bu tarih/saat seçilen saat diliminde geçerli değil. Lütfen başka bir saat seç.",
+  "lfg.create.date_ambiguous": "Bu saat, saat değişimi nedeniyle iki farklı zamana denk geliyor. Lütfen farklı bir saat seç.",
+  "lfg.create.date_not_future": "Başlangıç tarihi gelecekte olmalı.",
+  "lfg.create.date_too_far": "Başlangıç tarihi en fazla 1 yıl sonrası olabilir.",
+  "lfg.create.timezone_invalid": "Geçersiz saat dilimi.",
+  "lfg.status.timezone": "Saat dilimi",
+  "lfg.status.timezone_value": "{0} (/setup)",
+  "cmd.ekip.tarih_saat": "Özel başlangıç tarihi. Örn: 05.10.2026 21:30"
 }

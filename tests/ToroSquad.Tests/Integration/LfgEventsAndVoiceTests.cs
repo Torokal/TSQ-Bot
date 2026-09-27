@@ -226,7 +226,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         listing.ExpiresAt.Should().Be(TestHost.T0.AddHours(5));
         var card = _host.Services.GetRequiredService<LfgCardRenderer>().Render(listing, "tr");
         var at = TestHost.T0.AddHours(3).ToUnixTimeSeconds();
-        card.Embed!.Description.Should().Contain($"🗓️ Başlangıç: <t:{at}:f> • <t:{at}:R>");
+        card.Embed!.Description.Should().Contain($"🗓️ Başlangıç: <t:{at}:F> • <t:{at}:R>");
 
         _host.Clock.Advance(TimeSpan.FromHours(3) + TimeSpan.FromMinutes(5));
         await TickAsync();
