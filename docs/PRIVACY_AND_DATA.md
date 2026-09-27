@@ -25,6 +25,10 @@ kimlikler ve sonuç) ([quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md)).
 | `outbox` (LFG etkinlik bildirimleri) | Etiketlenen Joined oyuncuların kullanıcı ID'leri (bildirim içeriği) | kullanıcı | teslimden/bitişten 24 saat sonra; `/privacy delete` ile hemen — o an Discord'a gönderilmekte olan (in-flight) ya da teslimi henüz uzlaştırılan satır hariç: o satır bittikten 24 saat sonra silinir |
 | `lfg_guild_config` | İsteğe bağlı LFG kanalı; değiştiren yöneticinin kullanıcı ID'si | sunucu | bot sunucudan çıkarıldıktan 30 gün sonra |
 | *(bellek, tablo değil)* LFG form taslakları | `/ekip` / Düzenle formunun adımları arasında: kullanıcı, sunucu, kanal ID'si, yazılan metinler ve seçimler | kullanıcı | **veritabanına hiç yazılmaz**; son kullanımdan 30 dk sonra, kayıt/iptal anında ya da restart'ta silinir; bu kısa ömür nedeniyle `/privacy export/delete` kapsamında değildir |
+| `birthday_registration` | TSQ Doğum Günü: kullanıcı ID + **gün ve ay** (yıl yok) + kayıt/güncelleme zamanı; üyenin kendisi veya bir Administrator/sunucu sahibi (`/birthday-admin set`, logda denetim izi: yönetici ID, gün, ay) yazar | kullanıcı | `/birthday remove` / `/privacy delete`, sunucu verisiyle birlikte |
+| `birthday_celebration` | Kutlama kaydı: kullanıcı ID, yıl ve kutlanan yerel tarih, duyuruda adı geçti mi, botun verdiği rolün durumu (botun vermediği rol hiç kaldırılmaz) | kullanıcı | ertesi yıl sonunda; `/privacy delete` (botun verdiği rol de geri alınır), sunucu verisiyle birlikte |
+| `birthday_announcement`, `birthday_guild_config` | Günlük duyurunun durumu (kişi sayısı, kullanıcı ID'si yok); duyuru kanalı ve değiştiren yöneticinin kullanıcı ID'si | sunucu | 30 gün sonra / bot sunucudan çıkarıldıktan 30 gün sonra |
+| `outbox` (Doğum Günü duyurusu) | Duyuru metni: kutlananların mention'ları (kullanıcı ID'leri) | kullanıcı | teslimden/bitişten 2 gün sonra |
 
 TSQ Quote tablo kullanmaz; `/privacy export/delete` kapsamında kaydı yoktur (gönderilen alıntı görseli normal bir kanal
 mesajıdır; kanaldan Discord'da silinir).

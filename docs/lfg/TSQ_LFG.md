@@ -282,8 +282,9 @@ Açıkça istenirse (varsayılan kapalı) iki **yeni** mesaj — kart düzenlenm
 
 Core'daki `MentionPolicy` varsayılan olarak kullanıcı ping'ine izin vermez. Tek, açık bir ek: `MentionPolicy.ExplicitUsers(...)`
 → kablo tarafında yalnızca listelenen kimlikler `allowed_mentions.users` olur; `parse` boş (metinden kullanıcı/@everyone/
-@here ayrıştırılmaz), rol yok. Bunu kullanabilen **tek** yer `LfgNoticeRenderer`'dır ve yalnızca Joined oyuncuların
-kimliklerini verir (`LfgArchitectureTests.Explicit_user_pings_exist_only_in_the_lfg_notice_renderer`). `Users`
+@here ayrıştırılmaz), rol yok. LFG'de bunu kullanabilen **tek** yer `LfgNoticeRenderer`'dır ve yalnızca Joined oyuncuların
+kimliklerini verir; depo genelindeki tek diğer üretici TSQ Doğum Günü duyurusudur (yalnızca kutlananlar)
+(`LfgArchitectureTests.Explicit_user_pings_exist_only_in_the_lfg_notice_renderer_and_the_birthday_announcement`). `Users`
 kurucu parametresi değildir ve public setter'ı yoktur; başka bir yol derlenmez (`with { Users = … }` dahil). Oyun adı/detaydaki
 `@everyone`, `<@id>` gibi metinler etkisizleştirilir. TSQ Live'ın `@everyone` davranışı değişmedi.
 
