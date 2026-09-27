@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "e77d580d371cafdebc1d5ee91f8a419df69c81e0de577970afefad00b229a3e5",
+  "hash": "dc3d45f2c80b11c9f7e0efa4c86c0cf76b112e8af11f7bd2a221eb97de3d1995",
   "commands": [
     {
       "module": "core",
@@ -43,6 +43,91 @@
             "description_localizations": {
               "tr": "Burada çalışan sürümün kaynak koduna erişim"
             }
+          }
+        ]
+      }
+    },
+    {
+      "module": "lfg",
+      "payload": {
+        "type": 1,
+        "name": "ekip",
+        "description": "Find players: open a group listing for any game",
+        "description_localizations": {
+          "tr": "Oyuncu bul: herhangi bir oyun için ekip ilanı aç"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 3,
+            "name": "oyun",
+            "description": "Game or activity (e.g. Deadlock, CS2, Valheim)",
+            "description_localizations": {
+              "tr": "Oyun veya aktivite (ör. Deadlock, CS2, Valheim)"
+            },
+            "required": true,
+            "min_length": 2,
+            "max_length": 50
+          },
+          {
+            "type": 4,
+            "name": "kisi",
+            "description": "Total team size including you",
+            "description_localizations": {
+              "tr": "Toplam ekip büyüklüğü (sen dahil)"
+            },
+            "required": true,
+            "min_value": 2,
+            "max_value": 50
+          },
+          {
+            "type": 3,
+            "name": "detay",
+            "description": "Short details: mode, rank, roles, plan…",
+            "description_localizations": {
+              "tr": "Kısa detay: mod, rank, rol, plan…"
+            },
+            "required": false,
+            "max_length": 200
+          },
+          {
+            "type": 4,
+            "name": "sure",
+            "description": "How long the listing stays open (empty: default duration)",
+            "description_localizations": {
+              "tr": "İlan ne kadar açık kalsın (boş: varsayılan süre)"
+            },
+            "required": false,
+            "choices": [
+              {
+                "name": "1 hour",
+                "name_localizations": {
+                  "tr": "1 saat"
+                },
+                "value": 60
+              },
+              {
+                "name": "2 hours",
+                "name_localizations": {
+                  "tr": "2 saat"
+                },
+                "value": 120
+              },
+              {
+                "name": "3 hours",
+                "name_localizations": {
+                  "tr": "3 saat"
+                },
+                "value": 180
+              }
+            ]
           }
         ]
       }
@@ -1191,6 +1276,58 @@
           0
         ],
         "options": []
+      }
+    },
+    {
+      "module": "lfg",
+      "payload": {
+        "type": 1,
+        "name": "lfg-admin",
+        "description": "TSQ LFG group finder settings (admins)",
+        "description_localizations": {
+          "tr": "TSQ LFG ekip ilanı ayarları (yöneticiler)"
+        },
+        "default_member_permissions": "32",
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "channel",
+            "description": "Channel where /ekip listings can be opened (empty: any channel)",
+            "description_localizations": {
+              "tr": "/ekip ilanlarının açılabileceği kanal (boş: her kanal)"
+            },
+            "options": [
+              {
+                "type": 7,
+                "name": "channel",
+                "description": "Listing channel; leave empty to allow every channel",
+                "description_localizations": {
+                  "tr": "İlan kanalı; boş bırakırsan kısıtlama kalkar"
+                },
+                "required": false,
+                "channel_types": [
+                  0,
+                  5
+                ]
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "status",
+            "description": "LFG settings and active listings in this server",
+            "description_localizations": {
+              "tr": "LFG ayarları ve bu sunucudaki aktif ilanlar"
+            }
+          }
+        ]
       }
     },
     {
