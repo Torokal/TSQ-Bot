@@ -73,8 +73,28 @@ public sealed partial class LfgArchitectureTests
         AssertNoViolations(Types().That().ResideInNamespaceMatching(@"^ToroSquad\.Modules\.Lfg(\..*)?$")
             .Should().NotDependOnAny(Types().That().HaveNameMatching(@"^(INotificationOutbox|NotificationRequest)$")));
 
+        // Only the two primitives on an EXISTING message: an edit and a single read. Never a send, never a channel scan.
         var sync = File.ReadAllText(Path.Combine(Root(), "Application", "LfgCardSync.cs"));
-        sync.Should().Contain("transport.EditAsync(").And.NotContain("transport.SendAsync(");
+        Regex.Matches(sync, @"transport\.(\w+)\(").Select(m => m.Groups[1].Value).Distinct().Should().BeEquivalentTo("EditAsync", "GetPresenceAsync");
+    }
+
+    [Fact]
+    public void Every_card_response_and_edit_in_the_commands_goes_out_without_pings()
+    {
+        var commands = File.ReadAllText(Path.Combine(Root(), "Commands", "LfgCommands.cs"));
+        var calls = Regex.Matches(commands, @"\b(RespondAsync|ModifyOriginalResponseAsync|FollowupAsync)\(").ToList();
+        calls.Should().NotBeEmpty();
+        foreach (var call in calls)
+        {
+            // The whole argument list of each call (balanced parentheses) must set allowed_mentions = none.
+            var end = call.Index + call.Length;
+            for (var depth = 1; depth > 0; end++)
+                depth += commands[end] switch { '(' => 1, ')' => -1, _ => 0 };
+            commands[call.Index..end].Should().Contain("NoPings", $"{call.Value} at offset {call.Index}");
+        }
+
+        commands.Should().Contain("NoPings => DiscordConversions.ToAllowedMentions(MentionPolicy.None)");
+        commands.Should().NotContain("MentionPolicy.EveryoneOnly").And.NotContain("AllowedMentionTypes");
     }
 
     [Fact]

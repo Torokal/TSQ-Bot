@@ -589,6 +589,177 @@ public sealed class LfgLifecycleTests : IAsyncLifetime
         (await RowAsync(active.Id, second)).Status.Should().Be(LfgStatus.Open);
     }
 
+    // ---- deleted cards: no message-delete events (Guilds intent only), so a throttled one-read reconciliation ----
+
+    [Fact]
+    public async Task A_card_deleted_in_discord_orphans_its_listing_at_the_next_reconciliation_and_frees_the_owner_slot()
+    {
+        var kept = await OpenAsync(game: "CS2");
+        var deleted = await OpenAsync(game: "Valheim");
+        (await CreateAsync(game: "WoW")).Result.MessageKey.Should().Be("lfg.create.limit");
+        _host.Transport.DeleteMessage(deleted.Message!.Value);
+
+        await WorkerPassAsync();
+
+        var row = await RowAsync(deleted.Id);
+        row.Status.Should().Be(LfgStatus.Orphaned);
+        row.ClosedAt.Should().Be(TestHost.T0);
+        row.CardStale.Should().BeFalse();
+        (await RowAsync(kept.Id)).Status.Should().Be(LfgStatus.Open);
+        _host.Transport.EditCalls.Should().Be(0, "a gone card is never edited");
+        (await CreateAsync(game: "WoW")).Result.Succeeded.Should().BeTrue("an orphaned listing no longer counts as active");
+
+        var reads = _host.Transport.PresenceCalls;
+        await WorkerPassAsync();
+        _host.Transport.PresenceCalls.Should().Be(reads, "active cards are read at most every five minutes");
+        _host.Clock.Advance(LfgExpiryWorker.VerifyInterval);
+        await WorkerPassAsync();
+        _host.Transport.PresenceCalls.Should().Be(reads + 1, "only the remaining active card with a known message is read");
+        (await RowAsync(deleted.Id)).Status.Should().Be(LfgStatus.Orphaned);
+    }
+
+    [Fact]
+    public async Task When_the_bot_cannot_tell_whether_a_card_exists_nothing_is_orphaned()
+    {
+        var listing = await OpenAsync();
+        _host.Transport.DeleteMessage(listing.Message!.Value);
+        _host.Transport.ScriptedPresence = MessagePresence.Unknown; // no Read Message History, 5xx, gateway not ready …
+
+        await WorkerPassAsync();
+
+        (await RowAsync(listing.Id)).Status.Should().Be(LfgStatus.Open);
+    }
+
+    [Fact]
+    public async Task At_the_limit_only_the_callers_own_cards_are_checked_at_once()
+    {
+        await OpenAsync(game: "CS2");
+        var second = await OpenAsync(game: "Valheim");
+        var other = await OpenAsync(owner: 11);
+        _host.Transport.DeleteMessage(second.Message!.Value);
+        _host.Transport.DeleteMessage(other.Message!.Value);
+
+        var orphaned = await _host.InScopeAsync(sp => sp.GetRequiredService<LfgCardSync>().VerifyOwnerCardsAsync(Guild, new UserId(Owner), Ct));
+
+        orphaned.Should().Be(1);
+        _host.Transport.PresenceCalls.Should().Be(2, "one read per active card of the caller");
+        (await RowAsync(second.Id)).Status.Should().Be(LfgStatus.Orphaned);
+        (await RowAsync(other.Id)).Status.Should().Be(LfgStatus.Open, "other users' cards are left to the reconciliation");
+        (await CreateAsync(game: "WoW")).Result.Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Orphaning_is_idempotent_and_never_touches_ended_listings()
+    {
+        var active = await OpenAsync();
+        var closed = await OpenAsync(game: "CS2");
+        await Lfg(s => s.CloseAsync(User(Owner), closed.Id, Ct));
+        await _host.InScopeAsync(sp => sp.GetRequiredService<LfgCardSync>().SyncAsync(closed.Id, Ct));
+        _host.Transport.DeleteMessage(active.Message!.Value);
+        _host.Transport.DeleteMessage(closed.Message!.Value);
+
+        await _host.InScopeAsync(async sp =>
+        {
+            var cards = sp.GetRequiredService<LfgCardSync>();
+            (await cards.VerifyAsync(active.Id, Ct)).Should().Be(LfgCardSyncOutcome.MessageMissing);
+            (await cards.VerifyAsync(active.Id, Ct)).Should().Be(LfgCardSyncOutcome.NothingToDo);
+            (await cards.VerifyAsync(closed.Id, Ct)).Should().Be(LfgCardSyncOutcome.NothingToDo);
+        });
+
+        (await RowAsync(closed.Id)).Status.Should().Be(LfgStatus.Closed);
+        var version = (await RowAsync(active.Id)).Version;
+        (await JoinAsync(active.Id, 20)).Result.MessageKey.Should().Be("lfg.closed");
+        (await RowAsync(active.Id)).Version.Should().Be(version, "an orphaned listing can never be reopened");
+    }
+
+    // ---- background card edits ----
+
+    [Fact]
+    public async Task A_lost_permission_is_retried_a_bounded_number_of_times_and_never_changes_the_listing_state()
+    {
+        var listing = await OpenAsync();
+        await Lfg(s => s.CloseAsync(User(Owner), listing.Id, Ct));
+        for (var i = 0; i < LfgCardSync.MaxAttempts + 3; i++)
+            _host.Transport.ScriptEdit(() => new SendOutcome.Permanent(PermanentFailureKind.MissingAccess, "Missing Access"));
+
+        for (var i = 0; i < LfgCardSync.MaxAttempts + 3; i++)
+            await WorkerPassAsync();
+
+        var row = await RowAsync(listing.Id);
+        row.Status.Should().Be(LfgStatus.Closed);
+        row.CardStale.Should().BeFalse();
+        _host.Transport.EditCalls.Should().Be(LfgCardSync.MaxAttempts);
+    }
+
+    [Fact]
+    public async Task The_card_ids_are_recorded_once_and_only_for_the_listings_own_guild()
+    {
+        var created = (await CreateAsync()).Listing!;
+        Task Attach(GuildId guild, ChannelId channel, ulong message) =>
+            Lfg(async s =>
+            {
+                await s.AttachMessageAsync(created.Id, guild, channel, new MessageId(message), Ct);
+                return 0;
+            });
+
+        await Attach(OtherGuild, OtherChannel, 1);
+        (await GetAsync(created.Id))!.Message.Should().BeNull();
+        await Attach(Guild, Channel, 2);
+        await Attach(Guild, OtherChannel, 3);
+
+        var stored = (await GetAsync(created.Id))!;
+        stored.Message.Should().Be(new MessageId(2));
+        stored.Channel.Should().Be(Channel, "the later edit targets exactly the /ekip response");
+    }
+
+    // ---- full card ----
+
+    [Fact]
+    public async Task A_full_listing_refuses_joins_but_leave_and_close_still_work()
+    {
+        var renderer = _host.Services.GetRequiredService<LfgCardRenderer>();
+        var listing = await OpenAsync(players: 3);
+        await FillAsync(listing.Id, 2);
+        var full = (await GetAsync(listing.Id))!;
+        full.Status.Should().Be(LfgStatus.Full);
+        renderer.Render(full, "tr").Buttons!.Select(b => b.Disabled).Should().Equal(true, false, false);
+
+        (await JoinAsync(listing.Id, 30)).Result.MessageKey.Should().Be("lfg.join.full");
+        (await Lfg(s => s.CheckCloseAsync(User(Owner), listing.Id, Ct))).Result.MessageKey.Should().Be("lfg.close.question");
+        (await Lfg(s => s.CheckCloseAsync(Moderator(40), listing.Id, Ct))).Result.MessageKey.Should().Be("lfg.close.question");
+        (await Lfg(s => s.CheckCloseAsync(User(100), listing.Id, Ct))).Result.MessageKey.Should().Be("lfg.close.forbidden");
+
+        var left = await LeaveAsync(listing.Id, 101);
+        left.Listing!.Status.Should().Be(LfgStatus.Open);
+        renderer.Render(left.Listing, "tr").Buttons!.Should().OnlyContain(b => !b.Disabled);
+        (await JoinAsync(listing.Id, 30)).Result.MessageKey.Should().Be("lfg.join.done");
+    }
+
+    // ---- mentions ----
+
+    [Fact]
+    public async Task No_create_or_edit_of_a_card_can_ping_the_players_it_shows()
+    {
+        var renderer = _host.Services.GetRequiredService<LfgCardRenderer>();
+        var cards = new List<OutgoingMessage>();
+        var listing = await OpenAsync(players: 3); // the /ekip card
+        cards.Add(renderer.Render(listing, "tr"));
+        foreach (var step in new Func<Task<LfgResult>>[] { () => JoinAsync(listing.Id, 20), () => JoinAsync(listing.Id, 21), () => LeaveAsync(listing.Id, 21) })
+            cards.Add(renderer.Render((await step()).Listing!, "tr")); // interactive redraws after join, full, leave
+        await Lfg(s => s.CloseAsync(User(Owner), listing.Id, Ct));
+        await _host.InScopeAsync(sp => sp.GetRequiredService<LfgCardSync>().SyncAsync(listing.Id, Ct)); // close edit
+        var expiring = await OpenAsync(owner: 11, minutes: 60);
+        await JoinAsync(expiring.Id, 22);
+        _host.Clock.Advance(TimeSpan.FromMinutes(61));
+        await WorkerPassAsync(); // expiry edit
+
+        cards.AddRange(_host.Transport.Messages.SelectMany(m => m.Edits.Prepend(m.Message)));
+        cards.Should().HaveCount(4 + 2 + 2);
+        cards.Should().OnlyContain(c => c.Content == null && !c.Mentions.PingsAnything, "players are mentioned only inside the embed");
+        cards.Should().OnlyContain(c => c.Embed!.Description!.Contains("<@", StringComparison.Ordinal));
+        _host.Transport.Messages.Should().OnlyContain(m => !m.Pinged);
+    }
+
     // ---- privacy / retention ----
 
     [Fact]
