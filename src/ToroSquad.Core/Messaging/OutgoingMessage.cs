@@ -7,9 +7,10 @@ namespace ToroSquad.Core.Messaging;
 
 /// <summary>
 /// Which mentions may actually ping. Default is none. @here is never allowed for automated messages; role pings only for
-/// explicitly configured and permitted role IDs. Two separate, explicit opt-ins exist, each for exactly one producer
+/// explicitly configured and permitted role IDs. Two separate, explicit opt-ins exist, each for named producers only
 /// (architecture tests): <see cref="Everyone"/> — the first message of a new TSQ Live stream announcement — and
-/// <see cref="Users"/> — the TSQ LFG event reminder/start notices, which ping exactly the listed confirmed players.
+/// <see cref="Users"/> — the TSQ LFG event reminder/start notices (the listed confirmed players) and the TSQ Birthday
+/// announcement (the listed celebrants).
 /// Edits and retries after a proven non-delivery reuse the same payload; edits always go out with <see cref="None"/>
 /// (outbox + transport), and a resend after an uncertain delivery drops both opt-ins (at most one ping).
 /// Wire mapping: allowed_mentions = { "parse": Everyone ? ["everyone"] : [], "roles": [..Roles], "users": [..Users] } —
@@ -38,7 +39,8 @@ public sealed record MentionPolicy(
     public static MentionPolicy EveryoneOnly { get; } = new(Array.Empty<RoleId>(), Everyone: true);
 
     /// <summary>
-    /// Exactly these users may be pinged (no roles, no @everyone/@here). Only for TSQ LFG event notices to confirmed players.
+    /// Exactly these users may be pinged (no roles, no @everyone/@here). Only for TSQ LFG event notices to confirmed players
+    /// and the TSQ Birthday announcement to that day's celebrants.
     /// </summary>
     public static MentionPolicy ExplicitUsers(IEnumerable<UserId> users)
     {

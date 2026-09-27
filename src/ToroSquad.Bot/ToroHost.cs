@@ -8,6 +8,7 @@ using ToroSquad.Core.Modules;
 using ToroSquad.Discord;
 using ToroSquad.Infrastructure;
 using ToroSquad.Infrastructure.Hosting;
+using ToroSquad.Modules.Birthday;
 using ToroSquad.Modules.Esports;
 using ToroSquad.Modules.Example;
 using ToroSquad.Modules.Formula1;
@@ -28,7 +29,7 @@ public static class ToroHost
 
     public static IReadOnlyList<IToroModule> Modules(IConfiguration configuration)
     {
-        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module(), new VolleyballModule(), new LiveModule(), new LfgModule(), new QuoteModule() };
+        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module(), new VolleyballModule(), new LiveModule(), new LfgModule(), new QuoteModule(), new BirthdayModule() };
         // Example module: development/tests only. Off unless explicitly enabled.
         if (configuration.GetValue("Modules:Example:Enabled", false))
             modules.Add(new ExampleModule());
@@ -89,6 +90,7 @@ public static class ToroHost
             VolleyballModule.AddBackgroundJobs(services);
             LiveModule.AddBackgroundJobs(services);
             LfgModule.AddBackgroundJobs(services);
+            BirthdayModule.AddBackgroundJobs(services);
         }
     }
 

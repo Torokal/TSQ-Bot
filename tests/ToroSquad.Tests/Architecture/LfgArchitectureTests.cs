@@ -81,14 +81,15 @@ public sealed partial class LfgArchitectureTests
     }
 
     [Fact]
-    public void Explicit_user_pings_exist_only_in_the_lfg_notice_renderer()
+    public void Explicit_user_pings_exist_only_in_the_lfg_notice_renderer_and_the_birthday_announcement()
     {
         var src = Path.Combine(CommandManifestTests.RepoRoot(), "src");
         var allowed = new[]
         {
             Path.Combine("ToroSquad.Core", "Messaging", "OutgoingMessage.cs"), // the definition
             Path.Combine("ToroSquad.Discord", "Transport", "DiscordConversions.cs"), // the wire mapping (allowed_mentions.users)
-            Path.Combine("ToroSquad.Modules.Lfg", "Application", "LfgNoticeRenderer.cs"), // the only producer
+            Path.Combine("ToroSquad.Modules.Lfg", "Application", "LfgNoticeRenderer.cs"), // producer: the Joined players
+            Path.Combine("ToroSquad.Modules.Birthday", "Application", "BirthdayAnnouncementRenderer.cs"), // producer: the day's celebrants
         };
         foreach (var file in Directory.GetFiles(src, "*.cs", SearchOption.AllDirectories)
                      .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p is "bin" or "obj")))
@@ -128,6 +129,11 @@ public sealed partial class LfgArchitectureTests
         var producer = File.ReadAllText(Path.Combine(src, allowed[2]));
         producer.Should().Contain("MentionPolicy.ExplicitUsers(listing.Players)", "exactly the Joined players, never Maybe or text");
         Regex.Matches(producer, @"ExplicitUsers\(").Should().ContainSingle();
+
+        // The second (and last) producer: the celebrants the birthday text was built from — nothing else opts in there.
+        var birthday = File.ReadAllText(Path.Combine(src, allowed[3]));
+        birthday.Should().Contain("MentionPolicy.ExplicitUsers(named)");
+        UserPingOptIn().Matches(birthday).Should().ContainSingle();
     }
 
     [Fact]

@@ -18,6 +18,7 @@
     <ProjectReference Include="..\ToroSquad.Modules.Live\ToroSquad.Modules.Live.csproj" />
     <ProjectReference Include="..\ToroSquad.Modules.Lfg\ToroSquad.Modules.Lfg.csproj" />
     <ProjectReference Include="..\ToroSquad.Modules.Quote\ToroSquad.Modules.Quote.csproj" />
+    <ProjectReference Include="..\ToroSquad.Modules.Birthday\ToroSquad.Modules.Birthday.csproj" />
   </ItemGroup>
 
   <ItemGroup>
