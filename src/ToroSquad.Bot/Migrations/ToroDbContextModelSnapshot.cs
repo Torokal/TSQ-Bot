@@ -924,6 +924,140 @@ namespace ToroSquad.Bot.Migrations
                     b.ToTable("f1_guild_config", (string)null);
                 });
 
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgGuildConfigEntity", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedBy")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("GuildId");
+
+                    b.ToTable("lfg_guild_config", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgListingEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("CardStale")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CardSyncAttempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ClosedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ClosedByUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("EventAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("GameName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxPlayers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("MessageId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyAtStart")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("NotifyBeforeStart")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("OwnerUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ReminderHandledAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ReminderState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("StartNoticeHandledAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StartNoticeState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("VoiceChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CardStale")
+                        .HasFilter("\"CardStale\" = 1");
+
+                    b.HasIndex("Status", "EventAt")
+                        .HasFilter("\"EventAt\" IS NOT NULL");
+
+                    b.HasIndex("Status", "ExpiresAt");
+
+                    b.HasIndex("GuildId", "OwnerUserId", "Status");
+
+                    b.ToTable("lfg_listing", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgParticipantEntity", b =>
+                {
+                    b.Property<long>("ListingId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("JoinedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Response")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ListingId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("lfg_participant", (string)null);
+                });
+
             modelBuilder.Entity("ToroSquad.Modules.Live.Domain.CreatorState", b =>
                 {
                     b.Property<string>("CreatorKey")
@@ -1332,6 +1466,20 @@ namespace ToroSquad.Bot.Migrations
                     b.HasKey("GuildId");
 
                     b.ToTable("vb_guild_config", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgParticipantEntity", b =>
+                {
+                    b.HasOne("ToroSquad.Modules.Lfg.Persistence.LfgListingEntity", null)
+                        .WithMany("Participants")
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgListingEntity", b =>
+                {
+                    b.Navigation("Participants");
                 });
 #pragma warning restore 612, 618
         }

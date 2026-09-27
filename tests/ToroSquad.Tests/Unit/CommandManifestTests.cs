@@ -22,7 +22,7 @@ public sealed class CommandManifestTests
         var (manifest, admin) = await BuildAsync();
         CommandManifestValidator.Validate(manifest, admin).Should().BeEmpty();
         manifest.LoadErrors.Should().BeEmpty();
-        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "esports-admin", "f1", "f1-admin", "volleyball", "volleyball-admin", "live-admin");
+        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "esports-admin", "f1", "f1-admin", "volleyball", "volleyball-admin", "live-admin", "ekip", "lfg-admin");
 
         string[] Sub(string name) => manifest.Find(name)!.Options.Select(o => o.Name).ToArray();
         Sub("bot").Should().BeEquivalentTo("status", "about", "source");
@@ -35,6 +35,7 @@ public sealed class CommandManifestTests
         Sub("volleyball").Should().BeEquivalentTo("next", "schedule");
         Sub("volleyball-admin").Should().BeEquivalentTo("configure", "preview", "status", "doctor", "pause", "resume");
         Sub("live-admin").Should().BeEquivalentTo("doctor");
+        Sub("lfg-admin").Should().BeEquivalentTo("channel", "status");
     }
 
     [Fact]
@@ -42,9 +43,9 @@ public sealed class CommandManifestTests
     {
         var (manifest, _) = await BuildAsync();
         const string manageGuild = "32"; // 1 << 5
-        foreach (var name in new[] { "setup", "modules", "esports-admin", "f1-admin", "volleyball-admin", "live-admin" })
+        foreach (var name in new[] { "setup", "modules", "esports-admin", "f1-admin", "volleyball-admin", "live-admin", "lfg-admin" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().Be(manageGuild, $"/{name} is admin-only");
-        foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1", "volleyball" })
+        foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1", "volleyball", "ekip" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().BeNull($"/{name} is for everyone");
     }
 

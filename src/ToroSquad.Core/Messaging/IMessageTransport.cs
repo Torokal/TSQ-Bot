@@ -23,6 +23,18 @@ public abstract record SendOutcome
     public sealed record Ambiguous(string Reason) : SendOutcome;
 }
 
+/// <summary>
+/// Whether one of the bot's own messages still exists. <see cref="Missing"/>: Discord reports the message or its channel as
+/// gone (or the id is not a message of this bot). <see cref="Unknown"/>: it could not be determined (no access, transient
+/// error, not logged in) — never to be treated as missing.
+/// </summary>
+public enum MessagePresence
+{
+    Unknown = 0,
+    Present = 1,
+    Missing = 2,
+}
+
 public abstract record ReconcileOutcome
 {
     public sealed record Found(MessageId MessageId) : ReconcileOutcome;
@@ -48,6 +60,12 @@ public interface IMessageTransport
     /// the bot for the one described by <paramref name="probe"/>. Nothing internal is shown to users for this.
     /// </summary>
     Task<ReconcileOutcome> FindRecentAsync(ChannelId channel, DeliveryProbe probe, int scanLimit, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Single read of one known message (no scan, no send). Used where a deleted message must be noticed without the
+    /// message gateway intents (the bot only uses the Guilds intent).
+    /// </summary>
+    Task<MessagePresence> GetPresenceAsync(ChannelId channel, MessageId message, CancellationToken cancellationToken);
 }
 
 /// <summary>

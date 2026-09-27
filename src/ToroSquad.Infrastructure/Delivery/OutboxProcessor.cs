@@ -38,8 +38,8 @@ public sealed class DeliveryOptions
 /// turns into DeliveryUnknown — never blindly resent.</item>
 /// <item>Ambiguous outcomes (timeouts) become DeliveryUnknown and go through bounded reconciliation (content fingerprint of what was sent; no visible reference in the message).</item>
 /// <item>Edits never ping; a missing edit target is not replaced by a new message.</item>
-/// <item>@everyone at most once: a resend after an uncertain attempt (the row went through reconciliation) never carries
-/// the @everyone opt-in.</item>
+/// <item>@everyone and explicit user pings at most once: a resend after an uncertain attempt (the row went through
+/// reconciliation) never carries those opt-ins.</item>
 /// <item>One guild's failure never stops the batch.</item>
 /// </list>
 /// No exactly-once guarantee is claimed.
@@ -53,25 +53,26 @@ public sealed class OutboxProcessor(
 {
     private readonly DeliveryOptions _options = options.Value;
 
-    /// <summary>Crash recovery at startup: anything still InFlight may or may not have reached Discord.</summary>
+    /// <summary>
+    /// Crash recovery at startup: anything still InFlight may or may not have reached Discord. One atomic update, so a
+    /// concurrent change to such a row (e.g. a module moving its deadline) cannot make startup fail with a version conflict.
+    /// </summary>
     public async Task<int> RecoverAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ToroDbContext>();
         var now = clock.GetUtcNow();
-        var rows = await db.Outbox.Where(x => x.Status == OutboxStatus.InFlight).ToListAsync(cancellationToken);
-        foreach (var row in rows)
-        {
-            row.Status = OutboxStatus.DeliveryUnknown;
-            row.NextAttemptAt = now + _options.ReconcileDelay;
-            row.LastError = "recovered_after_restart";
-            row.UpdatedAt = now;
-        }
-
-        await db.SaveChangesAsync(cancellationToken);
-        if (rows.Count > 0)
-            logger.LogWarning("Outbox recovery: {Count} in-flight notifications marked DeliveryUnknown", rows.Count);
-        return rows.Count;
+        var next = now + _options.ReconcileDelay;
+        var count = await db.Outbox.Where(x => x.Status == OutboxStatus.InFlight)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.Status, OutboxStatus.DeliveryUnknown)
+                .SetProperty(x => x.NextAttemptAt, (DateTimeOffset?)next)
+                .SetProperty(x => x.LastError, "recovered_after_restart")
+                .SetProperty(x => x.UpdatedAt, now)
+                .SetProperty(x => x.Version, x => x.Version + 1), cancellationToken);
+        if (count > 0)
+            logger.LogWarning("Outbox recovery: {Count} in-flight notifications marked DeliveryUnknown", count);
+        return count;
     }
 
     public async Task<int> ProcessOnceAsync(CancellationToken cancellationToken)
@@ -211,6 +212,13 @@ public sealed class OutboxProcessor(
         {
             message = message with { Mentions = message.Mentions with { Everyone = false } };
             logger.LogWarning("Outbox {OutboxId} ref={Marker}: resend after an uncertain delivery goes out without @everyone", row.Id, row.Marker);
+        }
+
+        // The same rule for explicitly listed user pings (TSQ LFG notices): a missing ping is acceptable, a second one is not.
+        if (message.Mentions.Users is { Count: > 0 } && row.ReconcileAttempts > 0)
+        {
+            message = message with { Mentions = message.Mentions.WithoutUserPings() };
+            logger.LogWarning("Outbox {OutboxId} ref={Marker}: resend after an uncertain delivery goes out without user pings", row.Id, row.Marker);
         }
 
         // Claim: persist InFlight BEFORE talking to Discord (crash => DeliveryUnknown, not a blind resend).

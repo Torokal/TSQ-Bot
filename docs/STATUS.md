@@ -48,6 +48,29 @@ invite link and no global command registration. The source code is public under 
   Railway limitation); EventSub WebSocket requires a user access token + refresh-token lifecycle (owner decision).
 - Off by default (`Live:Enabled=false`, module gate off); no production change without owner approval.
 
+## TSQ LFG — Oyuncu Bul (new, 2026-09-27, branch `feat/lfg`)
+
+- Scope and rules: [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md). One generic listing lifecycle for any game (no game-specific model).
+- **IMPLEMENTED / TESTED_OFFLINE**: `/ekip` (free-text game + details, team size, optional 1/2/3 h), join/leave/full/reopen,
+  owner/moderator close with confirmation, lazy + worker expiry, restart recovery, deleted-card handling (`Orphaned`),
+  per-user active limit, optional listing channel (`/lfg-admin`), privacy export/delete/retention, race tests (last slot,
+  many joins, double click, concurrent creates), migration `LfgModule`. Deleted cards: no message-delete events (Guilds
+  intent only) — a throttled one-read check per active card (≤ every 5 min) and an immediate check of the caller's cards at
+  the limit orphan them. Offline contract test of the edit route (bot-token PATCH on the channel message, no interaction
+  token, allowed_mentions empty).
+- **NOT VERIFIED_LIVE**: no real Discord interaction yet (commands not synced; module not enabled). In particular the bot
+  editing its own `/ekip` response through the channel endpoint (expiry/close) has not been observed live.
+- **V2 IMPLEMENTED / TESTED_OFFLINE**: Maybe RSVP (never a slot, never pinged), relative scheduled start (`EventAt`;
+  `ExpiresAt = EventAt + duration`), opt-in 30-minute and start notices through the outbox (current Joined players only,
+  once across restarts, never late, none for ended listings or a disabled module), `MentionPolicy.ExplicitUsers` (only
+  the LFG notice renderer), optional voice channel + button (moves a member already in voice with Move Members; otherwise
+  an honest "open channel" link), migration `LfgScheduledEvents`.
+- **Custom start date IMPLEMENTED / TESTED_OFFLINE**: `/ekip tarih_saat` (`05.10.2026 21:30`, culture-independent), read in
+  the existing guild time zone (`/setup`, default Europe/Istanbul), DST gaps/overlaps refused, 1 minute – 1 year ahead,
+  exclusive with `baslangic`; feeds the same `EventAt` (expiry, notices, card, voice unchanged). No new migration.
+- **NOT VERIFIED_LIVE**: real user pings, the voice move and the channel link behaviour in Discord clients.
+- Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

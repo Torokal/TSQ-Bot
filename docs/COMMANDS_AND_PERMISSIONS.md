@@ -65,6 +65,24 @@ Başka takım seçtiren komut yoktur. Ayrıntı: [volleyball/VOLLEYBALL.md](voll
 Duyuru gönderen, yayıncı ekleyen veya ping atan komut yoktur (yayıncılar ve kanal yapılandırmadır). Ayrıntı:
 [live/TSQ_LIVE.md](live/TSQ_LIVE.md).
 
+## TSQ LFG — Oyuncu Bul (modül açıkken)
+
+| Komut / etkileşim | Ne yapar |
+|---|---|
+| `/ekip oyun kisi [detay] [baslangic] [tarih_saat] [sure] [hatirlat_30dk] [baslangicta_etiketle] [ses_kanali]` | Herkes: herhangi bir oyun için ekip ilanı açar (kart, komutun herkese açık yanıtıdır; kart asla ping atmaz). Kişi başı aktif ilan sınırı, isteğe bağlı kanal kısıtı; `baslangic` göreli seçim (Şimdi … 24 saat sonra) **veya** `tarih_saat` özel tarih (`05.10.2026 21:30`, sunucunun `/setup` saat diliminde; 1 dk – 1 yıl ileri); iki etiketleme seçeneği varsayılan kapalı ve ileri bir başlangıç ister; `ses_kanali` yalnızca bu sunucunun ses kanalı |
+| Buton `Katıl` · `Belki` · `Ayrıl` (`tsq:lfg:join|maybe|leave:<id>`) | Herkes; her tıklamada sunucu tarafında guild, durum, süre, üyelik ve boş slot yeniden denetlenir; Belki kapasiteye sayılmaz; sonuç ephemeral |
+| Buton `İlanı Kapat` (`tsq:lfg:close:<id>`) → `Evet, kapat` / `Vazgeç` | Yalnızca ilan sahibi veya **Manage Messages** (ya da Administrator) yetkili moderatör (`Authorize.Require`); ephemeral onay |
+| Buton `🔊 Ses Odası` / `🔊 Ses Odasına Katıl` (`tsq:lfg:voice:<id>`, kart ve bildirimlerde) | Yalnızca Joined oyuncu; zaten seste olanı bot Move Members + Connect ile taşır, aksi hâlde kanal + "Ses kanalını aç" link butonu (sese otomatik bağlama yok — Discord API'si izin vermez) |
+| Etkinlik bildirimleri (isteğe bağlı) | Başlangıçtan 30 dk önce / başlangıçta **yalnızca Joined oyuncuları** etiketleyen yeni mesajlar (outbox; tekrarsız, geç gönderilmez) |
+| `/lfg-admin channel [channel]` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): `/ekip`'i tek kanala kısıtlar; boş = her kanal |
+| `/lfg-admin status` | Yönetici: modül durumu, kanal, aktif ilan sayıları, sınırlar, bekleyen kart düzenlemeleri |
+
+Bot izinleri (ilan kanalı): `ViewChannel`, `SendMessages`, `EmbedLinks` (süre dolumu/kapatma düzenlemesi); isteğe bağlı
+`ReadMessageHistory` (silinen kartın erken fark edilmesi); ses kanalında `MoveMembers` + `Connect` (seste olanı tek tıkla
+taşıma — davet izinlerinde yok, isteğe bağlı olarak yalnızca ilgili ses kanallarında verilebilir). Ek gateway intent'i gerekmez.
+
+Ayrıntı: [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md).
+
 ## Esports (modül açıkken)
 
 | Komut | Seçenekler |

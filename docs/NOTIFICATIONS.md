@@ -155,8 +155,11 @@ adı) → 3) "team/esports/gaming/clan/club/gg" ayıklanmış ad **tek adaya** d
 
 ## Mesaj güvenliği
 
-- `allowed_mentions = { parse: [], roles: [izinli roller] }`; kullanıcı ve @here ping'i asla. @everyone yalnızca tek bir
-  yerde: TSQ Live'ın yeni yayın oturumu için ilk duyurusu (`MentionPolicy.EveryoneOnly`, yalnızca `LiveCardRenderer`;
+- `allowed_mentions = { parse: [], roles: [izinli roller] }`; @here ping'i asla, metinden kullanıcı ping'i asla. Açıkça
+  listelenen kullanıcı kimlikleri (`allowed_mentions.users`) yalnızca tek bir yerde: TSQ LFG'nin isteğe bağlı etkinlik
+  bildirimleri, ilanın Joined oyuncularına (`MentionPolicy.ExplicitUsers`, yalnızca `LfgNoticeRenderer`; mimari test) —
+  [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md); belirsiz bir teslimden sonraki yeniden gönderim bu ping'leri de taşımaz. @everyone
+  yalnızca tek bir yerde: TSQ Live'ın yeni yayın oturumu için ilk duyurusu (`MentionPolicy.EveryoneOnly`, yalnızca `LiveCardRenderer`;
   mimari test) — [live/TSQ_LIVE.md](live/TSQ_LIVE.md). Önizleme ve düzenlemeler ping atmaz. `@everyone` en fazla bir
   kez: yalnızca kesin başarısız (429, bağlantı yok, 4xx) bir ilk denemenin tekrarı onu taşıyabilir; Discord'a ulaşmış
   olabilecek bir denemeden (zaman aşımı, her 5xx, yanıt kaybı, gönderim sırasında çökme) sonraki her yeniden gönderimden
