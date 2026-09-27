@@ -43,7 +43,24 @@ public sealed record MessageEmbed(
     uint? Color,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ThumbnailUrl = null);
 
-public sealed record MessageButton(string Label, string? CustomId, string? Url, bool Disabled = false);
+/// <summary>Colour of an interactive (custom id) button; link buttons are always grey. Discord's own style names.</summary>
+public enum MessageButtonStyle
+{
+    Secondary = 0,
+    Primary = 1,
+    Success = 2,
+    Danger = 3,
+}
+
+/// <summary>
+/// <see cref="Style"/> is left out of the stored payload while it is the default, so existing payload hashes are unchanged.
+/// </summary>
+public sealed record MessageButton(
+    string Label,
+    string? CustomId,
+    string? Url,
+    bool Disabled = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] MessageButtonStyle Style = MessageButtonStyle.Secondary);
 
 /// <summary>SDK-agnostic outgoing message. Rendered by modules, delivered by an <see cref="IMessageTransport"/>.</summary>
 public sealed record OutgoingMessage(

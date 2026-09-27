@@ -60,9 +60,17 @@ public static class DiscordConversions
             if (b.Url is not null)
                 builder.WithButton(b.Label, url: b.Url, style: ButtonStyle.Link, disabled: b.Disabled, row: row);
             else
-                builder.WithButton(b.Label, b.CustomId, ButtonStyle.Secondary, disabled: b.Disabled, row: row);
+                builder.WithButton(b.Label, b.CustomId, ToStyle(b.Style), disabled: b.Disabled, row: row);
         }
 
         return builder.Build();
     }
+
+    private static ButtonStyle ToStyle(MessageButtonStyle style) => style switch
+    {
+        MessageButtonStyle.Primary => ButtonStyle.Primary,
+        MessageButtonStyle.Success => ButtonStyle.Success,
+        MessageButtonStyle.Danger => ButtonStyle.Danger,
+        _ => ButtonStyle.Secondary,
+    };
 }
