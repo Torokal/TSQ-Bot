@@ -54,8 +54,10 @@ public sealed class LfgCardRenderer(ILocalizer localizer)
         }
 
         lines.Add("");
-        if (listing.EventAt is { } eventAt)
-            lines.Add(L("lfg.card.starts", DiscordText.Timestamp(eventAt, 'F'), DiscordText.Timestamp(eventAt, 'R')));
+        // Always shown: a listing without EventAt started when it was opened ("now").
+        lines.Add(listing.EventAt is { } eventAt
+            ? L("lfg.card.starts", DiscordText.Timestamp(eventAt, 'F'), DiscordText.Timestamp(eventAt, 'R'))
+            : L("lfg.card.starts_now"));
         if (listing.VoiceChannel is { } voice)
             lines.Add(L("lfg.card.voice", ChannelMention(voice)));
         var expires = L("lfg.card.expires", DiscordText.Timestamp(listing.ExpiresAt, 'R'));

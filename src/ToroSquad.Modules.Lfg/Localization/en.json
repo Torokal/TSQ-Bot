@@ -144,5 +144,6 @@
   "lfg.form.voice_hint": "Optional: the team's voice channel",
   "lfg.form.duration_placeholder": "Listing duration",
   "lfg.form.duration_current": "(current)",
-  "lfg.form.duration_default": "(default)"
+  "lfg.form.duration_default": "(default)",
+  "lfg.card.starts_now": "🕘 Start: Now"
 }

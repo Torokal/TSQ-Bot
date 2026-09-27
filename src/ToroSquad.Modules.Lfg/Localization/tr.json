@@ -144,5 +144,6 @@
   "lfg.form.voice_hint": "İsteğe bağlı: ekibin ses kanalı",
   "lfg.form.duration_placeholder": "İlan süresi",
   "lfg.form.duration_current": "(mevcut)",
-  "lfg.form.duration_default": "(varsayılan)"
+  "lfg.form.duration_default": "(varsayılan)",
+  "lfg.card.starts_now": "🕘 Başlangıç: Şimdi"
 }
