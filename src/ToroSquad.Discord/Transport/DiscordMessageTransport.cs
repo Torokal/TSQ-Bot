@@ -146,7 +146,9 @@ public sealed class DiscordMessageTransport(DiscordSocketClient client, ILogger<
         switch (status)
         {
             case HttpStatusCode.Forbidden:
-                return new SendOutcome.Permanent(code == DiscordErrorCode.MissingPermissions ? PermanentFailureKind.MissingPermissions : PermanentFailureKind.MissingAccess, reason);
+                // Discord 50013 "Missing Permissions" is DiscordErrorCode.InsufficientPermissions in Discord.Net; its "MissingPermissions"
+                // is Discord 50001 "Missing Access" (the names were swapped here before; found by DiscordEditRouteContractTests).
+                return new SendOutcome.Permanent(code == DiscordErrorCode.InsufficientPermissions ? PermanentFailureKind.MissingPermissions : PermanentFailureKind.MissingAccess, reason);
             case HttpStatusCode.NotFound:
                 return new SendOutcome.Permanent(code == DiscordErrorCode.UnknownMessage ? PermanentFailureKind.UnknownMessage : PermanentFailureKind.UnknownChannel, reason);
             case HttpStatusCode.BadRequest:
