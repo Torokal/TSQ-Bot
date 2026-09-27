@@ -49,17 +49,29 @@ public static class DiscordConversions
         return builder.Build();
     }
 
+    /// <summary>Discord allows five rows of five buttons.</summary>
+    public const int ButtonsPerRow = 5;
+
+    public const int MaxRows = 5;
+
     public static MessageComponent? ToComponents(IReadOnlyList<MessageButton>? buttons)
     {
         if (buttons is null || buttons.Count == 0)
             return null;
         var builder = new ComponentBuilder();
         var row = 0;
-        for (var i = 0; i < buttons.Count && i < 25; i++)
+        var inRow = 0;
+        foreach (var b in buttons)
         {
-            var b = buttons[i];
-            if (i > 0 && i % 5 == 0)
+            if (inRow > 0 && (inRow == ButtonsPerRow || b.NewRow))
+            {
                 row++;
+                inRow = 0;
+            }
+
+            if (row == MaxRows)
+                break;
+            inRow++;
             if (b.Url is not null)
                 builder.WithButton(b.Label, url: b.Url, style: ButtonStyle.Link, disabled: b.Disabled, row: row);
             else

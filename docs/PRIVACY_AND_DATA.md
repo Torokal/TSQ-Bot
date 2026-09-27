@@ -19,6 +19,7 @@ presence izlemez. Profil, avatar, kullanıcı adı **saklanmaz**.
 | `lfg_participant` | İlan ID + oyuncunun kullanıcı ID'si + cevabı (Katıldı / Belki) + cevap zamanı (görünen ad saklanmaz) | kullanıcı | ayrılınca / `/privacy delete`, sunucu verisiyle birlikte |
 | `outbox` (LFG etkinlik bildirimleri) | Etiketlenen Joined oyuncuların kullanıcı ID'leri (bildirim içeriği) | kullanıcı | teslimden/bitişten 24 saat sonra; `/privacy delete` ile hemen — o an Discord'a gönderilmekte olan (in-flight) ya da teslimi henüz uzlaştırılan satır hariç: o satır bittikten 24 saat sonra silinir |
 | `lfg_guild_config` | İsteğe bağlı LFG kanalı; değiştiren yöneticinin kullanıcı ID'si | sunucu | bot sunucudan çıkarıldıktan 30 gün sonra |
+| *(bellek, tablo değil)* LFG form taslakları | `/ekip` / Düzenle formunun adımları arasında: kullanıcı, sunucu, kanal ID'si, yazılan metinler ve seçimler | kullanıcı | **veritabanına hiç yazılmaz**; son kullanımdan 30 dk sonra, kayıt/iptal anında ya da restart'ta silinir; bu kısa ömür nedeniyle `/privacy export/delete` kapsamında değildir |
 
 Discord ID'leri kayıpsız (64-bit) saklanır.
 

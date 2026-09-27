@@ -245,7 +245,8 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         var result = await CreateAsync(new LfgCreateInput("Deadlock", 5, StartMinutes: start, NotifyBeforeStart: remind, NotifyAtStart: atStart));
 
         result.Result.MessageKey.Should().Be("lfg.create.notice_needs_start");
-        (await CreateAsync(new LfgCreateInput("Deadlock", 5, StartMinutes: 45))).Result.MessageKey.Should().Be("lfg.create.start_invalid");
+        (await CreateAsync(new LfgCreateInput("Deadlock", 5, StartMinutes: -5))).Result.MessageKey.Should().Be("lfg.create.start_invalid");
+        (await CreateAsync(new LfgCreateInput("Deadlock", 5, StartMinutes: LfgRules.MaxStartMinutes + 1))).Result.MessageKey.Should().Be("lfg.create.start_invalid");
     }
 
     // ---- custom start date (same EventAt pipeline) ----
@@ -565,7 +566,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         cards.AddRange(_host.Transport.Messages.Where(m => m.Id == listing.Message).SelectMany(m => m.Edits.Prepend(m.Message)));
         cards.Should().HaveCount(5 + 2);
         cards.Should().OnlyContain(c => c.Content == null && !c.Mentions.PingsAnything);
-        cards.Take(5).Should().OnlyContain(c => c.Buttons!.Count == 5, "Katıl · Belki · Ayrıl · Ses Odası · Kapat");
+        cards.Take(5).Should().OnlyContain(c => c.Buttons!.Count == 6, "Katıl · Belki · Ayrıl · Ses Odası | Düzenle · Kapat");
     }
 
     // ---- voice ----
@@ -583,7 +584,8 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         var card = _host.Services.GetRequiredService<LfgCardRenderer>().Render(ok.Listing, "tr");
         card.Embed!.Description.Should().Contain("🔊 Ses Odası: <#8802>");
         card.Buttons!.Select(b => b.CustomId).Should().Equal(
-            "tsq:lfg:join:" + ok.Listing.Id, "tsq:lfg:maybe:" + ok.Listing.Id, "tsq:lfg:leave:" + ok.Listing.Id, "tsq:lfg:voice:" + ok.Listing.Id, "tsq:lfg:close:" + ok.Listing.Id);
+            "tsq:lfg:join:" + ok.Listing.Id, "tsq:lfg:maybe:" + ok.Listing.Id, "tsq:lfg:leave:" + ok.Listing.Id, "tsq:lfg:voice:" + ok.Listing.Id,
+            "tsq:lfg:edit:" + ok.Listing.Id, "tsq:lfg:close:" + ok.Listing.Id);
     }
 
     [Fact]
@@ -648,7 +650,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         await TickAsync();
         var redrawn = _host.Transport.Messages.Single(m => m.Id == listing.Message).Edits.Should().ContainSingle().Subject;
         redrawn.Embed!.Description.Should().NotContain("Ses Odası");
-        redrawn.Buttons!.Should().HaveCount(4);
+        redrawn.Buttons!.Should().HaveCount(5);
         (await VoiceAsync(listing.Id, Owner)).Result.MessageKey.Should().Be("lfg.voice.none");
     }
 

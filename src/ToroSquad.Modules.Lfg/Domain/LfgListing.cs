@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using ToroSquad.Core;
 
 namespace ToroSquad.Modules.Lfg.Domain;
@@ -65,7 +67,9 @@ public sealed record LfgListingView(
     long Version = 0,
     IReadOnlyList<UserId>? Maybe = null,
     DateTimeOffset? EventAt = null,
-    ChannelId? VoiceChannel = null)
+    ChannelId? VoiceChannel = null,
+    bool NotifyBeforeStart = false,
+    bool NotifyAtStart = false)
 {
     public bool IsActive => Status is LfgStatus.Open or LfgStatus.Full;
 
@@ -90,6 +94,15 @@ public enum LfgDraftError
     DateNotInFuture = 13,
     DateTooFar = 14,
     TimeZoneInvalid = 15,
+
+    /// <summary>Edit: the activity already started (or its start notice was handled), so its start can no longer move.</summary>
+    StartLocked = 16,
+
+    /// <summary>Edit: fewer slots than players who already joined.</summary>
+    PlayersBelowJoined = 17,
+
+    /// <summary>Edit: the new duration would end the listing in the past.</summary>
+    ExpiryPassed = 18,
 }
 
 /// <summary>
@@ -150,12 +163,21 @@ public static class LfgEventDate
     /// <summary>At most this far ahead.</summary>
     public static readonly TimeSpan MaxAhead = TimeSpan.FromDays(365);
 
+    /// <summary>The wall-clock date and time written in one of the <see cref="Formats"/> (no time zone, no range check).</summary>
+    public static bool TryReadWallClock(string? text, out DateTime local)
+    {
+        local = default;
+        if (string.IsNullOrWhiteSpace(text) || !DateTime.TryParseExact(text.Trim(), Formats.ToArray(), System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var parsed))
+            return false;
+        local = DateTime.SpecifyKind(parsed, DateTimeKind.Unspecified);
+        return true;
+    }
+
     public static (DateTimeOffset? At, LfgDraftError Error) Resolve(string text, TimeZoneInfo zone, DateTimeOffset now)
     {
-        if (!DateTime.TryParseExact(text.Trim(), Formats.ToArray(), System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out var local))
+        if (!TryReadWallClock(text, out var local))
             return (null, LfgDraftError.DateFormat);
-        local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
         if (zone.IsInvalidTime(local))
             return (null, LfgDraftError.DateNotInTimeZone);
         if (zone.IsAmbiguousTime(local))
@@ -190,8 +212,8 @@ public static class LfgRules
     /// <summary>The optional durations offered by /ekip (no free minute input); no choice = the configured default.</summary>
     public static IReadOnlyList<int> DurationChoicesMinutes { get; } = [60, 120, 180];
 
-    /// <summary>Relative start choices (no date/time-zone parsing): 0 = now (the default).</summary>
-    public static IReadOnlyList<int> StartChoicesMinutes { get; } = [0, 30, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
+    /// <summary>A relative start ("2 saat") reaches as far ahead as a custom date: 0 = now.</summary>
+    public static readonly int MaxStartMinutes = (int)LfgEventDate.MaxAhead.TotalMinutes;
 
     /// <summary>The optional reminder goes out this long before the start, and only before the start.</summary>
     public static readonly TimeSpan ReminderLead = TimeSpan.FromMinutes(30);
@@ -202,61 +224,72 @@ public static class LfgRules
     private const int ZeroWidthJoiner = 0x200D;
 
     /// <summary>
-    /// <paramref name="startMinutes"/> (a relative choice, 0 = now) and <paramref name="startAt"/> (a custom date, read in
+    /// <paramref name="startMinutes"/> (a relative start in minutes, 0 = now) and <paramref name="startAt"/> (a custom date, read in
     /// <paramref name="zone"/> relative to <paramref name="now"/>) are alternatives: giving both is refused here, not only
     /// in the command. A blank <paramref name="startAt"/> counts as not given.
     /// </summary>
     public static (LfgDraft? Draft, LfgDraftError Error) Validate(string? game, string? details, int players, int? durationMinutes, int maxPlayers, int defaultMinutes,
         int? startMinutes = null, bool notices = false, string? startAt = null, TimeZoneInfo? zone = null, DateTimeOffset? now = null)
     {
-        var name = Normalize(game);
-        if (name is null)
-            return (null, LfgDraftError.GameMissing);
-        var nameLength = Length(name);
-        if (nameLength < GameNameMinLength)
-            return (null, LfgDraftError.GameTooShort);
-        if (nameLength > GameNameMaxLength)
-            return (null, LfgDraftError.GameTooLong);
-
-        var text = Normalize(details);
-        if (text is not null && Length(text) > DetailsMaxLength)
-            return (null, LfgDraftError.DetailsTooLong);
-
-        if (players < MinPlayers || players > Math.Min(maxPlayers, HardMaxPlayers))
-            return (null, LfgDraftError.PlayersOutOfRange);
+        var (name, text, basics) = ValidateTexts(game, details, players, maxPlayers);
+        if (basics != LfgDraftError.None)
+            return (null, basics);
 
         if (durationMinutes is { } minutes && !DurationChoicesMinutes.Contains(minutes))
             return (null, LfgDraftError.DurationInvalid);
 
+        var (begin, startError) = ResolveStart(startMinutes, startAt, zone, now);
+        if (begin is null)
+            return (null, startError);
+
+        if (notices && begin.IsNow)
+            return (null, LfgDraftError.NoticeNeedsStart); // "now" has no reminder window and nothing to announce later
+
+        return (new LfgDraft(name!, text, players, TimeSpan.FromMinutes(durationMinutes ?? defaultMinutes), begin), LfgDraftError.None);
+    }
+
+    /// <summary>The creator's texts and the team size (shared by create and edit).</summary>
+    public static (string? Game, string? Details, LfgDraftError Error) ValidateTexts(string? game, string? details, int players, int maxPlayers)
+    {
+        var name = Normalize(game);
+        if (name is null)
+            return (null, null, LfgDraftError.GameMissing);
+        var nameLength = Length(name);
+        if (nameLength < GameNameMinLength)
+            return (null, null, LfgDraftError.GameTooShort);
+        if (nameLength > GameNameMaxLength)
+            return (null, null, LfgDraftError.GameTooLong);
+
+        var text = Normalize(details);
+        if (text is not null && Length(text) > DetailsMaxLength)
+            return (null, null, LfgDraftError.DetailsTooLong);
+
+        if (players < MinPlayers || players > Math.Min(maxPlayers, HardMaxPlayers))
+            return (null, null, LfgDraftError.PlayersOutOfRange);
+        return (name, text, LfgDraftError.None);
+    }
+
+    /// <summary>
+    /// One start from either a relative start (minutes, 0 = now) or a custom date read in <paramref name="zone"/> relative to
+    /// <paramref name="now"/> (shared by create and edit). Giving both is refused. A blank date counts as not given.
+    /// </summary>
+    public static (LfgStart? Start, LfgDraftError Error) ResolveStart(int? startMinutes, string? startAt, TimeZoneInfo? zone, DateTimeOffset? now)
+    {
         var custom = Normalize(startAt);
         if (startMinutes is not null && custom is not null)
             return (null, LfgDraftError.StartConflict);
 
-        LfgStart begin;
         if (custom is not null)
         {
             if (zone is null || now is null)
                 return (null, LfgDraftError.TimeZoneInvalid);
             var (at, dateError) = LfgEventDate.Resolve(custom, zone, now.Value);
-            if (at is null)
-                return (null, dateError);
-            begin = LfgStart.AtInstant(at.Value);
-        }
-        else if (startMinutes is { } start)
-        {
-            if (!StartChoicesMinutes.Contains(start))
-                return (null, LfgDraftError.StartInvalid);
-            begin = LfgStart.After(TimeSpan.FromMinutes(start));
-        }
-        else
-        {
-            begin = LfgStart.Now;
+            return at is null ? (null, dateError) : (LfgStart.AtInstant(at.Value), LfgDraftError.None);
         }
 
-        if (notices && begin.IsNow)
-            return (null, LfgDraftError.NoticeNeedsStart); // "now" has no reminder window and nothing to announce later
-
-        return (new LfgDraft(name, text, players, TimeSpan.FromMinutes(durationMinutes ?? defaultMinutes), begin), LfgDraftError.None);
+        if (startMinutes is { } start)
+            return start < 0 || start > MaxStartMinutes ? (null, LfgDraftError.StartInvalid) : (LfgStart.After(TimeSpan.FromMinutes(start)), LfgDraftError.None);
+        return (LfgStart.Now, LfgDraftError.None);
     }
 
     /// <summary>Drops control/format characters, collapses whitespace runs to one space and trims; null when nothing is left.</summary>
@@ -287,4 +320,91 @@ public static class LfgRules
     }
 
     public static int Length(string value) => value.EnumerateRunes().Count();
+}
+
+/// <summary>
+/// What the creator typed into the form's start field: nothing (or "şimdi") = now; a relative start ("30 dk", "1,5 saat",
+/// "2 saat", "1 gün") = minutes from now; anything else is a custom date for <see cref="LfgEventDate"/>. Deliberately not a
+/// natural-language parser: a unit is required for a relative start, so "1.5.2026 21:00" can never be read as hours.
+/// </summary>
+public sealed record LfgStartText(int? Minutes, string? At)
+{
+    public static LfgStartText Now { get; } = new(null, null);
+
+    /// <summary>Minutes of a relative start that is not a whole number of minutes (e.g. "1,33 saat").</summary>
+    public const int Unusable = -1;
+
+    private static readonly string[] NowWords = ["şimdi", "simdi", "hemen", "now"];
+
+    public bool IsNow => Minutes is null && At is null;
+
+    public static LfgStartText Parse(string? text)
+    {
+        var value = LfgRules.Normalize(text);
+        var lower = value is null ? null : LfgFormText.Lower(value);
+        if (lower is null || NowWords.Contains(lower))
+            return Now;
+        var match = LfgFormText.RelativePattern().Match(lower);
+        if (!match.Success)
+            return new LfgStartText(null, value);
+        var minutes = LfgFormText.ToMinutes(match.Groups["n"].Value, match.Groups["unit"].Value, defaultUnitMinutes: 1);
+        return minutes switch
+        {
+            null => new LfgStartText(Unusable, null),
+            0 => Now,
+            _ => new LfgStartText(minutes, null),
+        };
+    }
+}
+
+/// <summary>The form's number fields, read leniently but exactly: anything unreadable becomes a value the rules refuse.</summary>
+public static partial class LfgFormText
+{
+    /// <summary>Returned for unreadable input; always outside every allowed range.</summary>
+    public const int Invalid = -1;
+
+    /// <summary>"6" → 6; anything else (empty, "altı", "6 kişi") → <see cref="Invalid"/>.</summary>
+    public static int Players(string? text)
+    {
+        var value = LfgRules.Normalize(text);
+        return value is not null && PlayersPattern().IsMatch(value) && int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : Invalid;
+    }
+
+    /// <summary>Empty → null (the default duration); "2", "2 saat", "1,5 saat", "90 dk" → minutes; else <see cref="Invalid"/>.</summary>
+    public static int? DurationMinutes(string? text)
+    {
+        var value = LfgRules.Normalize(text);
+        if (value is null)
+            return null;
+        var match = DurationPattern().Match(Lower(value));
+        return match.Success ? ToMinutes(match.Groups["n"].Value, match.Groups["unit"].Value, defaultUnitMinutes: 60) ?? Invalid : Invalid;
+    }
+
+    /// <summary>Lower case for unit words, with the Turkish dotted capital I ("ŞİMDİ", "DAKİKA") read as i.</summary>
+    internal static string Lower(string value) => value.Replace('İ', 'i').ToLowerInvariant();
+
+    /// <summary>Whole minutes of "number unit", or null when it is not a whole number of minutes (or absurdly large).</summary>
+    internal static int? ToMinutes(string number, string unit, int defaultUnitMinutes)
+    {
+        if (!decimal.TryParse(number.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var n))
+            return null;
+        var factor = unit switch
+        {
+            "" => defaultUnitMinutes,
+            "dk" or "dak" or "dakika" or "min" or "m" => 1,
+            "sa" or "saat" or "s" or "h" => 60,
+            _ => 1440, // gün / gun / g
+        };
+        var minutes = n * factor;
+        return minutes != decimal.Truncate(minutes) || minutes > int.MaxValue ? null : (int)minutes;
+    }
+
+    [GeneratedRegex(@"^[0-9]{1,3}$", RegexOptions.CultureInvariant)]
+    private static partial Regex PlayersPattern();
+
+    [GeneratedRegex(@"^(?<n>[0-9]{1,3}(?:[.,][0-9]{1,2})?)\s*(?<unit>dk|dak|dakika|min|m|sa|saat|s|h|)\.?$", RegexOptions.CultureInvariant)]
+    private static partial Regex DurationPattern();
+
+    [GeneratedRegex(@"^(?<n>[0-9]{1,6}(?:[.,][0-9]{1,2})?)\s*(?<unit>dk|dak|dakika|min|m|sa|saat|s|h|gün|gun|g)\.?(?:\s*sonra)?$", RegexOptions.CultureInvariant)]
+    internal static partial Regex RelativePattern();
 }

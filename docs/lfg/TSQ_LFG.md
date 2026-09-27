@@ -16,28 +16,78 @@ katılım, geçmiş/itibar, otomatik eşleştirme.
 
 ## Kullanım
 
-```
-/ekip oyun:Deadlock kisi:6
-/ekip oyun:Deadlock kisi:6 baslangic:2 saat sonra
-/ekip oyun:Deadlock kisi:6 tarih_saat:05.10.2026 21:30
-/ekip oyun:Deadlock kisi:6 tarih_saat:05.10.2026 21:30 hatirlat_30dk:True baslangicta_etiketle:True ses_kanali:#Deadlock
-```
+`/ekip` parametresizdir: yazınca ilan **açılmaz**, bir form açılır. Discord bir modalda en fazla **5** üst düzey bileşene
+izin verir (Discord API: modal `components` 1–5; her alan bir `Label` + metin girişi), bu yüzden akış iki adımdır:
 
-| Seçenek | Kural |
+1. **Form (modal)** — *Ekip İlanı Oluştur*
+
+   | Alan | Kural |
+   |---|---|
+   | Oyun / Etkinlik | serbest metin, 2–50 karakter (kontrol/format karakterleri atılır, boşluklar sadeleşir) |
+   | Kişi sayısı | toplam ekip, **sahip dahil**; 2 … `Lfg:MaxPlayersPerListing` (varsayılan 20, üst sınır 50); yalnızca rakam |
+   | Detay | isteğe bağlı, en fazla 200 karakter |
+   | Başlangıç | isteğe bağlı, **tek alan**: boş / `şimdi` = şimdi · göreli `30 dk`, `45 dakika`, `1 saat`, `1,5 saat` / `1.5 saat`, `2 saat (sonra)`, `1 gün` · tarih `05.10.2026 21:30` (GG.AA.YYYY SS:DD) veya ISO `2026-10-05 21:30`. Göreli başlangıç için birim zorunludur (`30` tek başına tarih sayılır ve reddedilir; `d` birim değildir — dakika mı gün mü belirsiz); büyük harf (`ŞİMDİ`, `30 DAKİKA`) de olur; doğal dil ayrıştırıcısı yoktur |
+   | Süre (saat) | isteğe bağlı: `1`, `2` veya `3` (`2 saat` da olur); boşsa `Lfg:DefaultExpirationMinutes` (varsayılan 120). Planlı ilanda **başlangıçtan itibaren** sayılır |
+
+2. **Ayarlar (yalnızca formu gönderene görünür mesaj)** — formun özeti ve Discord'un yerel bileşenleri:
+   bildirim seçimi (çoklu seçim: *⏰ 30 dk önce hatırlat*, *🚀 Başladığında etiketle*; yalnızca ileri bir başlangıçta
+   gösterilir), ses kanalı seçici (yalnızca ses kanalları, isteğe bağlı) ve **[İlanı Oluştur] [✏️ Formu Düzenle] [İptal]**.
+   *Formu Düzenle* aynı formu yazılanlarla yeniden açar.
+
+Form gönderilince hiçbir şey kaydedilmez: yazılanlar oluşturma kurallarının aynısıyla (`LfgService.CheckCreateAsync`)
+denetlenir; hata varsa Türkçe neden ve *Formu Düzenle* düğmesi gösterilir. **İlanı Oluştur** mevcut
+`LfgService.CreateAsync` akışını çalıştırır (kanal kısıtı, kişi başı aktif ilan sınırı, sahip ilk Katılan, `BEGIN
+IMMEDIATE`, özel tarih/saat dilimi, bildirimler, ses doğrulaması) ve kart kanala herkese açık bir takip mesajı olarak
+**ping'siz** gönderilir; mesaj kimliği kaydedilir (bot kartı sonra kendisi düzenler). İlan yalnızca Discord kartı
+kesin olarak reddettiyse (4xx) silinir (kimse görmedi) ve ayarlar mesajı yeniden denenebilir kalır. Başka her hatada
+(zaman aşımı, 5xx) Discord kartı yine de oluşturmuş olabilir: kanalın son 20 mesajında bu ilanın kartı (Katıl düğmesi
+kimliği) aranır ve bulunursa kaydedilir; bulunamazsa ilan **tutulur** (boş geçmiş kanıt değildir — Read Message History
+yoksa Discord boş liste döner, mesaj bir an sonra da görünebilir): ikinci kart açılmaz, kartın ilk tıklaması mesaj
+kimliğini kaydeder; kart gerçekten yoksa ilan en geç süresi dolunca kapanır — planlı ilanda bu, başlangıç + süre kadar
+(en fazla ~1 yıl) sürebilir ve o süre sahibin aktif ilan haklarından birini tutar; bu nadir durum kabul edilen risktir
+(yanlış mesaja bağlama ya da ikinci kart yerine). Böyle bir ilanın bildirimi yalnızca sahibini (tek Katılan) etiketler. Kanal kısıtı ve aktif ilan sınırı formu açmadan önce de
+denetlenir; kimse boşuna form doldurmaz.
+
+**Taslak.** Adımlar arasındaki form, veritabanına değil **bellekte** kısa ömürlü bir taslakta durur (`LfgFormDrafts`):
+128 bit rastgele kimlik, yalnızca açan kullanıcı + sunucu için geçerli (kopyalanan/tahmin edilen kimlik başkası için
+yoktur), son kullanımdan 30 dk sonra düşer, kullanıcı başına en fazla 3 ve toplamda en fazla 2000; restart'ta kaybolur
+(kullanıcı formu yeniden açar). Kaydederken taslak alınır: çift tıklama tek kayıt yapar; reddedilirse taslak geri konur.
+Özel kimliklerde (`tsq:lfg:form:<taslak>`, `tsq:lfg:draft:save|back|cancel|notify|voice:<taslak>`) yalnızca taslak
+kimliği bulunur; ne yapılabileceğine her adımda sunucu karar verir.
+
+### İlanı düzenle
+
+Aktif (Açık **veya Dolu**) her kartta ikinci satırda **✏️ Düzenle** vardır (`tsq:lfg:edit:<id>`). Düğme herkese görünür,
+ama yetki sunucu tarafında: **yalnızca ilan sahibi** (`actor == OwnerUserId`). Moderatör/yönetici ilanı kapatabilir,
+içeriğini değiştiremez → `Bu ilanı yalnızca ilan sahibi düzenleyebilir.` Başka sunucunun ilanı "yok" sayılır.
+Kapalı / süresi dolmuş / Orphaned ilan → `Bu ilan artık düzenlenemez.`
+
+Sahip aynı formu **mevcut değerlerle dolu** açar (başlangıç sunucunun saat diliminde `GG.AA.YYYY SS:DD`; "şimdi"
+ilanlarında boş; süre tam saatse `2`, değilse `90 dk`), ardından aynı ayarlar adımı mevcut bildirim tercihleri ve ses
+kanalıyla gelir → **Kaydet**. Değişebilenler: oyun, detay, kişi sayısı, başlangıç, süre, iki bildirim tercihi, ses kanalı.
+Sahip, katılımcılar ve durum düzenlenemez. Başarılıysa sahibe `✅ İlan güncellendi.` ve **aynı kart** bot tarafından
+yeniden çizilir (yeni mesaj yok, kanala "güncellendi" duyurusu yok, ping yok, katılımcı listesi korunur).
+
+Kurallar (hepsi kayıt anında, yazma kilidi içinde **veritabanındaki güncel duruma** göre; formun açıldığı andaki görüntü
+karar vermez; hepsi-ya-hiç — reddedilen düzenleme hiçbir alanı değiştirmez):
+
+| Konu | Kural |
 |---|---|
-| `oyun` | serbest metin, 2–50 karakter (kontrol/format karakterleri atılır, boşluklar sadeleşir) |
-| `kisi` | toplam ekip büyüklüğü, **sahip dahil**; 2 … `Lfg:MaxPlayersPerListing` (varsayılan 20, üst sınır 50) |
-| `detay` | isteğe bağlı, tek satır, en fazla 200 karakter |
-| `baslangic` | isteğe bağlı, göreli seçim: Şimdi (varsayılan) · 30 dk · 1 · 1,5 · 2 · 3 · 4 · 6 · 8 · 12 · 24 saat sonra |
-| `tarih_saat` | isteğe bağlı, özel başlangıç: **GG.AA.YYYY SS:DD**, örn. `05.10.2026 21:30` (ek olarak ISO `2026-10-05 21:30`). `baslangic` ile aynı anda kullanılamaz |
-| `sure` | isteğe bağlı: 1 / 2 / 3 saat; boşsa `Lfg:DefaultExpirationMinutes` (varsayılan 120). Planlı ilanda **başlangıçtan itibaren** sayılır |
-| `hatirlat_30dk` | isteğe bağlı, varsayılan kapalı: başlangıçtan 30 dk önce katılanları etiketle (yalnızca ileri bir `baslangic` ile) |
-| `baslangicta_etiketle` | isteğe bağlı, varsayılan kapalı: başladığında katılanları etiketle (yalnızca ileri bir `baslangic` ile) |
-| `ses_kanali` | isteğe bağlı, Discord'un kanal seçicisi (yalnızca ses kanalları); sunucu tarafında bu guild'in gerçek bir ses kanalı mı diye yeniden denetlenir. Stage kanalları V1'de yok |
+| Kişi sayısı | yeni değer ≥ **Katılan** sayısı (Belki sayılmaz). Eşitse ilan **Dolu**, fazlaysa **Açık**. Az ise `Kişi sayısı, katılmış oyuncu sayısından (N) az olamaz.` Eşzamanlı katılımlar aynı kilitle sıralanır: aşırı rezervasyon olmaz |
+| Başlangıç | yalnızca etkinlik **henüz başlamadıysa** değişir (göreli, tarih veya boş = şimdi başlat). Başladıysa (`EventAt ≤ şimdi`, "şimdi" ilanları oluşturulduğu an başlamış sayılır, ya da başlangıç bildirimi işlendiyse) → `Etkinlik başladıktan sonra başlangıç zamanı değiştirilemez.`; diğer alanlar yine düzenlenir. Yeni başlangıç geçmişe alınamaz (tarih en erken şimdi + 1 dk) |
+| Süre / bitiş | `ExpiresAt = (EventAt ?? CreatedAt) + süre`: "şimdi" ilanında süre **oluşturulma anından** sayılır, her düzenleme ilanı baştan başlatmaz (90. dakikada süreyi 2 saate çekmek bitişi `şimdi + 2 saat` yapmaz). Bitiş geçmişte kalırsa reddedilir. Dokunulmayan süre (ör. 1, 2, 3 dışındaki yapılandırılmış varsayılan) aynen kalır |
+| Bildirimler | bkz. [Etkinlik bildirimleri](#etkinlik-bildirimleri) → *Düzenleme* |
+| Ses kanalı | eklenebilir, değiştirilebilir, kaldırılabilir; her kayıtta (değişmese de) bu sunucunun gerçek bir ses kanalı mı diye yeniden denetlenir. İlan kapanmaz, katılımcılar etkilenmez, kart yeniden çizilir; sonraki hatırlatma/başlangıç bildirimi yeni kanalı kullanır; gönderilmiş bildirim düzenlenmez |
 
-Etiketleme seçeneği "Şimdi" ile istenirse kısa hata: `Etiketleme seçenekleri yalnızca ileri bir başlangıç zamanı
-seçildiğinde kullanılabilir.` Neden modal değil: depoda modal kalıbı yok ve slash seçenekleri Discord'un kendi
-doğrulamasını (sayı aralığı, uzunluk, seçimler) istemci tarafında verir.
+Aynı formu ikinci kez kaydetmek `Değişiklik yok; ilan aynı kaldı.` der (sürüm ve kart değişmez). **Her alan** (oyun,
+detay, kişi, başlangıç, süre, iki bildirim tercihi, ses kanalı) formun **açıldığı andaki** haliyle karşılaştırılır;
+dokunulmamış alan kayıtta veritabanındaki **güncel** değerini korur (aynı tarih başka yazımla — `5.10.2026 21:30` — ya da
+başlangıcı boş formda `şimdi` da dokunulmamış sayılır; metinlerde büyük/küçük harf değişikliği düzenlemedir): iki açık
+düzenleme formundan eskisi, yenisinin değiştirdiği hiçbir alanı geri almaz (kayıp güncelleme yok). Değiştirilen alan
+güncel duruma göre doğrulanır. Dokunulmamış kişi sayısı, yapılandırılan üst sınır sonradan düşürülmüş olsa da geçerli kalır.
+Form gönderildiğindeki denetim yazma kilidi almaz ve hiçbir şey kaydetmez; karar kayıtta kilit altında yeniden verilir.
+Silinmiş bir ses kanalı düzenleme ayarlarında yeniden önerilmez; ayar "yok" bırakılırsa kayıtta kaldırılır (başka bir form o arada yeni bir kanal seçtiyse o kanal korunur). Dokunulmamış kanal, kayıtta saklanacak kanal olarak yeniden doğrulanır; form açıldıktan sonra silinmişse kayıt reddedilir (form yeniden açılınca "yok" ile kaydedilebilir). Saat dilimi çözülemezse (bozuk ayar) yazılan tarih
+oluşturmadaki gibi reddedilir.
 
 ### Başlangıç ve süre
 
@@ -45,14 +95,16 @@ doğrulamasını (sayı aralığı, uzunluk, seçimler) istemci tarafında verir
 bir kaynaktan gelir (`LfgStart`: şimdi · göreli · mutlak); nereden geldiği sonrasında önemsizdir — süre dolumu,
 bildirimler, kart ve ses aynı `EventAt` hattını kullanır.
 
-| Verilen | Sonuç |
+| Başlangıç alanı | Sonuç |
 |---|---|
-| hiçbiri | Şimdi: `EventAt = null`, `ExpiresAt = CreatedAt + süre` (V1 davranışı) |
-| yalnız `baslangic` | `EventAt = şimdi + seçilen gecikme` (Şimdi seçilirse `null`) |
-| yalnız `tarih_saat` | `EventAt` = girilen tarih/saat, sunucunun saat diliminde |
-| ikisi birden | reddedilir: `Başlangıç için ya hazır süreyi ya da özel tarih/saat alanını kullan. İkisini aynı anda seçemezsin.` (domain doğrulaması; boş `tarih_saat` verilmemiş sayılır) |
+| boş / `şimdi` | Şimdi: `EventAt = null`, `ExpiresAt = CreatedAt + süre` (V1 davranışı) |
+| göreli (`30 dk`, `2 saat`, …) | `EventAt = şimdi + gecikme` (1 dk … 365 gün; kaydetme anına göre) |
+| tarih (`05.10.2026 21:30`) | `EventAt` = girilen tarih/saat, sunucunun saat diliminde |
 
-Planlıysa `ExpiresAt = EventAt + süre`: ör. `tarih_saat: 05.10.2026 21:30`, `sure: 2 saat` → ilan 05.10.2026 23:30'da
+Domain, göreli başlangıç ile tarihin aynı anda verilmesini yine reddeder (`LfgRules.ResolveStart`); form tek alan olduğu
+için kullanıcı bunu yapamaz.
+
+Planlıysa `ExpiresAt = EventAt + süre`: ör. Başlangıç `05.10.2026 21:30`, Süre `2` → ilan 05.10.2026 23:30'da
 kapanır; başlangıçtan önce asla expire olmaz. 30 dk hatırlatma `EventAt − 30 dk`'da (21:00), başlangıç bildirimi `EventAt`'te.
 
 ### Özel tarih/saat ve saat dilimi
@@ -73,7 +125,8 @@ kapanır; başlangıçtan önce asla expire olmaz. 30 dk hatırlatma `EventAt �
 
 ## Kart
 
-Kart, `/ekip` komutunun **herkese açık etkileşim yanıtıdır** (ayrı kanal mesajı yok). Aynı renderer her oyun için:
+Kart, formun **İlanı Oluştur** tıklamasına verilen herkese açık takip (follow-up) mesajıdır (formun kendisi yalnızca
+açana görünür; `/ekip` önceden komutun kendi yanıtıydı). Aynı renderer her oyun için:
 
 ```
 🎮 Deadlock
@@ -89,14 +142,17 @@ Katılanlar
 🗓️ Başlangıç: 5 Ekim 2026 Pazartesi 21:30 • 8 gün içinde
 🔊 Ses Odası: #Deadlock
 ⏰ 4 saat içinde kapanır
-[Katıl] [Belki] [Ayrıl] [🔊 Ses Odası] [İlanı Kapat]
+[Katıl] [Belki] [Ayrıl] [🔊 Ses Odası]
+[✏️ Düzenle] [İlanı Kapat]
 ```
 
 - Kapasite yalnızca **Katılanlar** sayısıdır (`3 / 6`); Belki listesi ayrı gösterilir ve sayılmaz. Belki listesinin ilk 20
   kişisi gösterilir (`(+N)`).
-- Dolu: `✅ Ekip tamamlandı`, `[Katıl]` devre dışı; `[Belki]`, `[Ayrıl]`, `[🔊 Ses Odası]`, `[İlanı Kapat]` açık.
-- Ses kanalı yoksa dört buton (`Katıl · Belki · Ayrıl · İlanı Kapat`), varsa tam beş (Discord'un satır başına beş buton
-  sınırı; tek satır).
+- Dolu: `✅ Ekip tamamlandı`, `[Katıl]` devre dışı; `[Belki]`, `[Ayrıl]`, `[🔊 Ses Odası]`, `[✏️ Düzenle]`, `[İlanı Kapat]` açık.
+- İki satır: oyuncuların düğmeleri (`Katıl · Belki · Ayrıl`, ses kanalı varsa `· 🔊 Ses Odası`) ve ilanın düğmeleri
+  (`✏️ Düzenle · İlanı Kapat`). Satır ayrımı Core'daki `MessageButton.NewRow` ile yapılır (varsayılan kapalı ve kayıtlı
+  yüklerden dışarıda bırakılır: diğer modüllerin buton yerleşimi ve yük hash'leri değişmez). Dağıtımdan önce açılmış
+  kartlar ilk yeniden çiziminde yeni düzene geçer.
 - Oyuncular Discord kullanıcı kimliğiyle tutulur; kartta `<@id>` mention'ı olarak (her izleyici güncel görünen adı görür)
   **embed içinde** gösterilir. Kartın her gönderimi ve düzenlemesi (oluşturma, katıl, belki, ayrıl, kapat, süre dolumu)
   `allowed_mentions` boş gider: **kart asla ping atmaz**. Görünen ad kalıcı veri olarak saklanmaz.
@@ -159,6 +215,14 @@ Açıkça istenirse (varsayılan kapalı) iki **yeni** mesaj — kart düzenlenm
   değildir.
 - **Modül kapalı** (veya guild izin listesinde değil) iken vadesi gelen bildirim `Skipped` olur; modül saatler sonra açılsa
   bile geçmiş bildirimler toplu gönderilmez.
+- **Düzenleme**: bir bildirim **bir kez** işlenir. Henüz işlenmemiş (`Pending`) hatırlatma/başlangıç bildirimi yeni
+  `EventAt`'e göre planlanır. İşlenmiş olan (`Queued` = gönderildi/kuyrukta, `Skipped` = atlandı) yeni başlangıç, kapatıp
+  açma veya tekrar kaydetme ile **sıfırlanmaz**: aynı ilan için ikinci 30 dk hatırlatması olmaz. Kuyruktaki bir bildirimi
+  kapatmak onu outbox'ta iptal eder (kapatma ile aynı anlam: bekleyen iptal, gönderilmekte/uzlaştırılmakta olan yeniden
+  denenmez). Anı geçmiş bir bildirimi sonradan açmak onu `Skipped` olarak tüketir; geç gönderilmez. Başlangıç zamanı etkinlik
+  başladıktan (veya başlangıç bildirimi işlendikten) sonra değişmez, bu yüzden başlangıç bildirimi de tekrar etmez.
+  Başlangıç değişirken kuyrukta bekleyen (henüz teslim edilmemiş) hatırlatma eski saati yazdığı için outbox'ta iptal edilir
+  ve yeniden planlanmaz (bir eksik hatırlatma kabul, yanlış saatli ya da ikinci hatırlatma değil).
 - **Dayanıklılık / tekrar yok**: `LfgNoticePlanner` tek bir yazma transaction'ında ilanı yeniden okur, Joined oyuncuları
   alıcı yapar, **mevcut outbox'a** satır ekler ve bildirimi `Queued` işaretler (`ReminderState` / `StartNoticeState` +
   zaman). "Gönder, sonra işaretle" penceresi yoktur; teslimi outbox yapar (modül kapısı, izin listesi, `InFlight` claim,
@@ -220,16 +284,16 @@ olarak ayrıca gözlemlenmelidir.
 ## Arka plan düzenlemesi (kullanıcı etkileşimi gerekmez)
 
 Süre dolumu, onaylı kapatma, ses kanalının kaldırılması ve restart sonrası telafi kartı etkileşim olmadan günceller.
-`/ekip` yanıtının gerçek kanal ve mesaj kimliği `GetOriginalResponseAsync` ile saklanır (bir buton tıklaması yalnızca
-kimlik boşsa, yalnızca aynı guild'de ve yalnızca botun kendi kart mesajı için tamamlar; bildirim mesajları asla kart
-sayılmaz). Düzenleme **botun kendi REST kimliğiyle** `PATCH /channels/{kanal}/messages/{mesaj}` üzerinden yapılır;
+Kart mesajının kanal ve mesaj kimliği takip mesajı gönderilince saklanır (belirsiz bir hatada son 20 mesajdan tam kimlik
+eşleşmesiyle; bir buton tıklaması yalnızca kimlik boşsa, yalnızca aynı guild'de ve yalnızca botun kendi kart mesajı için
+tamamlar; bildirim mesajları asla kart sayılmaz). Düzenleme **botun kendi REST kimliğiyle** `PATCH /channels/{kanal}/messages/{mesaj}` üzerinden yapılır;
 etkileşim/webhook token'ı kullanılmaz (`DiscordEditRouteContractTests`). `Unknown Message/Channel` → `Orphaned`;
 yetki/erişim kaybı, 429, 5xx, zaman aşımı → uyarı, worker aralığıyla en fazla 8 deneme. Başarısız bir düzenleme ilanın
 durumunu asla değiştirmez.
 
 ## Kart outbox'sız, bildirimler outbox'lu
 
-LFG kartı kullanıcının kendi komutuna verilen **etkileşim yanıtıdır**: anında görünür, kanal izni gerektirmez,
+LFG kartı kullanıcının kendi etkileşimine verilen **takip mesajıdır**: anında görünür, kanal izni gerektirmez,
 tekilleştirilecek bir "gönderim" yoktur; bot sonrasında yalnızca **düzenler** (`LfgCardSync`, yalnızca `EditAsync`
 ve tek okumalık `GetPresenceAsync`). Etkinlik bildirimleri ise planlanmış, yeni, ping atan mesajlardır; bu yüzden mevcut
 outbox'tan gider (yalnızca `LfgNoticePlanner` outbox'a yazar — mimari test). İkinci bir kuyruk yoktur.
@@ -269,6 +333,11 @@ ilanları oyuncularıyla siler (gönderilmemiş bildirimleri de durdurulur), mod
 bildirim satırlarını kaldırır (o an gönderilmekte/uzlaştırılmakta olan bir satır bittikten 24 saat sonra silinir). Teslimi
 uzlaştırılamayıp bırakılan bildirim satırları da 24 saat sonra budanır. Sunucudan ayrılma sonrası saklama süresi
 dolunca guild'in tüm LFG verisi silinir.
+
+Kartı Discord tarafından kesin reddedilip silinen ilanın arada planlanmış bildirimi de iptal edilir.
+
+Form taslakları (adımlar arasındaki yazılanlar ve seçimler) **hiçbir zaman veritabanına yazılmaz**: yalnızca bot
+sürecinin belleğinde, son kullanımdan en fazla 30 dakika tutulur ve restart'ta kaybolur (`LfgFormDrafts`).
 
 ## Günlükler
 

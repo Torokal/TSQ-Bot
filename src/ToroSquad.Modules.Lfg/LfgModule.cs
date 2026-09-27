@@ -12,8 +12,9 @@ using ToroSquad.Modules.Lfg.Persistence;
 namespace ToroSquad.Modules.Lfg;
 
 /// <summary>
-/// TSQ LFG — Oyuncu Bul: /ekip opens a group-finder listing for ANY game or activity (free-text game name and details,
-/// team size, optional duration); members join/leave with buttons, the owner or a moderator closes it, and it expires on
+/// TSQ LFG — Oyuncu Bul: /ekip opens a form for a group-finder listing for ANY game or activity (free-text game name and
+/// details, team size, start, duration); the owner can edit it later (✏️ Düzenle); members join/leave with buttons, the owner
+/// or a moderator closes it, and it expires on
 /// its own (docs/lfg/TSQ_LFG.md). One generic lifecycle — there is no game-specific model, handler or field, and a new game
 /// never needs a code change. A separate feature module: depends only on the shared TSQ layers. Off by default in every
 /// guild (/modules enable lfg).
@@ -40,7 +41,7 @@ public sealed class LfgModule : IToroModule
         OptionalBotPermissions: OptionalPermissions,
         AdminCommands: ["lfg-admin"]);
 
-    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LfgCommands), typeof(LfgAdminCommands)];
+    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LfgFormCommands), typeof(LfgCommands), typeof(LfgAdminCommands)];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
@@ -52,6 +53,7 @@ public sealed class LfgModule : IToroModule
         services.AddSingleton<LfgNoticeRenderer>();
         services.AddSingleton<LfgExpiryWorker>();
         services.AddScoped<LfgService>();
+        services.AddSingleton<LfgFormDrafts>();
         services.AddScoped<LfgCardSync>();
         services.AddScoped<LfgNoticePlanner>();
         services.AddScoped<LfgConfigService>();

@@ -58,8 +58,9 @@ invite link and no global command registration. The source code is public under 
   intent only) — a throttled one-read check per active card (≤ every 5 min) and an immediate check of the caller's cards at
   the limit orphan them. Offline contract test of the edit route (bot-token PATCH on the channel message, no interaction
   token, allowed_mentions empty).
-- **NOT VERIFIED_LIVE**: no real Discord interaction yet (commands not synced; module not enabled). In particular the bot
-  editing its own `/ekip` response through the channel endpoint (expiry/close) has not been observed live.
+- **Production (2026-09-27)**: PR #12 merged and deployed, `/ekip` + `/lfg-admin` synced to the main guild; enabling the
+  module (`/modules enable lfg`) and the live checks are done by the owner in Discord.
+- **NOT VERIFIED_LIVE**: the bot editing its own card through the channel endpoint (expiry/close) has not been observed live.
 - **V2 IMPLEMENTED / TESTED_OFFLINE**: Maybe RSVP (never a slot, never pinged), relative scheduled start (`EventAt`;
   `ExpiresAt = EventAt + duration`), opt-in 30-minute and start notices through the outbox (current Joined players only,
   once across restarts, never late, none for ended listings or a disabled module), `MentionPolicy.ExplicitUsers` (only
@@ -69,6 +70,15 @@ invite link and no global command registration. The source code is public under 
   the existing guild time zone (`/setup`, default Europe/Istanbul), DST gaps/overlaps refused, 1 minute – 1 year ahead,
   exclusive with `baslangic`; feeds the same `EventAt` (expiry, notices, card, voice unchanged). No new migration.
 - **NOT VERIFIED_LIVE**: real user pings, the voice move and the channel link behaviour in Discord clients.
+- **Form + owner edit IMPLEMENTED / TESTED_OFFLINE** (`feat/lfg-modal-edit`): `/ekip` has no options and opens a modal
+  (game, players, details, one start field — empty/now, `30 dk`, `1,5 saat`, `2 saat`, `05.10.2026 21:30` — and duration);
+  Discord's five-component modal limit puts the two notice opt-ins and the voice channel in a private settings step
+  (native selects) before **İlanı Oluştur**; drafts live only in memory (30 min, owner + guild bound). The card gains
+  **✏️ Düzenle** (second row, via the additive `MessageButton.NewRow`): owner-only, same form prefilled; size never below
+  the Joined players, start only before the event, `ExpiresAt = (EventAt ?? CreatedAt) + duration`, handled notices never
+  repeat or revive, same card redrawn without pings. No migration.
+- **NOT VERIFIED_LIVE**: the modal and settings step in Discord clients, the public follow-up card after the settings step
+  and the bot's later edit of that card.
 - Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
 
 ## What has been verified against real Discord / real APIs

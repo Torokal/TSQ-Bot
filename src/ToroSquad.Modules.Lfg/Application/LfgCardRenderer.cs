@@ -11,8 +11,8 @@ namespace ToroSquad.Modules.Lfg.Application;
 /// players, the Maybe players, the optional start and voice channel, and the state. Players are rendered as user mentions
 /// (Discord shows each viewer the current display name) inside the embed, and every message goes out with
 /// allowed_mentions = none, so neither the first post nor any edit pings anyone. Times are Discord's native timestamps
-/// (each viewer's own time zone); the bot never edits the card just to tick a clock. At most five buttons, one row:
-/// Katıl · Belki · Ayrıl · (🔊 Ses Odası) · İlanı Kapat.
+/// (each viewer's own time zone); the bot never edits the card just to tick a clock. Two rows of buttons: the players'
+/// Katıl · Belki · Ayrıl · (🔊 Ses Odası), then the listing's ✏️ Düzenle (owner only, checked server-side) · İlanı Kapat.
 /// </summary>
 public sealed class LfgCardRenderer(ILocalizer localizer)
 {
@@ -22,6 +22,7 @@ public sealed class LfgCardRenderer(ILocalizer localizer)
     public const string LeavePrefix = "tsq:lfg:leave:";
     public const string VoicePrefix = "tsq:lfg:voice:";
     public const string ClosePrefix = "tsq:lfg:close:";
+    public const string EditPrefix = "tsq:lfg:edit:";
 
     public const uint OpenColor = 0x57F287;
     public const uint FullColor = 0x5865F2;
@@ -83,6 +84,7 @@ public sealed class LfgCardRenderer(ILocalizer localizer)
         };
         if (listing.VoiceChannel is not null)
             buttons.Add(new(L("lfg.button.voice"), VoicePrefix + id, null, Disabled: !listing.IsActive));
+        buttons.Add(new(L("lfg.button.edit"), EditPrefix + id, null, Disabled: !listing.IsActive, NewRow: true));
         buttons.Add(new(L("lfg.button.close"), ClosePrefix + id, null, Disabled: !listing.IsActive, Style: MessageButtonStyle.Danger));
         return new OutgoingMessage(null, embed, MentionPolicy.None, buttons);
     }

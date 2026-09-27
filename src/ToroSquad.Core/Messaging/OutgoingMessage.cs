@@ -81,14 +81,16 @@ public enum MessageButtonStyle
 }
 
 /// <summary>
-/// <see cref="Style"/> is left out of the stored payload while it is the default, so existing payload hashes are unchanged.
+/// <see cref="Style"/> and <see cref="NewRow"/> are left out of the stored payload while they are the default, so existing
+/// payload hashes are unchanged. Buttons fill rows of five in order; <see cref="NewRow"/> starts a new row at this button.
 /// </summary>
 public sealed record MessageButton(
     string Label,
     string? CustomId,
     string? Url,
     bool Disabled = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] MessageButtonStyle Style = MessageButtonStyle.Secondary);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] MessageButtonStyle Style = MessageButtonStyle.Secondary,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NewRow = false);
 
 /// <summary>SDK-agnostic outgoing message. Rendered by modules, delivered by an <see cref="IMessageTransport"/>.</summary>
 public sealed record OutgoingMessage(

@@ -13,8 +13,8 @@ using ToroSquad.Modules.Lfg.Domain;
 namespace ToroSquad.Modules.Lfg.Commands;
 
 /// <summary>
-/// /ekip and the card buttons. The card is the public response to /ekip (no extra channel message); Katıl/Ayrıl redraw it in
-/// the same interaction and answer the clicker privately. Every click is re-validated by <see cref="LfgService"/> — the
+/// The card buttons (the /ekip form and ✏️ Düzenle are in <see cref="LfgFormCommands"/>). Katıl/Belki/Ayrıl redraw the card
+/// in the same interaction and answer the clicker privately. Every click is re-validated by <see cref="LfgService"/> — the
 /// button's own state (enabled, label) is never trusted. Refusals are ephemeral and nothing here ever pings.
 /// </summary>
 [ToroModule(LfgModule.ModuleIdValue)]
@@ -31,61 +31,8 @@ public sealed class LfgCommands(
     public const string KeepOpenPrefix = "tsq:lfg:close-no:";
     private const int MaxRedraws = 3;
 
-    /// <summary>Bound for the at-limit card check: the /ekip answer must still arrive within Discord's 3 seconds.</summary>
-    private static readonly TimeSpan LimitRecheckBudget = TimeSpan.FromMilliseconds(1500);
-
     /// <summary>allowed_mentions = none on EVERY create and edit of a card (players are embed mentions, which never ping anyway).</summary>
     private static AllowedMentions NoPings => DiscordConversions.ToAllowedMentions(MentionPolicy.None);
-
-    [SlashCommand("ekip", "Find players: open a group listing for any game")]
-    public async Task CreateAsync(
-        [Summary("oyun", "Game or activity (e.g. Deadlock, CS2, Valheim)"), MinLength(LfgRules.GameNameMinLength), MaxLength(LfgRules.GameNameMaxLength)] string oyun,
-        [Summary("kisi", "Total team size including you"), MinValue(LfgRules.MinPlayers), MaxValue(LfgRules.HardMaxPlayers)] int kisi,
-        [Summary("detay", "Short details: mode, rank, roles, plan…"), MaxLength(LfgRules.DetailsMaxLength)] string? detay = null,
-        [Summary("baslangic", "When it starts (empty: now)"), Choice("Now", 0), Choice("In 30 minutes", 30), Choice("In 1 hour", 60), Choice("In 1.5 hours", 90),
-         Choice("In 2 hours", 120), Choice("In 3 hours", 180), Choice("In 4 hours", 240), Choice("In 6 hours", 360), Choice("In 8 hours", 480),
-         Choice("In 12 hours", 720), Choice("In 24 hours", 1440)] int? baslangic = null,
-        [Summary("tarih_saat", "Custom start, e.g. 05.10.2026 21:30 (server time zone)"), MaxLength(40)] string? tarihSaat = null,
-        [Summary("sure", "How long the listing stays open (from the start; empty: default)"), Choice("1 hour", 60), Choice("2 hours", 120), Choice("3 hours", 180)] int? sure = null,
-        [Summary("hatirlat_30dk", "Ping the joined players 30 minutes before the start")] bool remindBefore = false,
-        [Summary("baslangicta_etiketle", "Ping the joined players when it starts")] bool pingAtStart = false,
-        [Summary("ses_kanali", "Voice channel for the group"), ChannelTypes(ChannelType.Voice)] IChannel? voiceChannel = null)
-    {
-        // No defer: validation and the insert take milliseconds, and a refusal must stay private while the card is public.
-        var input = new LfgCreateInput(oyun, kisi, detay, sure, baslangic, remindBefore, pingAtStart, voiceChannel is null ? null : new ChannelId(voiceChannel.Id), tarihSaat);
-        var created = await lfg.CreateAsync(Actor, Here, input, CancellationToken.None);
-        if (created.Result.MessageKey == "lfg.create.limit" && await OwnerCardWasDeletedAsync())
-            created = await lfg.CreateAsync(Actor, Here, input, CancellationToken.None);
-        if (!created.Result.Succeeded || created.Listing is not { } listing)
-        {
-            await ReplyResultAsync(created.Result);
-            return;
-        }
-
-        var card = renderer.Render(listing, await LangAsync());
-        try
-        {
-            await RespondAsync(embed: DiscordConversions.ToEmbed(card.Embed), components: DiscordConversions.ToComponents(card.Buttons),
-                allowedMentions: NoPings);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            // A lost response may still have been posted: keep the listing if Discord shows the card, drop it otherwise.
-            if (await OriginalResponseAsync() is not { } posted)
-            {
-                await lfg.DiscardAsync(listing.Id, CancellationToken.None);
-                throw;
-            }
-
-            await lfg.AttachMessageAsync(listing.Id, Actor.GuildId, Here, posted, CancellationToken.None);
-            return;
-        }
-
-        if (await OriginalResponseAsync() is { } message)
-            await lfg.AttachMessageAsync(listing.Id, Actor.GuildId, Here, message, CancellationToken.None);
-        else
-            logger.LogWarning("LFG listing {Listing}: card posted but its message id is unknown; the first button click records it", listing.Id);
-    }
 
     [ComponentInteraction(LfgCardRenderer.JoinPrefix + "*", ignoreGroupNames: true)]
     public Task JoinAsync(string id) => CardActionAsync(id, lfg.JoinAsync);
@@ -166,20 +113,6 @@ public sealed class LfgCommands(
     }
 
     private ChannelId Here => new(Context.Interaction.ChannelId ?? Context.Channel.Id);
-
-    /// <summary>At the limit: were any of the caller's active cards deleted in Discord? (Orphans them; bounded in time.)</summary>
-    private async Task<bool> OwnerCardWasDeletedAsync()
-    {
-        using var budget = new CancellationTokenSource(LimitRecheckBudget);
-        try
-        {
-            return await cards.VerifyOwnerCardsAsync(Actor.GuildId, Actor.UserId, budget.Token) > 0;
-        }
-        catch (OperationCanceledException)
-        {
-            return false; // could not tell in time: the limit answer stands
-        }
-    }
 
     private async Task CardActionAsync(string id, Func<ActorContext, long, CancellationToken, Task<LfgResult>> action)
     {

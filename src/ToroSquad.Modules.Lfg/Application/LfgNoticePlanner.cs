@@ -140,10 +140,10 @@ public sealed class LfgNoticePlanner(
     /// request did reach Discord it is recorded as Sent, otherwise it ends as Expired — never retried, never re-sent.
     /// The only notice a close cannot stop is the one Discord is receiving at that moment (one request's duration).
     /// </summary>
-    public static async Task<int> CancelPendingAsync(ToroDbContext db, long listingId, string reason, DateTimeOffset now, CancellationToken ct)
+    public static async Task<int> CancelPendingAsync(ToroDbContext db, long listingId, string reason, DateTimeOffset now, CancellationToken ct, string? kind = null)
     {
         var key = SourceKey(listingId);
-        var rows = db.Outbox.Where(o => o.ModuleId == LfgModule.ModuleIdValue && o.SourceKey == key);
+        var rows = db.Outbox.Where(o => o.ModuleId == LfgModule.ModuleIdValue && o.SourceKey == key && (kind == null || o.Kind == kind));
         var cancelled = await rows.Where(o => o.Status == OutboxStatus.Pending)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(o => o.Status, OutboxStatus.Cancelled)
