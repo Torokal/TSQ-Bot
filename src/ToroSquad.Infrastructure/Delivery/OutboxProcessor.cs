@@ -216,7 +216,7 @@ public sealed class OutboxProcessor(
         // The same rule for explicitly listed user pings (TSQ LFG notices): a missing ping is acceptable, a second one is not.
         if (message.Mentions.Users is { Count: > 0 } && row.ReconcileAttempts > 0)
         {
-            message = message with { Mentions = message.Mentions with { Users = null } };
+            message = message with { Mentions = message.Mentions.WithoutUserPings() };
             logger.LogWarning("Outbox {OutboxId} ref={Marker}: resend after an uncertain delivery goes out without user pings", row.Id, row.Marker);
         }
 

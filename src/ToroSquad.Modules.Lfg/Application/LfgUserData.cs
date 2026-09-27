@@ -19,7 +19,7 @@ namespace ToroSquad.Modules.Lfg.Application;
 /// pinged player are removed as well (they are otherwise pruned 24 h after delivery). Guild retention purges every LFG row
 /// of the guild.
 /// </summary>
-public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
+public sealed class LfgUserData(ToroDbContext db, TimeProvider clock) : IUserDataContributor
 {
     public ModuleId Module => LfgModule.ModuleIdTyped;
 
@@ -108,6 +108,10 @@ public sealed class LfgUserData(ToroDbContext db) : IUserDataContributor
         // Listings the user created (their own text): removed with all their players. A button on such a card then answers
         // "this listing no longer exists" and retires the buttons.
         var owned = Listings.Where(x => x.GuildId == guild.Value && x.OwnerUserId == user.Value);
+        // Their notices not delivered yet stop too, like on a close: a deleted listing must not ping anyone afterwards.
+        var now = clock.GetUtcNow();
+        foreach (var id in await owned.Select(x => x.Id).ToListAsync(cancellationToken))
+            await LfgNoticePlanner.CancelPendingAsync(db, id, "listing_deleted", now, cancellationToken);
         await Participants.Where(p => owned.Any(l => l.Id == p.ListingId)).ExecuteDeleteAsync(cancellationToken);
         deleted += await owned.ExecuteDeleteAsync(cancellationToken);
 

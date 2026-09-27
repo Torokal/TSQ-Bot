@@ -68,6 +68,7 @@ public sealed class LfgNoticePlanner(
             {
                 // One listing must not hold back every other listing's notices (its transaction rolled back; retried next pass).
                 logger.LogError(ex, "LFG listing {Listing}: notice planning failed", id);
+                db.ChangeTracker.Clear();
             }
         }
 
@@ -132,22 +133,31 @@ public sealed class LfgNoticePlanner(
     }
 
     /// <summary>
-    /// Cancels this listing's notices still waiting in the outbox (closed/orphaned listing): Pending, and DeliveryUnknown —
-    /// otherwise a reconciliation that finds nothing would resend it (pingless) for an ended listing. Bumps the outbox
-    /// version so a dispatcher that already read a Pending row cannot claim it afterwards. A row already InFlight (claimed,
-    /// request under way) cannot be recalled: that window is the duration of one Discord request.
+    /// Stops this listing's notices that have not been delivered (closed/orphaned/deleted listing).
+    /// A Pending row is cancelled, bumping the outbox version so a dispatcher that already read it cannot claim it afterwards.
+    /// An InFlight (request under way) or DeliveryUnknown (being reconciled) row cannot be recalled from Discord, and the
+    /// dispatcher's reload-and-reapply would overwrite a status change; instead its deadline is moved into the past: if the
+    /// request did reach Discord it is recorded as Sent, otherwise it ends as Expired — never retried, never re-sent.
+    /// The only notice a close cannot stop is the one Discord is receiving at that moment (one request's duration).
     /// </summary>
-    public static Task<int> CancelPendingAsync(ToroDbContext db, long listingId, string reason, DateTimeOffset now, CancellationToken ct)
+    public static async Task<int> CancelPendingAsync(ToroDbContext db, long listingId, string reason, DateTimeOffset now, CancellationToken ct)
     {
         var key = SourceKey(listingId);
-        return db.Outbox.Where(o => o.ModuleId == LfgModule.ModuleIdValue && o.SourceKey == key &&
-                                    (o.Status == OutboxStatus.Pending || o.Status == OutboxStatus.DeliveryUnknown))
+        var rows = db.Outbox.Where(o => o.ModuleId == LfgModule.ModuleIdValue && o.SourceKey == key);
+        var cancelled = await rows.Where(o => o.Status == OutboxStatus.Pending)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(o => o.Status, OutboxStatus.Cancelled)
                 .SetProperty(o => o.LastError, reason)
                 .SetProperty(o => o.NextAttemptAt, (DateTimeOffset?)null)
                 .SetProperty(o => o.UpdatedAt, now)
                 .SetProperty(o => o.Version, o => o.Version + 1), ct);
+        var deadline = now - TimeSpan.FromSeconds(1);
+        var stopped = await rows.Where(o => (o.Status == OutboxStatus.InFlight || o.Status == OutboxStatus.DeliveryUnknown) && o.ExpiresAt > deadline)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(o => o.ExpiresAt, deadline)
+                .SetProperty(o => o.UpdatedAt, now)
+                .SetProperty(o => o.Version, o => o.Version + 1), ct);
+        return cancelled + stopped;
     }
 
     /// <summary>

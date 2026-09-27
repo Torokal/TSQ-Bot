@@ -19,11 +19,18 @@ namespace ToroSquad.Core.Messaging;
 /// </summary>
 public sealed record MentionPolicy(
     IReadOnlyList<RoleId> Roles,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Everyone = false,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<UserId>? Users = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Everyone = false)
 {
     /// <summary>Discord's allowed_mentions accepts at most 100 user ids.</summary>
     public const int MaxUsers = 100;
+
+    /// <summary>
+    /// Users allowed to be pinged. Deliberately not a constructor parameter and not publicly settable: the ONLY way to set it
+    /// is <see cref="ExplicitUsers"/> (plus reading a stored payload back), so no code can opt in by accident.
+    /// </summary>
+    [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<UserId>? Users { get; private init; }
 
     public static MentionPolicy None { get; } = new(Array.Empty<RoleId>());
 
@@ -38,8 +45,11 @@ public sealed record MentionPolicy(
         var list = users.Distinct().ToList();
         if (list.Count > MaxUsers)
             throw new ArgumentException($"At most {MaxUsers} users can be pinged by one message.", nameof(users));
-        return list.Count == 0 ? None : new MentionPolicy(Array.Empty<RoleId>(), Users: list);
+        return list.Count == 0 ? None : new MentionPolicy(Array.Empty<RoleId>()) { Users = list };
     }
+
+    /// <summary>The same policy without the explicit user pings (a resend after an uncertain delivery never pings twice).</summary>
+    public MentionPolicy WithoutUserPings() => Users is null ? this : this with { Users = null };
 
     public bool PingsAnything => Roles.Count > 0 || Everyone || Users is { Count: > 0 };
 }

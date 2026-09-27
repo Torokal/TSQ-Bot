@@ -510,7 +510,7 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         await TickAsync();
 
         var notice = Delivered().Should().ContainSingle().Subject.Message;
-        notice.Mentions.Should().BeEquivalentTo(new MentionPolicy([], false, [new UserId(Owner)]));
+        notice.Mentions.Should().BeEquivalentTo(MentionPolicy.ExplicitUsers([new UserId(Owner)]));
         DiscordText.RawMentionPattern().Matches(notice.Content!).Select(m => m.Value).Should().Equal("<@10>");
         var wire = DiscordConversions.ToAllowedMentions(notice.Mentions);
         wire.AllowedTypes.Should().Be(global::Discord.AllowedMentionTypes.None);
@@ -769,10 +769,49 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
 
         await Lfg(s => s.CloseAsync(User(Owner), listing.Id, Ct));
         _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await TickAsync(); // reconciliation: not in the channel -> past its (moved) deadline, no resend
+
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Expired);
+        Delivered().Should().BeEmpty("no resend for a closed listing");
+    }
+
+    [Fact]
+    public async Task Closing_while_a_notice_is_being_sent_never_retries_it()
+    {
+        var listing = await OpenAsync(start: 30, remind: true);
+        // The close lands while the request is under way (row claimed InFlight); Discord then answers with a retryable error.
+        _host.Transport.ScriptSend(() =>
+        {
+            Task.Run(() => Lfg(s => s.CloseAsync(User(Owner), listing.Id, Ct))).GetAwaiter().GetResult().Result.Succeeded.Should().BeTrue();
+            return new SendOutcome.Transient("503 service unavailable");
+        });
+        await TickAsync();
+        (await GetAsync(listing.Id))!.Status.Should().Be(LfgStatus.Closed);
+
+        _host.Clock.Advance(TimeSpan.FromMinutes(10));
+        await TickAsync();
         await TickAsync();
 
-        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Cancelled);
-        Delivered().Should().BeEmpty("no resend for a closed listing");
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Expired);
+        Delivered().Should().BeEmpty("a closed listing's notice is not retried");
+        (await NoticesAsync()).Single().Attempts.Should().Be(1, "one request, the one the close could not recall");
+    }
+
+    [Fact]
+    public async Task Privacy_delete_stops_an_uncertain_notice_of_a_deleted_listing()
+    {
+        await OpenAsync(start: 30, remind: true);
+        _host.Transport.ScriptSend(() => new SendOutcome.Ambiguous("timeout"));
+        await TickAsync();
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.DeliveryUnknown);
+
+        await _host.InScopeAsync(async sp =>
+            await sp.GetServices<IUserDataContributor>().Single(c => c.Module.Value == "lfg").DeleteAsync(Guild, new UserId(Owner), Ct));
+        _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await TickAsync(); // reconciliation: not in the channel -> the listing is gone, no resend
+
+        (await NoticesAsync()).Single().Status.Should().Be(OutboxStatus.Expired);
+        Delivered().Should().BeEmpty("a deleted listing never pings afterwards");
     }
 
     [Fact]

@@ -64,9 +64,17 @@ public sealed class LfgCardSync(
                 // An unexpected failure of one card must not stop the pass; it counts as an attempt (still bounded).
                 logger.LogError(ex, "LFG listing {Listing}: card update threw", id);
                 db.ChangeTracker.Clear();
-                await Listings.Where(x => x.Id == id).ExecuteUpdateAsync(s => s
-                    .SetProperty(x => x.CardSyncAttempts, x => x.CardSyncAttempts + 1)
-                    .SetProperty(x => x.CardStale, x => x.CardSyncAttempts + 1 < MaxAttempts), ct);
+                try
+                {
+                    await Listings.Where(x => x.Id == id).ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.CardSyncAttempts, x => x.CardSyncAttempts + 1)
+                        .SetProperty(x => x.CardStale, x => x.CardSyncAttempts + 1 < MaxAttempts), ct);
+                }
+                catch (Exception countEx) when (countEx is not OperationCanceledException)
+                {
+                    // The database itself is failing (e.g. busy): the rest of the pass still runs; retried next round.
+                    logger.LogError(countEx, "LFG listing {Listing}: could not count the failed card update", id);
+                }
             }
         }
 

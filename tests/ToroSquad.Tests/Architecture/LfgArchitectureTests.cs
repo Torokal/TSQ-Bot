@@ -99,16 +99,29 @@ public sealed partial class LfgArchitectureTests
             UserPingOptIn().IsMatch(File.ReadAllText(file)).Should().BeFalse($"{relative} must not opt in to user pings");
         }
 
-        // The detector itself: every known way in is caught, role-only policies are not.
+        // The detector itself: every known way in is caught, role-only policies and plain reads are not.
         foreach (var bad in new[]
                  {
-                     "MentionPolicy.ExplicitUsers(ids)", "new MentionPolicy(roles, false, users)", "new MentionPolicy(Array.Empty<RoleId>(), false, list)",
-                     "new MentionPolicy(r, Users: list)", "policy with { Users = list }", "allowed.UserIds = ids", "AllowedMentions.All",
-                     "new AllowedMentions(AllowedMentionTypes.Users)", "AllowedMentionTypes.All",
+                     "MentionPolicy.ExplicitUsers(ids)", "allowed.UserIds = ids", "new AllowedMentions { UserIds = ids }", "allowed.UserIds.Add(id)",
+                     "allowed.UserIds .AddRange(ids)", "AllowedMentions.All", "new AllowedMentions(AllowedMentionTypes.Users)", "AllowedMentionTypes.All",
+                     "(AllowedMentionTypes)7",
                  })
             UserPingOptIn().IsMatch(bad).Should().BeTrue(bad);
-        foreach (var fine in new[] { "new MentionPolicy(roles)", "new MentionPolicy([new RoleId(role)])", "Mentions with { Users = null }", "Mentions.Users is { Count: > 0 }" })
+        foreach (var fine in new[]
+                 {
+                     "new MentionPolicy(roles)", "new MentionPolicy([new RoleId(role)])", "Mentions.WithoutUserPings()", "Mentions.Users is { Count: > 0 }",
+                     "KickParser.UserIds(doc)", "allowed.UserIds == null",
+                 })
             UserPingOptIn().IsMatch(fine).Should().BeFalse(fine);
+
+        // The record's own shape keeps every other way in closed at compile time: Users is not a constructor parameter and
+        // has no public setter (so neither `new MentionPolicy(..., users)` nor `policy with { Users = ... }` compiles outside it).
+        var policy = typeof(ToroSquad.Core.Messaging.MentionPolicy);
+        var users = policy.GetProperty(nameof(ToroSquad.Core.Messaging.MentionPolicy.Users))!;
+        users.SetMethod!.IsPublic.Should().BeFalse();
+        policy.GetConstructors().SelectMany(c => c.GetParameters())
+            .Should().NotContain(p => p.ParameterType != typeof(ToroSquad.Core.Messaging.MentionPolicy) &&
+                                      typeof(IEnumerable<ToroSquad.Core.UserId>).IsAssignableFrom(p.ParameterType));
 
         var producer = File.ReadAllText(Path.Combine(src, allowed[2]));
         producer.Should().Contain("MentionPolicy.ExplicitUsers(listing.Players)", "exactly the Joined players, never Maybe or text");
@@ -224,10 +237,11 @@ public sealed partial class LfgArchitectureTests
     private static IEnumerable<string> Placeholders(string text) => PlaceholderPattern().Matches(text).Select(m => m.Value).Distinct().Order();
 
     /// <summary>
-    /// Any way to make a user id ping: the factory, the record's Users slot (named, or the positional third argument; clearing
-    /// it is fine), Discord.Net's UserIds, AllowedMentionTypes.Users/All or AllowedMentions.All.
+    /// Any way to make a user id ping: the only factory (<c>MentionPolicy.ExplicitUsers</c>; the record's Users slot has no
+    /// other public way in), Discord.Net's UserIds (assigned or added to), AllowedMentionTypes.Users/All, a numeric
+    /// AllowedMentionTypes cast or AllowedMentions.All.
     /// </summary>
-    [GeneratedRegex(@"ExplicitUsers\(|\bUsers\s*:\s*(?!null)|\bUsers\s*=\s*(?!null)[^=\s]|UserIds\s*=|AllowedMentionTypes\.(Users|All)|AllowedMentions\.All|new\s+MentionPolicy\([^;()]*(\([^;()]*\))?[^;()]*,[^;()]*,")]
+    [GeneratedRegex(@"ExplicitUsers\(|\bUserIds\s*=(?!=)|\.UserIds\s*\.\s*(Add|AddRange|Insert)\b|AllowedMentionTypes\.(Users|All)|\(\s*AllowedMentionTypes\s*\)|AllowedMentions\.All")]
     private static partial Regex UserPingOptIn();
 
     [GeneratedRegex(@"\{\d+\}")]
