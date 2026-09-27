@@ -577,7 +577,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
     /// <summary>The form as the save step sends it: typed values plus the snapshot of the listing the form was opened on.</summary>
     private Task<LfgResult> SaveFormAsync(long id, LfgEditOpening opened, LfgFormValues typed, bool before, bool atStart, ChannelId? voice) =>
         Lfg(s => s.EditAsync(User(Owner), id, new LfgEditInput(typed, before, atStart, voice, opened.Prefill,
-            new LfgFormSettings(opened.Listing!.NotifyBeforeStart, opened.Listing.NotifyAtStart, opened.Listing.VoiceChannel)), Ct));
+            new LfgFormSettings(opened.Listing!.NotifyBeforeStart, opened.Listing.NotifyAtStart, opened.Voice, opened.Listing.VoiceChannel)), Ct));
 
     [Fact]
     public async Task A_stale_form_never_reverts_any_field_it_did_not_touch()
@@ -609,6 +609,34 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
 
         var after = (await GetAsync(listing.Id))!;
         (after.Details, after.VoiceChannel).Should().Be(("yeni", (ChannelId?)null));
+    }
+
+    [Fact]
+    public async Task A_stale_form_that_did_not_offer_a_deleted_channel_keeps_a_newer_choice()
+    {
+        var listing = await OpenAsync(voice: Voice);
+        _host.Guilds.RemoveVoiceChannel(Guild, Voice);
+        var formA = await OpenEditAsync(listing.Id); // shows no voice channel
+        var formB = await OpenEditAsync(listing.Id);
+        (await SaveFormAsync(listing.Id, formB, formB.Prefill!, false, false, Voice2)).Result.MessageKey.Should().Be("lfg.edit.done");
+
+        (await SaveFormAsync(listing.Id, formA, formA.Prefill! with { Details = "A" }, false, false, formA.Voice)).Result.MessageKey.Should().Be("lfg.edit.done");
+
+        var after = (await GetAsync(listing.Id))!;
+        (after.Details, after.VoiceChannel).Should().Be(("A", (ChannelId?)Voice2), "form A never touched the voice channel");
+    }
+
+    [Fact]
+    public async Task An_untouched_channel_is_checked_as_the_one_that_will_be_stored()
+    {
+        var listing = await OpenAsync(voice: Voice);
+        var formA = await OpenEditAsync(listing.Id);
+        var formB = await OpenEditAsync(listing.Id);
+        (await SaveFormAsync(listing.Id, formB, formB.Prefill!, false, false, Voice2)).Result.MessageKey.Should().Be("lfg.edit.done");
+        _host.Guilds.RemoveVoiceChannel(Guild, Voice); // the channel form A showed, no longer the stored one
+
+        (await SaveFormAsync(listing.Id, formA, formA.Prefill! with { Details = "A" }, false, false, Voice)).Result.MessageKey.Should().Be("lfg.edit.done");
+        (await GetAsync(listing.Id))!.VoiceChannel.Should().Be(Voice2);
     }
 
     [Fact]

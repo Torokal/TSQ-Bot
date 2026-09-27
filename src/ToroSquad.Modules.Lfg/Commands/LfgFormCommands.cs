@@ -78,7 +78,7 @@ public sealed class LfgFormCommands(
 
         var draft = drafts.Open(Actor, listing.Channel, LfgFormKind.Edit, listing.Id, prefill, listing.NotifyBeforeStart, listing.NotifyAtStart,
             opened.Voice, // a deleted voice channel is not offered again (keeping "none" then removes it)
-            new LfgFormSettings(listing.NotifyBeforeStart, listing.NotifyAtStart, listing.VoiceChannel));
+            new LfgFormSettings(listing.NotifyBeforeStart, listing.NotifyAtStart, opened.Voice, listing.VoiceChannel));
         await RespondWithModalAsync(LfgFormUi.Modal(draft, MaxPlayers, await TextAsync()));
     }
 

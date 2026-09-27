@@ -188,8 +188,10 @@ public sealed class LfgService(
     {
         var o = options.Value;
         var (zone, zoneKnown) = await ZoneAsync(actor.GuildId, ct);
-        // Must be a plain voice channel of THIS guild as the bot sees it; checked on every save, changed or not.
-        if (input.VoiceChannel is { } voice && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, voice, ct)).Usable)
+        // A chosen voice channel must be a plain voice channel of THIS guild as the bot sees it. An untouched one is checked
+        // below, as the channel that will actually be stored.
+        var voiceUntouched = input.OpenedSettings is { } shown && input.VoiceChannel == shown.VoiceChannel;
+        if (!voiceUntouched && input.VoiceChannel is { } voice && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, voice, ct)).Usable)
             return (No(OperationError.InvalidInput, "lfg.create.voice_invalid"), null);
 
         async Task<(OperationResult, LfgFormPreview?)> Work()
@@ -220,10 +222,17 @@ public sealed class LfgService(
             var notifyBefore = settings is not null && input.NotifyBeforeStart == settings.NotifyBeforeStart ? listing.NotifyBeforeStart : input.NotifyBeforeStart;
             var notifyAtStart = settings is not null && input.NotifyAtStart == settings.NotifyAtStart ? listing.NotifyAtStart : input.NotifyAtStart;
             var storedVoice = listing.VoiceChannelId is { } sv ? new ChannelId(sv) : (ChannelId?)null;
-            var voice = settings is not null && input.VoiceChannel == settings.VoiceChannel ? storedVoice : input.VoiceChannel;
-            // The channel that will be stored must still be a voice channel of this guild (a typed one was checked above).
-            if (voice is { } kept && voice != input.VoiceChannel && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, kept, ct)).Usable)
-                return (No(OperationError.InvalidInput, "lfg.create.voice_invalid"), null);
+            var voice = input.VoiceChannel;
+            if (voiceUntouched)
+            {
+                // Untouched keeps the channel stored NOW — except the unusable one the form did not offer: if it is still the
+                // stored one, keeping "none" removes it.
+                var droppedAtOpen = settings!.VoiceChannel is null && settings.StoredVoiceChannel is not null;
+                voice = droppedAtOpen && storedVoice == settings.StoredVoiceChannel ? null : storedVoice;
+                if (voice is { } kept && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, kept, ct)).Usable)
+                    return (No(OperationError.InvalidInput, "lfg.create.voice_invalid"), null);
+            }
+
             var members = await Participants.Where(p => p.ListingId == listing.Id).ToListAsync(ct);
             var joined = members.Count(p => p.Response == LfgResponse.Joined); // Maybe never counts
             if (maxPlayers < joined)
@@ -399,10 +408,11 @@ public sealed class LfgService(
     /// <summary>The card could not be posted at all: the listing never existed for anyone, so it is removed (frees the owner's slot).</summary>
     public async Task DiscardAsync(long listingId, CancellationToken ct)
     {
-        // A notice planned in the meantime (short start) never goes out for a listing nobody saw.
-        await LfgNoticePlanner.CancelPendingAsync(db, listingId, "listing_discarded", clock.GetUtcNow(), ct);
         await Participants.Where(p => p.ListingId == listingId).ExecuteDeleteAsync(ct);
         await Listings.Where(x => x.Id == listingId).ExecuteDeleteAsync(ct);
+        // After the delete (the planner re-reads the listing under its lock, so nothing new can be planned now): a notice
+        // planned in the meantime (short start) never goes out for a listing nobody saw.
+        await LfgNoticePlanner.CancelPendingAsync(db, listingId, "listing_discarded", clock.GetUtcNow(), ct);
         logger.LogWarning("LFG listing {Listing} discarded: its card could not be posted", listingId);
     }
 

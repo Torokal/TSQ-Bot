@@ -139,11 +139,12 @@ public sealed class LfgFormTests
     {
         var drafts = new LfgFormDrafts(new FakeTimeProvider(T0));
         var shown = new LfgFormValues("Deadlock", "6", null, "05.10.2026 21:30", "2");
-        var draft = drafts.Open(User(1), Channel, LfgFormKind.Edit, 77, shown);
+        var stored = new LfgFormSettings(true, false, null, new ChannelId(9));
+        var draft = drafts.Open(User(1), Channel, LfgFormKind.Edit, 77, shown, stored: stored);
 
-        var typed = drafts.Update(draft.Id, User(1), d => d with { Values = shown with { Start = "3 saat" }, Opened = null })!;
+        var typed = drafts.Update(draft.Id, User(1), d => d with { Values = shown with { Start = "3 saat" }, Opened = null, OpenedSettings = null, Channel = new ChannelId(1) })!;
 
-        typed.ToEditInput().Opened.Should().Be(shown);
+        (typed.ToEditInput().Opened, typed.ToEditInput().OpenedSettings, typed.Channel).Should().Be((shown, stored, Channel), "the snapshot and the channel are pinned");
         drafts.Open(User(1), Channel, LfgFormKind.Create, null, shown).Opened.Should().BeNull();
     }
 

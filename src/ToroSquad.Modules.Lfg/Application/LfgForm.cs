@@ -93,8 +93,11 @@ public sealed record LfgFormPreview(string GameName, string? Details, int MaxPla
 /// <summary>Result of checking a submitted form without storing anything.</summary>
 public sealed record LfgFormCheck(OperationResult Result, LfgFormPreview? Preview);
 
-/// <summary>The settings of a listing as the edit form found them (notice opt-ins and voice channel, as stored).</summary>
-public sealed record LfgFormSettings(bool NotifyBeforeStart, bool NotifyAtStart, ChannelId? VoiceChannel);
+/// <summary>
+/// The settings of a listing as the edit form found them: the notice opt-ins, the voice channel the form SHOWED (a deleted
+/// one is not offered, so it shows none) and the voice channel that was STORED at that moment.
+/// </summary>
+public sealed record LfgFormSettings(bool NotifyBeforeStart, bool NotifyAtStart, ChannelId? VoiceChannel, ChannelId? StoredVoiceChannel = null);
 
 /// <summary>
 /// What the owner saves in the edit form: the texts plus the settings of the second step. <see cref="Opened"/> and
