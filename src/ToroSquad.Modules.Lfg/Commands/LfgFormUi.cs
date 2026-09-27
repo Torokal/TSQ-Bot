@@ -153,22 +153,14 @@ public static class LfgFormUi
     private static SelectMenuBuilder DurationSelect(LfgFormDraft draft, int defaultMinutes, Text L)
     {
         var options = LfgRules.DurationChoicesMinutes.Select(m => (Value: LfgForm.FormatDuration(TimeSpan.FromMinutes(m)), Minutes: m, Suffix: (string?)null)).ToList();
-        string selected;
-        if (draft.Values.Duration is { } stored)
-        {
-            selected = stored;
-            if (options.All(o => o.Value != stored) && LfgFormText.DurationMinutes(stored) is { } minutes and > 0)
-                options.Add((stored, minutes, L("lfg.form.duration_current"))); // an edited listing's duration that is not a choice
-        }
-        else if (LfgRules.DurationChoicesMinutes.Contains(defaultMinutes))
-        {
-            selected = LfgForm.FormatDuration(TimeSpan.FromMinutes(defaultMinutes));
-        }
-        else
-        {
-            selected = DefaultDuration;
+        // Offered for as long as the form lives (also after another choice): an edited listing's own duration when it is not
+        // a choice, and for a new listing a configured default that is not a choice.
+        if (draft.Opened?.Duration is { } current && options.All(o => o.Value != current) && LfgFormText.DurationMinutes(current) is { } currentMinutes and > 0)
+            options.Add((current, currentMinutes, L("lfg.form.duration_current")));
+        if (draft.Kind == LfgFormKind.Create && !LfgRules.DurationChoicesMinutes.Contains(defaultMinutes))
             options.Add((DefaultDuration, defaultMinutes, L("lfg.form.duration_default")));
-        }
+        var selected = draft.Values.Duration
+                       ?? (LfgRules.DurationChoicesMinutes.Contains(defaultMinutes) ? LfgForm.FormatDuration(TimeSpan.FromMinutes(defaultMinutes)) : DefaultDuration);
 
         var select = new SelectMenuBuilder()
             .WithCustomId(DurationPrefix + draft.Id)

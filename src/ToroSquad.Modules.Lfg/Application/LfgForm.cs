@@ -4,7 +4,10 @@ using ToroSquad.Modules.Lfg.Domain;
 
 namespace ToroSquad.Modules.Lfg.Application;
 
-/// <summary>The five texts of the listing form exactly as typed (create and edit use the same form).</summary>
+/// <summary>
+/// The listing form's texts exactly as given (create and edit use the same form): game, players, details and start date
+/// from the modal; the duration from the settings step.
+/// </summary>
 public sealed record LfgFormValues(string? Game, string? Players, string? Details, string? Start, string? Duration)
 {
     public static LfgFormValues Empty { get; } = new(null, null, null, null, null);

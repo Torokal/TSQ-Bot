@@ -163,6 +163,14 @@ public sealed class LfgModalContractTests
         var editOptions = LfgFormUi.Settings(Checked(edit, null, TimeSpan.FromMinutes(90)), T0, 120, L("tr")).Components.Components
             .Cast<ActionRowComponent>().First().Components.OfType<SelectMenuComponent>().Single().Options;
         editOptions.Select(o => (o.Value, o.IsDefault)).Should().Equal(("1", (bool?)false), ("2", (bool?)false), ("3", (bool?)false), ("90 dk", (bool?)true));
+
+        var afterChoice = edit with { Values = edit.Values with { Duration = "2" } };
+        LfgFormUi.Settings(Checked(afterChoice, null), T0, 120, L("tr")).Components.Components.Cast<ActionRowComponent>().First().Components
+            .OfType<SelectMenuComponent>().Single().Options.Select(o => (o.Value, o.IsDefault))
+            .Should().Equal([("1", (bool?)false), ("2", (bool?)true), ("3", (bool?)false), ("90 dk", (bool?)false)], "the listing's own duration stays offered after another choice");
+        var createAfterChoice = Checked(Draft() with { Values = LfgFormValues.Empty with { Duration = "3" } }, T0.AddHours(2));
+        LfgFormUi.Settings(createAfterChoice, T0, 90, L("tr")).Components.Components.Cast<ActionRowComponent>().First().Components
+            .OfType<SelectMenuComponent>().Single().Options.Select(o => o.Value).Should().Contain(LfgFormUi.DefaultDuration, "the default stays offered");
     }
 
     [Fact]

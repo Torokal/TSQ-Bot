@@ -188,8 +188,14 @@ public static partial class LfgEventDate
 
     public static (DateTimeOffset? At, LfgDraftError Error) Resolve(string text, TimeZoneInfo zone, DateTimeOffset now)
     {
-        if (!TryReadWallClock(text, TimeZoneInfo.ConvertTime(now, zone).Year, out var local))
+        var year = TimeZoneInfo.ConvertTime(now, zone).Year;
+        if (!TryReadWallClock(text, year, out var local))
             return (null, LfgDraftError.DateFormat);
+        // Far outside the one-year window (e.g. year 1 or 9999): refused before any time-zone arithmetic could overflow.
+        if (local.Year < year - 1)
+            return (null, LfgDraftError.DateNotInFuture);
+        if (local.Year > year + 1)
+            return (null, LfgDraftError.DateTooFar);
         if (zone.IsInvalidTime(local))
             return (null, LfgDraftError.DateNotInTimeZone);
         if (zone.IsAmbiguousTime(local))

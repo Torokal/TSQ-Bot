@@ -80,6 +80,18 @@ public sealed class LfgEventDateTests
     public void The_start_must_be_between_one_minute_and_one_year_ahead(string input, LfgDraftError expected) =>
         LfgEventDate.Resolve(input, Istanbul, Now).Error.Should().Be(expected);
 
+    [Theory]
+    [InlineData("01.01.0001 00:30", LfgDraftError.DateNotInFuture)]
+    [InlineData("0001-01-01 00:30", LfgDraftError.DateNotInFuture)]
+    [InlineData("31.12.9999 23:59", LfgDraftError.DateTooFar)]
+    [InlineData("27.09.2029 21:30", LfgDraftError.DateTooFar)]
+    [InlineData("27.09.2024 21:30", LfgDraftError.DateNotInFuture)]
+    public void Years_far_outside_the_window_are_refused_without_overflow(string input, LfgDraftError expected)
+    {
+        LfgEventDate.Resolve(input, Istanbul, Now).Error.Should().Be(expected);
+        LfgEventDate.Resolve(input, Zone("America/New_York"), Now).Error.Should().Be(expected);
+    }
+
     [Fact]
     public void Thirty_seconds_ahead_is_too_soon()
     {

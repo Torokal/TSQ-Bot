@@ -17,7 +17,7 @@
   "lfg.create.game_too_long": "Oyun adı en fazla {0} karakter olabilir.",
   "lfg.create.details_too_long": "Detay en fazla {0} karakter olabilir. Kısa tut: mod, rank, rol, plan…",
   "lfg.create.players_range": "Ekip büyüklüğü {0} ile {1} kişi arasında olmalı (sen dahil).",
-  "lfg.create.duration_invalid": "Geçersiz süre. 1, 2 veya 3 (saat) yazabilirsin; boş bırakırsan varsayılan süre kullanılır.",
+  "lfg.create.duration_invalid": "Geçersiz süre. İlan süresi olarak 1, 2 veya 3 saat seç.",
   "lfg.create.wrong_channel": "Ekip ilanları bu sunucuda yalnızca {0} kanalında açılabilir.",
   "lfg.create.limit": "Aynı anda en fazla {0} aktif ekip ilanı açabilirsin.",
   "lfg.join.done": "✅ Ekibe katıldın.",

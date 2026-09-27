@@ -17,7 +17,7 @@
   "lfg.create.game_too_long": "The game name can have at most {0} characters.",
   "lfg.create.details_too_long": "Details can have at most {0} characters. Keep it short: mode, rank, roles, plan…",
   "lfg.create.players_range": "The team size must be between {0} and {1} players (including you).",
-  "lfg.create.duration_invalid": "Invalid duration. Enter 1, 2 or 3 (hours); leave it empty for the default.",
+  "lfg.create.duration_invalid": "Invalid duration. Choose 1, 2 or 3 hours as the listing duration.",
   "lfg.create.wrong_channel": "In this server, listings can only be opened in {0}.",
   "lfg.create.limit": "You can have at most {0} active listings at the same time.",
   "lfg.join.done": "✅ You joined the team.",
