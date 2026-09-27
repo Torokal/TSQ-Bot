@@ -17,8 +17,10 @@ katılım, geçmiş/itibar, otomatik eşleştirme.
 ## Kullanım
 
 ```
-/ekip oyun:Deadlock kisi:6 detay:Ranked, mikrofon gerekli [baslangic:2 saat sonra] [sure:2 saat]
-      [hatirlat_30dk:True] [baslangicta_etiketle:True] [ses_kanali:#Deadlock]
+/ekip oyun:Deadlock kisi:6
+/ekip oyun:Deadlock kisi:6 baslangic:2 saat sonra
+/ekip oyun:Deadlock kisi:6 tarih_saat:05.10.2026 21:30
+/ekip oyun:Deadlock kisi:6 tarih_saat:05.10.2026 21:30 hatirlat_30dk:True baslangicta_etiketle:True ses_kanali:#Deadlock
 ```
 
 | Seçenek | Kural |
@@ -26,7 +28,8 @@ katılım, geçmiş/itibar, otomatik eşleştirme.
 | `oyun` | serbest metin, 2–50 karakter (kontrol/format karakterleri atılır, boşluklar sadeleşir) |
 | `kisi` | toplam ekip büyüklüğü, **sahip dahil**; 2 … `Lfg:MaxPlayersPerListing` (varsayılan 20, üst sınır 50) |
 | `detay` | isteğe bağlı, tek satır, en fazla 200 karakter |
-| `baslangic` | isteğe bağlı, göreli seçim: Şimdi (varsayılan) · 30 dk · 1 · 1,5 · 2 · 3 · 4 · 6 · 8 · 12 · 24 saat sonra. Tarih/saat dilimi ayrıştırma yok |
+| `baslangic` | isteğe bağlı, göreli seçim: Şimdi (varsayılan) · 30 dk · 1 · 1,5 · 2 · 3 · 4 · 6 · 8 · 12 · 24 saat sonra |
+| `tarih_saat` | isteğe bağlı, özel başlangıç: **GG.AA.YYYY SS:DD**, örn. `05.10.2026 21:30` (ek olarak ISO `2026-10-05 21:30`). `baslangic` ile aynı anda kullanılamaz |
 | `sure` | isteğe bağlı: 1 / 2 / 3 saat; boşsa `Lfg:DefaultExpirationMinutes` (varsayılan 120). Planlı ilanda **başlangıçtan itibaren** sayılır |
 | `hatirlat_30dk` | isteğe bağlı, varsayılan kapalı: başlangıçtan 30 dk önce katılanları etiketle (yalnızca ileri bir `baslangic` ile) |
 | `baslangicta_etiketle` | isteğe bağlı, varsayılan kapalı: başladığında katılanları etiketle (yalnızca ileri bir `baslangic` ile) |
@@ -38,11 +41,35 @@ doğrulamasını (sayı aralığı, uzunluk, seçimler) istemci tarafında verir
 
 ### Başlangıç ve süre
 
-`EventAt` etkinliğin başlayacağı an, `ExpiresAt` ilanın artık kullanılamayacağı an — ikisi ayrı alanlardır.
+`EventAt` etkinliğin başlayacağı an, `ExpiresAt` ilanın artık kullanılamayacağı an — ikisi ayrı alanlardır. Başlangıç tek
+bir kaynaktan gelir (`LfgStart`: şimdi · göreli · mutlak); nereden geldiği sonrasında önemsizdir — süre dolumu,
+bildirimler, kart ve ses aynı `EventAt` hattını kullanır.
 
-- **Şimdi** (`EventAt = null`): `ExpiresAt = CreatedAt + süre` — V1 davranışı aynen.
-- **Planlı**: `EventAt = şimdi + seçilen gecikme`, `ExpiresAt = EventAt + süre`. Örnek: 3 saat sonra başlayan, 2 saatlik ilan
-  3 saat boyunca ekip toplar, etkinlik başlar ve başlangıçtan 2 saat sonra kapanır; başlangıçtan önce asla expire olmaz.
+| Verilen | Sonuç |
+|---|---|
+| hiçbiri | Şimdi: `EventAt = null`, `ExpiresAt = CreatedAt + süre` (V1 davranışı) |
+| yalnız `baslangic` | `EventAt = şimdi + seçilen gecikme` (Şimdi seçilirse `null`) |
+| yalnız `tarih_saat` | `EventAt` = girilen tarih/saat, sunucunun saat diliminde |
+| ikisi birden | reddedilir: `Başlangıç için ya hazır süreyi ya da özel tarih/saat alanını kullan. İkisini aynı anda seçemezsin.` (domain doğrulaması; boş `tarih_saat` verilmemiş sayılır) |
+
+Planlıysa `ExpiresAt = EventAt + süre`: ör. `tarih_saat: 05.10.2026 21:30`, `sure: 2 saat` → ilan 05.10.2026 23:30'da
+kapanır; başlangıçtan önce asla expire olmaz. 30 dk hatırlatma `EventAt − 30 dk`'da (21:00), başlangıç bildirimi `EventAt`'te.
+
+### Özel tarih/saat ve saat dilimi
+
+- **Özel tarih/saat, sunucunun saat diliminde yorumlanır. Discord kartında tarih her kullanıcının kendi yerel saatinde
+  gösterilir** (`<t:…:F> • <t:…:R>`; bot kartta saat dilimi dönüştürmez).
+- Saat dilimi, TSQ Bot'un mevcut sunucu ayarıdır (`/setup` → saat dilimi; `GuildSettings.TimeZoneId`, varsayılan
+  **Europe/Istanbul**). LFG ikinci bir saat dilimi ayarı tutmaz, yeni kolon/migration yoktur. Kayıt yalnızca `/setup`
+  üzerinden, doğrulanmış IANA kimlikleriyle olur (`GuildTime.TryResolve`; Railway/Linux ve Windows'ta aynı ID'ler);
+  `/lfg-admin status` kullanılan saat dilimini gösterir.
+- Ayrıştırma açık ve kültürden bağımsızdır (`TryParseExact`, `d.M.yyyy H:mm` ve `yyyy-M-d H:mm`; makine yereli yok).
+  `31.02.2026 21:00`, `05/10/2026`, eksik saat vb. → `Tarih/saat anlaşılamadı. Biçim: GG.AA.YYYY SS:DD`.
+- Sınırlar: en erken **şimdi + 1 dakika** (geçmiş, şimdi veya 30 sn sonrası → `Başlangıç tarihi gelecekte olmalı.`), en
+  geç **şimdi + 365 gün** (`Başlangıç tarihi en fazla 1 yıl sonrası olabilir.`). Sabit domain sınırları (`LfgEventDate`).
+- Yaz saati: ileri alınırken hiç var olmayan saat → `Bu tarih/saat seçilen saat diliminde geçerli değil.`; geri alınırken
+  iki kez yaşanan saat tahmin edilmez, reddedilir → `Bu saat, saat değişimi nedeniyle iki farklı zamana denk geliyor.`
+  (Europe/Istanbul'da yaz saati yok; kural tüm saat dilimleri için aynı.)
 
 ## Kart
 
@@ -59,7 +86,7 @@ Katılanlar
 🤔 Belki
 @Arif · @Shotgun
 
-🗓️ Başlangıç: 27 Eylül 2026 21:00 • 2 saat içinde
+🗓️ Başlangıç: 5 Ekim 2026 Pazartesi 21:30 • 8 gün içinde
 🔊 Ses Odası: #Deadlock
 ⏰ 4 saat içinde kapanır
 [Katıl] [Belki] [Ayrıl] [🔊 Ses Odası] [İlanı Kapat]

@@ -65,6 +65,9 @@ invite link and no global command registration. The source code is public under 
   once across restarts, never late, none for ended listings or a disabled module), `MentionPolicy.ExplicitUsers` (only
   the LFG notice renderer), optional voice channel + button (moves a member already in voice with Move Members; otherwise
   an honest "open channel" link), migration `LfgScheduledEvents`.
+- **Custom start date IMPLEMENTED / TESTED_OFFLINE**: `/ekip tarih_saat` (`05.10.2026 21:30`, culture-independent), read in
+  the existing guild time zone (`/setup`, default Europe/Istanbul), DST gaps/overlaps refused, 1 minute – 1 year ahead,
+  exclusive with `baslangic`; feeds the same `EventAt` (expiry, notices, card, voice unchanged). No new migration.
 - **NOT VERIFIED_LIVE**: real user pings, the voice move and the channel link behaviour in Discord clients.
 - Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
 
