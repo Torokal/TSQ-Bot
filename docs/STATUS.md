@@ -71,9 +71,9 @@ invite link and no global command registration. The source code is public under 
   exclusive with `baslangic`; feeds the same `EventAt` (expiry, notices, card, voice unchanged). No new migration.
 - **NOT VERIFIED_LIVE**: real user pings, the voice move and the channel link behaviour in Discord clients.
 - **Form + owner edit IMPLEMENTED / TESTED_OFFLINE** (`feat/lfg-modal-edit`): `/ekip` has no options and opens a modal
-  (game, players, details, one start field — empty/now, `30 dk`, `1,5 saat`, `2 saat`, `05.10.2026 21:30` — and duration);
-  Discord's five-component modal limit puts the two notice opt-ins and the voice channel in a private settings step
-  (native selects) before **İlanı Oluştur**; drafts live only in memory (30 min, owner + guild bound). The card gains
+  (game, players, details, start date — empty = now or `27.09.2026 21:30` / `27.09.26 21:30`, no relative times — and the
+  voice channel as a native channel select); Discord's five-component modal limit puts the listing duration (1/2/3 h) and
+  the two notice opt-ins in a private settings step (native selects) before **İlanı Oluştur**; drafts live only in memory (30 min, owner + guild bound). The card gains
   **✏️ Düzenle** (second row, via the additive `MessageButton.NewRow`): owner-only, same form prefilled; size never below
   the Joined players, start only before the event, `ExpiresAt = (EventAt ?? CreatedAt) + duration`, handled notices never
   repeat or revive, same card redrawn without pings. No migration.
