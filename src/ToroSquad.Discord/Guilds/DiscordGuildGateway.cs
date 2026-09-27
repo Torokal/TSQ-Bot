@@ -48,6 +48,30 @@ public sealed class DiscordGuildGateway(DiscordSocketClient client) : IGuildGate
     public Task<RoleOperationOutcome> RemoveRoleAsync(GuildId guild, UserId user, RoleId role, string auditReason, CancellationToken cancellationToken) =>
         RunAsync(() => client.Rest.RemoveRoleAsync(guild.Value, user.Value, role.Value, Options(auditReason, cancellationToken)));
 
+    public async Task<GuildMemberLookup> GetMemberAsync(GuildId guild, UserId user, CancellationToken cancellationToken)
+    {
+        if (client.GetGuild(guild.Value)?.CurrentUser is null)
+            return GuildMemberLookup.Unavailable; // not connected (yet): unknown, never "left"
+        try
+        {
+            // REST, not the socket cache: without the GuildMembers intent a cached member's roles can be stale.
+            var member = await client.Rest.GetGuildUserAsync(guild.Value, user.Value, new RequestOptions { CancelToken = cancellationToken });
+            return member is null
+                ? GuildMemberLookup.NotMember
+                : new GuildMemberLookup(MemberLookupOutcome.Found, member.RoleIds.Select(r => new RoleId(r)).ToList());
+        }
+        catch (HttpException ex) when (ex.HttpCode == HttpStatusCode.NotFound && ex.DiscordCode is DiscordErrorCode.UnknownMember or DiscordErrorCode.UnknownUser)
+        {
+            return GuildMemberLookup.NotMember;
+        }
+        catch (Exception ex) when (ex is HttpException or TimeoutException or HttpRequestException or TaskCanceledException)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                throw;
+            return GuildMemberLookup.Unavailable;
+        }
+    }
+
     public Task<VoiceChannelAccess> GetVoiceChannelAccessAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken)
     {
         var g = client.GetGuild(guild.Value);

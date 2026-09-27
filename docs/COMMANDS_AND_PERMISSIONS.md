@@ -100,6 +100,19 @@ Bot izinleri: kaynak kanalda `ViewChannel` + `ReadMessageHistory`; komutun çal�
 değişmez (aşağıya bakın).
 Ayrıntı: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md).
 
+## TSQ Doğum Günü (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/birthday set <tarih>` · `show` · `remove` | Herkes, yalnızca **kendi** kaydı: gün + ay (`14.03`, `14/03`, `14-03`; yıl yok). Başkasının kaydına erişen komut veya liste yok |
+| `/birthday-admin set member:@üye date:14.03` | **Yalnızca Administrator veya sunucu sahibi** (etkin izinlerden, sunucu tarafında; Manage Server yetmez): başka bir üyenin gün + ayını oluşturur/günceller; ephemeral, ping'siz cevap |
+| `/birthday-admin configure channel:` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): duyuru kanalı |
+| `/birthday-admin status` · `doctor` | Yönetici: ayarlar, bugünün durumu, zamanlayıcı; kanal/rol hiyerarşisi/izin/veritabanı kontrolü |
+
+Bot izinleri: duyuru kanalında `ViewChannel` + `SendMessages` (düz mesaj; yalnızca o günün kutlananlarını pingler, @everyone/rol asla); Doğum Günü rolü için sunucuda
+`Manage Roles` ve botun en yüksek rolü bu rolün **üstünde**. Ek gateway intent'i gerekmez (üye rolleri REST ile okunur).
+Ayrıntı: [birthday/TSQ_BIRTHDAY.md](birthday/TSQ_BIRTHDAY.md).
+
 ## Esports (modül açıkken)
 
 | Komut | Seçenekler |
@@ -146,7 +159,7 @@ panel, autocomplete ve bildirimler modül kapalıyken çalışmaz.
 | Embed Links | 16384 | embed'ler | evet |
 | Read Message History | 65536 | belirsiz teslimat uzlaştırması (yalnızca kendi mesajlarını arar); TSQ Quote kaynak kanalı | önerilir; TSQ Quote için kaynak kanalda gerekli |
 | Attach Files | 32768 | TSQ Quote kartı (`quote.png`), komutun çalıştığı kanalda | TSQ Quote kullanılıyorsa |
-| Manage Roles | 268435456 | self-service bildirim rolleri | yalnızca self-service kullanılırsa |
+| Manage Roles | 268435456 | self-service bildirim rolleri; TSQ Doğum Günü geçici rolü | self-service veya Doğum Günü rolü kullanılırsa |
 | Mention Everyone | 131072 | bahsedilemez rolleri pinglemek; TSQ Live duyurusunun `@everyone` bildirimi | rollerde **önerilmez** (rolü "bahsedilebilir" yapın); TSQ Live kullanılıyorsa **yalnızca duyuru kanalında** kanal izniyle verin |
 
   Asgari izin tamsayısı (tüm modüller, TSQ Quote dahil): **117760** (View Channel + Send Messages + Embed Links + Attach

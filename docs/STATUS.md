@@ -121,6 +121,23 @@ invite link and no global command registration. The source code is public under 
   permission resolution on real overwrites). Live acceptance plan: docs/quote/TSQ_QUOTE.md.
 - Off by default (module gate off); `/quote` is in the manifest but not synced.
 
+## TSQ Doğum Günü (new, 2026-09-28, branch `feat/birthday`)
+
+- Scope and rules: [birthday/TSQ_BIRTHDAY.md](birthday/TSQ_BIRTHDAY.md). Additive migration `BirthdayModule` (4 new tables).
+- **IMPLEMENTED / TESTED_OFFLINE**: `/birthday set|show|remove` (day + month, no year; 29.02 valid), `/birthday-admin
+  configure|status|doctor`; reconciliation on the Europe/Istanbul day (startup, every 60 s, just after local midnight):
+  one announcement per guild and day (unique guild + local date, staged with the outbox in one transaction, pings only the celebrants,
+  never sent the next day), celebrated once a year (unique guild + user + year), temporary role given only by the bot and
+  taken back when the next day starts (a role the member already had is never touched), restart/downtime/duplicate-pass
+  safe, members who left skipped, role hierarchy problems isolated (announcement still sent, doctor FAILED).
+- **Delta (2026-09-28)**: `/birthday-admin set member date` (Administrator or guild owner via `Authorize.Require`; Manage
+  Server is not enough; same registration row and date rules; audit log `source=admin`); the announcement now pings
+  exactly the celebrants it names (`MentionPolicy.ExplicitUsers`, second and last user-ping producer besides LFG).
+- `IGuildGateway.GetMemberAsync` (REST member lookup) added for the member check and the member's current roles.
+- **NOT VERIFIED_LIVE**: everything (announcement and its user pings in Discord, `/birthday-admin set` with a real
+  Administrator / owner / Manage-Server-only account, role grant/removal and the real hierarchy on TSQ, REST member lookup,
+  midnight run on Railway). Off by default; commands in the manifest but not synced.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

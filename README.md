@@ -7,7 +7,9 @@ standings ([docs/FORMULA1.md](docs/FORMULA1.md)). A **Volleyball** module follow
 ("Filenin Sultanları") ([docs/volleyball/VOLLEYBALL.md](docs/volleyball/VOLLEYBALL.md)). **TSQ Live** announces the configured
 creators' Twitch/Kick streams ([docs/live/TSQ_LIVE.md](docs/live/TSQ_LIVE.md)). **TSQ LFG — Oyuncu Bul** lets members
 open quick group listings for any game with `/ekip` ([docs/lfg/TSQ_LFG.md](docs/lfg/TSQ_LFG.md)). **TSQ Quote** turns a
-message into a black-and-white quote card with `/quote` ([docs/quote/TSQ_QUOTE.md](docs/quote/TSQ_QUOTE.md)).
+message into a black-and-white quote card with `/quote` ([docs/quote/TSQ_QUOTE.md](docs/quote/TSQ_QUOTE.md)). **TSQ Doğum
+Günü** celebrates members' birthdays (day and month only) with one message and a role for the day
+([docs/birthday/TSQ_BIRTHDAY.md](docs/birthday/TSQ_BIRTHDAY.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
 **BOT Greg** and reuses adapted portions of the open-source
@@ -70,6 +72,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ LFG | `/ekip` (opens the listing form; buttons: Katıl · Belki · Ayrıl · 🔊 Ses Odası · ✏️ Düzenle (owner only) · İlanı Kapat) | everyone (module on) |
 | TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
 | TSQ Quote | `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
+| TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
+| TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set member date` | Manage Server; `set`: Administrator or server owner |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
 [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md). The generated, test-checked schema is
@@ -171,6 +175,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Live` | TSQ Live (Twitch + Kick stream announcements: creator session state machine, official-API reconciliation, planner) |
 | `ToroSquad.Modules.Lfg` | TSQ LFG — Oyuncu Bul (generic group-finder listings: create/join/leave/close/expire, race-safe persistence, card sync) |
 | `ToroSquad.Modules.Quote` | TSQ Quote (`/quote`: message reference parsing, access checks, Discord text → plain text, ImageSharp card renderer with embedded fonts) |
+| `ToroSquad.Modules.Birthday` | TSQ Doğum Günü (day + month registrations, restart-safe daily reconciliation: one announcement, temporary role) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |
 
