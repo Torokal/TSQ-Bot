@@ -69,6 +69,15 @@ invite link and no global command registration. The source code is public under 
   the existing guild time zone (`/setup`, default Europe/Istanbul), DST gaps/overlaps refused, 1 minute – 1 year ahead,
   exclusive with `baslangic`; feeds the same `EventAt` (expiry, notices, card, voice unchanged). No new migration.
 - **NOT VERIFIED_LIVE**: real user pings, the voice move and the channel link behaviour in Discord clients.
+- **Form + owner edit IMPLEMENTED / TESTED_OFFLINE** (`feat/lfg-modal-edit`): `/ekip` has no options and opens a modal
+  (game, players, details, one start field — empty/now, `30 dk`, `1,5 saat`, `2 saat`, `05.10.2026 21:30` — and duration);
+  Discord's five-component modal limit puts the two notice opt-ins and the voice channel in a private settings step
+  (native selects) before **İlanı Oluştur**; drafts live only in memory (30 min, owner + guild bound). The card gains
+  **✏️ Düzenle** (second row, via the additive `MessageButton.NewRow`): owner-only, same form prefilled; size never below
+  the Joined players, start only before the event, `ExpiresAt = (EventAt ?? CreatedAt) + duration`, handled notices never
+  repeat or revive, same card redrawn without pings. No migration.
+- **NOT VERIFIED_LIVE**: the modal and settings step in Discord clients, the public follow-up card after the settings step
+  and the bot's later edit of that card.
 - Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
 
 ## What has been verified against real Discord / real APIs
