@@ -88,7 +88,7 @@ public sealed class Formula1Poller(
                 wake.CancelAfter(TickInterval);
                 try
                 {
-                    await listener.Events.WaitToReadAsync(wake.Token);
+                    await listener.WaitForLiveDataAsync(wake.Token);
                     if (!stoppingToken.IsCancellationRequested)
                         await Task.Delay(TimeSpan.FromMilliseconds(250), clock, stoppingToken); // let a burst arrive together
                 }
@@ -119,6 +119,11 @@ public sealed class Formula1Poller(
             while (listener.Events.TryRead(out _))
             {
                 // nobody to notify: drop leftovers so the loop does not keep waking up
+            }
+
+            while (listener.Incidents.TryRead(out _))
+            {
+                // same for race-control incidents
             }
 
             return;
@@ -309,6 +314,14 @@ public sealed class Formula1Poller(
                 }
 
                 changed |= (await workflow.ApplyLifecycleAsync(lifecycle.Id, events.Value!, ct)).Count > 0;
+                if (lifecycle is IF1RaceControlSource raceControl)
+                {
+                    var incidents = await SafeAsync(() => raceControl.GetIncidentsAsync(session.LifecycleProviderRef!, ct), now);
+                    if (incidents.HasData)
+                        changed |= await workflow.ApplyIncidentsAsync(lifecycle.Id, incidents.Value!, ct) > 0;
+                    else
+                        logger.LogWarning("F1 race control reconcile {Session}: {Outcome} {Detail}", session.SessionKey, incidents.Outcome, incidents.Detail);
+                }
             }
 
             var connected = listener.Status.State == F1LiveState.Connected;
@@ -324,12 +337,18 @@ public sealed class Formula1Poller(
         var batch = new List<F1LifecycleEvent>();
         while (batch.Count < 1000 && listener.Events.TryRead(out var e))
             batch.Add(e);
-        if (batch.Count == 0)
+        var incidents = new List<F1RaceControlIncident>();
+        while (incidents.Count < 1000 && listener.Incidents.TryRead(out var i))
+            incidents.Add(i);
+        if (batch.Count == 0 && incidents.Count == 0)
             return false;
         var workflow = sp.GetRequiredService<Formula1Workflow>();
         var changed = false;
         foreach (var provider in batch.GroupBy(e => e.ProviderId))
             changed |= (await workflow.ApplyLifecycleAsync(provider.Key, provider.ToList(), ct)).Count > 0;
+        // Incidents after lifecycle: a session must be mapped (it is, once its lifecycle is tracked) to store them.
+        foreach (var provider in incidents.GroupBy(i => i.ProviderId))
+            changed |= await workflow.ApplyIncidentsAsync(provider.Key, provider.ToList(), ct) > 0;
         return changed;
     }
 

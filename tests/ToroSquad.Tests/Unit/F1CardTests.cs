@@ -35,13 +35,13 @@ public sealed class F1CardTests
     private static readonly F1StandingsAttachment NoStandings = new(F1StandingsSection.None, null, null, null);
 
     [Fact]
-    public void Start_card_names_session_circuit_round_and_source_and_pings_only_the_given_role()
+    public void Start_card_names_session_circuit_round_without_source_and_pings_only_the_given_role()
     {
         var view = View(F1SessionType.Race) with { State = F1SessionState.Started };
         var message = Live.Started(view, "tr", new MentionPolicy([new RoleId(77)]), "f1.source.openf1");
         message.Embed!.Title.Should().Be("🏎️ Valley Grand Prix — Yarış");
         message.Embed.Description.Should().Contain("🔴 **Yarış başladı**").And.Contain("<t:").And.Contain("Valley Ring · Otherland").And.Contain("Round 8 · 2030");
-        message.Embed.Footer.Should().Be("Kaynak: OpenF1");
+        message.Embed.Footer.Should().BeNull("cards show no provider attribution");
         message.Content.Should().Be("<@&77>");
         message.Mentions.Roles.Should().Equal(new RoleId(77));
         DiscordLimits.Validate(message).Should().BeEmpty();
@@ -61,7 +61,7 @@ public sealed class F1CardTests
         lines.Should().Contain("4. Di Brisk — Team 4 — +1 tur");
         lines.Should().Contain("5. Ed Nimble — Team 5", "no gap was supplied, none is invented");
         lines.Should().Contain("`DNF` Fi Rush — Team 6").And.Contain("`DNS` Gu Dash — Team 7").And.Contain("`DSQ` Ha Zoom — Team 8");
-        message.Embed.Footer.Should().Be("Kaynak: OpenF1");
+        message.Embed.Footer.Should().BeNull("cards show no provider attribution");
         DiscordLimits.Validate(message).Should().BeEmpty();
     }
 
@@ -154,7 +154,7 @@ public sealed class F1CardTests
         pending.Embed!.Fields.Single().Value.Should().Contain("Waiting for the standings update");
         var stale = Live.Result(View(F1SessionType.Race), result, new(F1StandingsSection.NotUpdated, null, null, null), false, "en", MentionPolicy.None, "f1.source.openf1", 10);
         stale.Embed!.Fields.Single().Value.Should().Contain("/f1 standings drivers");
-        stale.Embed.Footer.Should().Be("Source: OpenF1", "the standings source is only credited when its data is shown");
+        stale.Embed.Footer.Should().BeNull("cards show no provider attribution");
     }
 
     [Fact]

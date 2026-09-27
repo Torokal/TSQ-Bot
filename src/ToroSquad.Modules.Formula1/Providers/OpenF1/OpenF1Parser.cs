@@ -91,6 +91,62 @@ public static class OpenF1Parser
         }
     }
 
+    public static IReadOnlyList<F1RaceControlIncident> ParseIncidents(JsonElement root) =>
+        Array(root).EnumerateArray().Select(ParseIncident).OfType<F1RaceControlIncident>().OrderBy(i => i.OccurredAt).ToList();
+
+    /// <summary>The incident carried by one MQTT race_control message, if any.</summary>
+    public static F1RaceControlIncident? ParseMqttIncident(string topic, string payload)
+    {
+        if (topic != OpenF1Topics.RaceControl)
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(payload);
+            return ParseIncident(doc.RootElement);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// One race_control row → incident, or null. Exact provider messages only (verified against real 2024–2026 OpenF1
+    /// race_control data, see tests/ToroSquad.Tests/Fixtures/f1/openf1-race-control-*.json); VSC, yellow/green flags,
+    /// penalties, investigations ("... RED FLAG INFRINGEMENT"), track limits, deleted laps and aborted starts are never
+    /// incidents. Disqualifications are not read from race_control (it carries none); see Formula1Workflow.
+    /// </summary>
+    public static F1RaceControlIncident? ParseIncident(JsonElement row)
+    {
+        if (row.ValueKind != JsonValueKind.Object)
+            return null;
+        var session = Int(row, "session_key");
+        var at = Instant(row, "date");
+        var message = Str(row, "message")?.ToUpperInvariant();
+        if (session is null || at is null || message is null)
+            return null;
+        var category = Str(row, "category");
+        var lap = Int(row, "lap_number");
+        var sessionRef = session.Value.ToString(CultureInfo.InvariantCulture);
+        F1RaceControlIncident Make(F1IncidentKind kind) => new(Source, sessionRef, kind, at.Value, lap, null, null, null);
+
+        if (category == "SafetyCar")
+        {
+            return message switch
+            {
+                RaceControlMessages.SafetyCarDeployed => Make(F1IncidentKind.SafetyCarDeployed),
+                RaceControlMessages.SafetyCarInThisLap => Make(F1IncidentKind.SafetyCarEnding),
+                _ => null, // VSC and anything else
+            };
+        }
+
+        if (RaceControlMessages.IsRedFlag(category, Str(row, "flag"), Str(row, "scope"), message))
+            return Make(F1IncidentKind.RedFlag);
+        if (RaceControlMessages.IsSessionRestart(category, message))
+            return Make(F1IncidentKind.RedFlagCleared);
+        return null;
+    }
+
     /// <summary>Joins session_result with the session's driver list into a normalized classification.</summary>
     public static F1SessionResult ParseSessionResult(JsonElement resultRoot, JsonElement? driversRoot, F1Session session)
     {

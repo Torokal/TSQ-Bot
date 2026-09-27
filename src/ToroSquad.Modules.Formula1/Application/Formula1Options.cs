@@ -71,6 +71,28 @@ public sealed class Formula1Options
     /// <summary>Rows shown in the standings section of a result card (full tables: /f1 standings).</summary>
     public int CardStandingsRows { get; set; } = 10;
 
+    /// <summary>
+    /// Thursday weekend-schedule card window (UTC hours, Thursday of the race week). Never sent before the window, after it,
+    /// or once the weekend's first session has started (no late card).
+    /// </summary>
+    public int WeekendScheduleFromHourUtc { get; set; } = 6;
+
+    public int WeekendScheduleUntilHourUtc { get; set; } = 20;
+
+    /// <summary>The race reminder may be delivered this long after "start − 15 min" at most (never late).</summary>
+    public int RaceReminderGraceMinutes { get; set; } = 3;
+
+    /// <summary>A Safety Car / red-flag card is only sent this soon after the provider's message time (no late cards).</summary>
+    public int IncidentFreshMinutes { get; set; } = 10;
+
+    /// <summary>A disqualification card is only sent this soon after the provider's message (stewards may decide after the flag).</summary>
+    public int DisqualificationFreshHours { get; set; } = 3;
+
+    /// <summary>
+    /// HTTPS base URL of the in-house card thumbnails (assets/formula1 in the repository). Empty = no thumbnails.
+    /// </summary>
+    public string AssetBaseUrl { get; set; } = "https://raw.githubusercontent.com/Torokal/TSQ-Bot/main/assets/formula1/";
+
     public sealed class ProviderSection
     {
         public F1ProviderMode Mode { get; set; } = F1ProviderMode.Fixture;
@@ -113,6 +135,16 @@ public sealed class Formula1Options
         Range(nameof(StandingsSettleWindowMinutes), StandingsSettleWindowMinutes, 5, 1440);
         Range(nameof(SessionMatchToleranceHours), SessionMatchToleranceHours, 1, 24);
         Range(nameof(CardStandingsRows), CardStandingsRows, 3, 22);
+        Range(nameof(WeekendScheduleFromHourUtc), WeekendScheduleFromHourUtc, 0, 23);
+        Range(nameof(WeekendScheduleUntilHourUtc), WeekendScheduleUntilHourUtc, 1, 24);
+        if (WeekendScheduleUntilHourUtc <= WeekendScheduleFromHourUtc)
+            errors.Add("Formula1:WeekendScheduleUntilHourUtc must be after WeekendScheduleFromHourUtc");
+        Range(nameof(RaceReminderGraceMinutes), RaceReminderGraceMinutes, 1, 10);
+        Range(nameof(IncidentFreshMinutes), IncidentFreshMinutes, 1, 60);
+        Range(nameof(DisqualificationFreshHours), DisqualificationFreshHours, 1, 24);
+        if (!string.IsNullOrEmpty(AssetBaseUrl) &&
+            (!Uri.TryCreate(AssetBaseUrl, UriKind.Absolute, out var assets) || assets.Scheme != Uri.UriSchemeHttps || !AssetBaseUrl.EndsWith('/')))
+            errors.Add("Formula1:AssetBaseUrl must be an absolute https URL ending with '/' (or empty)");
         if (StandingsSettleWindowMinutes > ResultCorrectionHours * 60)
             errors.Add("Formula1:StandingsSettleWindowMinutes must not exceed ResultCorrectionHours (standings edit the result message)");
         return errors;

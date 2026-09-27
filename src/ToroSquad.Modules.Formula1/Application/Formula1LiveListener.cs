@@ -23,6 +23,8 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
 
     private readonly Channel<F1LifecycleEvent> _events = Channel.CreateBounded<F1LifecycleEvent>(
         new BoundedChannelOptions(10_000) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
+    private readonly Channel<F1RaceControlIncident> _incidents = Channel.CreateBounded<F1RaceControlIncident>(
+        new BoundedChannelOptions(10_000) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
     private readonly Lock _gate = new();
     private readonly HashSet<string> _seen = new(StringComparer.Ordinal);
     private readonly Queue<string> _seenOrder = new();
@@ -33,6 +35,21 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
     private F1LiveStatus _status = Publish(cache, F1LiveStatus.Initial(transport.IsConfigured));
 
     public ChannelReader<F1LifecycleEvent> Events => _events.Reader;
+
+    /// <summary>Race-control incidents (Safety Car, red flag, disqualification) from the same live connection.</summary>
+    public ChannelReader<F1RaceControlIncident> Incidents => _incidents.Reader;
+
+    /// <summary>Completes when a lifecycle event or an incident is waiting (the poller wakes early for either).</summary>
+    public async Task WaitForLiveDataAsync(CancellationToken ct)
+    {
+        // Cancel the waiter that did not fire, so no pending read is left behind on either channel.
+        using var both = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var events = _events.Reader.WaitToReadAsync(both.Token).AsTask();
+        var incidents = _incidents.Reader.WaitToReadAsync(both.Token).AsTask();
+        await Task.WhenAny(events, incidents);
+        await both.CancelAsync();
+        ct.ThrowIfCancellationRequested();
+    }
 
     public bool IsConfigured => transport.IsConfigured;
 
@@ -158,7 +175,7 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
             TimeSpan wait;
             try
             {
-                await transport.RunConnectionAsync(OnEventAsync, () =>
+                await transport.RunConnectionAsync(OnEventAsync, OnIncidentAsync, () =>
                 {
                     failures = 0;
                     Interlocked.Exchange(ref _reconnected, 1);
@@ -230,6 +247,22 @@ public sealed class Formula1LiveListener(IF1LiveTransport transport, Formula1Cac
         }
 
         await _events.Writer.WriteAsync(e, ct);
+    }
+
+    /// <summary>Queues an incident; exact repeats (same provider message fingerprint) are dropped here already.</summary>
+    public async Task OnIncidentAsync(F1RaceControlIncident i, CancellationToken ct)
+    {
+        var key = string.Join('|', "incident", i.ProviderId, i.ProviderSessionRef, i.Fingerprint);
+        lock (_gate)
+        {
+            if (!_seen.Add(key))
+                return;
+            _seenOrder.Enqueue(key);
+            while (_seenOrder.Count > DedupeCapacity)
+                _seen.Remove(_seenOrder.Dequeue());
+        }
+
+        await _incidents.Writer.WriteAsync(i, ct);
     }
 
     private static F1LiveStatus Publish(Formula1Cache cache, F1LiveStatus status)

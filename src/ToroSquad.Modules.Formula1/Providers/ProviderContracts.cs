@@ -152,6 +152,23 @@ public interface IF1LiveTransport
     bool IsConfigured { get; }
 
     Task RunConnectionAsync(Func<F1LifecycleEvent, CancellationToken, Task> onEvent, Action onConnected, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Same connection, additionally delivering race-control incidents (Safety Car, red flag, disqualification). Transports
+    /// without incident support deliver lifecycle events only.
+    /// </summary>
+    Task RunConnectionAsync(Func<F1LifecycleEvent, CancellationToken, Task> onEvent, Func<F1RaceControlIncident, CancellationToken, Task> onIncident,
+        Action onConnected, CancellationToken cancellationToken) =>
+        RunConnectionAsync(onEvent, onConnected, cancellationToken);
+}
+
+/// <summary>
+/// Optional capability of a lifecycle provider: the race-control incidents of a session over REST (reconciliation after a
+/// reconnect or while the live stream is down). Same normalization as the live channel.
+/// </summary>
+public interface IF1RaceControlSource
+{
+    Task<F1ProviderResult<IReadOnlyList<F1RaceControlIncident>>> GetIncidentsAsync(string providerSessionRef, CancellationToken cancellationToken);
 }
 
 /// <summary>Token bucket per provider budget (requests per period), so documented limits can never be exceeded by TSQ Bot.</summary>

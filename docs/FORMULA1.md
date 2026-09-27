@@ -175,12 +175,14 @@ gerçekten bitene kadar yeni bağlantı açılmaz. Host kapanışı bu yüzden t
 
 ## Komutlar
 
-Genel (`/f1`, modül açık olmalı; tüm yanıtlar ephemeral, kaynak + güncellik gösterir):
+Genel (`/f1`, modül açık olmalı; yalnızca önbellekten okunur). `next`, `schedule`, `standings` ve `now` yanıtları **kanalda herkese
+halka açık**; `results` spoiler riski nedeniyle **ephemeral** kalır. "Veri yok" türü hatalar yalnızca çağırana görünür. Kartlarda
+sağlayıcı adı/"Kaynak" gösterilmez, güncellik ("Veri: …") gösterilir; `/f1-admin` komutlarının tümü ephemeral:
 
 | Komut | Ne yapar |
 |---|---|
 | `/f1 next` | Sıradaki (veya süren) Grand Prix: tur, pist, yarış saati, tüm seanslar |
-| `/f1 schedule [round]` | Hafta sonu programı (sprint/standart), seans durumları; canlı durum yoksa bunu açıkça belirtir |
+| `/f1 schedule [round]` | Parametresiz: güncel sezonun tam takvimi (round, GP, yarış tarihi, ⚡ Sprint; ✅ bitti · 🔴 yalnızca sağlayıcı doğruladıysa canlı · ➡️ sıradaki · ▫️ gelecek). `round:N`: o hafta sonunun ayrıntılı programı ve seans durumları. Sezon önbellekten seçilir (kodda yıl yok) |
 | `/f1 results [session] [spoiler]` | Önbellekteki son sınıflandırma (`latest`, `race`, `sprint`, `qualifying`, `sprint-qualifying`, `fp1`–`fp3`) |
 | `/f1 now` | Canlı sağlayıcıya göre süren seans; bilinmiyorsa "kullanılamıyor" (tahmin yok) |
 | `/f1 standings drivers` / `/f1 standings constructors` | Sağlayıcının tablosu, "N. yarış sonrası", güncellik, bayatlık uyarısı |
@@ -263,8 +265,9 @@ gönderilmez; modül zaten varsayılan kapalıdır.
 | **Jolpica F1** (`api.jolpi.ca/ergast/f1/`) | Takvim, sürücüler/takımlar puan durumu | yakın-gerçek zamanlı + tarihsel | Yok | TERMS.md (2025-08-27): **yalnızca ticari olmayan kullanım**, veri **CC BY-NC-SA 4.0**; ticari kullanım için admin@jolpi.ca. 4 istek/sn, 500 istek/saat; özel User-Agent zorunlu; gönüllü projedir, doğruluk/erişilebilirlik garantisi yok |
 | **OpenF1** (`api.openf1.org`) | Canlı seans yaşam döngüsü (MQTT/REST), sonuçlar | canlı (**ücretli sponsor erişimi**) + tarihsel (2023+, ücretsiz) | Canlı için hesap (kullanıcı adı/parola → OAuth2 token) | Veri **CC BY-NC-SA 4.0**, "eğitim, kişisel proje, araştırma ve **ticari olmayan** hayran etkileşimi" için; resmî değildir, Formula 1 şirketleriyle bağlantısı yoktur. Ücretsiz: 3 istek/sn, 30 istek/dk; sponsor: 6/sn, 60/dk, 10 eşzamanlı MQTT |
 
-- Her kartın altbilgisinde kaynak yazar ("Kaynak: OpenF1", puan durumu eklendiyse "· Puan durumu: Jolpica F1"); komutlar
-  kaynağı ve güncelliği gösterir. Bot hiçbir yerde "resmî Formula 1 API" iddiasında bulunmaz. `/bot about` Jolpica F1,
+- Otomatik bildirim kartları ve önizlemeler sağlayıcı adı/"Kaynak" altbilgisi göstermez (sahip kararı; TEST/DEMO etiketi kalır).
+  Kaynak bilgisi içeride korunur: loglar, sağlayıcı durumu, `/f1-admin doctor`. `/f1` komutları kaynağı ve güncelliği göstermeye
+  devam eder. Bot hiçbir yerde "resmî Formula 1 API" iddiasında bulunmaz. `/bot about` Jolpica F1,
   OpenF1 (CC BY-NC-SA 4.0) ve MQTTnet (MIT) atıflarını listeler.
 - TSQ Bot'un mevcut kullanımı (tek sunuculu, ücretsiz, reklamsız hayran botu) ticari olmayan kullanım olarak
   değerlendirilmiştir. **İşletmeci sorumluluğu:** kullanım ticari hale gelirse (ücretli bot, reklam, sponsorluk) önce
@@ -283,17 +286,62 @@ Migration: `Formula1Module` (yalnızca eklemeli; esports tablolarına dokunmaz).
 | `f1_result_snapshot` | Son kanonik sınıflandırma (normalize JSON + hash, düzeltme sayısı) |
 | `f1_standings_snapshot` | Farklı her puan tablosu (hash değişince yeni satır) |
 | `f1_provider_state` | Sağlayıcı sağlığı (son deneme/başarı, sonuç, ardışık hata, ayrıntı) + önbelleklenmiş takvim |
+| `f1_race_control_event` | V2: Safety Car / kırmızı bayrak / diskalifiye olayları (oturum + parmak izi benzersiz; migration `Formula1LowSpamV2`) |
 
 Kullanıcıya ait veri tutulmaz; sunucu verisi saklama süresi sonunda silinir.
+
+## Düşük gürültülü V2 bildirimleri
+
+Beş yeni bildirim türü, her biri `/f1-admin configure notifications` içinde ayrı bir anahtarla açılır. **Hepsi varsayılan
+olarak KAPALI** (mevcut sunucular yeni mesaj almaz; migration `Formula1LowSpamV2` sütunları `false` ile ekler). Hepsi
+mevcut hattan geçer: sağlayıcı → normalize → workflow/kalıcılık → planner → outbox → Discord. Hiçbiri ping atmaz; teslim
+anında kendi anahtarı kontrol edilir (kapatılırsa bekleyen kart iptal edilir); pause, kanal, watermark ve modül durumu geçerlidir.
+
+| Tür (anahtar) | Kaynak | En fazla | Zamanlama / tazelik |
+|---|---|---|---|
+| Hafta sonu programı (`weekend_schedule`) | Jolpica takvimi | hafta sonu başına 1 | Yarış haftasının perşembesi 06:00–20:00 UTC (`Formula1:WeekendScheduleFromHourUtc`/`UntilHourUtc`) ve ilk seanstan önce; pencere kaçarsa hiç gönderilmez |
+| Yarış hatırlatması (`race_reminder`) | Jolpica takvimi | yarış başına 1 | Planlanan yarış başlangıcından tam 15 dk önce; en geç 3 dk içinde (`RaceReminderGraceMinutes`), sonra hiç. Yalnızca Yarış (sprint/sıralama/antrenman yok). Gerçek "yarış başladı" kartı ayrı ve yaşam döngüsüne bağlı kalır |
+| Safety Car (`safety_car:<faz>`) | OpenF1 race_control | gerçek SC fazı başına 1 | Sağlayıcı mesaj zamanından en fazla 10 dk sonra (`IncidentFreshMinutes`) |
+| Kırmızı bayrak (`red_flag:<faz>`) | OpenF1 race_control | gerçek kırmızı bayrak fazı başına 1 | Aynı tazelik kuralı |
+| Diskalifiye (`disqualification:<araç>`) | OpenF1 session_result `dsq: true` | araç başına 1 | İlk görüldükten en fazla 3 saat sonra (`DisqualificationFreshHours`) |
+
+Sağlayıcı semantiği (gerçek OpenF1 verisinden, 2024–2026; fixture: `tests/ToroSquad.Tests/Fixtures/f1/openf1-race-control-*.json`):
+
+- **Safety Car:** kategori `SafetyCar`, mesaj tam olarak `SAFETY CAR DEPLOYED` bir faz açar; `SAFETY CAR IN THIS LAP` kapatır
+  (kırmızı bayrak ve yeniden start da kapatır). Açık fazdaki tekrar "deployed" mesajı yeni kart değildir. `VSC DEPLOYED` /
+  `VSC ENDING` aynı kategoride gelir ve **yok sayılır**. SC bitişi ayrıca duyurulmaz. 2026 Azerbaycan GP: tur 31 ve tur 36'da iki ayrı faz.
+- **Kırmızı bayrak:** açık kırmızı bayrak mesajı gerekir — `Flag`/`RED`/`Track` satırı (`RED FLAG`, 2024–2025) veya 2026 yarış biçimi
+  `RED FLAG - RACE SUSPENDED` (`Other`). `SESSION ABORTED` tek başına kullanılmaz (gözlenen 41 örneğin hepsinde bir dakika içinde açık
+  kırmızı bayrak mesajı vardı, ama her kırmızı bayrakta ABORTED yok). Faz `SESSION STARTED` ile kapanır. `... RED FLAG INFRINGEMENT`
+  (soruşturma) ve `STARTING PROCEDURE SUSPENDED` (iptal edilen start) kırmızı bayrak değildir. 2024 Brezilya sıralaması: 5 ayrı faz.
+- **Diskalifiye:** race_control 2024–2026 verisinde hiç diskalifiye mesajı içermiyor; serbest metinden tahmin yapılmaz. Kaynak,
+  doğrulanmış sınıflandırmadaki `dsq: true` alanıdır (gerçek örnekler: 2025 Çin #16/#44/#10, 2024 Belçika #63, 2025 Las Vegas #4/#81).
+  Yarış sonrası karar sınıflandırma düzeltmesi olarak gelir ve yeni diskalifiye edilen araç için bir kart üretir. Gerekçe alanı
+  sağlayıcıda yok; kartta sürücü numarası/adı ve zaman gösterilir.
+
+Kalıcılık ve tekrar koruması: olaylar `f1_race_control_event` tablosunda (oturum + sağlayıcı mesaj parmak izi benzersiz)
+bir kez saklanır — MQTT, REST mutabakatı veya yeniden bağlanma sonrası tekrar aynı satırı üretemez. Fazlar bu kalıcı geçmişten
+hesaplanır; outbox mantıksal anahtarı (sunucu + seans/hafta sonu + kanal + tür/faz) her kartı en fazla bir mesaj yapar, yeniden
+başlatmadan sonra da. Perşembe kartı ve hatırlatma, penceresinin başlangıcı watermark'tan önceyse gönderilmez (pencere açıldıktan
+sonra açılan anahtar o hafta sonunu atlar).
+
+Görseller (küçük resim, `Formula1:AssetBaseUrl`, boş = kapalı): `assets/formula1/start-lights.png` (yarış başladı + hatırlatma),
+`safety-car.png`, `red-flag.png`, `weekend-schedule.png`. Hepsi `assets/formula1/generate.py` ile üretilmiş, TSQ'ya ait basit
+geometrik çizimlerdir (harici görsel, logo, marka veya resmî F1 görseli yok; repo lisansı AGPL-3.0-only). Varsayılan URL
+`https://raw.githubusercontent.com/Torokal/TSQ-Bot/main/assets/formula1/` — dosyalar `main`'e girene kadar Discord küçük resmi göstermez.
+
+**Eklenmeyenler (bilerek):** VSC, sarı/yeşil bayrak bildirimleri, genel ceza bildirimleri (5/10 sn, drive-through, stop-go,
+uyarı), pist sınırı, silinen tur, soruşturma bildirimleri, favori pilot bildirimleri, canlı ilk 10, tahminler.
 
 ## Kapsam dışı (V1)
 
 Canlı sıralama/tur tur mesajları, lastik stratejisi, telemetri, sektör karşılaştırması, tahmin, yapay zekâ özetleri,
 fantezi puanları, bahis. Mimari şunları engellemez: sıralama bildirimleri (modelli, anahtarla açılır), pilot takip rolleri,
-logolar, en hızlı tur, pit özetleri, güvenlik aracı / kırmızı bayrak bildirimleri (race_control zaten dinleniyor), alternatif
-ticari sağlayıcılar.
+logolar, en hızlı tur, pit özetleri, alternatif ticari sağlayıcılar. (Safety Car / kırmızı bayrak / diskalifiye: yukarıdaki V2 bölümü.)
 
 ## Durum
 
-Uygulandı ve çevrimdışı test edildi (**TESTED_OFFLINE**). Canlı Discord ve canlı sağlayıcı ile doğrulanmadı
-(**VERIFIED_LIVE değil**); OpenF1 canlı erişimi kimlik bilgisi/ücretli plan beklediği için **BLOCKED**.
+V1: 2026-09-26 Azerbaycan GP'de canlı doğrulandı (**VERIFIED_LIVE**, OpenF1 Sponsor MQTT): gerçek yarış başlangıcı → tek
+"yarış başladı" kartı (~7 sn), tam sınıflandırma → tek sonuç kartı, Jolpica puan durumu → aynı mesajın düzenlenmesi, token
+yenileme/MQTT yeniden bağlanma ve Railway yeniden başlatması kopya üretmedi. Düşük gürültülü V2 bildirimleri uygulandı ve
+gerçek sağlayıcı verisiyle çevrimdışı test edildi (**TESTED_OFFLINE**); canlı Discord'da henüz doğrulanmadı.

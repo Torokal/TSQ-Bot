@@ -36,6 +36,13 @@ public sealed class Formula1GuildConfigEntity
     public bool NotifySprintQualifyingStart { get; set; }
     public bool NotifySprintQualifyingResults { get; set; }
 
+    // Low-spam V2 (docs/FORMULA1.md): all off by default so existing guilds get no new messages until an admin opts in.
+    public bool NotifyWeekendSchedule { get; set; }
+    public bool NotifyRaceReminder { get; set; }
+    public bool NotifyDisqualification { get; set; }
+    public bool NotifySafetyCar { get; set; }
+    public bool NotifyRedFlag { get; set; }
+
     public string? ChannelProblem { get; set; }
     public DateTimeOffset? ChannelProblemAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
@@ -108,6 +115,26 @@ public sealed class F1SessionSnapshotEntity
     public DateTimeOffset FirstSeenAt { get; set; }
     public DateTimeOffset LastSeenAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// One provider race-control incident (Safety Car, red flag, disqualification) of a mapped session, stored once per
+/// provider message (unique <see cref="Fingerprint"/> per session). Phases and "one notification per phase/car" are derived
+/// from this persisted history, so restarts, reconnects and replays can never announce the same incident twice.
+/// </summary>
+public sealed class F1RaceControlEventEntity
+{
+    public long Id { get; set; }
+    public string SessionKey { get; set; } = "";
+    public int Kind { get; set; }
+    public DateTimeOffset OccurredAt { get; set; }
+    public int? Lap { get; set; }
+    public int? DriverNumber { get; set; }
+    public string? DriverCode { get; set; }
+    public string? Reason { get; set; }
+    public string Fingerprint { get; set; } = "";
+    public string Provider { get; set; } = "";
+    public DateTimeOffset RecordedAt { get; set; }
 }
 
 /// <summary>Latest canonical classification of a session (normalized JSON + deterministic hash).</summary>
@@ -187,6 +214,17 @@ public sealed class Formula1ModelContributor : IModelContributor
             e.HasIndex(x => x.ScheduledStartUtc);
             e.HasIndex(x => new { x.Season, x.Round });
             e.HasIndex(x => new { x.LifecycleProvider, x.LifecycleProviderRef });
+        });
+        modelBuilder.Entity<F1RaceControlEventEntity>(e =>
+        {
+            e.ToTable("f1_race_control_event");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.SessionKey).HasMaxLength(32);
+            e.Property(x => x.DriverCode).HasMaxLength(8);
+            e.Property(x => x.Reason).HasMaxLength(200);
+            e.Property(x => x.Fingerprint).HasMaxLength(64);
+            e.Property(x => x.Provider).HasMaxLength(32);
+            e.HasIndex(x => new { x.SessionKey, x.Fingerprint }).IsUnique();
         });
         modelBuilder.Entity<F1ResultSnapshotEntity>(e =>
         {
