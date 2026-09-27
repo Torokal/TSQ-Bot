@@ -52,6 +52,7 @@ public sealed class LfgModule : IToroModule
         services.AddSingleton<LfgNoticeRenderer>();
         services.AddSingleton<LfgExpiryWorker>();
         services.AddScoped<LfgService>();
+        services.AddSingleton<LfgFormDrafts>();
         services.AddScoped<LfgCardSync>();
         services.AddScoped<LfgNoticePlanner>();
         services.AddScoped<LfgConfigService>();

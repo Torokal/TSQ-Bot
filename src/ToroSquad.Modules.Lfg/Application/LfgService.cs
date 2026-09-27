@@ -17,8 +17,9 @@ namespace ToroSquad.Modules.Lfg.Application;
 public sealed record LfgResult(OperationResult Result, LfgListingView? Listing, bool RefreshCard);
 
 /// <summary>
-/// What /ekip asked for. <see cref="StartMinutes"/>: one of <see cref="LfgRules.StartChoicesMinutes"/> (null/0 = now).
-/// The notices are explicit opt-ins and need a later start. <see cref="VoiceChannel"/>: optional guild voice channel.
+/// What the /ekip form asked for. <see cref="StartMinutes"/>: a relative start in minutes (null/0 = now) or
+/// <see cref="StartAt"/>: a custom date — never both. The notices are explicit opt-ins and need a later start.
+/// <see cref="VoiceChannel"/>: optional guild voice channel.
 /// </summary>
 public sealed record LfgCreateInput(
     string? Game,
@@ -70,38 +71,9 @@ public sealed class LfgService(
     {
         var o = options.Value;
         var now = clock.GetUtcNow();
-        // A custom date is wall-clock time in the guild's (existing, /setup-managed) time zone — default Europe/Istanbul.
-        TimeZoneInfo? zone = null;
-        if (!string.IsNullOrWhiteSpace(input.StartAt) && GuildTime.TryResolve((await settings.GetAsync(actor.GuildId, ct)).TimeZoneId, out var guildZone))
-            zone = guildZone;
-        var (draft, error) = LfgRules.Validate(input.Game, input.Details, input.Players, input.DurationMinutes, o.MaxPlayersPerListing, o.DefaultExpirationMinutes,
-            input.StartMinutes, input.NotifyBeforeStart || input.NotifyAtStart, input.StartAt, zone, now);
+        var (draft, refusal) = await PrepareCreateAsync(actor, channel, input, now, ct);
         if (draft is null)
-            return Refused(error switch
-            {
-                LfgDraftError.GameMissing or LfgDraftError.GameTooShort => No(OperationError.InvalidInput, "lfg.create.game_too_short", LfgRules.GameNameMinLength),
-                LfgDraftError.GameTooLong => No(OperationError.InvalidInput, "lfg.create.game_too_long", LfgRules.GameNameMaxLength),
-                LfgDraftError.DetailsTooLong => No(OperationError.InvalidInput, "lfg.create.details_too_long", LfgRules.DetailsMaxLength),
-                LfgDraftError.PlayersOutOfRange => No(OperationError.InvalidInput, "lfg.create.players_range", LfgRules.MinPlayers, Math.Min(o.MaxPlayersPerListing, LfgRules.HardMaxPlayers)),
-                LfgDraftError.StartInvalid => No(OperationError.InvalidInput, "lfg.create.start_invalid"),
-                LfgDraftError.NoticeNeedsStart => No(OperationError.InvalidInput, "lfg.create.notice_needs_start"),
-                LfgDraftError.StartConflict => No(OperationError.InvalidInput, "lfg.create.start_conflict"),
-                LfgDraftError.DateFormat => No(OperationError.InvalidInput, "lfg.create.date_format"),
-                LfgDraftError.DateNotInTimeZone => No(OperationError.InvalidInput, "lfg.create.date_not_in_zone"),
-                LfgDraftError.DateAmbiguous => No(OperationError.InvalidInput, "lfg.create.date_ambiguous"),
-                LfgDraftError.DateNotInFuture => No(OperationError.InvalidInput, "lfg.create.date_not_future"),
-                LfgDraftError.DateTooFar => No(OperationError.InvalidInput, "lfg.create.date_too_far"),
-                LfgDraftError.TimeZoneInvalid => No(OperationError.InvalidInput, "lfg.create.timezone_invalid"),
-                _ => No(OperationError.InvalidInput, "lfg.create.duration_invalid"),
-            });
-
-        var config = await db.Set<LfgGuildConfigEntity>().AsNoTracking().FirstOrDefaultAsync(c => c.GuildId == actor.GuildId.Value, ct);
-        if (config?.ChannelId is { } only && only != channel.Value)
-            return Refused(No(OperationError.InvalidInput, "lfg.create.wrong_channel", "<#" + only.ToString(CultureInfo.InvariantCulture) + ">"));
-
-        // Must be a plain voice channel of THIS guild as the bot sees it (another guild's id is simply unknown here).
-        if (input.VoiceChannel is { } voice && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, voice, ct)).Usable)
-            return Refused(No(OperationError.InvalidInput, "lfg.create.voice_invalid"));
+            return Refused(refusal!);
 
         var (eventAt, expiresAt) = draft.Schedule(now); // the same instant the custom date was validated against
         var guild = actor.GuildId.Value;
@@ -139,6 +111,251 @@ public sealed class LfgService(
         logger.LogInformation("LFG listing {Listing} created in guild {Guild} channel {Channel}: {Max} players, starts {EventAt:O}, expires {ExpiresAt:O}",
             id, guild, channel, draft.MaxPlayers, eventAt ?? now, expiresAt);
         return new LfgResult(OperationResult.Ok("lfg.create.done"), await GetAsync(id, ct), RefreshCard: true);
+    }
+
+    /// <summary>
+    /// Before the /ekip form opens: the refusals that do not depend on what will be typed (listing channel, active-listing
+    /// limit), so nobody fills a form for nothing. Advisory only — saving checks everything again.
+    /// </summary>
+    public async Task<OperationResult?> PrecheckCreateAsync(ActorContext actor, ChannelId channel, CancellationToken ct)
+    {
+        var o = options.Value;
+        var now = clock.GetUtcNow();
+        if (await WrongChannelAsync(actor, channel, ct) is { } wrong)
+            return wrong;
+        var active = await Listings.AsNoTracking().CountAsync(x => x.GuildId == actor.GuildId.Value && x.OwnerUserId == actor.UserId.Value &&
+                                                                   (x.Status == LfgStatus.Open || x.Status == LfgStatus.Full) && x.ExpiresAt > now, ct);
+        return active >= o.MaxActiveListingsPerUser ? No(OperationError.Conflict, "lfg.create.limit", o.MaxActiveListingsPerUser) : null;
+    }
+
+    /// <summary>The submitted /ekip form checked exactly like <see cref="CreateAsync"/> would, without storing anything.</summary>
+    public async Task<LfgFormCheck> CheckCreateAsync(ActorContext actor, ChannelId channel, LfgCreateInput input, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var (draft, refusal) = await PrepareCreateAsync(actor, channel, input, now, ct);
+        if (draft is null)
+            return new LfgFormCheck(refusal!, null);
+        var (eventAt, _) = draft.Schedule(now); // a relative start is shown (and offers notices) as of now; saving recomputes it
+        return new LfgFormCheck(OperationResult.Ok("lfg.form.checked"),
+            new LfgFormPreview(draft.GameName, draft.Details, draft.MaxPlayers, draft.Start ?? LfgStart.Now, eventAt, draft.Duration));
+    }
+
+    /// <summary>
+    /// ✏️ Düzenle: only the owner, only while the listing is active. Returns the listing and its form (texts, start in the
+    /// guild's time zone, duration). Nothing changes here; the save re-checks everything against the stored state.
+    /// </summary>
+    public async Task<LfgEditOpening> OpenEditAsync(ActorContext actor, long listingId, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var listing = await GetAsync(listingId, actor.GuildId, ct);
+        if (listing is null)
+            return new(NotFound(), null, null);
+        if (listing.Owner != actor.UserId)
+            return new(No(OperationError.Forbidden, "lfg.edit.forbidden"), null, null);
+        if (!listing.IsActive || listing.ExpiresAt <= now)
+            return new(No(OperationError.Conflict, "lfg.edit.ended"), null, null);
+        return new(OperationResult.Ok("lfg.edit.open"), listing, LfgForm.Prefill(listing, await ZoneAsync(actor.GuildId, ct)));
+    }
+
+    /// <summary>The submitted edit form checked exactly like <see cref="EditAsync"/> would, without storing anything.</summary>
+    public async Task<LfgFormCheck> CheckEditAsync(ActorContext actor, long listingId, LfgEditInput input, CancellationToken ct)
+    {
+        var (result, preview) = await EditCoreAsync(actor, listingId, input, save: false, ct);
+        return new LfgFormCheck(result, preview);
+    }
+
+    /// <summary>
+    /// The owner saves the edit form: game, details, size, start, duration, the two notice opt-ins and the voice channel.
+    /// Owner, participants and status are never edited. Everything is decided on the state read inside the write
+    /// transaction (never on what the form showed): only the owner, only while active; the size never below the Joined
+    /// players (Maybe never counts; equal = Full); the start only while it is still ahead (then relative or a custom date,
+    /// never in the past); <c>ExpiresAt = (EventAt ?? CreatedAt) + duration</c>, so an edit never restarts the listing's
+    /// lifetime. A notice that was already handled (queued or skipped) is never handled again — a new start or switching
+    /// it off and on again cannot repeat it; one switched off while still waiting in the outbox is cancelled; one switched
+    /// on after its moment is consumed as skipped, never sent late. All or nothing: a refused edit changes no field.
+    /// </summary>
+    public async Task<LfgResult> EditAsync(ActorContext actor, long listingId, LfgEditInput input, CancellationToken ct)
+    {
+        var (result, _) = await EditCoreAsync(actor, listingId, input, save: true, ct);
+        return new LfgResult(result, await GetAsync(listingId, actor.GuildId, ct), result.Succeeded && result.MessageKey == "lfg.edit.done");
+    }
+
+    private async Task<(OperationResult Result, LfgFormPreview? Preview)> EditCoreAsync(ActorContext actor, long listingId, LfgEditInput input, bool save, CancellationToken ct)
+    {
+        var o = options.Value;
+        var zone = await ZoneAsync(actor.GuildId, ct);
+        // Must be a plain voice channel of THIS guild as the bot sees it; checked on every save, changed or not.
+        if (input.VoiceChannel is { } voice && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, voice, ct)).Usable)
+            return (No(OperationError.InvalidInput, "lfg.create.voice_invalid"), null);
+
+        return await WriteAsync(async () =>
+        {
+            var now = clock.GetUtcNow();
+            var listing = await FindAsync(actor, listingId, ct);
+            if (listing is null)
+                return (NotFound(), (LfgFormPreview?)null);
+            if (listing.OwnerUserId != actor.UserId.Value)
+                return (No(OperationError.Forbidden, "lfg.edit.forbidden"), null);
+            if (await ExpireIfDueAsync(listing, now, cardStale: true, ct) || Ended(listing) is not null)
+                return (No(OperationError.Conflict, "lfg.edit.ended"), null);
+
+            var form = input.Form;
+            var (game, details, textError) = LfgRules.ValidateTexts(form.Game, form.Details, LfgFormText.Players(form.Players), o.MaxPlayersPerListing);
+            if (textError != LfgDraftError.None)
+                return (Refusal(textError), null);
+            var maxPlayers = LfgFormText.Players(form.Players);
+            var members = await Participants.Where(p => p.ListingId == listing.Id).ToListAsync(ct);
+            var joined = members.Count(p => p.Response == LfgResponse.Joined); // Maybe never counts
+            if (maxPlayers < joined)
+                return (No(OperationError.InvalidInput, "lfg.edit.players_below_joined", joined), null);
+
+            var current = ToView(listing, members);
+            var prefill = LfgForm.Prefill(current, zone);
+
+            // Start: untouched, or new while the start is still ahead. Started = its moment passed (a "now" listing started
+            // at creation) or its start notice was already handled.
+            var started = (listing.EventAt ?? listing.CreatedAt) <= now || listing.StartNoticeState != LfgNoticeState.Pending;
+            var eventAt = listing.EventAt;
+            var start = listing.EventAt is { } at ? LfgStart.AtInstant(at) : LfgStart.Now;
+            if (!LfgForm.SameText(form.Start, prefill.Start))
+            {
+                if (started)
+                    return (Refusal(LfgDraftError.StartLocked), null);
+                var typed = LfgStartText.Parse(form.Start);
+                var (resolved, startError) = LfgRules.ResolveStart(typed.Minutes, typed.At, zone, now);
+                if (resolved is null)
+                    return (Refusal(startError), null);
+                start = resolved;
+                eventAt = resolved.EventAt(now) ?? now; // "now" for a scheduled listing: it starts at this moment
+            }
+
+            // Duration: untouched keeps the current one (even a configured default that is not one of the choices).
+            var duration = LfgForm.Duration(current);
+            if (!LfgForm.SameText(form.Duration, prefill.Duration))
+            {
+                var minutes = LfgFormText.DurationMinutes(form.Duration);
+                if (minutes is { } m && !LfgRules.DurationChoicesMinutes.Contains(m))
+                    return (Refusal(LfgDraftError.DurationInvalid), null);
+                duration = TimeSpan.FromMinutes(minutes ?? o.DefaultExpirationMinutes);
+            }
+
+            var expiresAt = (eventAt ?? listing.CreatedAt) + duration;
+            if (expiresAt <= now)
+                return (Refusal(LfgDraftError.ExpiryPassed), null);
+            if ((input.NotifyBeforeStart || input.NotifyAtStart) && eventAt is null)
+                return (Refusal(LfgDraftError.NoticeNeedsStart), null);
+
+            var preview = new LfgFormPreview(game!, details, maxPlayers, start, eventAt, duration);
+            var voiceId = input.VoiceChannel?.Value;
+            var unchanged = listing.GameName == game && listing.Details == details && listing.MaxPlayers == maxPlayers && listing.EventAt == eventAt &&
+                            listing.ExpiresAt == expiresAt && listing.NotifyBeforeStart == input.NotifyBeforeStart &&
+                            listing.NotifyAtStart == input.NotifyAtStart && listing.VoiceChannelId == voiceId;
+            if (!save)
+                return (OperationResult.Ok("lfg.form.checked"), preview);
+            if (unchanged)
+                return (OperationResult.Ok("lfg.edit.unchanged"), preview);
+
+            // Notices: handled once. Off while waiting in the outbox -> cancelled (the existing close semantics); on after
+            // its moment -> consumed as skipped; a queued or skipped notice is never reset by a new start or a re-enable.
+            if (listing.NotifyBeforeStart && !input.NotifyBeforeStart && listing.ReminderState == LfgNoticeState.Queued)
+                await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "reminder_switched_off", now, ct, LfgNoticePlanner.KindReminder);
+            if (listing.NotifyAtStart && !input.NotifyAtStart && listing.StartNoticeState == LfgNoticeState.Queued)
+                await LfgNoticePlanner.CancelPendingAsync(db, listing.Id, "start_notice_switched_off", now, ct, LfgNoticePlanner.KindStart);
+            if (input.NotifyBeforeStart && !listing.NotifyBeforeStart && listing.ReminderState == LfgNoticeState.Pending && eventAt <= now)
+            {
+                listing.ReminderState = LfgNoticeState.Skipped;
+                listing.ReminderHandledAt = now;
+            }
+
+            if (input.NotifyAtStart && !listing.NotifyAtStart && listing.StartNoticeState == LfgNoticeState.Pending && eventAt <= now)
+            {
+                listing.StartNoticeState = LfgNoticeState.Skipped;
+                listing.StartNoticeHandledAt = now;
+            }
+
+            listing.GameName = game!;
+            listing.Details = details;
+            listing.MaxPlayers = maxPlayers;
+            listing.EventAt = eventAt;
+            listing.ExpiresAt = expiresAt;
+            listing.NotifyBeforeStart = input.NotifyBeforeStart;
+            listing.NotifyAtStart = input.NotifyAtStart;
+            listing.VoiceChannelId = voiceId;
+            listing.Status = joined >= maxPlayers ? LfgStatus.Full : LfgStatus.Open;
+            listing.CardStale = listing.MessageId is not null; // the form lives in another (ephemeral) message: the card is edited separately
+            listing.CardSyncAttempts = 0;
+            listing.Version++;
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("LFG listing {Listing} edited by its owner: {Max} players, starts {EventAt:O}, expires {ExpiresAt:O}",
+                listing.Id, maxPlayers, eventAt ?? listing.CreatedAt, expiresAt);
+            return (OperationResult.Ok("lfg.edit.done"), preview);
+        }, ct);
+    }
+
+    /// <summary>
+    /// Everything about a new listing that does not need the write lock: the texts and numbers, the start (a custom date is
+    /// wall-clock time in the guild's existing /setup time zone — default Europe/Istanbul), the listing channel and the voice
+    /// channel. The active-listing limit is checked under the lock when the listing is inserted.
+    /// </summary>
+    private async Task<(LfgDraft? Draft, OperationResult? Refusal)> PrepareCreateAsync(ActorContext actor, ChannelId channel, LfgCreateInput input, DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var o = options.Value;
+        TimeZoneInfo? zone = null;
+        if (!string.IsNullOrWhiteSpace(input.StartAt) && GuildTime.TryResolve((await settings.GetAsync(actor.GuildId, ct)).TimeZoneId, out var guildZone))
+            zone = guildZone;
+        var (draft, error) = LfgRules.Validate(input.Game, input.Details, input.Players, input.DurationMinutes, o.MaxPlayersPerListing, o.DefaultExpirationMinutes,
+            input.StartMinutes, input.NotifyBeforeStart || input.NotifyAtStart, input.StartAt, zone, now);
+        if (draft is null)
+            return (null, Refusal(error));
+
+        if (await WrongChannelAsync(actor, channel, ct) is { } wrong)
+            return (null, wrong);
+
+        // Must be a plain voice channel of THIS guild as the bot sees it (another guild's id is simply unknown here).
+        if (input.VoiceChannel is { } voice && !(await guilds.GetVoiceChannelAccessAsync(actor.GuildId, voice, ct)).Usable)
+            return (null, No(OperationError.InvalidInput, "lfg.create.voice_invalid"));
+        return (draft, null);
+    }
+
+    private async Task<OperationResult?> WrongChannelAsync(ActorContext actor, ChannelId channel, CancellationToken ct)
+    {
+        var config = await db.Set<LfgGuildConfigEntity>().AsNoTracking().FirstOrDefaultAsync(c => c.GuildId == actor.GuildId.Value, ct);
+        return config?.ChannelId is { } only && only != channel.Value
+            ? No(OperationError.InvalidInput, "lfg.create.wrong_channel", "<#" + only.ToString(CultureInfo.InvariantCulture) + ">")
+            : null;
+    }
+
+    /// <summary>The guild's time zone (existing /setup setting; an unknown id falls back to the default zone, then UTC).</summary>
+    private async Task<TimeZoneInfo> ZoneAsync(GuildId guild, CancellationToken ct)
+    {
+        if (GuildTime.TryResolve((await settings.GetAsync(guild, ct)).TimeZoneId, out var zone))
+            return zone;
+        return GuildTime.TryResolve(GuildSettings.Default(guild).TimeZoneId, out var fallback) ? fallback : TimeZoneInfo.Utc;
+    }
+
+    private OperationResult Refusal(LfgDraftError error)
+    {
+        var o = options.Value;
+        return error switch
+        {
+            LfgDraftError.GameMissing or LfgDraftError.GameTooShort => No(OperationError.InvalidInput, "lfg.create.game_too_short", LfgRules.GameNameMinLength),
+            LfgDraftError.GameTooLong => No(OperationError.InvalidInput, "lfg.create.game_too_long", LfgRules.GameNameMaxLength),
+            LfgDraftError.DetailsTooLong => No(OperationError.InvalidInput, "lfg.create.details_too_long", LfgRules.DetailsMaxLength),
+            LfgDraftError.PlayersOutOfRange => No(OperationError.InvalidInput, "lfg.create.players_range", LfgRules.MinPlayers, Math.Min(o.MaxPlayersPerListing, LfgRules.HardMaxPlayers)),
+            LfgDraftError.StartInvalid => No(OperationError.InvalidInput, "lfg.create.start_invalid"),
+            LfgDraftError.NoticeNeedsStart => No(OperationError.InvalidInput, "lfg.create.notice_needs_start"),
+            LfgDraftError.StartConflict => No(OperationError.InvalidInput, "lfg.create.start_conflict"),
+            LfgDraftError.DateFormat => No(OperationError.InvalidInput, "lfg.create.date_format"),
+            LfgDraftError.DateNotInTimeZone => No(OperationError.InvalidInput, "lfg.create.date_not_in_zone"),
+            LfgDraftError.DateAmbiguous => No(OperationError.InvalidInput, "lfg.create.date_ambiguous"),
+            LfgDraftError.DateNotInFuture => No(OperationError.InvalidInput, "lfg.create.date_not_future"),
+            LfgDraftError.DateTooFar => No(OperationError.InvalidInput, "lfg.create.date_too_far"),
+            LfgDraftError.TimeZoneInvalid => No(OperationError.InvalidInput, "lfg.create.timezone_invalid"),
+            LfgDraftError.StartLocked => No(OperationError.Conflict, "lfg.edit.start_locked"),
+            LfgDraftError.ExpiryPassed => No(OperationError.InvalidInput, "lfg.edit.expiry_passed"),
+            _ => No(OperationError.InvalidInput, "lfg.create.duration_invalid"),
+        };
     }
 
     /// <summary>Records the card message once Discord confirmed it (or a later button click reveals it). Never overwrites.</summary>
@@ -469,7 +686,9 @@ public sealed class LfgService(
             listing.Version,
             Ordered(listing, all, LfgResponse.Maybe),
             listing.EventAt,
-            listing.VoiceChannelId is { } v ? new ChannelId(v) : null);
+            listing.VoiceChannelId is { } v ? new ChannelId(v) : null,
+            listing.NotifyBeforeStart,
+            listing.NotifyAtStart);
     }
 
     /// <summary>Owner first, then in the order of their answer.</summary>
