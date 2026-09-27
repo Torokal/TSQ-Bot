@@ -30,25 +30,27 @@ public static class LfgFormUi
     public const int MaxDescriptionLength = 100;
 
     /// <summary>
-    /// Text inputs allow twice the rule's length: Discord counts UTF-16 units, the rules count characters (an emoji is two
-    /// units), so a stored name is never cut when the edit form is prefilled. The server applies the real limit.
+    /// The edit form's text inputs allow twice the rule's length: Discord counts UTF-16 units, the rules count characters (an
+    /// emoji is two units), so a stored name is never cut when it is prefilled. The server applies the real limit. The
+    /// create form keeps the rule's length (no round trip for plain text that is too long).
     /// </summary>
-    public const int InputLengthFactor = 2;
+    public const int EditInputLengthFactor = 2;
 
     public delegate string Text(string key, params object?[] args);
 
     public static Modal Modal(LfgFormDraft draft, int maxPlayers, Text L)
     {
         var values = draft.Values;
+        var factor = draft.Kind == LfgFormKind.Edit ? EditInputLengthFactor : 1;
         return new ModalBuilder()
             .WithTitle(L(draft.Kind == LfgFormKind.Create ? "lfg.form.title_create" : "lfg.form.title_edit"))
             .WithCustomId(LfgForm.ModalPrefix + draft.Id)
             .AddLabel(L("lfg.form.game"), Input(LfgForm.GameField, TextInputStyle.Short, L("lfg.form.game_placeholder"), LfgRules.GameNameMinLength,
-                LfgRules.GameNameMaxLength * InputLengthFactor, required: true, values.Game), L("lfg.form.game_hint"))
+                LfgRules.GameNameMaxLength * factor, required: true, values.Game), L("lfg.form.game_hint"))
             .AddLabel(L("lfg.form.players"), Input(LfgForm.PlayersField, TextInputStyle.Short, "6", 1, LfgForm.PlayersMaxLength, required: true,
                 values.Players), L("lfg.form.players_hint", LfgRules.MinPlayers, maxPlayers))
             .AddLabel(L("lfg.form.details"), Input(LfgForm.DetailsField, TextInputStyle.Paragraph, L("lfg.form.details_placeholder"), null,
-                LfgRules.DetailsMaxLength * InputLengthFactor, required: false, values.Details), L("lfg.form.details_hint"))
+                LfgRules.DetailsMaxLength * factor, required: false, values.Details), L("lfg.form.details_hint"))
             .AddLabel(L("lfg.form.start"), Input(LfgForm.StartField, TextInputStyle.Short, L("lfg.form.start_placeholder"), null, LfgForm.StartMaxLength,
                 required: false, values.Start), L("lfg.form.start_hint"))
             .AddLabel(L("lfg.form.duration"), Input(LfgForm.DurationField, TextInputStyle.Short, "2", null, LfgForm.DurationMaxLength, required: false,

@@ -244,40 +244,55 @@ public sealed class LfgFormCommands(
 
     /// <summary>
     /// The public card, as a follow-up of the save click (the form itself is private); a posted one is recorded so the bot
-    /// can edit it later. When the post failed, Discord may still have created it (lost response): the recent channel
-    /// history is checked for this listing's card (its Katıl button id). Only a card proven absent — Discord refused the
-    /// request (4xx), or it is not in the history — removes the listing (nobody saw it); otherwise it is kept.
+    /// can edit it later. The listing is removed only when Discord surely did not post the card (it refused the request with
+    /// a 4xx). Any other failure may be a lost response of a posted card: the recent channel history is searched for this
+    /// listing's card (its Katıl button id) and recorded if found; otherwise the listing is kept (never a dead card, never a
+    /// second one) and the first click on the card records it. An empty history proves nothing (no Read Message History
+    /// returns an empty list; the message may appear a moment later).
     /// </summary>
     private async Task<CardPost> PostCardAsync(LfgListingView listing)
     {
         var card = renderer.Render(listing, await LangAsync());
+        IUserMessage posted;
         try
         {
-            var posted = await FollowupAsync(embed: DiscordConversions.ToEmbed(card.Embed), components: DiscordConversions.ToComponents(card.Buttons),
+            posted = await FollowupAsync(embed: DiscordConversions.ToEmbed(card.Embed), components: DiscordConversions.ToComponents(card.Buttons),
                 ephemeral: false, allowedMentions: NoPings);
-            await lfg.AttachMessageAsync(listing.Id, Actor.GuildId, Here, new MessageId(posted.Id), CancellationToken.None);
-            return CardPost.Posted;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException or TaskCanceledException) // a request timeout is a TaskCanceledException
+        catch (HttpException ex) when ((int)ex.HttpCode is >= 400 and < 500)
         {
-            logger.LogWarning(ex, "LFG listing {Listing}: posting its card failed", listing.Id);
-            var refused = ex is HttpException { HttpCode: var code } && (int)code is >= 400 and < 500;
-            var (known, message) = refused ? (true, null) : await FindPostedCardAsync(listing.Id);
-            if (message is { } posted)
-            {
-                await lfg.AttachMessageAsync(listing.Id, Actor.GuildId, Here, posted, CancellationToken.None);
-                return CardPost.Posted;
-            }
-
-            if (!known)
-                return CardPost.Unknown;
+            logger.LogWarning(ex, "LFG listing {Listing}: Discord refused its card; the listing is removed", listing.Id);
             await lfg.DiscardAsync(listing.Id, CancellationToken.None);
             return CardPost.NotPosted;
         }
+        catch (Exception ex) when (IsFailure(ex))
+        {
+            logger.LogWarning(ex, "LFG listing {Listing}: posting its card failed; it may have been posted", listing.Id);
+            if (await FindPostedCardAsync(listing.Id) is not { } found)
+                return CardPost.Unknown;
+            await AttachAsync(listing.Id, found);
+            return CardPost.Posted;
+        }
+
+        await AttachAsync(listing.Id, new MessageId(posted.Id));
+        return CardPost.Posted;
     }
 
-    /// <summary>The listing's card among the channel's latest messages (Known = false: the history could not be read).</summary>
-    private async Task<(bool Known, MessageId? Message)> FindPostedCardAsync(long listingId)
+    /// <summary>Records the posted card; if that fails, the first click on the card records it (the card exists either way).</summary>
+    private async Task AttachAsync(long listingId, MessageId message)
+    {
+        try
+        {
+            await lfg.AttachMessageAsync(listingId, Actor.GuildId, Here, message, CancellationToken.None);
+        }
+        catch (Exception ex) when (IsFailure(ex))
+        {
+            logger.LogWarning(ex, "LFG listing {Listing}: its posted card could not be recorded yet; the first click records it", listingId);
+        }
+    }
+
+    /// <summary>The listing's card among the channel's latest messages, or null (not there, or the history cannot be read).</summary>
+    private async Task<MessageId?> FindPostedCardAsync(long listingId)
     {
         var join = LfgCardRenderer.JoinPrefix + listingId.ToString(CultureInfo.InvariantCulture);
         try
@@ -286,14 +301,17 @@ public sealed class LfgFormCommands(
             var card = recent.FirstOrDefault(m => m.Author.Id == Context.Client.CurrentUser.Id &&
                                                   m.Components.OfType<ActionRowComponent>().SelectMany(r => r.Components).OfType<ButtonComponent>()
                                                       .Any(b => b.CustomId == join));
-            return (true, card is null ? null : new MessageId(card.Id));
+            return card is null ? null : new MessageId(card.Id);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (IsFailure(ex))
         {
             logger.LogWarning(ex, "LFG listing {Listing}: could not check the channel for its card", listingId);
-            return (false, null); // e.g. no Read Message History: cannot tell
+            return null;
         }
     }
+
+    /// <summary>Any failure of a Discord or database call, including a request timeout (a TaskCanceledException); no cancellation token is used here.</summary>
+    private static bool IsFailure(Exception ex) => ex is not OperationCanceledException || ex is TaskCanceledException;
 
     /// <summary>The edit is saved; a failed redraw only leaves the card to the worker (it stays marked stale).</summary>
     private async Task RedrawCardAsync(long listingId)

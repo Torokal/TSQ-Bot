@@ -58,10 +58,9 @@ public sealed class LfgModalContractTests
         }
 
         var byId = inputs.ToDictionary(i => i.Input.CustomId, i => i.Input);
-        (byId["game"].MinLength, byId["game"].MaxLength, byId["game"].Required).Should().Be(((int?)LfgRules.GameNameMinLength, (int?)(LfgRules.GameNameMaxLength * 2), (bool?)true),
-            "Discord counts UTF-16 units, the rule counts characters; the server applies the real limit");
+        (byId["game"].MinLength, byId["game"].MaxLength, byId["game"].Required).Should().Be(((int?)LfgRules.GameNameMinLength, (int?)LfgRules.GameNameMaxLength, (bool?)true));
         (byId["players"].MaxLength, byId["players"].Required).Should().Be(((int?)LfgForm.PlayersMaxLength, (bool?)true));
-        (byId["details"].MaxLength, byId["details"].Required, byId["details"].Style).Should().Be(((int?)(LfgRules.DetailsMaxLength * 2), (bool?)false, TextInputStyle.Paragraph));
+        (byId["details"].MaxLength, byId["details"].Required, byId["details"].Style).Should().Be(((int?)LfgRules.DetailsMaxLength, (bool?)false, TextInputStyle.Paragraph));
         (byId["start"].MaxLength, byId["start"].Required).Should().Be(((int?)LfgForm.StartMaxLength, (bool?)false));
         (byId["duration"].MaxLength, byId["duration"].Required).Should().Be(((int?)LfgForm.DurationMaxLength, (bool?)false));
     }
@@ -95,6 +94,9 @@ public sealed class LfgModalContractTests
         var modal = LfgFormUi.Modal(Draft(LfgFormKind.Edit, new LfgFormValues(game, "6", null, null, "2")), 20, L("tr"));
 
         Inputs(modal)[0].Input.Value.Should().Be(game, "never cut in the middle of a character");
+        Inputs(modal)[0].Input.MaxLength.Should().Be(LfgRules.GameNameMaxLength * LfgFormUi.EditInputLengthFactor,
+            "Discord counts UTF-16 units, the rule counts characters; the server applies the real limit");
+        Inputs(modal)[2].Input.MaxLength.Should().Be(LfgRules.DetailsMaxLength * LfgFormUi.EditInputLengthFactor);
         LfgRules.Length(game).Should().Be(LfgRules.GameNameMaxLength);
     }
 
