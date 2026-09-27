@@ -75,6 +75,9 @@ Duyuru gönderen, yayıncı ekleyen veya ping atan komut yoktur (yayıncılar ve
 | `/lfg-admin channel [channel]` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): `/ekip`'i tek kanala kısıtlar; boş = her kanal |
 | `/lfg-admin status` | Yönetici: modül durumu, kanal, aktif ilan sayıları, sınırlar, bekleyen kart düzenlemeleri |
 
+Bot izinleri (ilan kanalı): `ViewChannel`, `SendMessages`, `EmbedLinks` (süre dolumu/kapatma düzenlemesi); isteğe bağlı
+`ReadMessageHistory` (silinen kartın erken fark edilmesi). Ek gateway intent'i gerekmez.
+
 Ayrıntı: [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md).
 
 ## Esports (modül açıkken)

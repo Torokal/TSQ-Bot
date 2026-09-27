@@ -54,7 +54,10 @@ invite link and no global command registration. The source code is public under 
 - **IMPLEMENTED / TESTED_OFFLINE**: `/ekip` (free-text game + details, team size, optional 1/2/3 h), join/leave/full/reopen,
   owner/moderator close with confirmation, lazy + worker expiry, restart recovery, deleted-card handling (`Orphaned`),
   per-user active limit, optional listing channel (`/lfg-admin`), privacy export/delete/retention, race tests (last slot,
-  many joins, double click, concurrent creates), migration `LfgModule`.
+  many joins, double click, concurrent creates), migration `LfgModule`. Deleted cards: no message-delete events (Guilds
+  intent only) — a throttled one-read check per active card (≤ every 5 min) and an immediate check of the caller's cards at
+  the limit orphan them. Offline contract test of the edit route (bot-token PATCH on the channel message, no interaction
+  token, allowed_mentions empty).
 - **NOT VERIFIED_LIVE**: no real Discord interaction yet (commands not synced; module not enabled). In particular the bot
   editing its own `/ekip` response through the channel endpoint (expiry/close) has not been observed live.
 - Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.

@@ -64,7 +64,7 @@ Oyuncular                                     Oyuncular
 | Kapat | Yalnızca sahip veya moderatör (Discord **Manage Messages** ya da Administrator; mevcut `Authorize.Require`). Önce ephemeral onay (`Evet, kapat` / `Vazgeç`), sonra `Closed`; kart kapalı olarak düzenlenir. Tekrar kapatmak idempotenttir |
 | Süre dolumu | Tek arka plan döngüsü (`LfgExpiryWorker`, ~60 sn; ilan başına zamanlayıcı yok) `ExpiresAt <= now` olan aktif ilanları toplu `Expired` yapar ve kartları düzenler. Bir butona süre dolduktan sonra basılırsa ilan o anda da expire edilir |
 | Restart | Durum yalnızca veritabanındadır. Buton custom id'leri yalnızca ilan kimliğini taşır (`tsq:lfg:join:<id>`, `…:leave:`, `…:close:`), restart sonrası da çalışır. Açılışta ilk tur (~20 sn sonra) kapalıyken süresi dolan ilanları expire eder ve kartlarını düzenler |
-| Mesaj silindi | Kart düzenlemesi `Unknown Message/Channel` dönerse ilan `Orphaned` olur (terminal; tekrar denenmez). `Closed`'dan ayrı tutulur çünkü kimse kapatmadı — mesaj ortadan kalktı; geçmiş ve tanı doğru kalır. Diğer düzenleme hataları sınırlı sayıda (8) yeniden denenir |
+| Mesaj silindi | Bot yalnızca **Guilds** intent'i kullanır; mesaj silme olayı (`MESSAGE_DELETE`) ayrıcalıksız ama ayrı bir intent (`GuildMessages`) ister ve botun gördüğü her kanaldaki her mesajın olaylarını getirirdi — belgelenmiş "yalnızca Guilds" politikasına ve gizlilik metnine aykırı olduğu için eklenmedi. Onun yerine: (1) worker **en fazla 5 dakikada bir** her aktif kartı tek bir okumayla (`GET /channels/{kanal}/messages/{mesaj}`) doğrular; (2) kullanıcı aktif ilan sınırına takılınca yalnızca **onun** aktif kartları o anda (1,5 sn sınırla) kontrol edilir; (3) bir kart düzenlemesi `Unknown Message/Channel` dönerse. Üç yolda da ilan hemen `Orphaned` olur (terminal; aktif sayılmaz, bir daha düzenlenmez, yeniden açılamaz; tekrar kontrol hiçbir şey değiştirmez). "Belirlenemedi" (Read Message History yok, 5xx, gateway hazır değil) asla silinmiş sayılmaz. `Closed`'dan ayrı tutulur çünkü kimse kapatmadı — mesaj ortadan kalktı; geçmiş ve tanı doğru kalır |
 
 Modül bir sunucuda kapatılırsa (`/modules disable lfg`) butonlar "modül kapalı" cevabı verir; süre dolumu yine işler
 (yalnızca kartı "süresi doldu" yapar, veri silinmez).
@@ -81,6 +81,16 @@ Modül bir sunucuda kapatılırsa (`/modules disable lfg`) butonlar "modül kapa
 - İki eşzamanlı tıklamada Discord eski görüntünün düzenlemesini sonra uygulayabilir: her tıklama kartı düzenledikten sonra
   sürümü yeniden okur, değiştiyse güncel hali yeniden çizer; oturmazsa kart `CardStale` işaretlenir ve worker düzeltir.
 
+## Arka plan düzenlemesi (kullanıcı etkileşimi gerekmez)
+
+Süre dolumu, onaylı kapatma ve restart sonrası telafi kartı etkileşim olmadan günceller. `/ekip` yanıtının gerçek kanal ve
+mesaj kimliği `GetOriginalResponseAsync` ile saklanır (bir buton tıklaması yalnızca kimlik boşsa, yalnızca aynı guild'de ve
+yalnızca botun kendi mesajı için tamamlar; var olan kimliğin üzerine yazılmaz). Düzenleme **botun kendi REST kimliğiyle**
+`PATCH /channels/{kanal}/messages/{mesaj}` üzerinden yapılır; etkileşim/webhook token'ı kullanılmaz, dolayısıyla token
+süresine bağlı değildir (`DiscordEditRouteContractTests`, Discord.Net'in gerçek istek yolu kayıt edilerek). Hata kuralları:
+`Unknown Message/Channel` → `Orphaned`; yetki/erişim kaybı, 429, 5xx, zaman aşımı → uyarı günlüğü, worker aralığıyla (~60 sn)
+en fazla 8 deneme, sonra bırakılır. Başarısız bir düzenleme ilanın durumunu asla değiştirmez (kapalı ilan açılmaz).
+
 ## Neden outbox değil
 
 Diğer modüllerin otomatik bildirimleri `INotificationOutbox` üzerinden gider (tekilleştirme, belirsiz gönderim
@@ -95,7 +105,8 @@ düzenlemesinin telafisi): bu yalnızca `LfgCardSync` içinde `IMessageTransport
 İsteğe bağlı: `/lfg-admin channel kanal:#ekip-bul` → `/ekip` yalnızca o kanalda çalışır (başka kanalda ephemeral
 `Ekip ilanları bu sunucuda yalnızca #ekip-bul kanalında açılabilir.`). `/lfg-admin channel` (boş) kısıtı kaldırır. Ayar
 yoksa `/ekip` kullanıldığı kanalda çalışır. Bot kartları süre dolunca düzenleyebilmek için kanalı görebilmelidir
-(`ViewChannel`, `SendMessages`, `EmbedLinks`); eksikse ayar kaydedilir ama uyarı verilir.
+(`ViewChannel`, `SendMessages`, `EmbedLinks`); eksikse ayar kaydedilir ama uyarı verilir. İsteğe bağlı `ReadMessageHistory`,
+silinen kartların erken fark edilmesini sağlar (yoksa kart en geç süre dolumundaki düzenlemede fark edilir).
 
 ## Yapılandırma (`Lfg`)
 
