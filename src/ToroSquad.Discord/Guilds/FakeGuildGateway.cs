@@ -26,6 +26,26 @@ public sealed class FakeGuildGateway : IGuildGateway
     public bool MemberHasRole(GuildId guild, UserId user, RoleId role) =>
         _memberRoles.TryGetValue((guild.Value, user.Value), out var set) && set.Contains(role.Value);
 
+    /// <summary>Makes the user a member of the guild without roles (members are the users given roles here).</summary>
+    public void AddMember(GuildId guild, UserId user) => _memberRoles.GetOrAdd((guild.Value, user.Value), _ => []);
+
+    public void RemoveMember(GuildId guild, UserId user) => _memberRoles.TryRemove((guild.Value, user.Value), out _);
+
+    /// <summary>Scripted member lookups (e.g. <see cref="MemberLookupOutcome.Unavailable"/>) answered before the member table.</summary>
+    public Queue<MemberLookupOutcome> ScriptedMemberLookups { get; } = new();
+
+    public int MemberLookups { get; private set; }
+
+    public Task<GuildMemberLookup> GetMemberAsync(GuildId guild, UserId user, CancellationToken cancellationToken)
+    {
+        MemberLookups++;
+        if (ScriptedMemberLookups.TryDequeue(out var scripted) && scripted != MemberLookupOutcome.Found)
+            return Task.FromResult(scripted == MemberLookupOutcome.NotMember ? GuildMemberLookup.NotMember : GuildMemberLookup.Unavailable);
+        return Task.FromResult(_memberRoles.TryGetValue((guild.Value, user.Value), out var set)
+            ? new GuildMemberLookup(MemberLookupOutcome.Found, set.Select(r => new RoleId(r)).ToList())
+            : GuildMemberLookup.NotMember);
+    }
+
     public Task<GuildRoleSnapshot?> GetRoleSnapshotAsync(GuildId guild, CancellationToken cancellationToken) =>
         Task.FromResult(_snapshots.TryGetValue(guild.Value, out var s) ? s : null);
 

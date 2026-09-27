@@ -110,6 +110,12 @@ public interface IGuildGateway
 
     Task<RoleOperationOutcome> RemoveRoleAsync(GuildId guild, UserId user, RoleId role, string auditReason, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Whether <paramref name="user"/> is a member of the guild right now and which roles they have, read over REST (the Guilds
+    /// intent keeps no member cache, so this is the only current view of a member outside an interaction).
+    /// </summary>
+    Task<GuildMemberLookup> GetMemberAsync(GuildId guild, UserId user, CancellationToken cancellationToken);
+
     /// <summary>Whether <paramref name="channel"/> is a guild voice channel of THIS guild as the bot sees it, and the bot's permissions there.</summary>
     Task<VoiceChannelAccess> GetVoiceChannelAccessAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken);
 
@@ -120,6 +126,25 @@ public interface IGuildGateway
     /// could not join themselves.
     /// </summary>
     Task<VoiceMoveOutcome> MoveMemberToVoiceAsync(GuildId guild, UserId user, ChannelId channel, CancellationToken cancellationToken);
+}
+
+public enum MemberLookupOutcome
+{
+    Found = 0,
+
+    /// <summary>Discord says the user is not in the guild (left, kicked, banned, or never joined).</summary>
+    NotMember = 1,
+
+    /// <summary>Not known right now (not connected yet, timeout, rate limit, 5xx): ask again later, never treat as "left".</summary>
+    Unavailable = 2,
+}
+
+public sealed record GuildMemberLookup(MemberLookupOutcome Outcome, IReadOnlyCollection<RoleId> Roles)
+{
+    public static GuildMemberLookup NotMember { get; } = new(MemberLookupOutcome.NotMember, []);
+    public static GuildMemberLookup Unavailable { get; } = new(MemberLookupOutcome.Unavailable, []);
+
+    public bool HasRole(RoleId role) => Outcome == MemberLookupOutcome.Found && Roles.Contains(role);
 }
 
 /// <summary>A voice channel as the bot sees it. Stage channels are not <see cref="IsVoice"/> (plain guild voice only).</summary>
