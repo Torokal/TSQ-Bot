@@ -86,7 +86,7 @@ başlangıcı boş formda `şimdi` da dokunulmamış sayılır; metinlerde büy�
 düzenleme formundan eskisi, yenisinin değiştirdiği hiçbir alanı geri almaz (kayıp güncelleme yok). Değiştirilen alan
 güncel duruma göre doğrulanır. Dokunulmamış kişi sayısı, yapılandırılan üst sınır sonradan düşürülmüş olsa da geçerli kalır.
 Form gönderildiğindeki denetim yazma kilidi almaz ve hiçbir şey kaydetmez; karar kayıtta kilit altında yeniden verilir.
-Silinmiş bir ses kanalı düzenleme ayarlarında yeniden önerilmez. Saat dilimi çözülemezse (bozuk ayar) yazılan tarih
+Silinmiş bir ses kanalı düzenleme ayarlarında yeniden önerilmez; ayar "yok" bırakılırsa kayıtta kaldırılır (başka bir form o arada yeni bir kanal seçtiyse o kanal korunur). Dokunulmamış kanal, kayıtta saklanacak kanal olarak yeniden doğrulanır; form açıldıktan sonra silinmişse kayıt reddedilir (form yeniden açılınca "yok" ile kaydedilebilir). Saat dilimi çözülemezse (bozuk ayar) yazılan tarih
 oluşturmadaki gibi reddedilir.
 
 ### Başlangıç ve süre
