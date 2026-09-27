@@ -38,8 +38,8 @@ public sealed class DeliveryOptions
 /// turns into DeliveryUnknown — never blindly resent.</item>
 /// <item>Ambiguous outcomes (timeouts) become DeliveryUnknown and go through bounded reconciliation (content fingerprint of what was sent; no visible reference in the message).</item>
 /// <item>Edits never ping; a missing edit target is not replaced by a new message.</item>
-/// <item>@everyone at most once: a resend after an uncertain attempt (the row went through reconciliation) never carries
-/// the @everyone opt-in.</item>
+/// <item>@everyone and explicit user pings at most once: a resend after an uncertain attempt (the row went through
+/// reconciliation) never carries those opt-ins.</item>
 /// <item>One guild's failure never stops the batch.</item>
 /// </list>
 /// No exactly-once guarantee is claimed.
@@ -211,6 +211,13 @@ public sealed class OutboxProcessor(
         {
             message = message with { Mentions = message.Mentions with { Everyone = false } };
             logger.LogWarning("Outbox {OutboxId} ref={Marker}: resend after an uncertain delivery goes out without @everyone", row.Id, row.Marker);
+        }
+
+        // The same rule for explicitly listed user pings (TSQ LFG notices): a missing ping is acceptable, a second one is not.
+        if (message.Mentions.Users is { Count: > 0 } && row.ReconcileAttempts > 0)
+        {
+            message = message with { Mentions = message.Mentions with { Users = null } };
+            logger.LogWarning("Outbox {OutboxId} ref={Marker}: resend after an uncertain delivery goes out without user pings", row.Id, row.Marker);
         }
 
         // Claim: persist InFlight BEFORE talking to Discord (crash => DeliveryUnknown, not a blind resend).
