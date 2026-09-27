@@ -159,7 +159,7 @@ public sealed class LfgFormCommands(
             if (!edited.Result.Succeeded)
             {
                 drafts.Return(draft);
-                await ReplyResultAsync(edited.Result);
+                await ReplyRefusalAsync(draft, edited.Result);
                 return;
             }
 
@@ -182,7 +182,7 @@ public sealed class LfgFormCommands(
         if (!created.Result.Succeeded || created.Listing is not { } listing)
         {
             drafts.Return(draft);
-            await ReplyResultAsync(created.Result);
+            await ReplyRefusalAsync(draft, created.Result);
             return;
         }
 
@@ -227,7 +227,8 @@ public sealed class LfgFormCommands(
             : await lfg.CheckEditAsync(Actor, draft.ListingId!.Value, draft.ToEditInput(), CancellationToken.None);
         if (!check.Result.Succeeded || check.Preview is null)
         {
-            var reason = await T(check.Result.MessageKey, check.Result.Args.ToArray()) + await TraceLineAsync(check.Result);
+            var reason = LfgFormUi.Refusal(check.Result.MessageKey, check.Result.Args, L) + await TraceLineAsync(check.Result);
+            draft = drafts.Update(id, Actor, d => LfgFormUi.WithRefusal(d, check.Result.MessageKey)) ?? draft;
             await ShowAsync(reason, LfgFormUi.Retry(draft, L));
             return;
         }
@@ -241,6 +242,18 @@ public sealed class LfgFormCommands(
 
         var (content, components) = LfgFormUi.Settings(draft, Services.Clock.GetUtcNow(), DefaultMinutes, L);
         await ShowAsync(content, components);
+    }
+
+    /// <summary>
+    /// A save refused on the stored state (the draft was put back): the field and the reason privately, with the way back
+    /// into the filled form when a field can fix it; the settings message stays usable.
+    /// </summary>
+    private async Task ReplyRefusalAsync(LfgFormDraft draft, OperationResult result)
+    {
+        var L = await TextAsync();
+        var text = LfgFormUi.Refusal(result.MessageKey, result.Args, L) + await TraceLineAsync(result);
+        draft = drafts.Update(draft.Id, Actor, d => LfgFormUi.WithRefusal(d, result.MessageKey)) ?? draft;
+        await SendEphemeralAsync(text, null, LfgFormUi.FieldOf(result.MessageKey) is null ? null : LfgFormUi.Retry(draft, L));
     }
 
     private ChannelId Here => new(Context.Interaction.ChannelId ?? Context.Channel.Id);

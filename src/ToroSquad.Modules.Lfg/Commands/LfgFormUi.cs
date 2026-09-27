@@ -199,6 +199,13 @@ public static class LfgFormUi
     public static LfgFormDraft WithDetails(LfgFormDraft draft, string? details) =>
         draft with { Values = draft.Values with { Details = LfgRules.Normalize(details) is null ? null : details }, Preview = null };
 
+    /// <summary>
+    /// The form was refused: everything is kept for ✏️ Formu Düzelt, except a refused voice channel, which is not offered
+    /// again (like a deleted one on edit; Discord may refuse a modal that preselects it) — the user picks another or none.
+    /// </summary>
+    public static LfgFormDraft WithRefusal(LfgFormDraft draft, string messageKey) =>
+        messageKey == "lfg.create.voice_invalid" ? draft with { VoiceChannel = null, Preview = null } : draft;
+
     /// <summary>The form was checked: its preview.</summary>
     public static LfgFormDraft WithCheck(LfgFormDraft draft, LfgFormPreview preview) => draft with { Preview = preview };
 
@@ -214,12 +221,46 @@ public static class LfgFormUi
             : draft with { Values = draft.Values with { Duration = duration }, Preview = draft.Preview is { } p ? p with { Duration = TimeSpan.FromMinutes(minutes) } : null };
     }
 
-    /// <summary>A refused form: the reason and the ways back (main form, details) or out; the draft keeps everything.</summary>
+    /// <summary>A refused form: the ways back (✏️ Formu Düzelt reopens the main form filled, details) or out; the draft keeps everything.</summary>
     public static MessageComponent Retry(LfgFormDraft draft, Text L) => new ComponentBuilder()
         .WithButton(L("lfg.form.back"), BackPrefix + draft.Id, ButtonStyle.Primary)
         .WithButton(L(string.IsNullOrEmpty(draft.Values.Details) ? "lfg.form.details_add" : "lfg.form.details_edit"), DetailsPrefix + draft.Id, ButtonStyle.Secondary)
         .WithButton(L("lfg.form.cancel"), CancelPrefix + draft.Id, ButtonStyle.Secondary)
         .Build();
+
+    /// <summary>
+    /// The form field a refusal is about — shown as its heading, since a Discord modal has no way for the bot to mark a field
+    /// as invalid — or none for a refusal about the listing itself (channel, limit, permissions).
+    /// </summary>
+    public static string? FieldOf(string messageKey) => messageKey switch
+    {
+        "lfg.create.game_too_short" or "lfg.create.game_too_long" => "lfg.form.game",
+        "lfg.create.players_range" or "lfg.edit.players_below_joined" => "lfg.form.players",
+        "lfg.create.date_format" or "lfg.create.date_not_in_zone" or "lfg.create.date_ambiguous" or "lfg.create.date_not_future"
+            or "lfg.create.date_too_far" or "lfg.create.timezone_invalid" or "lfg.edit.start_locked" => "lfg.form.start",
+        "lfg.create.voice_invalid" => "lfg.form.voice",
+        "lfg.create.notice_needs_start" => "lfg.form.notices",
+        "lfg.create.details_too_long" => "lfg.form.details",
+        "lfg.create.duration_invalid" or "lfg.edit.expiry_passed" => "lfg.form.duration",
+        _ => null,
+    };
+
+    /// <summary>
+    /// A refused form as the user reads it: <c>❌ **field**</c> and what is wrong with it (never a bare "invalid input"); a
+    /// refusal about the listing itself keeps its own sentence.
+    /// </summary>
+    public static string Refusal(string messageKey, IEnumerable<object?> args, Text L)
+    {
+        var values = args.ToArray();
+        var reason = messageKey switch
+        {
+            "lfg.create.game_too_short" or "lfg.create.game_too_long" => L("lfg.form.error.game", LfgRules.GameNameMinLength, LfgRules.GameNameMaxLength),
+            "lfg.create.players_range" => L("lfg.form.error.players", values),
+            "lfg.create.date_format" => L("lfg.form.error.date_format"),
+            _ => L(messageKey, values),
+        };
+        return FieldOf(messageKey) is { } field ? L("lfg.form.error", L(field), reason) : L("lfg.form.error_general", reason);
+    }
 
     public static string StartText(LfgFormPreview preview, Text L) =>
         preview.EventAt is { } at && !preview.Start.IsNow
@@ -271,8 +312,10 @@ public static class LfgFormUi
             .WithRequired(required);
         if (minLength is { } min)
             input.WithMinLength(min);
-        if (!string.IsNullOrEmpty(value) && value.Length <= maxLength)
-            input.WithValue(value); // a longer value is not prefilled (never cut mid-character); the owner retypes it
+        // Only a value within the input's own limits is prefilled (Discord refuses the modal otherwise): a longer one is never
+        // cut mid-character and a refused too-short one is not shown again; the user retypes it.
+        if (!string.IsNullOrEmpty(value) && value.Length <= maxLength && value.Length >= (minLength ?? 0))
+            input.WithValue(value);
         return input;
     }
 }

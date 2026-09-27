@@ -363,6 +363,95 @@ public sealed class LfgModalContractTests
         ticks.Select(o => (o.GetProperty("value").GetString(), IsTrue(o, "default"))).Should().Equal([(LfgFormUi.NotifyBefore, true), (LfgFormUi.NotifyStart, false)]);
     }
 
+    /// <summary>
+    /// Discord's own checks, as it receives them: the client does not submit the modal while a required field is empty, a
+    /// text is shorter than <c>min_length</c> or longer than <c>max_length</c>, or a required select has no choice. Nothing
+    /// else can be checked before submit (no min/max value, pattern or custom validator exists for a text input).
+    /// </summary>
+    [Fact]
+    public void The_create_form_carries_every_constraint_discord_checks_before_submit()
+    {
+        var parts = Wire(LfgFormUi.Modal(Draft(), MaxPlayers, L("tr")).Component.Components).EnumerateArray().Select(l => l.GetProperty("component")).ToList();
+
+        var game = parts[0];
+        (game.GetProperty("required").GetBoolean(), game.GetProperty("min_length").GetInt32(), game.GetProperty("max_length").GetInt32())
+            .Should().Be((true, LfgRules.GameNameMinLength, LfgRules.GameNameMaxLength), "the same 2–50 the server applies");
+        game.GetProperty("placeholder").GetString().Should().Be("Deadlock, CS2, Valheim…");
+
+        var players = parts[1];
+        (players.GetProperty("required").GetBoolean(), players.GetProperty("min_values").GetInt32(), players.GetProperty("max_values").GetInt32())
+            .Should().Be((true, 1, 1), "a size must be chosen, and only one");
+        players.GetProperty("options").EnumerateArray().Select(o => o.GetProperty("value").GetString())
+            .Should().Equal(Enumerable.Range(2, 19).Select(n => n.ToString()), "234 is not a choice: it cannot be entered");
+
+        var start = parts[2];
+        (start.GetProperty("required").GetBoolean(), start.GetProperty("max_length").GetInt32(), start.GetProperty("placeholder").GetString())
+            .Should().Be((false, LfgForm.StartMaxLength, "27.09.2026 21:30"), "empty = now; the date itself is checked after submit");
+        if (start.TryGetProperty("min_length", out var startMin) && startMin.ValueKind == JsonValueKind.Number)
+            startMin.GetInt32().Should().Be(0, "an empty start is allowed");
+        foreach (var text in new[] { game, start })
+            text.EnumerateObject().Select(p => p.Name).Should().NotContain(["min_value", "max_value", "pattern", "regex"], "no such text input fields exist");
+
+        var voice = parts[3];
+        (voice.GetProperty("required").GetBoolean(), voice.GetProperty("min_values").GetInt32(), voice.GetProperty("max_values").GetInt32())
+            .Should().Be((false, 0, 1));
+        voice.GetProperty("channel_types").EnumerateArray().Select(t => t.GetInt32()).Should().Equal([2]);
+
+        var notices = parts[4];
+        (notices.GetProperty("required").GetBoolean(), notices.GetProperty("min_values").GetInt32(), notices.GetProperty("max_values").GetInt32())
+            .Should().Be((false, 0, 2));
+
+        var details = Wire(LfgFormUi.DetailsModal(Draft(), L("tr")).Component.Components).EnumerateArray().Single().GetProperty("component");
+        (details.GetProperty("required").GetBoolean(), details.GetProperty("max_length").GetInt32()).Should().Be((false, LfgRules.DetailsMaxLength));
+
+        var duration = Wire(LfgFormUi.Settings(Checked(Draft(), null), T0, 120, L("tr")).Components.Components).EnumerateArray().First()
+            .GetProperty("components")[0];
+        duration.GetProperty("options").EnumerateArray().Select(o => o.GetProperty("value").GetString()).Should().Equal(["1", "2", "3"], "999 is not a choice");
+    }
+
+    [Theory]
+    [InlineData("tr", "lfg.create.date_format", "❌ **Başlangıç Tarihi**\nTarih/saat anlaşılamadı.\nÖrnek: `27.09.2026 21:30` veya `27.09.26 21:30`.")]
+    [InlineData("tr", "lfg.create.date_not_future", "❌ **Başlangıç Tarihi**\nBaşlangıç tarihi gelecekte olmalı.")]
+    [InlineData("tr", "lfg.create.players_range", "❌ **Kişi Sayısı**\nKişi sayısı 2–20 arasında olmalı.")]
+    [InlineData("tr", "lfg.create.game_too_short", "❌ **Oyun / Etkinlik**\nEn az 2, en fazla 50 karakter olmalı.")]
+    [InlineData("tr", "lfg.create.game_too_long", "❌ **Oyun / Etkinlik**\nEn az 2, en fazla 50 karakter olmalı.")]
+    [InlineData("tr", "lfg.create.notice_needs_start", "❌ **Bildirimler**\nBildirim kullanmak için bir başlangıç tarihi seçmelisin.")]
+    [InlineData("tr", "lfg.create.voice_invalid", "❌ **Ses Kanalı**\nSeçilen kanal bu sunucuda kullanılabilir bir ses kanalı değil.")]
+    [InlineData("tr", "lfg.create.duration_invalid", "❌ **İlan Süresi**\nGeçersiz süre. İlan süresi olarak 1, 2 veya 3 saat seç.")]
+    [InlineData("tr", "lfg.edit.start_locked", "❌ **Başlangıç Tarihi**\nEtkinlik başladıktan sonra başlangıç zamanı değiştirilemez.")]
+    [InlineData("en", "lfg.create.date_format", "❌ **Start date**\nCould not read the date/time.\nExample: `27.09.2026 21:30` or `27.09.26 21:30`.")]
+    [InlineData("en", "lfg.create.players_range", "❌ **Team size**\nTeam size must be 2–20.")]
+    public void A_refusal_names_the_field_and_says_what_is_wrong(string language, string key, string expected)
+    {
+        object?[] args = key == "lfg.create.players_range" ? [2, 20] : key.StartsWith("lfg.create.game", StringComparison.Ordinal) ? [2] : [];
+
+        LfgFormUi.Refusal(key, args, L(language)).Should().Be(expected);
+        LfgFormUi.FieldOf(key).Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Every_listing_rule_a_form_field_can_break_has_its_field()
+    {
+        string[] fieldKeys =
+        [
+            "lfg.create.game_too_short", "lfg.create.game_too_long", "lfg.create.details_too_long", "lfg.create.players_range", "lfg.create.duration_invalid",
+            "lfg.create.notice_needs_start", "lfg.create.voice_invalid", "lfg.create.date_format", "lfg.create.date_not_in_zone", "lfg.create.date_ambiguous",
+            "lfg.create.date_not_future", "lfg.create.date_too_far", "lfg.create.timezone_invalid", "lfg.edit.start_locked",
+            "lfg.edit.players_below_joined", "lfg.edit.expiry_passed",
+        ];
+
+        foreach (var key in fieldKeys)
+        {
+            var field = LfgFormUi.FieldOf(key);
+            field.Should().NotBeNull(key);
+            foreach (var language in new[] { "tr", "en" })
+                Catalog.Get(language, field!).Should().NotBe(field, $"{field} is localized in {language}");
+        }
+
+        foreach (var key in new[] { "lfg.create.limit", "lfg.create.wrong_channel", "lfg.edit.forbidden", "lfg.edit.ended" })
+            LfgFormUi.FieldOf(key).Should().BeNull(key);
+    }
+
     [Fact]
     public void The_settings_step_goes_out_as_discords_select_and_button_json()
     {
@@ -397,7 +486,7 @@ public sealed class LfgModalContractTests
         var buttons = LfgFormUi.Retry(draft, L("tr")).Components.Cast<ActionRowComponent>().Single().Components.Cast<ButtonComponent>().ToList();
 
         buttons.Select(b => (b.Label, b.CustomId)).Should().Equal(
-            ("✏️ Formu Düzenle", LfgFormUi.BackPrefix + draft.Id), ("📝 Detay Ekle", LfgFormUi.DetailsPrefix + draft.Id), ("İptal", LfgFormUi.CancelPrefix + draft.Id));
+            ("✏️ Formu Düzelt", LfgFormUi.BackPrefix + draft.Id), ("📝 Detay Ekle", LfgFormUi.DetailsPrefix + draft.Id), ("İptal", LfgFormUi.CancelPrefix + draft.Id));
     }
 
     private static IComponentInteractionData Data(string customId, params string[] values) => new FakeComponentData(customId, values);

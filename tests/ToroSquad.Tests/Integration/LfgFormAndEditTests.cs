@@ -241,7 +241,8 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
             ? await Lfg(s => s.CheckCreateAsync(User(Owner), Channel, draft.ToCreateInput(), Ct))
             : await Lfg(s => s.CheckEditAsync(User(Owner), draft.ListingId!.Value, draft.ToEditInput(), Ct));
         if (!check.Result.Succeeded)
-            return (check, catalog.Get("tr", check.Result.MessageKey, check.Result.Args.ToArray()), drafts.Get(id, User(Owner)));
+            return (check, LfgFormUi.Refusal(check.Result.MessageKey, check.Result.Args, (key, args) => catalog.Get("tr", key, args)),
+                drafts.Update(id, User(Owner), d => LfgFormUi.WithRefusal(d, check.Result.MessageKey)));
         draft = drafts.Update(id, User(Owner), d => LfgFormUi.WithCheck(d, check.Preview!))!;
         return (check, LfgFormUi.Settings(draft, _host.Clock.GetUtcNow(), 120, (key, args) => catalog.Get("tr", key, args)).Content, draft);
     }
@@ -318,9 +319,9 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         var (check, shown, draft) = await StepAsync(id, d => LfgFormUi.WithModal(d, MainForm(""), "6", Voice, true, true));
 
         check.Result.MessageKey.Should().Be("lfg.create.notice_needs_start");
-        shown.Should().Be("Bildirim kullanmak için bir başlangıç tarihi seçmelisin.");
+        shown.Should().Be("❌ **Bildirimler**\nBildirim kullanmak için bir başlangıç tarihi seçmelisin.");
         (draft!.NotifyBeforeStart, draft.NotifyAtStart, draft.VoiceChannel, draft.Values.Players).Should().Be((true, true, (ChannelId?)Voice, "6"),
-            "✏️ Formu Düzenle reopens the form with what was chosen");
+            "✏️ Formu Düzelt reopens the form with what was chosen");
         (await StepAsync(id, d => LfgFormUi.WithModal(d, MainForm("25.09.2026 21:30"), "6", Voice, true, true))).Check.Result.Succeeded.Should().BeTrue();
     }
 
@@ -332,7 +333,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
 
         var (tooLong, shown, _) = await StepAsync(id, d => LfgFormUi.WithDetails(d, new string('a', LfgRules.DetailsMaxLength + 1)));
         tooLong.Result.MessageKey.Should().Be("lfg.create.details_too_long");
-        shown.Should().Contain(LfgRules.DetailsMaxLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        shown.Should().StartWith("❌ **Detay**\nDetay en fazla " + LfgRules.DetailsMaxLength.ToString(System.Globalization.CultureInfo.InvariantCulture) + " karakter");
 
         var ok = (await StepAsync(id, d => LfgFormUi.WithDetails(d, "  Rank\u202E   fark  etmez "))).Check;
         ok.Preview!.Details.Should().Be("Rank fark etmez", "normalized like on create");
@@ -341,9 +342,64 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         var drafts = _host.Services.GetRequiredService<LfgFormDrafts>();
         drafts.Update(id, User(20), d => LfgFormUi.WithDetails(d, "hijack")).Should().BeNull("only the opener's draft");
         drafts.Update(id, User(Owner, new GuildId(999)), d => LfgFormUi.WithDetails(d, "hijack")).Should().BeNull("only in the guild it was opened in");
-        drafts.Get(id, User(Owner))!.Values.Details.Should().Be("  Rank‮   fark  etmez ");
+        drafts.Get(id, User(Owner))!.Values.Details.Should().Be("  Rank\u202E   fark  etmez ");
         _host.Clock.Advance(LfgFormDrafts.Lifetime + TimeSpan.FromSeconds(1));
         drafts.Update(id, User(Owner), d => LfgFormUi.WithDetails(d, "late")).Should().BeNull("a stale draft cannot be changed");
+    }
+
+    /// <summary>
+    /// A refused main form (bypassing Discord's own checks, as a forged payload would): the field and the reason — never a
+    /// bare "invalid input" — the draft keeps everything, and ✏️ Formu Düzelt reopens the same form filled so only the wrong
+    /// field needs fixing.
+    /// </summary>
+    [Theory]
+    [InlineData("Deadlock", "27.13.2026 21:30", 8902UL, "❌ **Başlangıç Tarihi**\nTarih/saat anlaşılamadı.\nÖrnek: `27.09.2026 21:30` veya `27.09.26 21:30`.")]
+    [InlineData("Deadlock", "2 saat", 8902UL, "❌ **Başlangıç Tarihi**\nTarih/saat anlaşılamadı.\nÖrnek: `27.09.2026 21:30` veya `27.09.26 21:30`.")]
+    [InlineData("Deadlock", "01.01.2020 21:30", 8902UL, "❌ **Başlangıç Tarihi**\nBaşlangıç tarihi gelecekte olmalı.")]
+    [InlineData("D", "", 8902UL, "❌ **Oyun / Etkinlik**\nEn az 2, en fazla 50 karakter olmalı.")]
+    [InlineData("   ", "", 8902UL, "❌ **Oyun / Etkinlik**\nEn az 2, en fazla 50 karakter olmalı.")]
+    [InlineData("123456789012345678901234567890123456789012345678901", "", 8902UL, "❌ **Oyun / Etkinlik**\nEn az 2, en fazla 50 karakter olmalı.")]
+    [InlineData("Deadlock", "", 8904UL, "❌ **Ses Kanalı**\nSeçilen kanal bu sunucuda kullanılabilir bir ses kanalı değil.")]
+    [InlineData("Deadlock", "", 999999UL, "❌ **Ses Kanalı**\nSeçilen kanal bu sunucuda kullanılabilir bir ses kanalı değil.")]
+    public async Task A_refused_field_is_named_the_draft_survives_and_the_form_comes_back_filled(string game, string start, ulong voice, string expected)
+    {
+        var id = NewDraft();
+        string Text(string key, object?[] args) => _host.Services.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>().Get("tr", key, args);
+
+        var (check, shown, draft) = await StepAsync(id, d => LfgFormUi.WithModal(d, MainForm(start, game), "7", new ChannelId(voice), false, false));
+
+        check.Result.Succeeded.Should().BeFalse();
+        shown.Should().Be(expected);
+        LfgFormUi.FieldOf(check.Result.MessageKey).Should().NotBeNull();
+        LfgFormUi.Retry(draft!, Text).Components.Cast<global::Discord.ActionRowComponent>().Single().Components.Cast<global::Discord.ButtonComponent>()
+            .First().Should().Match<global::Discord.ButtonComponent>(b => b.Label == "✏️ Formu Düzelt" && b.CustomId == LfgFormUi.BackPrefix + id);
+        var (modal, players, voiceBack, before, atStart) = Resubmit(LfgFormUi.Modal(draft!, 20, Text));
+        var refusedVoice = check.Result.MessageKey == "lfg.create.voice_invalid";
+        (modal.Start, players, voiceBack, before, atStart).Should().Be(
+            (start.Length == 0 ? null : start, "7", refusedVoice ? null : (ChannelId?)new ChannelId(voice), false, false),
+            "everything the user chose comes back (a refused voice channel is not offered again); only the wrong field needs fixing");
+        modal.Game.Should().Be(game.Length is >= LfgRules.GameNameMinLength and <= LfgRules.GameNameMaxLength ? game : null,
+            "a value outside the input's own limits cannot be prefilled (Discord refuses the modal); it is retyped");
+        (await StepAsync(id, d => LfgFormUi.WithModal(d, MainForm(In(120), Games), "7", Voice, false, false))).Check.Result.Succeeded.Should().BeTrue(
+            "fixed, the same draft goes on to the settings step");
+    }
+
+    [Fact]
+    public async Task A_refused_save_names_the_field_too()
+    {
+        var listing = await OpenAsync(Form(start: In(120)));
+        foreach (var user in new ulong[] { 21, 22, 23 })
+            (await JoinAsync(listing.Id, user)).Result.Succeeded.Should().BeTrue();
+        var catalog = _host.Services.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>();
+
+        var result = await EditAsync(listing.Id, f => f with { Players = "3" });
+
+        result.Result.MessageKey.Should().Be("lfg.edit.players_below_joined");
+        LfgFormUi.Refusal(result.Result.MessageKey, result.Result.Args, (key, args) => catalog.Get("tr", key, args))
+            .Should().Be("❌ **Kişi Sayısı**\nKişi sayısı, katılmış oyuncu sayısından (4) az olamaz.");
+        LfgFormUi.Refusal("lfg.create.limit", [2], (key, args) => catalog.Get("tr", key, args))
+            .Should().Be("❌ Aynı anda en fazla 2 aktif ekip ilanı açabilirsin.", "a refusal about the listing itself has no field");
+        LfgFormUi.FieldOf("lfg.create.limit").Should().BeNull("no way back into a form that cannot fix it");
     }
 
     [Theory]
@@ -358,7 +414,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         var (check, shown, _) = await StepAsync(NewDraft(), d => LfgFormUi.WithModal(d, MainForm(""), players, null, false, false));
 
         check.Result.MessageKey.Should().Be("lfg.create.players_range");
-        shown.Should().Be("Ekip büyüklüğü 2 ile 20 kişi arasında olmalı (sen dahil).");
+        shown.Should().Be("❌ **Kişi Sayısı**\nKişi sayısı 2–20 arasında olmalı.");
         (await Lfg(s => s.CreateAsync(User(Owner), Channel, LfgForm.ToCreateInput(Form(players: players), false, false, null), Ct))).Result.MessageKey
             .Should().Be("lfg.create.players_range", "saving refuses it too");
     }
@@ -386,7 +442,7 @@ public sealed class LfgFormAndEditTests : IAsyncLifetime
         var (check, shown) = await SubmitAsync(start);
 
         check.Result.MessageKey.Should().Be("lfg.create.date_format");
-        shown.Should().Be("Tarih/saat anlaşılamadı. Örnek: 27.09.2026 21:30 veya 27.09.26 21:30");
+        shown.Should().Be("❌ **Başlangıç Tarihi**\nTarih/saat anlaşılamadı.\nÖrnek: `27.09.2026 21:30` veya `27.09.26 21:30`.");
     }
 
     [Fact]
