@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Bot;
 using ToroSquad.Core;
+using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
@@ -245,6 +246,76 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
 
         result.Result.MessageKey.Should().Be("lfg.create.notice_needs_start");
         (await CreateAsync(new LfgCreateInput("Deadlock", 5, StartMinutes: 45))).Result.MessageKey.Should().Be("lfg.create.start_invalid");
+    }
+
+    // ---- custom start date (same EventAt pipeline) ----
+
+    // TestHost.T0 = 24.09.2026 12:00 UTC = 15:00 in Istanbul (the guild default time zone).
+    private static readonly DateTimeOffset Custom = new(2026, 9, 24, 14, 0, 0, TimeSpan.Zero); // "24.09.2026 17:00" Istanbul
+
+    [Fact]
+    public async Task A_custom_date_is_read_in_the_guild_time_zone_and_expires_duration_after_the_start()
+    {
+        var listing = (await CreateAsync(new LfgCreateInput("Deadlock", 6, DurationMinutes: 120, StartAt: "24.09.2026 17:00"))).Listing!;
+
+        listing.EventAt.Should().Be(Custom);
+        listing.ExpiresAt.Should().Be(Custom.AddHours(2));
+        var at = Custom.ToUnixTimeSeconds();
+        _host.Services.GetRequiredService<LfgCardRenderer>().Render(listing, "tr").Embed!.Description
+            .Should().Contain($"🗓️ Başlangıç: <t:{at}:F> • <t:{at}:R>", "rendered exactly like a relative start");
+    }
+
+    [Fact]
+    public async Task Relative_and_custom_starts_cannot_be_combined_and_bad_dates_are_refused()
+    {
+        (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartMinutes: 120, StartAt: "24.09.2026 17:00"))).Result.MessageKey
+            .Should().Be("lfg.create.start_conflict");
+        (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: "24.09.2026 14:00"))).Result.MessageKey.Should().Be("lfg.create.date_not_future");
+        (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: "31.02.2026 21:00"))).Result.MessageKey.Should().Be("lfg.create.date_format");
+        (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: "25.09.2027 12:00"))).Result.MessageKey.Should().Be("lfg.create.date_too_far");
+        (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartMinutes: 120))).Listing!.EventAt.Should().Be(TestHost.T0.AddHours(2), "relative starts unchanged");
+        (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: " "), owner: 11)).Listing!.EventAt.Should().BeNull("blank = now");
+    }
+
+    [Fact]
+    public async Task The_guild_time_zone_from_setup_decides_the_instant()
+    {
+        await _host.InScopeAsync(async sp =>
+            (await sp.GetRequiredService<GuildSettingsService>().UpdateAsync(TestHost.Admin(Guild), null, "America/New_York", Ct)).Succeeded.Should().BeTrue());
+
+        var listing = (await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: "24.09.2026 17:00"))).Listing!;
+
+        listing.EventAt.Should().Be(new DateTimeOffset(2026, 9, 24, 21, 0, 0, TimeSpan.Zero), "17:00 EDT = 21:00 UTC");
+        var status = await _host.InScopeAsync(sp => sp.GetRequiredService<LfgConfigService>().StatusAsync(TestHost.Admin(Guild), Ct));
+        status.Status!.TimeZoneId.Should().Be("America/New_York");
+    }
+
+    [Fact]
+    public async Task A_custom_date_uses_the_same_reminder_start_notice_and_restart_rules()
+    {
+        var created = await CreateAsync(new LfgCreateInput("Deadlock", 6, StartAt: "24.09.2026 17:00", NotifyBeforeStart: true, NotifyAtStart: true, VoiceChannel: Voice));
+        var id = created.Listing!.Id;
+        await JoinAsync(id, 20);
+        await MaybeAsync(id, 30);
+
+        _host.Clock.Advance(Custom - TestHost.T0 - TimeSpan.FromMinutes(31)); // 31 minutes before the start
+        await TickAsync();
+        Delivered().Should().BeEmpty();
+
+        _host.Clock.Advance(TimeSpan.FromMinutes(1)); // EventAt - 30 min
+        await TickAsync();
+        await TickAsync();
+        var reminder = Delivered().Should().ContainSingle().Subject;
+        Pinged(reminder).Should().BeEquivalentTo([Owner, 20UL]);
+        reminder.Message.Buttons.Should().ContainSingle().Which.CustomId.Should().Be("tsq:lfg:voice:" + id);
+
+        _host.Clock.Advance(TimeSpan.FromMinutes(30)); // EventAt
+        await TickAsync();
+        await TickAsync();
+        Delivered().Should().HaveCount(2);
+        Delivered().Last().Message.Content.Should().StartWith("🚀 **Deadlock** şimdi başlıyor!");
+        var row = await RowAsync(id);
+        (row.ReminderState, row.StartNoticeState, row.Status).Should().Be((LfgNoticeState.Queued, LfgNoticeState.Queued, LfgStatus.Open));
     }
 
     // ---- 30-minute reminder ----
