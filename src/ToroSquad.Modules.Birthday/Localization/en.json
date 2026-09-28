@@ -32,6 +32,9 @@
   "birthday.admin_set.unchanged": "🎂 {0}'s birthday is already saved as {1}.",
   "birthday.admin_set.forbidden": "❌ You need the Administrator permission for this.",
   "birthday.admin_set.not_member": "❌ This person is not a member of this server, or is a bot; no birthday can be saved.",
+  "birthday.admin_show.value": "🎂 {0}'s saved birthday: {1}",
+  "birthday.admin_show.none": "🎂 {0} has no saved birthday.",
+  "birthday.admin_show.not_member": "❌ This person is not a member of this server, or is a bot.",
   "birthday.config.channel_invalid": "This channel cannot be used: it must be a text channel in this server that the bot can see.",
   "birthday.config.saved": "Birthday announcements will now be posted in {0}.",
   "birthday.config.saved_missing_permissions": "Saved: {0}. Warning: the bot is missing permissions there ({1}); announcements cannot be sent.",
@@ -123,6 +126,8 @@
   "cmd.birthday-admin.set": "Set a member's birthday (Administrator only)",
   "cmd.birthday-admin.set.member": "Member whose birthday you set",
   "cmd.birthday-admin.set.date": "Day and month: 14.03, 14/03 or 14-03 (no year)",
+  "cmd.birthday-admin.show": "Show a member's saved birthday (Administrator only)",
+  "cmd.birthday-admin.show.member": "Member whose birthday you want to see",
   "cmd.birthday-admin.status": "Birthday module settings and today's state",
   "cmd.birthday-admin.doctor": "Check channel, role hierarchy, permissions, database and scheduler"
 }

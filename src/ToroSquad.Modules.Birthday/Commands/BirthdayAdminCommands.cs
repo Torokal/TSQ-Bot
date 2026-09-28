@@ -14,8 +14,8 @@ namespace ToroSquad.Modules.Birthday.Commands;
 /// <summary>
 /// /birthday-admin — Manage Server required: hidden by default_member_permissions AND re-authorized in the service. Works while
 /// the module is disabled so the channel can be set and checked before activation (/modules enable birthday). Nothing here
-/// sends an announcement or changes a role, and nothing shows whose birthday is when. `set` changes another member's
-/// personal data and therefore requires Discord's Administrator permission (or guild ownership) on top — checked in the
+/// sends an announcement or changes a role, and there is no list of birthdays. `set` and `show` change or read one member's
+/// personal data and therefore require Discord's Administrator permission (or guild ownership) on top — checked in the
 /// service from the caller's effective permissions; Discord can only hide a whole command group, not one subcommand.
 /// </summary>
 [ToroModule(BirthdayModule.ModuleIdValue, AllowWhenDisabled = true)]
@@ -36,9 +36,7 @@ public sealed class BirthdayAdminCommands(
         [Summary("date", "Day and month: 14.03, 14/03 or 14-03 (no year)")] string date)
     {
         await DeferEphemeralAsync();
-        // Only a human member of THIS guild; the id comes from Discord's resolved option, never typed text.
-        var eligible = member is IGuildUser { IsBot: false } target && target.GuildId == Context.Guild.Id;
-        var result = await birthdays.SetForMemberAsync(Actor, new UserId(member.Id), eligible, date, CancellationToken.None);
+        var result = await birthdays.SetForMemberAsync(Actor, new UserId(member.Id), IsHumanMemberHere(member), date, CancellationToken.None);
         if (!result.Succeeded)
         {
             await ReplyResultAsync(result);
@@ -46,11 +44,33 @@ public sealed class BirthdayAdminCommands(
         }
 
         // Private answer; the mention only renders the name (replies never ping).
-        var day = (int)result.Args[0];
-        var month = (int)result.Args[1];
-        var dateText = await T("birthday.date", day, await T(BirthdayCommands.MonthKeys[month - 1]));
-        await ReplyTextAsync(result.MessageKey, Inv($"<@{member.Id}>"), dateText);
+        await ReplyTextAsync(result.MessageKey, Inv($"<@{member.Id}>"), await DateTextAsync((int)result.Args[0], (int)result.Args[1]));
     }
+
+    [SlashCommand("show", "Show a member's saved birthday (Administrator only)")]
+    public async Task ShowAsync([Summary("member", "Member whose birthday you want to see")] IUser member)
+    {
+        await DeferEphemeralAsync();
+        var (result, date) = await birthdays.GetForMemberAsync(Actor, new UserId(member.Id), IsHumanMemberHere(member), CancellationToken.None);
+        if (!result.Succeeded)
+        {
+            await ReplyResultAsync(result);
+            return;
+        }
+
+        // Private answer for the admin only; the mention only renders the name (replies never ping).
+        var mention = Inv($"<@{member.Id}>");
+        if (date is { } d)
+            await ReplyTextAsync(result.MessageKey, mention, await DateTextAsync(d.Day, d.Month));
+        else
+            await ReplyTextAsync(result.MessageKey, mention);
+    }
+
+    /// <summary>Only a human member of THIS guild; the id comes from Discord's resolved option, never typed text.</summary>
+    private bool IsHumanMemberHere(IUser member) => member is IGuildUser { IsBot: false } target && target.GuildId == Context.Guild.Id;
+
+    /// <summary>"14 Mart" / "March 14".</summary>
+    private async Task<string> DateTextAsync(int day, int month) => await T("birthday.date", day, await T(BirthdayCommands.MonthKeys[month - 1]));
 
     [SlashCommand("configure", "Channel for the birthday announcements")]
     public async Task ConfigureAsync(
