@@ -21,13 +21,16 @@ public enum LfgStatus
 }
 
 /// <summary>
-/// A member's answer to a listing. Only <see cref="Joined"/> players fill slots, count for Full and are pinged by event
-/// notices; <see cref="Maybe"/> is shown separately and never counts. The owner is always <see cref="Joined"/>.
+/// A member's answer to a listing. Only <see cref="Joined"/> players fill slots, count for Full, are pinged by event notices
+/// and may use the voice action. <see cref="Maybe"/> is shown separately and never counts. <see cref="Waitlisted"/> asked
+/// to join a full team: never counts, never pinged, no voice; it holds a durable place in a first-come first-served queue
+/// and becomes Joined by itself when a slot frees up. The owner is always <see cref="Joined"/>.
 /// </summary>
 public enum LfgResponse
 {
     Joined = 0,
     Maybe = 1,
+    Waitlisted = 2,
 }
 
 /// <summary>
@@ -46,7 +49,8 @@ public enum LfgNoticeState
 /// One group-finder listing as the rest of the module sees it. Game-agnostic by design: the bot only knows that
 /// <see cref="Owner"/> looks for <see cref="MaxPlayers"/> players for <see cref="GameName"/> and wrote <see cref="Details"/>
 /// — it never interprets either text. <see cref="Players"/> are the Joined players (owner first, then join order),
-/// <see cref="Maybe"/> the undecided ones; both are Discord user ids, display names are never stored. <see cref="EventAt"/> is
+/// <see cref="Maybe"/> the undecided ones, <see cref="Waitlist"/> the queue (first in line first); all are Discord user ids,
+/// display names are never stored. <see cref="EventAt"/> is
 /// when the activity starts (null = now); <see cref="ExpiresAt"/> is when the listing stops being usable (a separate
 /// concept). <see cref="VoiceChannel"/> is an optional guild voice channel. <see cref="Version"/> changes with every stored state change (used to detect a card drawn from an older state).
 /// </summary>
@@ -69,11 +73,15 @@ public sealed record LfgListingView(
     DateTimeOffset? EventAt = null,
     ChannelId? VoiceChannel = null,
     bool NotifyBeforeStart = false,
-    bool NotifyAtStart = false)
+    bool NotifyAtStart = false,
+    IReadOnlyList<UserId>? Waitlist = null)
 {
     public bool IsActive => Status is LfgStatus.Open or LfgStatus.Full;
 
     public IReadOnlyList<UserId> MaybePlayers => Maybe ?? [];
+
+    /// <summary>The waitlist in queue order: the first one takes the next free slot.</summary>
+    public IReadOnlyList<UserId> WaitlistedPlayers => Waitlist ?? [];
 }
 
 public enum LfgDraftError

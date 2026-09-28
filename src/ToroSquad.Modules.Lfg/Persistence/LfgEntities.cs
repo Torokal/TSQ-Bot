@@ -61,18 +61,25 @@ public sealed class LfgListingEntity
 
 /// <summary>
 /// A member of a listing. Primary key (ListingId, UserId): the same user can never be in a listing twice — a change of mind
-/// (Joined ↔ Maybe) updates <see cref="Response"/> in place.
+/// (Joined, Maybe, Waitlisted) updates <see cref="Response"/> in place.
 /// </summary>
 public sealed class LfgParticipantEntity
 {
     public long ListingId { get; set; }
     public ulong UserId { get; set; }
 
-    /// <summary>Joined (default; every row created before RSVP existed) or Maybe.</summary>
+    /// <summary>Joined (default; every row created before RSVP existed), Maybe or Waitlisted.</summary>
     public LfgResponse Response { get; set; }
 
-    /// <summary>When the current response was given (orders the player lists).</summary>
+    /// <summary>When the current response was given (orders the Joined and Maybe lists).</summary>
     public DateTimeOffset JoinedAt { get; set; }
+
+    /// <summary>
+    /// The place in the waitlist: set only while <see cref="LfgResponse.Waitlisted"/> (null otherwise), assigned under the
+    /// listing's write lock as the highest live place + 1. The queue order is this stored number — the order in which the
+    /// writes happened — never a timestamp, a name or an id.
+    /// </summary>
+    public long? WaitlistOrder { get; set; }
 }
 
 /// <summary>Per-guild LFG settings. Absent row / null channel = /ekip works in any channel.</summary>
