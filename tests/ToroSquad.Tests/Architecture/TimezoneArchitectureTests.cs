@@ -128,7 +128,7 @@ public sealed partial class TimezoneArchitectureTests
     {
         foreach (var file in SourceFiles().Concat(Directory.GetFiles(Path.Combine(Root(), "Localization"), "*.json")))
             File.ReadAllText(file).Should().NotMatchRegex(@"\bToro\b", Path.GetFileName(file));
-        File.ReadAllText(Path.Combine(Root(), "Commands", "TimezoneCommands.cs")).Should().MatchRegex(@"cards\.Convert\([^;]*DisplayName\(\)\)");
+        File.ReadAllText(Path.Combine(Root(), "Commands", "TimezoneCommands.cs")).Should().MatchRegex(@"cards\.Convert\([^;]*DisplayName\(\)[,)]");
     }
 
     [Fact]
@@ -185,15 +185,24 @@ public sealed partial class TimezoneArchitectureTests
         saat.DefaultMemberPermissions.Should().BeNull("/saat is for everyone");
         saat.Contexts.Should().Equal(0);
         saat.IntegrationTypes.Should().Equal(0);
-        var time = saat.Options.Should().ContainSingle().Subject;
-        (time.Name, time.Type, time.Required, time.MinLength, time.MaxLength).Should().Be(("time", OptionType.String, true, (int?)1, (int?)ClockInput.MaxInputLength));
+        saat.Options.Select(o => o.Name).Should().Equal("time", "timezone");
+        var time = saat.Options[0];
+        (time.Name, time.Type, time.Required, time.MinLength, time.MaxLength, time.Autocomplete).Should().Be(("time", OptionType.String, true, (int?)1, (int?)ClockInput.MaxInputLength, false));
+        var zone = saat.Options[1];
+        (zone.Name, zone.Type, zone.Required, zone.MaxLength, zone.Autocomplete).Should().Be(("timezone", OptionType.String, false, (int?)SourceTimeZones.MaxInputLength, true));
+        zone.Choices.Should().BeEmpty("autocomplete suggests; any alias can still be typed");
 
         // What DiscordCommandRegistrar actually sends: the English default plus the "tr" localization.
         var properties = DiscordCommandRegistrar.ToProperties(saat);
         properties.Name.Value.Should().Be("saat");
-        (properties.Description.Value, properties.DescriptionLocalizations["tr"]).Should().Be(("Convert a time in Türkiye to other time zones", "Türkiye saatini farklı saat dilimlerine çevirir."));
-        var option = properties.Options.Value.Single();
-        (option.Description, option.DescriptionLocalizations["tr"]).Should().Be(("Time in Türkiye (today), e.g. 21:00 or 9.30", "Türkiye saati (bugün). Örn: 21:00 veya 9.30"));
+        (properties.Description.Value, properties.DescriptionLocalizations["tr"]).Should().Be(("Convert a time to other time zones", "Girilen saati farklı saat dilimlerine çevirir."));
+        var options = properties.Options.Value;
+        options.Select(o => (o.Name, o.Description, o.DescriptionLocalizations["tr"])).Should().Equal(
+            ("time", "Time, e.g. 21:00 or 9.30 (today; Türkiye time unless a time zone is given)", "Saat. Örn: 21:00 veya 9.30 (bugün; saat dilimi verilmezse Türkiye saati)"),
+            ("timezone", "Time zone of the entered time (default: Türkiye), e.g. tr, pdt, est, uk, utc", "Girilen saatin saat dilimi (varsayılan: Türkiye). Örn: tr, pdt, est, uk, utc"));
+        options.Should().OnlyContain(o => o.Description.Length <= 100 && o.DescriptionLocalizations["tr"].Length <= 100);
+        options[1].IsAutocomplete.Should().BeTrue();
+        options[1].IsRequired.Should().NotBe(true);
     }
 
     [Fact]
