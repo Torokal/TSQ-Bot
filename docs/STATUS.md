@@ -148,16 +148,20 @@ invite link and no global command registration. The source code is public under 
 
 ## TSQ Döviz & Altın (new, 2026-09-28, branch `feat/currency-module`)
 
-- Scope and rules: [currency/TSQ_CURRENCY.md](currency/TSQ_CURRENCY.md). Stateless utility module: no table, no migration,
-  no worker, no API key.
+- Scope and rules: [currency/TSQ_CURRENCY.md](currency/TSQ_CURRENCY.md). No own table, no migration, no API key; the only
+  worker is the daily 09:00 card (staged into the shared outbox).
 - **IMPLEMENTED / TESTED_OFFLINE**: `/dolar`, `/euro`, `/altın` (public cards); Altınkaynak → TCMB (USD/EUR, labelled
   "Gösterge Kuru", bulletin date) / Trunçgil (gram gold) → last good price ≤ 15 min (marked stale) → trace-coded notice;
   tr-TR decimal parsing (`"48,820"` = 48.820), GA never PGA, Türkiye local provider times; dataset cache 60 s / 30 s,
   failed provider skipped 30 s, single flight; `/bot status` line; `/modules` gate (off by default).
+- **IMPLEMENTED / TESTED_OFFLINE (2026-09-28)**: commands only in the currency channel `1242464361855848459` (elsewhere a
+  private pointer, nothing fetched); daily combined card at 09:00 Europe/Istanbul, catch-up until 09:30, per-instrument
+  source/time, outbox key `day:<Türkiye date>` (no second card after restart/overlap, no edit of a sent card), module gate,
+  partial/none data handling, no pings.
 - **Contract checked live (read-only GET, 2026-09-28)** through the module's own HTTP clients and parsers: Altınkaynak
   Currency/Gold, TCMB, Trunçgil — all fields present and parsed. Not a Discord observation.
 - **NOT VERIFIED_LIVE**: the commands in Discord (`/altın` registration with the Turkish ı, public defer → card, card
-  rendering in clients). `/dolar`, `/euro`, `/altın` are in the manifest but not synced.
+  rendering in clients, the private wrong-channel pointer), the first real 09:00 card and its delivery. `/dolar`, `/euro`, `/altın` are in the manifest but not synced.
 
 ## What has been verified against real Discord / real APIs
 

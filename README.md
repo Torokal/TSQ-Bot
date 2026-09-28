@@ -47,11 +47,12 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   (no channel scan, no message events); server-side access checks (same server; the member and the bot may view the
   channel and read its history; the bot may attach files where the command ran); stateless (nothing stored or logged).
   Needs the application's Message Content access (Developer Portal) — the gateway intents stay `Guilds`.
-- **TSQ Döviz & Altın** (separate module, off by default): `/dolar`, `/euro`, `/altın` answer publicly with the current
-  USD/TRY, EUR/TRY and gram gold buy/sell prices and the provider's own update time. Altınkaynak's public JSON service is
+- **TSQ Döviz & Altın** (separate module, off by default): `/dolar`, `/euro`, `/altın` answer publicly in the currency
+  channel (elsewhere: a private pointer to it) with the current USD/TRY, EUR/TRY and gram gold buy/sell prices and the
+  provider's own update time; one combined card is posted there daily at 09:00 Türkiye time (outbox, catch-up until 09:30). Altınkaynak's public JSON service is
   the primary source; TCMB's daily indicative rate (USD/EUR, labelled as such) and Trunçgil (gram gold) are fallbacks, then
   the last good price for up to 15 minutes, clearly marked. Fetched on demand only, cached in memory (60 s / 30 s,
-  one shared fetch for concurrent requests); no API key, no table, no background polling.
+  one shared fetch for concurrent requests); no API key, no own table, no price polling.
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
@@ -80,7 +81,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
 | TSQ Quote | `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
-| TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options; public answer) | everyone (module on) |
+| TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options; public answer, currency channel only) | everyone (module on) |
 | TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:

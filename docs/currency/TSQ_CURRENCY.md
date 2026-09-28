@@ -1,12 +1,24 @@
 # TSQ Döviz & Altın
 
-`/dolar`, `/euro` ve `/altın`, güncel USD/TRY, EUR/TRY ve gram altın **alış/satış** fiyatlarını kanalda herkese açık bir
-kartla gösterir. Argüman yoktur. Her sunucuda varsayılan kapalıdır: `/modules enable currency` (listede
-**Döviz & Altın**).
+`/dolar`, `/euro` ve `/altın`, güncel USD/TRY, EUR/TRY ve gram altın **alış/satış** fiyatlarını döviz kanalında herkese
+açık bir kartla gösterir. Argüman yoktur. Her gün 09:00'da (Türkiye saati) aynı kanala üçünü birlikte gösteren tek bir
+günlük kart gönderilir. Her sunucuda varsayılan kapalıdır: `/modules enable currency` (listede **Döviz & Altın**).
 
-Durumsuz bir yardımcı modüldür: tablo, migration, arka plan işi, API anahtarı/secret ve yapay zekâ yoktur. Veri yalnızca
-bir komut çalıştığında alınır ve bellekte önbelleklenir; modül kapalıyken veya komut kullanılmazken hiçbir ağ isteği
-yapılmaz. Bot açılışında sağlayıcıya istek atılmaz (sağlayıcı kapalıyken de bot açılır).
+Kendi tablosu ve migration'ı yoktur; API anahtarı/secret ve yapay zekâ kullanılmaz. Fiyatlar yalnızca gerektiğinde (bir
+komut veya 09:00 kartı) alınır ve bellekte önbelleklenir; sürekli fiyat sorgulayan bir arka plan işi yoktur. Modül
+kapalıyken hiçbir ağ isteği yapılmaz. Bot açılışında sağlayıcıya ya da Discord'a zorunlu istek atılmaz (sağlayıcı
+kapalıyken de bot açılır).
+
+## Döviz kanalı
+
+Komutlar yalnızca **tek bir kanalda** çalışır: `Currency:ChannelId` = **`1242464361855848459`** (üretim varsayılanı;
+yönetici komutu veya tablo yok). Başlangıçta doğrulanır (geçerli bir Discord snowflake olmalı).
+
+- Döviz kanalında: mevcut kartlar **herkese açık** (ephemeral değil, ping yok).
+- Başka bir kanalda: yalnızca komutu kullanan kişinin gördüğü (ephemeral) tek satır —
+  "Bu komutu yalnızca <#1242464361855848459> kanalında kullanabilirsiniz." (tıklanabilir kanal etiketi; İngilizce
+  sunucuda "You can only use this command in <#…>.") — ve **başka hiçbir şey**: fiyat sorgusu, sağlayıcı isteği, herkese
+  açık onay veya defer yapılmaz. Kontrol üç komutta ortaktır (`CurrencyCommandFlow`).
 
 ## Komutlar
 
@@ -77,9 +89,40 @@ koduyla loglanır.
 kişi aynı anda `/dolar` yazsa da sağlayıcıya tek istek gider. Başarısız birincil sağlayıcı 30 sn atlanır, sonra yeniden
 denenir; böylece Altınkaynak geri geldiğinde en geç yarım dakika içinde tekrar kullanılır.
 
+## Günlük 09:00 kartı
+
+- **Ne zaman:** her gün **09:00 Europe/Istanbul** (sabit bir UTC saati değil; gün, Türkiye takvim günüdür). Zamanlayıcı her
+  turda bir sonraki 09:00'ı saatten yeniden hesaplar (24 saatlik sabit bekleme yok; restart/deploy kaydırmaz).
+- **Kaçırılan sabah (catch-up):** 09:00–09:30 arası (`Currency:DailyCatchUpMinutes`, varsayılan 30). 09:05 veya 09:28'de ilk
+  kez açılan bot o günün kartını yollar; 09:31'de veya öğleden sonra açılan bot o günü kaçırılmış sayar, geç "sabah" kartı
+  atmaz. Pencere içinde tur dakikada bir çalışır.
+- **Tek kart:** "💱 Günlük Döviz & Altın" başlıklı tek embed; 💵 Amerikan Doları, 💶 Euro, 🪙 Gram Altın bölümleri. Her
+  bölümde alış/satış (`48,900 ₺` biçimi, tek-komut kartlarıyla aynı `Price()`), **kendi kaynağı** ve zamanı
+  (`Kaynak: Altınkaynak · Güncellendi: <t:…:R>`; TCMB'de `Kaynak: TCMB — Gösterge Kuru · Bülten: 25.09.2026` ve
+  gösterge kuru notu; yedekte "(yedek kaynak)"; eski veride "⚠️ Son başarılı fiyat · son sorgu …"). Tek bir ortak
+  "Kaynak" altbilgisi yoktur: üç enstrüman farklı sağlayıcılardan gelebilir.
+- **Aynı fiyat servisi:** fiyatlar komutlarla aynı `MarketQuoteService`'ten gelir (birincil → yedek → son iyi fiyat, önbellek,
+  single flight). USD ve EUR tek Altınkaynak Currency yanıtını paylaşır: normalde en fazla bir Currency ve bir Gold isteği.
+- **Kısmi veri:** bir enstrüman alınamazsa o bölümde "Şu anda alınamadı" yazar, diğerleri gösterilir. Üçü de alınamazsa kart
+  gönderilmez; pencere içinde sonraki turda yeniden denenir, 09:30'a kadar gelmezse o gün atlanır (uyarı logu) ve ertesi gün
+  normal devam eder.
+- **Teslim ve tekrar koruması:** kart doğrudan Discord'a gönderilmez; kalıcı **outbox**'a yazılır (yeni tablo/migration yok).
+  Mantıksal anahtar: sunucu + `currency` + `day:<Türkiye tarihi>` + kanal + `currency-daily`
+  (ör. `live|<sunucu>|currency|day:2026-09-29|1242464361855848459|currency-daily`). O gün için outbox'ta herhangi bir durumda
+  satır varsa yeniden yazılmaz (gönderilmiş kart düzenlenmez de); eşzamanlı iki tur benzersiz anahtara takılır. Böylece
+  09:03'teki bir restart/deploy ikinci kart üretmez. Kanal erişilemezse (403/404) mevcut outbox teslim kuralları işler;
+  09:30 + 1 saate kadar teslim edilemeyen kart geç gönderilmez.
+- **Modül kapalıysa kart yok:** yalnızca modülü açık (ve izinli) sunuculara kart hazırlanır, onlar için bile fiyat ancak
+  gerekirse alınır; teslim anında modül kapısı ayrıca denetlenir. 09:00–09:30 arasında açılan modül o günün kartını alır;
+  daha sonra açılırsa geçmiş sabah kartı gönderilmez.
+- **Ping yok:** `MentionPolicy.None`; @everyone, @here, rol veya kullanıcı etiketi yok.
+- Loglar (`currency_daily_queued` / `_no_data` / `_skipped` / `_channel_unavailable` / `_window_passed`): yerel tarih, kanal,
+  tur nedeni (`startup`/`scheduled`), enstrüman başına kaynak/erişilebilirlik ve outbox sonucu.
+
 ## Yapılandırma
 
-`appsettings.json` → `Currency`: üç taban URL (`AltinkaynakBaseUrl`, `TcmbBaseUrl`, `TruncgilBaseUrl`) ve yukarıdaki dört süre.
+`appsettings.json` → `Currency`: `ChannelId`, `DailyCatchUpMinutes`, üç taban URL (`AltinkaynakBaseUrl`, `TcmbBaseUrl`,
+`TruncgilBaseUrl`) ve yukarıdaki dört süre.
 Varsayılanlar üretim değerleridir; secret veya Railway değişkeni gerekmez. Başlangıçta doğrulanır: URL'ler mutlak `https`,
 `/` ile biten, kimlik bilgisi/sorgu içermeyen adresler olmalı; hatalı bir değer botu açık bir `CONFIG: [currency] …`
 satırıyla durdurur. HTTP, sağlayıcı başına adlandırılmış `IHttpClientFactory` istemcileriyle yapılır (yönlendirme ve cookie
@@ -87,7 +130,7 @@ yok, yanıt en fazla 1 MB, `User-Agent: TSQBot`).
 
 ## Durum
 
-`/bot status` son komutun nasıl karşılandığını gösterir (birincil / yedek / eski veri / veri yok); bunun için sağlayıcıya
+`/bot status` son fiyat isteğinin (komut veya günlük kart) nasıl karşılandığını gösterir (birincil / yedek / eski veri / veri yok); bunun için sağlayıcıya
 istek atılmaz.
 
 ## Canlı sözleşme kontrolü (test paketinin parçası değil)
