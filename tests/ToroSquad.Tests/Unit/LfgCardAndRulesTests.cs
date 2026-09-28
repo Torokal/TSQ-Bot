@@ -114,6 +114,50 @@ public sealed class LfgCardAndRulesTests
     }
 
     [Fact]
+    public void The_waitlist_is_shown_in_line_order_between_the_players_and_the_maybes_without_pinging()
+    {
+        var listing = Listing("Deadlock", null, 2, LfgStatus.Full, 1, 2) with
+        {
+            Waitlist = [new UserId(9), new UserId(3), new UserId(7)],
+            Maybe = [new UserId(5)],
+        };
+
+        var card = Renderer().Render(listing, "tr");
+
+        card.Embed!.Description.Should().Contain(
+            "**Katılanlar**\n<@1> · <@2>\n🎟️ **Bekleme Listesi (3)**\n`1.` <@9> · `2.` <@3> · `3.` <@7>\n🤔 **Belki**\n<@5>");
+        card.Embed.Description.Should().Contain("👥 **2 / 2**", "only Joined players count").And.Contain("✅ **Ekip dolu**");
+        card.Mentions.Should().Be(MentionPolicy.None, "an edit that lists the waitlist pings nobody");
+        DiscordLimits.Validate(card).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_long_waitlist_shows_the_first_twenty_and_the_full_count()
+    {
+        var listing = Listing("Deadlock", null, 2, LfgStatus.Full, 1, 2) with
+        {
+            Waitlist = Enumerable.Range(100, 28).Select(i => new UserId((ulong)i)).ToList(),
+        };
+
+        var description = Renderer().Render(listing, "tr").Embed!.Description!;
+
+        description.Should().Contain("🎟️ **Bekleme Listesi (28)**").And.Contain("`20.` <@119> (+8)").And.NotContain("<@120>").And.NotContain("`21.`");
+    }
+
+    [Theory]
+    [InlineData(LfgStatus.Open, "tr", "Katıl", MessageButtonStyle.Success)]
+    [InlineData(LfgStatus.Full, "tr", "🎟️ Sıraya Gir", MessageButtonStyle.Primary)]
+    [InlineData(LfgStatus.Open, "en", "Join", MessageButtonStyle.Success)]
+    [InlineData(LfgStatus.Full, "en", "🎟️ Join Waitlist", MessageButtonStyle.Primary)]
+    public void The_first_button_joins_while_open_and_queues_while_full_and_is_the_same_action(LfgStatus status, string language, string label,
+        MessageButtonStyle style)
+    {
+        var join = Renderer().Render(Listing("Deadlock", null, 2, status, 1, 2), language).Buttons![0];
+
+        (join.Label, join.CustomId, join.Disabled, join.Style).Should().Be((label, "tsq:lfg:join:7", false, style));
+    }
+
+    [Fact]
     public void English_guilds_get_the_english_card()
     {
         var card = Renderer().Render(Listing("Minecraft", null, 4), "en");
