@@ -600,6 +600,13 @@
           "ToroSquad.Discord": "[0.1.0-dev, )"
         }
       },
+      "torosquad.modules.randomizer": {
+        "type": "Project",
+        "dependencies": {
+          "ToroSquad.Core": "[0.1.0-dev, )",
+          "ToroSquad.Discord": "[0.1.0-dev, )"
+        }
+      },
       "torosquad.modules.volleyball": {
         "type": "Project",
         "dependencies": {

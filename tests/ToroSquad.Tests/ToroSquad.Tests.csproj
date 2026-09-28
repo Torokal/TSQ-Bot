@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Quote\ToroSquad.Modules.Quote.csproj" />
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Currency\ToroSquad.Modules.Currency.csproj" />
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Birthday\ToroSquad.Modules.Birthday.csproj" />
+    <ProjectReference Include="..\..\src\ToroSquad.Modules.Randomizer\ToroSquad.Modules.Randomizer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

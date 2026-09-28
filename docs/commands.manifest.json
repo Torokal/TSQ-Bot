@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "ea1a2af4883737dab18b34fe4c3eaf13e877d593777ecb84ede676578f8cf2ea",
+  "hash": "8c9974a4dd9e4e02b31d3c86760ba25c37b2fc1793d82c4a23501bee738b670e",
   "commands": [
     {
       "module": "currency",
@@ -1716,6 +1716,81 @@
       }
     },
     {
+      "module": "randomizer",
+      "payload": {
+        "type": 1,
+        "name": "randomsayi",
+        "description": "Pick a random number from the given range",
+        "description_localizations": {
+          "tr": "Belirtilen aralıktan rastgele sayı seçer"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 4,
+            "name": "maksimum",
+            "description": "Largest value (inclusive)",
+            "description_localizations": {
+              "tr": "En büyük değer (dahil)"
+            },
+            "required": true,
+            "min_value": -1000000000,
+            "max_value": 1000000000
+          },
+          {
+            "type": 4,
+            "name": "minimum",
+            "description": "Smallest value (inclusive, default: 1)",
+            "description_localizations": {
+              "tr": "En küçük değer (dahil, varsayılan: 1)"
+            },
+            "required": false,
+            "min_value": -1000000000,
+            "max_value": 1000000000
+          }
+        ]
+      }
+    },
+    {
+      "module": "randomizer",
+      "payload": {
+        "type": 1,
+        "name": "sec",
+        "description": "Pick one of the given options at random",
+        "description_localizations": {
+          "tr": "Verilen seçeneklerden rastgele birini seçer"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 3,
+            "name": "seçenekler",
+            "description": "Comma-separated options, e.g. CS2, Valheim, WoW",
+            "description_localizations": {
+              "tr": "Virgülle ayrılmış seçenekler, ör. CS2, Valheim, WoW"
+            },
+            "required": true,
+            "min_length": 1,
+            "max_length": 1000
+          }
+        ]
+      }
+    },
+    {
       "module": "core",
       "payload": {
         "type": 1,
@@ -2032,6 +2107,58 @@
                 ]
               }
             ]
+          }
+        ]
+      }
+    },
+    {
+      "module": "randomizer",
+      "payload": {
+        "type": 1,
+        "name": "yazitura",
+        "description": "Flip a coin",
+        "description_localizations": {
+          "tr": "Yazı tura atar"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": []
+      }
+    },
+    {
+      "module": "randomizer",
+      "payload": {
+        "type": 1,
+        "name": "zarat",
+        "description": "Roll the given dice",
+        "description_localizations": {
+          "tr": "Belirtilen zarları atar"
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 3,
+            "name": "zar",
+            "description": "Number of dice and sides: 1-20, 2-6 or 2d6",
+            "description_localizations": {
+              "tr": "Zar sayısı ve yüz sayısı: 1-20, 2-6 veya 2d6"
+            },
+            "required": true,
+            "min_length": 1,
+            "max_length": 32
           }
         ]
       }
