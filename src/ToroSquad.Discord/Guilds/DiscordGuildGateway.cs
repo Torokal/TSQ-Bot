@@ -22,14 +22,23 @@ public sealed class DiscordGuildGateway(DiscordSocketClient client) : IGuildGate
 
         var roles = g.Roles.Select(r => new RoleInfo(
             new RoleId(r.Id), r.Name, r.Position, (CorePermission)r.Permissions.RawValue, r.IsManaged, r.IsEveryone, r.IsMentionable)).ToList();
-        var overwrites = g.Channels
+        var overwrites = RoleOverwrites(g.Channels);
+        var botTop = g.CurrentUser.Roles.Count == 0 ? 0 : g.CurrentUser.Roles.Max(r => r.Position);
+        return Task.FromResult<GuildRoleSnapshot?>(new GuildRoleSnapshot(guild, roles, botTop, (CorePermission)g.CurrentUser.GuildPermissions.RawValue, overwrites));
+    }
+
+    /// <summary>
+    /// The role permission overwrites of the guild's channels. The socket channel cache also holds active threads: a thread
+    /// has no overwrites of its own (it uses its parent channel's, which is in the list) and Discord.Net throws
+    /// NotSupportedException on a thread's PermissionOverwrites, so threads are skipped.
+    /// </summary>
+    public static IReadOnlyList<ChannelRoleOverwrite> RoleOverwrites(IEnumerable<IGuildChannel> channels) =>
+        channels
+            .Where(c => c is not IThreadChannel)
             .SelectMany(c => c.PermissionOverwrites
                 .Where(o => o.TargetType == PermissionTarget.Role)
                 .Select(o => new ChannelRoleOverwrite(new ChannelId(c.Id), new RoleId(o.TargetId), (CorePermission)o.Permissions.AllowValue, (CorePermission)o.Permissions.DenyValue)))
             .ToList();
-        var botTop = g.CurrentUser.Roles.Count == 0 ? 0 : g.CurrentUser.Roles.Max(r => r.Position);
-        return Task.FromResult<GuildRoleSnapshot?>(new GuildRoleSnapshot(guild, roles, botTop, (CorePermission)g.CurrentUser.GuildPermissions.RawValue, overwrites));
-    }
 
     public Task<BotChannelAccess> GetBotChannelAccessAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken)
     {
