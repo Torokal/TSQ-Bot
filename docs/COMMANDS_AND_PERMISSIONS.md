@@ -100,6 +100,16 @@ Bot izinleri: kaynak kanalda `ViewChannel` + `ReadMessageHistory`; komutun çal�
 değişmez (aşağıya bakın).
 Ayrıntı: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md).
 
+## TSQ Döviz & Altın (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/dolar` · `/euro` · `/altın` | Herkes, argümansız: güncel USD/TRY, EUR/TRY veya gram altın alış/satış fiyatını kanalda **herkese açık** bir kartla gösterir (kaynak + sağlayıcının güncelleme zamanı). Yedek kaynak (TCMB gösterge kuru / Trunçgil) ve eski veri kartta açıkça yazılır; veri yoksa takip kodlu kısa bir mesaj. Ping yok |
+
+Bot izni gerekmez (cevap etkileşim yanıtıdır). `/altın` Türkçe `ı` ile kayıtlıdır: Discord komut adlarında her dilden küçük
+harfe izin verir; manifest doğrulayıcısı Discord'un kuralını uygular (1–32 küçük harf/rakam, `-`, `_`).
+Ayrıntı: [currency/TSQ_CURRENCY.md](currency/TSQ_CURRENCY.md).
+
 ## TSQ Doğum Günü (modül açıkken)
 
 | Komut | Ne yapar |

@@ -146,6 +146,19 @@ invite link and no global command registration. The source code is public under 
   Administrator / owner / Manage-Server-only account, role grant/removal and the real hierarchy on TSQ, REST member lookup,
   midnight run on Railway). Off by default. Deployed and synced 2026-09-28 (PR #19, #20); `show` needs a new sync.
 
+## TSQ Döviz & Altın (new, 2026-09-28, branch `feat/currency-module`)
+
+- Scope and rules: [currency/TSQ_CURRENCY.md](currency/TSQ_CURRENCY.md). Stateless utility module: no table, no migration,
+  no worker, no API key.
+- **IMPLEMENTED / TESTED_OFFLINE**: `/dolar`, `/euro`, `/altın` (public cards); Altınkaynak → TCMB (USD/EUR, labelled
+  "Gösterge Kuru", bulletin date) / Trunçgil (gram gold) → last good price ≤ 15 min (marked stale) → trace-coded notice;
+  tr-TR decimal parsing (`"48,820"` = 48.820), GA never PGA, Türkiye local provider times; dataset cache 60 s / 30 s,
+  failed provider skipped 30 s, single flight; `/bot status` line; `/modules` gate (off by default).
+- **Contract checked live (read-only GET, 2026-09-28)** through the module's own HTTP clients and parsers: Altınkaynak
+  Currency/Gold, TCMB, Trunçgil — all fields present and parsed. Not a Discord observation.
+- **NOT VERIFIED_LIVE**: the commands in Discord (`/altın` registration with the Turkish ı, public defer → card, card
+  rendering in clients). `/dolar`, `/euro`, `/altın` are in the manifest but not synced.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.
