@@ -14,8 +14,9 @@ namespace ToroSquad.Modules.Lfg.Application;
 
 /// <summary>
 /// /privacy for TSQ LFG: the listings a user created (with their own game/details text) and the listings they joined, in
-/// one guild, with their answer (Joined / Maybe). Deletion removes both; listings the user only joined lose them (a full one
-/// reopens when a Joined player goes) and their cards are redrawn by the worker. Event notices that list the user as a
+/// one guild, with their answer (Joined / Maybe / Waitlisted). Deletion removes both; listings the user only joined lose
+/// them — a Joined player's slot goes to the first in that listing's waitlist in the same transaction (a full one reopens
+/// only when nobody waits) — and their cards are redrawn by the worker. Event notices that list the user as a
 /// pinged player are removed as well (they are otherwise pruned 24 h after delivery). Guild retention purges every LFG row
 /// of the guild.
 /// </summary>
@@ -88,20 +89,23 @@ public sealed class LfgUserData(ToroDbContext db, TimeProvider clock) : IUserDat
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var deleted = 0;
 
-        // Listings the user only joined: remove them as a player; the card is redrawn without them.
+        // Listings the user only joined (Joined, Maybe or waitlisted): remove them; a freed slot goes to the first in the
+        // waitlist in this same transaction (the shared roster rule); the card is redrawn by the worker.
+        var now = clock.GetUtcNow();
         var memberships = await JoinedElsewhere(guild, user).ToListAsync(cancellationToken);
         var affected = memberships.Select(p => p.ListingId).ToHashSet();
-        var freedSlot = memberships.Where(p => p.Response == LfgResponse.Joined).Select(p => p.ListingId).ToHashSet();
         foreach (var listing in await Listings.Where(x => affected.Contains(x.Id)).ToListAsync(cancellationToken))
         {
-            if (listing.Status == LfgStatus.Full && freedSlot.Contains(listing.Id))
-                listing.Status = LfgStatus.Open; // a Maybe never held a slot
+            var members = await Participants.Where(p => p.ListingId == listing.Id).ToListAsync(cancellationToken);
+            var mine = members.Single(p => p.UserId == user.Value);
+            Participants.Remove(mine);
+            members.Remove(mine);
+            LfgRoster.Rebalance(listing, members, now); // a closed, expired or orphaned listing stays untouched
             listing.CardStale = listing.MessageId is not null;
             listing.CardSyncAttempts = 0;
             listing.Version++;
         }
 
-        Participants.RemoveRange(memberships);
         deleted += memberships.Count;
         await db.SaveChangesAsync(cancellationToken);
 
@@ -109,7 +113,6 @@ public sealed class LfgUserData(ToroDbContext db, TimeProvider clock) : IUserDat
         // "this listing no longer exists" and retires the buttons.
         var owned = Listings.Where(x => x.GuildId == guild.Value && x.OwnerUserId == user.Value);
         // Their notices not delivered yet stop too, like on a close: a deleted listing must not ping anyone afterwards.
-        var now = clock.GetUtcNow();
         foreach (var id in await owned.Select(x => x.Id).ToListAsync(cancellationToken))
             await LfgNoticePlanner.CancelPendingAsync(db, id, "listing_deleted", now, cancellationToken);
         await Participants.Where(p => owned.Any(l => l.Id == p.ListingId)).ExecuteDeleteAsync(cancellationToken);

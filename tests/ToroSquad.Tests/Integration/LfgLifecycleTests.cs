@@ -223,7 +223,7 @@ public sealed class LfgLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_last_slot_makes_the_listing_full_and_further_joins_are_refused()
+    public async Task The_last_slot_makes_the_listing_full_and_further_joins_go_to_the_waitlist()
     {
         var listing = await OpenAsync(players: 3);
         await JoinAsync(listing.Id, 20);
@@ -234,9 +234,11 @@ public sealed class LfgLifecycleTests : IAsyncLifetime
         last.Listing.Players.Should().HaveCount(3);
 
         var late = await JoinAsync(listing.Id, 22);
-        late.Result.MessageKey.Should().Be("lfg.join.full");
-        late.RefreshCard.Should().BeTrue("a card that still offered a slot is redrawn");
-        (await ParticipantRowsAsync(listing.Id)).Should().Be(3);
+        late.Result.MessageKey.Should().Be("lfg.join.waitlisted");
+        late.Result.Args.Should().Equal(1);
+        late.RefreshCard.Should().BeTrue("the card shows the waitlist");
+        (late.Listing!.Players.Count, late.Listing.Status).Should().Be((3, LfgStatus.Full));
+        late.Listing.WaitlistedPlayers.Should().Equal(new UserId(22));
     }
 
     [Fact]
@@ -504,9 +506,10 @@ public sealed class LfgLifecycleTests : IAsyncLifetime
             var a = 2000 + ((ulong)round * 10);
             var results = await Task.WhenAll(Task.Run(() => JoinAsync(listing.Id, a)), Task.Run(() => JoinAsync(listing.Id, a + 1)));
 
-            results.Select(r => r.Result.MessageKey).Should().BeEquivalentTo(["lfg.join.done", "lfg.join.full"]);
+            results.Select(r => r.Result.MessageKey).Should().BeEquivalentTo(["lfg.join.done", "lfg.join.waitlisted"]);
             var stored = (await GetAsync(listing.Id))!;
             stored.Players.Should().HaveCount(6);
+            stored.WaitlistedPlayers.Should().ContainSingle("the one who lost the race waits first in line");
             stored.Status.Should().Be(LfgStatus.Full);
         }
     }
@@ -519,8 +522,11 @@ public sealed class LfgLifecycleTests : IAsyncLifetime
         var results = await Task.WhenAll(Enumerable.Range(0, 12).Select(i => Task.Run(() => JoinAsync(listing.Id, 300 + (ulong)i))));
 
         results.Count(r => r.Result.MessageKey == "lfg.join.done").Should().Be(3);
-        results.Count(r => r.Result.MessageKey == "lfg.join.full").Should().Be(9);
-        (await ParticipantRowsAsync(listing.Id)).Should().Be(4);
+        results.Where(r => r.Result.MessageKey == "lfg.join.waitlisted").Select(r => (int)r.Result.Args[0]!).Should().BeEquivalentTo(Enumerable.Range(1, 9),
+            "nine different places, one each");
+        (await ParticipantRowsAsync(listing.Id)).Should().Be(13);
+        var stored = (await GetAsync(listing.Id))!;
+        (stored.Players.Count, stored.WaitlistedPlayers.Count).Should().Be((4, 9));
         (await RowAsync(listing.Id)).Status.Should().Be(LfgStatus.Full);
     }
 
@@ -715,24 +721,26 @@ public sealed class LfgLifecycleTests : IAsyncLifetime
     // ---- full card ----
 
     [Fact]
-    public async Task A_full_listing_refuses_joins_but_leave_and_close_still_work()
+    public async Task A_full_listing_queues_joins_and_leave_and_close_still_work()
     {
         var renderer = _host.Services.GetRequiredService<LfgCardRenderer>();
         var listing = await OpenAsync(players: 3);
         await FillAsync(listing.Id, 2);
         var full = (await GetAsync(listing.Id))!;
         full.Status.Should().Be(LfgStatus.Full);
-        renderer.Render(full, "tr").Buttons!.Select(b => b.Disabled).Should().Equal(true, false, false, false, false);
+        renderer.Render(full, "tr").Buttons!.Should().OnlyContain(b => !b.Disabled, "full is not closed: the first button queues");
 
-        (await JoinAsync(listing.Id, 30)).Result.MessageKey.Should().Be("lfg.join.full");
+        (await JoinAsync(listing.Id, 30)).Result.MessageKey.Should().Be("lfg.join.waitlisted");
         (await Lfg(s => s.CheckCloseAsync(User(Owner), listing.Id, Ct))).Result.MessageKey.Should().Be("lfg.close.question");
         (await Lfg(s => s.CheckCloseAsync(Moderator(40), listing.Id, Ct))).Result.MessageKey.Should().Be("lfg.close.question");
         (await Lfg(s => s.CheckCloseAsync(User(100), listing.Id, Ct))).Result.MessageKey.Should().Be("lfg.close.forbidden");
 
         var left = await LeaveAsync(listing.Id, 101);
-        left.Listing!.Status.Should().Be(LfgStatus.Open);
-        renderer.Render(left.Listing, "tr").Buttons!.Should().OnlyContain(b => !b.Disabled);
-        (await JoinAsync(listing.Id, 30)).Result.MessageKey.Should().Be("lfg.join.done");
+        (left.Listing!.Status, left.Listing.WaitlistedPlayers.Count).Should().Be((LfgStatus.Full, 0));
+        left.Listing.Players.Should().Contain(new UserId(30), "the freed slot went to the first in line").And.HaveCount(3);
+        (await LeaveAsync(listing.Id, 100)).Listing!.Status.Should().Be(LfgStatus.Open);
+        renderer.Render((await GetAsync(listing.Id))!, "tr").Buttons!.Should().OnlyContain(b => !b.Disabled);
+        (await JoinAsync(listing.Id, 31)).Result.MessageKey.Should().Be("lfg.join.done");
     }
 
     // ---- mentions ----

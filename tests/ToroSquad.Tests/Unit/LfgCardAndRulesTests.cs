@@ -51,12 +51,14 @@ public sealed class LfgCardAndRulesTests
     }
 
     [Fact]
-    public void Full_card_disables_join_but_keeps_leave_and_close()
+    public void Full_card_keeps_every_button_and_offers_the_waitlist_instead_of_join()
     {
         var card = Renderer().Render(Listing("Deadlock", null, 2, LfgStatus.Full, 1, 2), "tr");
 
-        card.Embed!.Description.Should().Contain("✅ **Ekip tamamlandı**").And.Contain("kapanır").And.NotContain("📝");
-        card.Buttons!.Select(b => b.Disabled).Should().Equal(true, false, false, false, false); // Katıl off; Belki, Ayrıl, Düzenle, Kapat on
+        card.Embed!.Description.Should().Contain("✅ **Ekip dolu**").And.Contain("kapanır").And.NotContain("📝").And.NotContain("Bekleme");
+        card.Buttons!.Select(b => b.Disabled).Should().Equal(false, false, false, false, false);
+        (card.Buttons![0].Label, card.Buttons[0].CustomId, card.Buttons[0].Style).Should().Be(("🎟️ Sıraya Gir", "tsq:lfg:join:7", MessageButtonStyle.Primary),
+            "the same join button: the server decides slot or waitlist");
         card.Embed.Color.Should().Be(LfgCardRenderer.FullColor);
     }
 

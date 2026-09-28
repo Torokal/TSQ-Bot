@@ -5,7 +5,7 @@
   "lfg.card.count": "👥 **{0} / {1}**",
   "lfg.card.players": "**Katılanlar**",
   "lfg.card.expires": "⏰ {0} kapanır",
-  "lfg.card.full": "✅ **Ekip tamamlandı**",
+  "lfg.card.full": "✅ **Ekip dolu**",
   "lfg.card.expired": "⏰ Bu ekip ilanının süresi doldu.",
   "lfg.card.closed": "🔒 **İlan kapatıldı**",
   "lfg.card.footer": "TSQ LFG · Oyuncu Bul",
@@ -22,7 +22,6 @@
   "lfg.create.limit": "Aynı anda en fazla {0} aktif ekip ilanı açabilirsin.",
   "lfg.join.done": "✅ Ekibe katıldın.",
   "lfg.join.already": "Zaten bu ekiptesin.",
-  "lfg.join.full": "Bu ekip dolu.",
   "lfg.leave.done": "Ekipten ayrıldın.",
   "lfg.leave.owner": "İlan sahibi ekipten ayrılamaz. İstersen ilanı kapatabilirsin.",
   "lfg.leave.not_member": "Bu ekipte değilsin.",
@@ -65,7 +64,6 @@
   "lfg.button.maybe": "Belki",
   "lfg.button.voice": "🔊 Ses Odası",
   "lfg.button.voice_join": "🔊 Ses Odasına Katıl",
-  "lfg.join.full_stays_maybe": "Bu ekip şu anda dolu. \"Belki\" olarak kaldın.",
   "lfg.maybe.done": "🤔 \"Belki\" olarak işaretlendin: kapasiteye sayılmazsın ve etkinlik bildirimlerinde etiketlenmezsin.",
   "lfg.maybe.already": "Zaten \"Belki\" olarak işaretlisin.",
   "lfg.maybe.owner": "İlan sahibi \"Belki\" seçemez. İstersen ilanı kapatabilirsin.",
@@ -158,5 +156,12 @@
   "lfg.form.error_general": "❌ {0}",
   "lfg.form.error.game": "En az {0}, en fazla {1} karakter olmalı.",
   "lfg.form.error.players": "Kişi sayısı {0}–{1} arasında olmalı.",
-  "lfg.form.error.date_format": "Tarih/saat anlaşılamadı.\nÖrnek: `27.09.2026 21:30` veya `27.09.26 21:30`."
+  "lfg.form.error.date_format": "Tarih/saat anlaşılamadı.\nÖrnek: `27.09.2026 21:30` veya `27.09.26 21:30`.",
+  "lfg.button.join_waitlist": "🎟️ Sıraya Gir",
+  "lfg.card.waitlist": "🎟️ **Bekleme Listesi ({0})**",
+  "lfg.join.waitlisted": "🎟️ Ekip dolu. Bekleme listesine eklendin.\nSıran: **#{0}**",
+  "lfg.join.already_waitlisted": "🎟️ Zaten bekleme listesindesin.\nSıran: **#{0}**",
+  "lfg.leave.done_waitlist": "🎟️ Bekleme listesinden çıktın.",
+  "lfg.leave.done_maybe": "İlandan ayrıldın.",
+  "lfg.voice.waitlisted": "🎟️ Bekleme listesindesin. Ekipte yer açıldığında otomatik olarak katılacaksın."
 }
