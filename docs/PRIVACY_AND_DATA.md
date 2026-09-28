@@ -30,6 +30,10 @@ kimlikler ve sonuç) ([quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md)).
 | `birthday_announcement`, `birthday_guild_config` | Günlük duyurunun durumu (kişi sayısı, kullanıcı ID'si yok); duyuru kanalı ve değiştiren yöneticinin kullanıcı ID'si | sunucu | 30 gün sonra / bot sunucudan çıkarıldıktan 30 gün sonra |
 | `outbox` (Doğum Günü duyurusu) | Duyuru metni: kutlananların mention'ları (kullanıcı ID'leri) | kullanıcı | teslimden/bitişten 2 gün sonra |
 
+TSQ Döviz & Altın kendi tablosunu kullanmaz ve kullanıcı verisi tutmaz: fiyatlar yalnızca bellekte kısa süre önbelleklenir,
+komut kullanımları ve sağlayıcı yanıtları kaydedilmez; sağlayıcılara kullanıcıya ait hiçbir bilgi gönderilmez. Günlük 09:00
+kartı ortak `outbox` tablosuna yazılır (yalnızca fiyatlar, kullanıcı ID'si yok).
+
 TSQ Quote tablo kullanmaz; `/privacy export/delete` kapsamında kaydı yoktur (gönderilen alıntı görseli normal bir kanal
 mesajıdır; kanaldan Discord'da silinir).
 

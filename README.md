@@ -9,7 +9,8 @@ creators' Twitch/Kick streams ([docs/live/TSQ_LIVE.md](docs/live/TSQ_LIVE.md)). 
 open quick group listings for any game with `/ekip` ([docs/lfg/TSQ_LFG.md](docs/lfg/TSQ_LFG.md)). **TSQ Quote** turns a
 message into a black-and-white quote card with `/quote` ([docs/quote/TSQ_QUOTE.md](docs/quote/TSQ_QUOTE.md)). **TSQ Doğum
 Günü** celebrates members' birthdays (day and month only) with one message and a role for the day
-([docs/birthday/TSQ_BIRTHDAY.md](docs/birthday/TSQ_BIRTHDAY.md)).
+([docs/birthday/TSQ_BIRTHDAY.md](docs/birthday/TSQ_BIRTHDAY.md)). **TSQ Döviz & Altın** shows the current US dollar, euro
+and gram gold buy/sell prices with `/dolar`, `/euro` and `/altın` ([docs/currency/TSQ_CURRENCY.md](docs/currency/TSQ_CURRENCY.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
 **BOT Greg** and reuses adapted portions of the open-source
@@ -46,6 +47,12 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   (no channel scan, no message events); server-side access checks (same server; the member and the bot may view the
   channel and read its history; the bot may attach files where the command ran); stateless (nothing stored or logged).
   Needs the application's Message Content access (Developer Portal) — the gateway intents stay `Guilds`.
+- **TSQ Döviz & Altın** (separate module, off by default): `/dolar`, `/euro`, `/altın` answer publicly in the currency
+  channel (elsewhere: a private pointer to it) with the current USD/TRY, EUR/TRY and gram gold buy/sell prices and the
+  provider's own update time; one combined card is posted there daily at 09:00 Türkiye time (outbox, catch-up until 09:30). Altınkaynak's public JSON service is
+  the primary source; TCMB's daily indicative rate (USD/EUR, labelled as such) and Trunçgil (gram gold) are fallbacks, then
+  the last good price for up to 15 minutes, clearly marked. Fetched on demand only, cached in memory (60 s / 30 s,
+  one shared fetch for concurrent requests); no API key, no own table, no price polling.
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
@@ -74,6 +81,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
 | TSQ Quote | `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
+| TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options; public answer, currency channel only) | everyone (module on) |
 | TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
@@ -176,6 +184,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Live` | TSQ Live (Twitch + Kick stream announcements: creator session state machine, official-API reconciliation, planner) |
 | `ToroSquad.Modules.Lfg` | TSQ LFG — Oyuncu Bul (generic group-finder listings: create/join/leave/close/expire, race-safe persistence, card sync) |
 | `ToroSquad.Modules.Quote` | TSQ Quote (`/quote`: message reference parsing, access checks, Discord text → plain text, ImageSharp card renderer with embedded fonts) |
+| `ToroSquad.Modules.Currency` | TSQ Döviz & Altın (`/dolar`, `/euro`, `/altın`: Altınkaynak / TCMB / Trunçgil parsers, dataset cache with single flight, last-known-good) |
 | `ToroSquad.Modules.Birthday` | TSQ Doğum Günü (day + month registrations, restart-safe daily reconciliation: one announcement, temporary role) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |

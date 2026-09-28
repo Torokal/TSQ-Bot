@@ -18,6 +18,7 @@ COPY src/ToroSquad.Modules.Volleyball/ToroSquad.Modules.Volleyball.csproj src/To
 COPY src/ToroSquad.Modules.Live/ToroSquad.Modules.Live.csproj src/ToroSquad.Modules.Live/packages.lock.json src/ToroSquad.Modules.Live/
 COPY src/ToroSquad.Modules.Lfg/ToroSquad.Modules.Lfg.csproj src/ToroSquad.Modules.Lfg/packages.lock.json src/ToroSquad.Modules.Lfg/
 COPY src/ToroSquad.Modules.Quote/ToroSquad.Modules.Quote.csproj src/ToroSquad.Modules.Quote/packages.lock.json src/ToroSquad.Modules.Quote/
+COPY src/ToroSquad.Modules.Currency/ToroSquad.Modules.Currency.csproj src/ToroSquad.Modules.Currency/packages.lock.json src/ToroSquad.Modules.Currency/
 COPY src/ToroSquad.Modules.Birthday/ToroSquad.Modules.Birthday.csproj src/ToroSquad.Modules.Birthday/packages.lock.json src/ToroSquad.Modules.Birthday/
 COPY src/ToroSquad.Bot/ToroSquad.Bot.csproj src/ToroSquad.Bot/packages.lock.json src/ToroSquad.Bot/
 RUN dotnet restore src/ToroSquad.Bot/ToroSquad.Bot.csproj --locked-mode

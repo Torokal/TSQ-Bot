@@ -10,6 +10,7 @@
     <Project Path="src/ToroSquad.Modules.Live/ToroSquad.Modules.Live.csproj" />
     <Project Path="src/ToroSquad.Modules.Lfg/ToroSquad.Modules.Lfg.csproj" />
     <Project Path="src/ToroSquad.Modules.Quote/ToroSquad.Modules.Quote.csproj" />
+    <Project Path="src/ToroSquad.Modules.Currency/ToroSquad.Modules.Currency.csproj" />
     <Project Path="src/ToroSquad.Modules.Birthday/ToroSquad.Modules.Birthday.csproj" />
     <Project Path="src/ToroSquad.Bot/ToroSquad.Bot.csproj" />
   </Folder>

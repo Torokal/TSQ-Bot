@@ -11,6 +11,10 @@
 > (`channels`, `users`, app token) reconciliation; EventSub/webhooks are deferred for V1 (the current deployment exposes no HTTP
 > callback endpoint — not a Railway limitation; EventSub WebSocket subscriptions require a user access token and V1 avoids a
 > refresh-token lifecycle for TSQ Live). Contracts and limits: [live/TSQ_LIVE.md](live/TSQ_LIVE.md).
+>
+> TSQ Döviz & Altın (USD/TRY, EUR/TRY, gram gold): Altınkaynak public JSON service (primary), TCMB `today.xml` daily indicative
+> rates (USD/EUR fallback) and Trunçgil Finance v4 (gram gold fallback) — public, no API key, fetched on demand only.
+> Contract (checked live 2026-09-28), fallback order and cache: [currency/TSQ_CURRENCY.md](currency/TSQ_CURRENCY.md).
 
 Research dates: Liquipedia/Valve 2026-09-24 (Liquipedia terms re-checked 2026-09-25), PandaScore 2026-09-25. Labels: **VERIFIED** (read at the primary/official source), **VERIFIED (archive)**
 (official page read via Web Archive because the live page was behind a bot challenge), **VERIFIED (3rd-party)**

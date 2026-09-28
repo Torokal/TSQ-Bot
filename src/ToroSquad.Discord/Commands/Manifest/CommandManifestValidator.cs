@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace ToroSquad.Discord.Commands.Manifest;
@@ -131,9 +132,11 @@ public static partial class CommandManifestValidator
 
     private static void CheckName(List<string> errors, string path, string name)
     {
-        // Discord allows more (unicode letters), TSQ Bot policy keeps command/option names short, stable ASCII.
-        if (!NamePattern().IsMatch(name))
-            errors.Add($"{path}: invalid name '{name}' (policy: ^[a-z0-9_-]{{1,32}}$)");
+        // Discord's rule (application-commands docs; Discord.Net 3.20 validates the same pattern before registering): 1-32
+        // letters or digits of any script, '-' or '_', and the lowercase variant of every letter that has one. Turkish names
+        // such as /altın are therefore valid; spaces, punctuation and uppercase are not.
+        if (!NamePattern().IsMatch(name) || name.Any(c => char.GetUnicodeCategory(c) is UnicodeCategory.UppercaseLetter or UnicodeCategory.TitlecaseLetter))
+            errors.Add($"{path}: invalid name '{name}' (Discord: 1-32 lowercase letters, digits, '-' or '_')");
     }
 
     private static void CheckDescription(List<string> errors, string path, string description, IReadOnlyDictionary<string, string> localizations)
@@ -158,6 +161,6 @@ public static partial class CommandManifestValidator
         return command.Name.Length + command.Description.Length + Count(command.Options);
     }
 
-    [GeneratedRegex("^[a-z0-9_-]{1,32}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^[-_\p{L}\p{N}\p{IsDevanagari}\p{IsThai}]{1,32}$", RegexOptions.CultureInvariant)]
     private static partial Regex NamePattern();
 }
