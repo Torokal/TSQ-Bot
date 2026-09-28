@@ -16,6 +16,12 @@ public static class DatabaseMaintenance
         DefaultTimeout = 30,
     }.ToString();
 
+    /// <summary>
+    /// A connection to the bot's database. Every pooled connection to it goes through this, so concurrent opens can never
+    /// share a native handle (see <see cref="ToroSqliteConnection"/>).
+    /// </summary>
+    public static SqliteConnection CreateConnection(string databasePath) => new ToroSqliteConnection(ConnectionString(databasePath));
+
     public static async Task MigrateAsync(ToroDbContext db, CancellationToken cancellationToken)
     {
         await db.Database.MigrateAsync(cancellationToken);
@@ -54,7 +60,7 @@ public static class DatabaseMaintenance
         Directory.CreateDirectory(backupDirectory);
         var stamp = clock.GetUtcNow().ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
         var target = Path.Combine(backupDirectory, $"torosquad-{stamp}.db");
-        using var source = new SqliteConnection(ConnectionString(databasePath));
+        using var source = CreateConnection(databasePath); // shares the running bot's pool
         using var destination = new SqliteConnection(new SqliteConnectionStringBuilder(ConnectionString(target)) { Pooling = false }.ToString());
         source.Open();
         destination.Open();

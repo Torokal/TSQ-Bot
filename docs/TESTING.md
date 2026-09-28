@@ -20,6 +20,7 @@ scope doğrulaması açıktır. Ağ erişimi yoktur.
 | `Integration.F1RestartTests` | Başlangıç gönderildi → yeniden başlatma → ikinci başlangıç yok; sonuç gönderildi → yeniden başlatma → aynı sonuç = mesaj/düzenleme yok; yeniden başlatma sonrası ceza = aynı mesaj pingsiz düzenlenir; yaşam döngüsü durumu korunur (devam ≠ başlangıç); önbellek gerçek çekim zamanıyla geri yüklenir |
 | `Integration.F1LiveListenerTests` | Tek bağlantı, yeniden bağlanma sinyali, kopya elenir; kopma → yeniden bağlanma; geçici hata üstel geri çekilme; kimlik hatası 15 dk; durdurma ve host kapanışı temiz; kimlik yoksa bağlantı yok; poller canlı olayları uygular, akışı yalnızca seans çevresinde açar, yeniden bağlanmada REST uzlaştırması ve tek başlangıç |
 | `Integration.F1AdminAndCommandTests` | Tüm yönetici işlemleri üyeye sunucu tarafında kapalı; Discord meta verisi (ManageGuild, kapı, yalnızca sunucu); kapalı modülde genel komutlar reddedilir, kurulum çalışır; @everyone/yabancı rol/kanal reddi, eksik izin uyarısı; önizleme pingsiz, sentetik, TEST/DEMO; doctor eyleme dönük ve secret'sız; sağlık kontrolü sağlayıcı çağırmaz; `/f1 next`/`results` seçim mantığı |
+| `Integration.DatabaseConnectionTests` | Botun veritabanı bağlantısı (EF context'i) `ToroSqliteConnection`: havuzlu, context başına ayrı, context kapanınca kapalı; 500 dalga × 16 eşzamanlı açılışta her sahip ayrı native handle alır (Microsoft.Data.Sqlite ≤ 10.0.12 havuz yarışı, dotnet/efcore#39008) |
 | `Integration.F1PersistenceTests` | `Formula1Module` migration'ı yalnızca `f1_*` nesneleri oluşturur; boş veritabanına uygulanır (anahtarlar, indeksler, snapshot = model); önceki üretim şemasına esports verisi korunarak uygulanır; güvenli varsayılanlar |
 | `Unit.F1DomainTests` · `Unit.F1CardTests` | Oturum adı normalizasyonu, deterministik anahtarlar, durum makinesi (ilk başlangıç, devam, kopya/sıra dışı, bitiş≠sonuç, segmentler, başlangıçsız bitiş), kanonik sonuç/puan hash'i, doğrulayıcı, eşleyici (belirsizlikte fail closed); kartlar: başlangıç, yarış (madalya, DNF/DNS/DSQ, yalnızca sağlayıcı farkları), antrenman (kazanan yok), tur zamanı biçimi, spoiler sızıntısı yok, güvenilmez metin, 22 araç + puan durumu sınırlar içinde, kısaltma notu, puan bölümü durumları, TEST/DEMO |
 | `Architecture.VbArchitectureTests` | Voleybol ↔ diğer modüller arası referans yok; iş kodunda Discord SDK yok; domain saf; komutlar sağlayıcıya/HTTP'ye erişemez; sağlayıcı katmanı outbox'a/Discord'a erişemez; yalnızca planlayıcı outbox'a yazar; `[ToroModule("volleyball")]`; varsayılan kapalı ve takım ayarı yok; kodda yıl sabiti ve `DateTime.Now/UtcNow` yok; TR/EN anahtar+yer tutucu eşliği |
@@ -106,3 +107,16 @@ otomatik test paketi ağ çağrısı yapmaz.
   bulundu: `TestHost.DisposeAsync` `SqliteConnection.ClearAllPools()` çağırıyordu; bu, paralel çalışan **diğer** testlerin
   bağlantı havuzlarını da geri alıyordu. Artık yalnızca kendi havuzu temizleniyor (`ClearPool`). Önceki `DbUpdateException`
   gözleminin de olası nedeni budur. Düzeltme sonrası tam kapı ×3 temiz.
+- 2026-09-28: `LfgLifecycleTests` eşzamanlılık testlerinde aralıklı hata (sınıf ×60'ta 2 kez): scope kapanışında
+  "SQLite Error 5: unable to delete/modify collation sequence / user-function due to active statements" ya da
+  `BEGIN IMMEDIATE`'te "cannot start a transaction within a transaction". Kök neden **Microsoft.Data.Sqlite 10.0.12'nin
+  bağlantı havuzu** (dotnet/efcore#39008): havuz bir bağlantıyı kilidi altında verir, ama `Activate` kilitten sonra
+  bağlantıyı sahibini yazmadan önce etkin işaretler; o an havuzu boş bulan eşzamanlı bir `Open()` bağlantıyı "sızmış"
+  sanıp geri alır ve aynı native handle'ı ikinci bir sahibe verir; iki istek aynı transaction'ı paylaşır. Üretimi de
+  etkiler (eşzamanlı etkileşimler ve worker'lar). Bizim connection string'imizle ölçüm: 15.000 dalgada (16 eşzamanlı
+  açılış) 12 dalgada paylaşılan handle. Upstream düzeltmesi (#39012) 10.0.12'de yok; NuGet'te henüz sürüm yok.
+  Düzeltme: `ToroSqliteConnection` havuzu korur, `Open()` çağrılarını sıraya sokar (teslim, etkinleştirme ve sızıntı
+  taraması `Open()` içinde); EF (`UseSqlite(connection, contextOwnsConnection: true)`) ve yedek kaynağı bunu kullanır.
+  Sonrası: 15.000 dalgada 0, `LfgLifecycleTests` ×100 temiz. Havuzu kapatmak da düzeltiyordu ama tam test koşusunu
+  21 sn'den 65 sn'ye çıkardı (her işlem yeni handle + şema yükleme + WAL checkpoint). Sınıf, düzeltmeyi içeren bir
+  Microsoft.Data.Sqlite sürümüyle kaldırılabilir.
