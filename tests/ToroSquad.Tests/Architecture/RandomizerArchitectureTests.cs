@@ -204,10 +204,10 @@ public sealed partial class RandomizerArchitectureTests
 
         var expected = new Dictionary<string, string>
         {
-            ["zarat"] = "Belirtilen zarları atar",
-            ["randomsayi"] = "Belirtilen aralıktan rastgele sayı seçer",
-            ["sec"] = "Verilen seçeneklerden rastgele birini seçer",
-            ["yazitura"] = "Yazı tura atar",
+            ["zarat"] = "Belirtilen zarları rastgele atar.",
+            ["randomsayi"] = "Belirtilen aralıktan rastgele bir sayı seçer.",
+            ["sec"] = "Verilen seçeneklerden rastgele birini seçer.",
+            ["yazitura"] = "Yazı tura atar.",
         };
         foreach (var (name, tr) in expected)
         {
@@ -229,6 +229,38 @@ public sealed partial class RandomizerArchitectureTests
         (options.Name, options.Type, options.Required, options.MaxLength).Should().Be(("seçenekler", OptionType.String, true, (int?)ChoiceList.MaxInputLength));
 
         manifest.Find("yazitura")!.Options.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Registration_payload_sends_turkish_for_every_description_and_keeps_english_as_the_default()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var manifest = await host.Services.GetRequiredService<InteractionHost>().InitializeAsync(host.Services);
+        var expected = new Dictionary<string, (string English, string Turkish)>
+        {
+            ["zarat"] = ("Roll the given dice", "Belirtilen zarları rastgele atar."),
+            ["zarat.zar"] = ("Number of dice and sides: 1-20, 2-6 or 2d6", "Zar biçimi. Örn: 1-20 veya 2d6"),
+            ["randomsayi"] = ("Pick a random number from the given range", "Belirtilen aralıktan rastgele bir sayı seçer."),
+            ["randomsayi.maksimum"] = ("Largest value (inclusive)", "Seçilebilecek en büyük sayı"),
+            ["randomsayi.minimum"] = ("Smallest value (inclusive, default: 1)", "Seçilebilecek en küçük sayı (varsayılan: 1)"),
+            ["sec"] = ("Pick one of the given options at random", "Verilen seçeneklerden rastgele birini seçer."),
+            ["sec.seçenekler"] = ("Options separated by commas or |, e.g. CS2, Valheim | WoW", "Virgül veya | ile ayrılmış seçenekler. Örn: CS2, Valheim | WoW"),
+            ["yazitura"] = ("Flip a coin", "Yazı tura atar."),
+        };
+
+        var actual = new Dictionary<string, (string English, string Turkish)>();
+        foreach (var name in new[] { "zarat", "randomsayi", "sec", "yazitura" })
+        {
+            // What DiscordCommandRegistrar actually sends: the English default plus the "tr" localization.
+            var properties = DiscordCommandRegistrar.ToProperties(manifest.Find(name)!);
+            actual[name] = (properties.Description.Value, properties.DescriptionLocalizations["tr"]);
+            foreach (var option in properties.Options.GetValueOrDefault() ?? [])
+                actual[name + "." + option.Name] = (option.Description, option.DescriptionLocalizations["tr"]);
+        }
+
+        actual.Should().BeEquivalentTo(expected);
+        foreach (var text in expected.Values)
+            text.Turkish.Length.Should().BeLessThanOrEqualTo(100, "Discord's description limit");
     }
 
     [Fact]
