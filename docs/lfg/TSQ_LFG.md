@@ -1,7 +1,8 @@
 # TSQ LFG — Oyuncu Bul
 
 Ayrı modül (`lfg`, `src/ToroSquad.Modules.Lfg`). Sunucudaki oyuncular **herhangi bir oyun veya aktivite** için `/ekip`
-ile hızlıca ekip ilanı açar; diğerleri butonlarla katılır, "belki" der veya ayrılır; ilan sahibi veya bir moderatör kapatır,
+ile hızlıca ekip ilanı açar; diğerleri butonlarla katılır (ekip doluysa bekleme listesine girer), "belki" der veya
+ayrılır; ilan sahibi veya bir moderatör kapatır,
 ilan süresi dolunca kendiliğinden kapanır. İsteğe bağlı olarak ileri bir başlangıç zamanı, başlangıçtan 30 dakika önce ve
 başlangıçta katılanları etiketleyen bildirimler ve bir ses kanalı seçilebilir.
 
@@ -177,26 +178,32 @@ açana görünür; `/ekip` önceden komutun kendi yanıtıydı). Aynı renderer 
 ```
 🎮 Deadlock
 @Toro ekip arıyor
-👥 3 / 6
+👥 3 / 3
 📝 Ranked gireceğiz, mikrofon gerekli.
 
 Katılanlar
 @Toro · @Oykeli · @Hasom
+🎟️ Bekleme Listesi (2)
+`1.` @Arif · `2.` @Shotgun
 🤔 Belki
-@Arif · @Shotgun
+@Despale
 
 🗓️ **Başlangıç:** 5 Ekim 2026 Pazartesi 21:30 • 8 gün içinde    ("şimdi" ilanında: 🕘 **Başlangıç:** Şimdi)
 🔊 Ses Odası: #Deadlock
+✅ Ekip dolu
 ⏰ 4 saat içinde kapanır
-[Katıl] [Belki] [Ayrıl] [🔊 Ses Odası]
+[🎟️ Sıraya Gir] [Belki] [Ayrıl] [🔊 Ses Odası]      (açık ilanda ilk düğme: [Katıl])
 [✏️ Düzenle] [İlanı Kapat]
 ```
 
 - Başlangıç satırı **her zaman** gösterilir: planlı ilanda `🗓️ **Başlangıç:** <t:…:F> • <t:…:R>`, başlangıcı boş ilanda
   `🕘 **Başlangıç:** Şimdi` (en: `🕘 **Start:** Now`); veritabanında `EventAt` yine `null` kalır ve kapanış geri sayımı değişmez.
-- Kapasite yalnızca **Katılanlar** sayısıdır (`3 / 6`); Belki listesi ayrı gösterilir ve sayılmaz. Belki listesinin ilk 20
-  kişisi gösterilir (`(+N)`).
-- Dolu: `✅ Ekip tamamlandı`, `[Katıl]` devre dışı; `[Belki]`, `[Ayrıl]`, `[🔊 Ses Odası]`, `[✏️ Düzenle]`, `[İlanı Kapat]` açık.
+- Kapasite yalnızca **Katılanlar** sayısıdır (`3 / 3`); bekleme listesi (sıra numarasıyla, sıra düzeninde) ve Belki
+  listesi ayrı gösterilir ve sayılmaz. İkisinin de ilk 20 kişisi gösterilir (`(+N)`); başlık toplamı verir
+  (`Bekleme Listesi (28)`).
+- Dolu: `✅ Ekip dolu`; **hiçbir düğme kapanmaz**. İlk düğme `[🎟️ Sıraya Gir]` olur (en: `Join Waitlist`) — aynı
+  `tsq:lfg:join:<id>` düğmesidir: slot mu sıra mı kararını sunucu kayıtlı duruma göre verir, etiket hiçbir şeyi
+  yetkilendirmez.
 - İki satır: oyuncuların düğmeleri (`Katıl · Belki · Ayrıl`, ses kanalı varsa `· 🔊 Ses Odası`) ve ilanın düğmeleri
   (`✏️ Düzenle · İlanı Kapat`). Satır ayrımı Core'daki `MessageButton.NewRow` ile yapılır (varsayılan kapalı ve kayıtlı
   yüklerden dışarıda bırakılır: diğer modüllerin buton yerleşimi ve yük hash'leri değişmez). Dağıtımdan önce açılmış
@@ -210,26 +217,54 @@ Katılanlar
 - Durumlar: açık (yeşil) · dolu · **🔒 İlan kapatıldı** · **⏰ Bu ekip ilanının süresi doldu.** Bitmiş ilanda mesaj
   silinmez; listeler kalır, tüm butonlar devre dışıdır.
 
-## RSVP: Katıl / Belki / Ayrıl
+## RSVP: Katıl / Sıraya Gir / Belki / Ayrıl
+
+Üç cevap: `Joined` (kapasiteye sayılır, Full'u belirler, bildirimlerde etiketlenir, ses düğmesini kullanır), `Maybe`
+(sayılmaz, etiketlenmez, ses yok) ve `Waitlisted` (sayılmaz, etiketlenmez, ses yok; sırası vardır ve slot açılınca kendiliğinden
+`Joined` olur). Sahip her zaman `Joined`'dır.
 
 | Durum → işlem | Sonuç |
 |---|---|
-| yok → Katıl | boş slot varsa `Joined` (son slot `Full` yapar); yoksa `Bu ekip dolu.` |
-| yok → Belki | `Maybe` (kapasite denetimi yok; dolu ilanda da mümkün) |
-| Belki → Katıl | slot varsa `Joined`; yoksa **Belki kalır**: `Bu ekip şu anda dolu. "Belki" olarak kaldın.` |
-| Katıldı → Belki | izinli; slot boşalır, ilan `Full` idiyse `Open` olur ve Katıl yeniden aktifleşir |
-| Katıldı / Belki → Ayrıl | kayıt tamamen silinir; yalnızca Katılan ayrılınca slot boşalır |
-| Sahip | her zaman `Joined`; Belki'ye geçemez, ayrılamaz (`İlan sahibi … seçemez/ayrılamaz`), ilanı kapatabilir |
+| yok → Katıl | boş slot varsa ve kimse beklemiyorsa `Joined` (son slot `Full` yapar); yoksa `Waitlisted`, sıranın sonu: `🎟️ Ekip dolu. Bekleme listesine eklendin. Sıran: #N` |
+| Belki → Katıl | slot varsa `Joined`; yoksa sıranın sonuna `Waitlisted` (Katıl'a basan artık Belki kalmaz) |
+| Bekliyor → Katıl | değişiklik yok, ikinci satır ya da ikinci sıra yok: `🎟️ Zaten bekleme listesindesin. Sıran: #N` (güncel sıra) |
+| Katıldı → Katıl | `Zaten bu ekiptesin.` |
+| yok → Belki | `Maybe` (dolu ilanda da mümkün) |
+| Katıldı → Belki | slot boşalır; sıranın ilki **aynı yazmada** `Joined` olur |
+| Bekliyor → Belki | sırasını bırakır (`WaitlistOrder` silinir); diğerlerinin sırası korunur |
+| Katıldı → Ayrıl | kayıt silinir: `Ekipten ayrıldın.`; sıranın ilki aynı yazmada `Joined` olur |
+| Bekliyor → Ayrıl | kayıt silinir: `🎟️ Bekleme listesinden çıktın.`; slot boşalmaz |
+| Belki → Ayrıl | kayıt silinir: `İlandan ayrıldın.` |
+| Sahip | her zaman `Joined`; Belki'ye geçemez, sıraya giremez, ayrılamaz, ilanı kapatabilir |
 
-`Belki` olan kişi kapasiteye sayılmaz, bildirimlerde etiketlenmez, ses butonunu kullanamaz. Durum `lfg_participant.Response`
-alanındadır; aynı kullanıcı bir ilanda tek satırdır (fikir değiştirmek satırı günceller).
+**Sıra (FIFO) nasıl tutulur.** `lfg_participant.WaitlistOrder` (nullable tam sayı) yalnızca `Waitlisted` iken doludur.
+Sıraya giren, yazma kilidi (SQLite `BEGIN IMMEDIATE`) altında ilanın kuyruğundaki en büyük sıra + 1'i alır (kuyruk tamamen
+boşalırsa 1'den başlar). Sıra bu kayıtlı sayıdır — yazmaların gerçekleştiği sıra; zaman damgasından, addan ya da Discord
+kimliğinden **tahmin edilmez** (aynı anda gelenler de kimlikleri ne olursa olsun geliş sırasını korur; restart'ta aynıdır).
+Gösterilen sıra numarası (`#2`) kayıtlı sayı değil, canlı kuyruktan hesaplanır (önündeki bekleyen sayısı + 1); ortadan
+biri çıkınca kimsenin kaydı yeniden yazılmaz.
+
+**Otomatik terfi.** Tek bir kural (`LfgRoster.Rebalance`): aktif ilanda `Joined < MaxPlayers` ve kuyruk doluyken kuyruğun
+başı (`WaitlistOrder` artan) `Joined` olur (`WaitlistOrder = null`, cevap zamanı = şimdi); sonra `Joined = MaxPlayers` ise
+`Full`, değilse `Open`. Çağıran yollar: **Ayrıl**, **Belki** (Joined'dan ya da sıradan), sahibin **kişi sayısını artırması**
+(birden çok slot → sıranın ilk N kişisi; kuyruktan büyük kapasite → herkes, ilan `Open`), **`/privacy delete`** (başka
+ilanlardaki katılımın silinince) ve Katıl (yalnızca durumu Open/Full yapmak için; yeni gelen hiçbir zaman kuyruğun önüne
+geçemez). Kapalı / süresi dolmuş / Orphaned ilanda **hiç terfi yoktur**. Terfi ayrı mesaj, DM ya da ping üretmez; kart
+yalnızca son durumu gösterir (ara `9 / 10 Açık` hali hiç çizilmez). Kişi sayısı yine Katılan sayısının altına inemez;
+bekleyenler bu sınıra sayılmaz ve kimse sıradan düşürülmez. Ayrı bir bekleme listesi sınırı yoktur (kişi başı tek satır
+zaten sınırdır; kart ilk 20'yi gösterir).
+
+**Değişmez kural.** Her yazmadan sonra aktif ilanda: `Joined ≤ MaxPlayers` ve (`bekleme listesi boş` veya
+`Joined = MaxPlayers`) — **bekleyen varken boş slot olamaz**.
+
+Durum `lfg_participant.Response` alanındadır; aynı kullanıcı bir ilanda tek satırdır (fikir değiştirmek satırı günceller).
 
 ## Yaşam döngüsü
 
 | Olay | Davranış |
 |---|---|
 | Oluştur | Girdi + kanal kısıtı + ses kanalı doğrulaması + kişi başı aktif ilan sınırı (`Lfg:MaxActiveListingsPerUser`, varsayılan 2, guild başına) denetlenir; ilan `Open`, sahip ilk oyuncu (`1 / N`). Kart yanıt olarak gönderilir, mesaj kimliği kaydedilir. Yanıt hiç gönderilemediyse ilan silinir (sahibin hakkını yemez) |
-| Katıl / Belki / Ayrıl | Etkileşim hemen onaylanır (deferred update); ilan veritabanından yeniden okunur: guild, durum, süre, üyelik, boş slot. **Aynı kart** düzenlenir, tıklayana ephemeral sonuç. Hatalar ephemeral: `Zaten bu ekiptesin.` · `Bu ekip dolu.` · `Bu ilan kapatılmış.` · `Bu ilanın süresi dolmuş.` |
+| Katıl / Sıraya Gir / Belki / Ayrıl | Etkileşim hemen onaylanır (deferred update); ilan veritabanından yeniden okunur: guild, durum, süre, üyelik, boş slot, kuyruk. **Aynı kart** düzenlenir, tıklayana ephemeral sonuç (sıraya girince sıra numarası). Retler ephemeral: `Zaten bu ekiptesin.` · `Bu ilan kapatılmış.` · `Bu ilanın süresi dolmuş.` |
 | Kapat | Yalnızca sahip veya moderatör (Discord **Manage Messages** ya da Administrator; mevcut `Authorize.Require`). Önce ephemeral onay (`Evet, kapat` / `Vazgeç`), sonra `Closed`; kart kapalı olarak düzenlenir; outbox'ta bekleyen bildirim iptal edilir. Tekrar kapatmak idempotenttir |
 | Süre dolumu | Tek arka plan döngüsü (`LfgExpiryWorker`, ~60 sn; ilan başına zamanlayıcı yok) `ExpiresAt <= now` olan aktif ilanları toplu `Expired` yapar ve kartları düzenler. Bir butona süre dolduktan sonra basılırsa ilan o anda da expire edilir |
 | Restart | Durum yalnızca veritabanındadır. Buton custom id'leri yalnızca ilan kimliğini taşır (`tsq:lfg:join|maybe|leave|voice|close:<id>`), restart sonrası da çalışır. Açılışta ilk tur (~20 sn sonra) kapalıyken süresi dolan ilanları expire eder, vadesi gelen bildirimleri kurallara göre işler ve kartları düzenler |
@@ -251,7 +286,9 @@ Açıkça istenirse (varsayılan kapalı) iki **yeni** mesaj — kart düzenlenm
 ```
 
 - **Kim etiketlenir**: mesaj planlandığı andaki **Joined** oyuncular (sahip dahil), veritabanından yeniden okunur. Belki
-  olanlar ve ayrılmış kullanıcılar etiketlenmez; 30 dk mesajından sonra katılan başlangıç mesajında vardır. En fazla 50.
+  olanlar, bekleme listesindekiler ve ayrılmış kullanıcılar etiketlenmez; 30 dk mesajından sonra katılan (ya da sıradan
+  terfi eden) başlangıç mesajında vardır — ona geç bir hatırlatma gönderilmez; hatırlatmadan önce terfi eden
+  hatırlatmada da vardır. En fazla 50.
 - **Ne zaman**: 30 dk hatırlatma `EventAt − 30 dk ≤ now < EventAt` penceresinde; başlangıç mesajı `EventAt ≤ now <
   EventAt + 5 dk` (kısa tolerans). Pencere geçtiyse (bot kapalıydı) geç mesaj **gönderilmez**: bildirim `Skipped` olarak
   tüketilir, restart'ta tekrar denenmez. Çözünürlük ~1 dk (worker döngüsü).
@@ -299,7 +336,8 @@ Discord API'sinin gerçek kabiliyeti (2026-09-27, resmî belgeler ve Discord.Net
   varsa taşımayı dener ve 40032'yi "bağlı değil" olarak yorumlar.
 
 `[🔊 Ses Odası]` (kart) ve `[🔊 Ses Odasına Katıl]` (bildirimler) aynı işleyicidir (`tsq:lfg:voice:<id>`). Buton hiçbir
-kanal/izin bilgisi taşımaz; her tıklamada: doğru guild, ilan aktif, tıklayan **Joined** (Belki/üye olmayan →
+kanal/izin bilgisi taşımaz; her tıklamada: doğru guild, ilan aktif, tıklayan **Joined** (bekleme listesindeki →
+`🎟️ Bekleme listesindesin. Ekipte yer açıldığında otomatik olarak katılacaksın.`; Belki/üye olmayan →
 `Önce ekibe katılmalısın.`), ilanın ses kanalı var ve hâlâ bu guild'in bir ses kanalı.
 
 | Durum | Sonuç |
@@ -324,9 +362,12 @@ olarak ayrıca gözlemlenmelidir.
   alıcı listesi ile işaret arasına katıl/ayrıl giremez.
 - `lfg_participant` birincil anahtarı `(ListingId, UserId)`: aynı kullanıcı bir ilanda veritabanı seviyesinde iki kez
   olamaz. `lfg_listing.Version` iyimser eşzamanlılık belirteci ek güvencedir (çakışmada işlem yeniden denenir).
-- Testler: 5/6 ilana aynı anda iki katılım → biri katılır, diğeri "dolu", sonuç 6/6; 12 eşzamanlı katılım 3 boş slota
-  → tam 3; aynı kullanıcının 4 eşzamanlı tıklaması → tek kayıt; aynı kullanıcının 5 eşzamanlı ilanı (sınır 2) → tam 2;
-  karışık eşzamanlı Katıl/Belki → kişi başı tek satır, Joined ≤ kapasite, Full yalnızca Joined sayısına göre.
+- Testler: 5/6 ilana aynı anda iki katılım → biri katılır, diğeri sıranın başında, sonuç 6/6; 12 eşzamanlı katılım 3 boş
+  slota → tam 3, kalan 9 farklı sırada; dolu ilana 20 eşzamanlı katılım → 1…20 sıraları, her cevap kayıtlı sıraya eşit;
+  iki eşzamanlı ayrılma → sıranın ilk ikisi terfi eder; ayrılma ile yeni katılım yarışı → önceden bekleyen hep önde;
+  sahibin kapasite artışı ile katılım yarışı → kapasite aşılmaz, sıra korunur; aynı kullanıcının 4 eşzamanlı tıklaması →
+  tek kayıt, tek sıra; aynı kullanıcının 5 eşzamanlı ilanı (sınır 2) → tam 2; rastgele 150 adımlık karışık akış → her
+  adımda değişmez kural.
 - İki eşzamanlı tıklamada Discord eski görüntünün düzenlemesini sonra uygulayabilir: her tıklama kartı düzenledikten sonra
   sürümü yeniden okur, değiştiyse güncel hali yeniden çizer; oturmazsa kart `CardStale` işaretlenir ve worker düzeltir.
 
@@ -367,17 +408,21 @@ sunucuda varsayılan kapalıdır** (`EnabledByDefault=false`) ve depodaki standa
 
 ## Veri ve gizlilik
 
-Tablolar (additive migration'lar `LfgModule`, `LfgScheduledEvents`): `lfg_listing` (ilan; oyun adı + detay kullanıcının
-kendi metni, `EventAt`, `VoiceChannelId`, bildirim tercihleri ve işaretleri), `lfg_participant` (ListingId + UserId +
-`Response` Joined/Maybe + cevap zamanı), `lfg_guild_config` (isteğe bağlı kanal). İndeksler: `(Status, ExpiresAt)` süre
+Tablolar (additive migration'lar `LfgModule`, `LfgScheduledEvents`, `LfgWaitlist`): `lfg_listing` (ilan; oyun adı + detay
+kullanıcının kendi metni, `EventAt`, `VoiceChannelId`, bildirim tercihleri ve işaretleri), `lfg_participant` (ListingId +
+UserId + `Response` Joined/Maybe/Waitlisted + cevap zamanı + `WaitlistOrder`), `lfg_guild_config` (isteğe bağlı kanal). İndeksler: `(Status, ExpiresAt)` süre
 dolumu, `(GuildId, OwnerUserId, Status)` aktif ilan sınırı, `CardStale = 1` kısmi, `(Status, EventAt)` kısmi
 (`EventAt IS NOT NULL`, vadesi gelen bildirimler), `lfg_participant(UserId)` gizlilik; FK `ListingId` → `lfg_listing`
 (cascade). `LfgScheduledEvents` yalnızca kolon/indeks ekler: mevcut katılımcılar `Joined`, mevcut ilanlar `EventAt = null`,
-bildirim bayrakları kapalı, ses kanalı yok — V1 anlamı korunur (test).
+bildirim bayrakları kapalı, ses kanalı yok — V1 anlamı korunur (test). `LfgWaitlist` yalnızca nullable
+`lfg_participant.WaitlistOrder` ekler (varsayılan `NULL`; mevcut Joined/Maybe satırları ve ilan durumları değişmez, test);
+`Waitlisted` enum değeri mevcut int kolonda saklanır. Ek indeks yok: kuyruk sorguları birincil anahtarın öneki
+`ListingId` ile ilanın satırlarını okur.
 
-`/privacy export` açtığın ilanları (oyun, detay, durum, zamanlar, bildirim tercihleri), katıldığın/belki dediğin ilanları
-(cevabınla) ve seni etiketleyen, henüz silinmemiş bildirim sayısını içerir. `/privacy delete` katıldığın veya belki dediğin
-ilanlardan seni çıkarır (yalnızca Katılan silinince dolu ilan yeniden açılır; kart senin olmadan yeniden çizilir), açtığın
+`/privacy export` açtığın ilanları (oyun, detay, durum, zamanlar, bildirim tercihleri), katıldığın/belki dediğin/sırada
+beklediğin ilanları (cevabınla: `Joined` / `Maybe` / `Waitlisted`) ve seni etiketleyen, henüz silinmemiş bildirim sayısını
+içerir. `/privacy delete` bu ilanlardan seni çıkarır (bir Katılan silinince boşalan slot aynı işlemde sıranın ilkine geçer;
+kimse beklemiyorsa dolu ilan yeniden açılır; kart senin olmadan yeniden çizilir), açtığın
 ilanları oyuncularıyla siler (gönderilmemiş bildirimleri de durdurulur), moderatör olarak kapattığın ilanlardaki "kapatan" kaydını temizler ve seni etiketleyen
 bildirim satırlarını kaldırır (o an gönderilmekte/uzlaştırılmakta olan bir satır bittikten 24 saat sonra silinir). Teslimi
 uzlaştırılamayıp bırakılan bildirim satırları da 24 saat sonra budanır. Sunucudan ayrılma sonrası saklama süresi

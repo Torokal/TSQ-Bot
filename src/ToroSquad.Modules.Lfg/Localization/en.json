@@ -5,7 +5,7 @@
   "lfg.card.count": "👥 **{0} / {1}**",
   "lfg.card.players": "**Joined**",
   "lfg.card.expires": "⏰ Closes {0}",
-  "lfg.card.full": "✅ **Team complete**",
+  "lfg.card.full": "✅ **Team full**",
   "lfg.card.expired": "⏰ This listing has expired.",
   "lfg.card.closed": "🔒 **Listing closed**",
   "lfg.card.footer": "TSQ LFG · Find Players",
@@ -22,7 +22,6 @@
   "lfg.create.limit": "You can have at most {0} active listings at the same time.",
   "lfg.join.done": "✅ You joined the team.",
   "lfg.join.already": "You are already in this team.",
-  "lfg.join.full": "This team is full.",
   "lfg.leave.done": "You left the team.",
   "lfg.leave.owner": "The owner cannot leave the team. You can close the listing instead.",
   "lfg.leave.not_member": "You are not in this team.",
@@ -65,7 +64,6 @@
   "lfg.button.maybe": "Maybe",
   "lfg.button.voice": "🔊 Voice",
   "lfg.button.voice_join": "🔊 Join voice",
-  "lfg.join.full_stays_maybe": "This team is full right now. You are still a \"Maybe\".",
   "lfg.maybe.done": "🤔 Marked as \"Maybe\": you do not take a slot and are not pinged by event notices.",
   "lfg.maybe.already": "You are already a \"Maybe\".",
   "lfg.maybe.owner": "The owner cannot choose \"Maybe\". You can close the listing instead.",
@@ -158,5 +156,12 @@
   "lfg.form.error_general": "❌ {0}",
   "lfg.form.error.game": "At least {0} and at most {1} characters.",
   "lfg.form.error.players": "Team size must be {0}–{1}.",
-  "lfg.form.error.date_format": "Could not read the date/time.\nExample: `27.09.2026 21:30` or `27.09.26 21:30`."
+  "lfg.form.error.date_format": "Could not read the date/time.\nExample: `27.09.2026 21:30` or `27.09.26 21:30`.",
+  "lfg.button.join_waitlist": "🎟️ Join Waitlist",
+  "lfg.card.waitlist": "🎟️ **Waitlist ({0})**",
+  "lfg.join.waitlisted": "🎟️ The team is full. You are on the waitlist.\nYour place: **#{0}**",
+  "lfg.join.already_waitlisted": "🎟️ You are already on the waitlist.\nYour place: **#{0}**",
+  "lfg.leave.done_waitlist": "🎟️ You left the waitlist.",
+  "lfg.leave.done_maybe": "You left the listing.",
+  "lfg.voice.waitlisted": "🎟️ You are on the waitlist. You will join the team automatically when a slot opens."
 }

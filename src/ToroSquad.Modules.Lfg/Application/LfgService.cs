@@ -232,7 +232,7 @@ public sealed class LfgService(
             }
 
             var members = await Participants.Where(p => p.ListingId == listing.Id).ToListAsync(ct);
-            var joined = members.Count(p => p.Response == LfgResponse.Joined); // Maybe never counts
+            var joined = members.Count(p => p.Response == LfgResponse.Joined); // Maybe and the waitlist never count
             if (maxPlayers < joined)
                 return (No(OperationError.InvalidInput, "lfg.edit.players_below_joined", joined), null);
 
@@ -313,13 +313,14 @@ public sealed class LfgService(
             listing.NotifyBeforeStart = notifyBefore;
             listing.NotifyAtStart = notifyAtStart;
             listing.VoiceChannelId = voiceId;
-            listing.Status = joined >= maxPlayers ? LfgStatus.Full : LfgStatus.Open;
+            var promoted = LfgRoster.Rebalance(listing, members, now); // more slots: the waitlist moves up in the same write
             listing.CardStale = listing.MessageId is not null; // the form lives in another (ephemeral) message: the card is edited separately
             listing.CardSyncAttempts = 0;
             listing.Version++;
             await db.SaveChangesAsync(ct);
             logger.LogInformation("LFG listing {Listing} edited by its owner: {Max} players, starts {EventAt:O}, expires {ExpiresAt:O}",
                 listing.Id, maxPlayers, eventAt ?? listing.CreatedAt, expiresAt);
+            LogPromoted(listing.Id, promoted);
             return (OperationResult.Ok("lfg.edit.done"), preview);
         }
 
@@ -412,7 +413,11 @@ public sealed class LfgService(
         logger.LogWarning("LFG listing {Listing} discarded: its card could not be posted", listingId);
     }
 
-    /// <summary>"Katıl": a new player, or a Maybe who commits. Only Joined players count against <c>MaxPlayers</c>.</summary>
+    /// <summary>
+    /// "Katıl" / "Sıraya Gir" (one button): a free slot makes the caller Joined; a full team puts them at the end of the
+    /// waitlist (a Maybe who commits too). Only Joined players count against <c>MaxPlayers</c>. Pressing it again never
+    /// creates a second row or a second place: it answers with the current place in line.
+    /// </summary>
     public async Task<LfgResult> JoinAsync(ActorContext actor, long listingId, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
@@ -431,33 +436,42 @@ public sealed class LfgService(
             var mine = members.FirstOrDefault(p => p.UserId == user);
             if (mine is { Response: LfgResponse.Joined })
                 return (No(OperationError.Conflict, "lfg.join.already"), false);
-            var joined = members.Count(p => p.Response == LfgResponse.Joined); // only confirmed players fill slots
-            if (joined >= listing.MaxPlayers)
+            if (mine is { Response: LfgResponse.Waitlisted })
+                return (No(OperationError.Conflict, "lfg.join.already_waitlisted", LfgRoster.Position(mine, members)), false);
+
+            string key;
+            // Straight in only with a free slot AND nobody waiting: a newcomer never passes the queue. (By the invariant a
+            // free slot means an empty queue; if a stored state ever broke it, the rebalance below serves the queue first.)
+            if (members.Count(p => p.Response == LfgResponse.Joined) < listing.MaxPlayers && !LfgRoster.Queue(members).Any())
             {
-                if (listing.Status != LfgStatus.Full)
+                if (mine is null)
                 {
-                    listing.Status = LfgStatus.Full;
-                    listing.Version++;
-                    await db.SaveChangesAsync(ct);
+                    mine = new LfgParticipantEntity { ListingId = listing.Id, UserId = user, Response = LfgResponse.Joined, JoinedAt = now };
+                    Participants.Add(mine);
+                    members.Add(mine);
+                }
+                else
+                {
+                    mine.Response = LfgResponse.Joined; // Maybe -> Joined
+                    mine.JoinedAt = now;
                 }
 
-                // A Maybe stays Maybe; the clicked card still offered a slot.
-                return (No(OperationError.Conflict, mine is null ? "lfg.join.full" : "lfg.join.full_stays_maybe"), true);
-            }
-
-            if (mine is null)
-            {
-                Participants.Add(new LfgParticipantEntity { ListingId = listing.Id, UserId = user, Response = LfgResponse.Joined, JoinedAt = now });
+                key = "lfg.join.done";
             }
             else
             {
-                mine.Response = LfgResponse.Joined; // Maybe -> Joined
-                mine.JoinedAt = now;
+                if (mine is null)
+                {
+                    mine = new LfgParticipantEntity { ListingId = listing.Id, UserId = user, Response = LfgResponse.Waitlisted, JoinedAt = now };
+                    Participants.Add(mine);
+                    members.Add(mine);
+                }
+
+                LfgRoster.Enqueue(mine, members, now); // a new player or a Maybe who commits: the end of the line
+                key = "lfg.join.waitlisted";
             }
 
-            var full = joined + 1 >= listing.MaxPlayers;
-            if (full)
-                listing.Status = LfgStatus.Full;
+            var promoted = LfgRoster.Rebalance(listing, members, now); // Open / Full from the final Joined count
             listing.Version++;
             try
             {
@@ -469,16 +483,20 @@ public sealed class LfgService(
                 return (No(OperationError.Conflict, "lfg.join.already"), false);
             }
 
-            if (full)
+            LogPromoted(listing.Id, promoted);
+            if (mine.Response == LfgResponse.Waitlisted)
+                return (OperationResult.Ok(key, LfgRoster.Position(mine, members)), true);
+            key = "lfg.join.done"; // queued behind a broken state and served at once by the rebalance
+            if (listing.Status == LfgStatus.Full)
                 logger.LogInformation("LFG listing {Listing} is full ({Players} players)", listing.Id, listing.MaxPlayers);
-            return (OperationResult.Ok("lfg.join.done"), true);
+            return (OperationResult.Ok(key), true);
         }, ct);
         return new LfgResult(result, await GetAsync(listingId, actor.GuildId, ct), refresh);
     }
 
     /// <summary>
-    /// "Belki": not a confirmed player — no slot, not counted for Full, never pinged. From Joined it frees the slot (Full
-    /// reopens). Allowed while Full. The owner is always Joined.
+    /// "Belki": not a confirmed player — no slot, not counted for Full, never pinged. From Joined it frees the slot, which the
+    /// first in the waitlist takes in the same write; from the waitlist it gives up the place. The owner is always Joined.
     /// </summary>
     public async Task<LfgResult> MaybeAsync(ActorContext actor, long listingId, CancellationToken ct)
     {
@@ -496,21 +514,24 @@ public sealed class LfgService(
             if (listing.OwnerUserId == user)
                 return (No(OperationError.InvalidInput, "lfg.maybe.owner"), false);
 
-            var mine = await Participants.FirstOrDefaultAsync(p => p.ListingId == listing.Id && p.UserId == user, ct);
+            var members = await Participants.Where(p => p.ListingId == listing.Id).ToListAsync(ct);
+            var mine = members.FirstOrDefault(p => p.UserId == user);
             if (mine is { Response: LfgResponse.Maybe })
                 return (No(OperationError.Conflict, "lfg.maybe.already"), false);
             if (mine is null)
             {
-                Participants.Add(new LfgParticipantEntity { ListingId = listing.Id, UserId = user, Response = LfgResponse.Maybe, JoinedAt = now });
+                mine = new LfgParticipantEntity { ListingId = listing.Id, UserId = user, Response = LfgResponse.Maybe, JoinedAt = now };
+                Participants.Add(mine);
+                members.Add(mine);
             }
             else
             {
-                mine.Response = LfgResponse.Maybe; // Joined -> Maybe frees the slot
+                mine.Response = LfgResponse.Maybe; // from Joined: frees the slot; from the waitlist: gives up the place
+                LfgRoster.Dequeue(mine);
                 mine.JoinedAt = now;
-                if (listing.Status == LfgStatus.Full)
-                    listing.Status = LfgStatus.Open;
             }
 
+            var promoted = LfgRoster.Rebalance(listing, members, now);
             listing.Version++;
             try
             {
@@ -521,12 +542,16 @@ public sealed class LfgService(
                 return (No(OperationError.Conflict, "lfg.maybe.already"), false);
             }
 
+            LogPromoted(listing.Id, promoted);
             return (OperationResult.Ok("lfg.maybe.done"), true);
         }, ct);
         return new LfgResult(result, await GetAsync(listingId, actor.GuildId, ct), refresh);
     }
 
-    /// <summary>"Ayrıl": removes a Joined or Maybe member completely; a Joined one frees a slot (Full reopens).</summary>
+    /// <summary>
+    /// "Ayrıl": removes the member completely (Joined, Maybe or from the waitlist). A Joined player's slot goes to the first
+    /// in the waitlist in the same write, so the card never shows a free slot while someone waits.
+    /// </summary>
     public async Task<LfgResult> LeaveAsync(ActorContext actor, long listingId, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
@@ -543,18 +568,32 @@ public sealed class LfgService(
             if (listing.OwnerUserId == user)
                 return (No(OperationError.InvalidInput, "lfg.leave.owner"), false);
 
-            var participant = await Participants.FirstOrDefaultAsync(p => p.ListingId == listing.Id && p.UserId == user, ct);
+            var members = await Participants.Where(p => p.ListingId == listing.Id).ToListAsync(ct);
+            var participant = members.FirstOrDefault(p => p.UserId == user);
             if (participant is null)
                 return (No(OperationError.NotFound, "lfg.leave.not_member"), false);
 
+            var was = participant.Response;
             Participants.Remove(participant);
-            if (participant.Response == LfgResponse.Joined && listing.Status == LfgStatus.Full)
-                listing.Status = LfgStatus.Open; // a slot is free again and the listing has not expired
+            members.Remove(participant);
+            var promoted = LfgRoster.Rebalance(listing, members, now);
             listing.Version++;
             await db.SaveChangesAsync(ct);
-            return (OperationResult.Ok("lfg.leave.done"), true);
+            LogPromoted(listing.Id, promoted);
+            return (OperationResult.Ok(was switch
+            {
+                LfgResponse.Waitlisted => "lfg.leave.done_waitlist",
+                LfgResponse.Maybe => "lfg.leave.done_maybe",
+                _ => "lfg.leave.done",
+            }), true);
         }, ct);
         return new LfgResult(result, await GetAsync(listingId, actor.GuildId, ct), refresh);
+    }
+
+    private void LogPromoted(long listingId, IReadOnlyList<ulong> promoted)
+    {
+        if (promoted.Count > 0)
+            logger.LogInformation("LFG listing {Listing}: {Count} player(s) moved up from the waitlist", listingId, promoted.Count);
     }
 
     /// <summary>First step of closing (before the confirmation is shown): same checks as <see cref="CloseAsync"/>, no change.</summary>
@@ -656,6 +695,8 @@ public sealed class LfgService(
             return new(No(OperationError.NotFound, "lfg.voice.none"));
         var response = await Participants.AsNoTracking().Where(p => p.ListingId == listing.Id && p.UserId == actor.UserId.Value)
             .Select(p => (LfgResponse?)p.Response).FirstOrDefaultAsync(ct);
+        if (response == LfgResponse.Waitlisted)
+            return new(No(OperationError.Forbidden, "lfg.voice.waitlisted"));
         if (response != LfgResponse.Joined)
             return new(No(OperationError.Forbidden, "lfg.voice.join_first")); // Maybe or not in the team
 
@@ -729,7 +770,8 @@ public sealed class LfgService(
             listing.EventAt,
             listing.VoiceChannelId is { } v ? new ChannelId(v) : null,
             listing.NotifyBeforeStart,
-            listing.NotifyAtStart);
+            listing.NotifyAtStart,
+            LfgRoster.Queue(all).Select(p => new UserId(p.UserId)).ToList());
     }
 
     /// <summary>Owner first, then in the order of their answer.</summary>

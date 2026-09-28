@@ -152,12 +152,12 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         (await MaybeAsync(listing.Id, Owner)).Result.MessageKey.Should().Be("lfg.maybe.owner");
         (await GetAsync(listing.Id))!.Players.Should().Contain(new UserId(Owner), "the owner is always Joined");
 
-        (await LeaveAsync(listing.Id, 30)).Result.MessageKey.Should().Be("lfg.leave.done");
+        (await LeaveAsync(listing.Id, 30)).Result.MessageKey.Should().Be("lfg.leave.done_maybe", "a Maybe leaves the listing, not the team");
         (await GetAsync(listing.Id))!.MaybePlayers.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task Maybe_to_joined_needs_a_free_slot_and_otherwise_stays_maybe()
+    public async Task Maybe_to_joined_takes_a_free_slot_and_otherwise_goes_to_the_end_of_the_waitlist()
     {
         var listing = await OpenAsync(players: 2);
         await MaybeAsync(listing.Id, 30);
@@ -167,11 +167,14 @@ public sealed class LfgEventsAndVoiceTests : IAsyncLifetime
         full.Players.Should().Equal(new UserId(Owner), new UserId(30));
         full.Status.Should().Be(LfgStatus.Full);
 
+        await JoinAsync(listing.Id, 32); // waiting first
         await MaybeAsync(listing.Id, 31);
-        var refused = await JoinAsync(listing.Id, 31);
-        refused.Result.MessageKey.Should().Be("lfg.join.full_stays_maybe");
-        refused.Listing!.MaybePlayers.Should().Equal(new UserId(31));
-        refused.Listing.Players.Should().HaveCount(2);
+        var queued = await JoinAsync(listing.Id, 31);
+        queued.Result.MessageKey.Should().Be("lfg.join.waitlisted", "pressing Katıl commits: a Maybe is not left as Maybe any more");
+        queued.Result.Args.Should().Equal(2);
+        queued.Listing!.MaybePlayers.Should().BeEmpty();
+        queued.Listing.WaitlistedPlayers.Should().Equal(new UserId(32), new UserId(31));
+        queued.Listing.Players.Should().HaveCount(2);
     }
 
     [Fact]

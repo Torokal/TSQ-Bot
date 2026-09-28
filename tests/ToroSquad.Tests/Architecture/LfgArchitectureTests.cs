@@ -173,7 +173,7 @@ public sealed partial class LfgArchitectureTests
             "ClosedByUserId", "CardStale", "CardSyncAttempts", "Version", "Participants", "ListingId", "UserId", "JoinedAt",
             // generic event features only: when it starts, a voice channel, the creator's ping opt-ins and their handled-once markers, RSVP
             "EventAt", "VoiceChannelId", "NotifyBeforeStart", "NotifyAtStart", "ReminderState", "ReminderHandledAt", "StartNoticeState",
-            "StartNoticeHandledAt", "Response");
+            "StartNoticeHandledAt", "Response", "WaitlistOrder");
     }
 
     [Fact]

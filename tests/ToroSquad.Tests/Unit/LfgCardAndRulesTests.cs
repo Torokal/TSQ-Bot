@@ -51,12 +51,14 @@ public sealed class LfgCardAndRulesTests
     }
 
     [Fact]
-    public void Full_card_disables_join_but_keeps_leave_and_close()
+    public void Full_card_keeps_every_button_and_offers_the_waitlist_instead_of_join()
     {
         var card = Renderer().Render(Listing("Deadlock", null, 2, LfgStatus.Full, 1, 2), "tr");
 
-        card.Embed!.Description.Should().Contain("✅ **Ekip tamamlandı**").And.Contain("kapanır").And.NotContain("📝");
-        card.Buttons!.Select(b => b.Disabled).Should().Equal(true, false, false, false, false); // Katıl off; Belki, Ayrıl, Düzenle, Kapat on
+        card.Embed!.Description.Should().Contain("✅ **Ekip dolu**").And.Contain("kapanır").And.NotContain("📝").And.NotContain("Bekleme");
+        card.Buttons!.Select(b => b.Disabled).Should().Equal(false, false, false, false, false);
+        (card.Buttons![0].Label, card.Buttons[0].CustomId, card.Buttons[0].Style).Should().Be(("🎟️ Sıraya Gir", "tsq:lfg:join:7", MessageButtonStyle.Primary),
+            "the same join button: the server decides slot or waitlist");
         card.Embed.Color.Should().Be(LfgCardRenderer.FullColor);
     }
 
@@ -109,6 +111,50 @@ public sealed class LfgCardAndRulesTests
         var description = Renderer().Render(listing, language).Embed!.Description!;
 
         description.Should().Contain(prefix + "<t:" + at.ToUnixTimeSeconds() + ":F> • <t:" + at.ToUnixTimeSeconds() + ":R>").And.NotContain("🕘");
+    }
+
+    [Fact]
+    public void The_waitlist_is_shown_in_line_order_between_the_players_and_the_maybes_without_pinging()
+    {
+        var listing = Listing("Deadlock", null, 2, LfgStatus.Full, 1, 2) with
+        {
+            Waitlist = [new UserId(9), new UserId(3), new UserId(7)],
+            Maybe = [new UserId(5)],
+        };
+
+        var card = Renderer().Render(listing, "tr");
+
+        card.Embed!.Description.Should().Contain(
+            "**Katılanlar**\n<@1> · <@2>\n🎟️ **Bekleme Listesi (3)**\n`1.` <@9> · `2.` <@3> · `3.` <@7>\n🤔 **Belki**\n<@5>");
+        card.Embed.Description.Should().Contain("👥 **2 / 2**", "only Joined players count").And.Contain("✅ **Ekip dolu**");
+        card.Mentions.Should().Be(MentionPolicy.None, "an edit that lists the waitlist pings nobody");
+        DiscordLimits.Validate(card).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_long_waitlist_shows_the_first_twenty_and_the_full_count()
+    {
+        var listing = Listing("Deadlock", null, 2, LfgStatus.Full, 1, 2) with
+        {
+            Waitlist = Enumerable.Range(100, 28).Select(i => new UserId((ulong)i)).ToList(),
+        };
+
+        var description = Renderer().Render(listing, "tr").Embed!.Description!;
+
+        description.Should().Contain("🎟️ **Bekleme Listesi (28)**").And.Contain("`20.` <@119> (+8)").And.NotContain("<@120>").And.NotContain("`21.`");
+    }
+
+    [Theory]
+    [InlineData(LfgStatus.Open, "tr", "Katıl", MessageButtonStyle.Success)]
+    [InlineData(LfgStatus.Full, "tr", "🎟️ Sıraya Gir", MessageButtonStyle.Primary)]
+    [InlineData(LfgStatus.Open, "en", "Join", MessageButtonStyle.Success)]
+    [InlineData(LfgStatus.Full, "en", "🎟️ Join Waitlist", MessageButtonStyle.Primary)]
+    public void The_first_button_joins_while_open_and_queues_while_full_and_is_the_same_action(LfgStatus status, string language, string label,
+        MessageButtonStyle style)
+    {
+        var join = Renderer().Render(Listing("Deadlock", null, 2, status, 1, 2), language).Buttons![0];
+
+        (join.Label, join.CustomId, join.Disabled, join.Style).Should().Be((label, "tsq:lfg:join:7", false, style));
     }
 
     [Fact]

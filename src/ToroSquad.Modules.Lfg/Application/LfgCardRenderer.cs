@@ -8,11 +8,12 @@ namespace ToroSquad.Modules.Lfg.Application;
 
 /// <summary>
 /// The one LFG card, for every game: "🎮 game", who is looking, Joined x / y, the creator's own details line, the Joined
-/// players, the Maybe players, the optional start and voice channel, and the state. Players are rendered as user mentions
+/// players, the waitlist in queue order, the Maybe players, the start, the optional voice channel, and the state. Players are rendered as user mentions
 /// (Discord shows each viewer the current display name) inside the embed, and every message goes out with
 /// allowed_mentions = none, so neither the first post nor any edit pings anyone. Times are Discord's native timestamps
 /// (each viewer's own time zone); the bot never edits the card just to tick a clock. Two rows of buttons: the players'
-/// Katıl · Belki · Ayrıl · (🔊 Ses Odası), then the listing's ✏️ Düzenle (owner only, checked server-side) · İlanı Kapat.
+/// Katıl (🎟️ Sıraya Gir while full — the same button: the server decides slot or waitlist) · Belki · Ayrıl · (🔊 Ses Odası),
+/// then the listing's ✏️ Düzenle (owner only, checked server-side) · İlanı Kapat.
 /// </summary>
 public sealed class LfgCardRenderer(ILocalizer localizer)
 {
@@ -31,6 +32,9 @@ public sealed class LfgCardRenderer(ILocalizer localizer)
     /// <summary>The Maybe list is capped on the card (the count is still shown).</summary>
     public const int MaybeShown = 20;
 
+    /// <summary>The waitlist is capped on the card the same way (the heading shows the full count).</summary>
+    public const int WaitlistShown = 20;
+
     public OutgoingMessage Render(LfgListingView listing, string language)
     {
         string L(string key, params object?[] args) => localizer.Get(language, key, args);
@@ -45,6 +49,14 @@ public sealed class LfgCardRenderer(ILocalizer localizer)
         lines.Add("");
         lines.Add(L("lfg.card.players"));
         lines.Add(listing.Players.Count == 0 ? "—" : string.Join(" · ", listing.Players.Select(Mention)));
+        var waitlist = listing.WaitlistedPlayers;
+        if (waitlist.Count > 0)
+        {
+            lines.Add(L("lfg.card.waitlist", waitlist.Count));
+            var shown = string.Join(" · ", waitlist.Take(WaitlistShown).Select((user, i) => string.Create(CultureInfo.InvariantCulture, $"`{i + 1}.` ") + Mention(user)));
+            lines.Add(waitlist.Count > WaitlistShown ? shown + " " + L("lfg.card.more", waitlist.Count - WaitlistShown) : shown);
+        }
+
         var maybe = listing.MaybePlayers;
         if (maybe.Count > 0)
         {
@@ -80,7 +92,10 @@ public sealed class LfgCardRenderer(ILocalizer localizer)
         var id = listing.Id.ToString(CultureInfo.InvariantCulture);
         var buttons = new List<MessageButton>
         {
-            new(L("lfg.button.join"), JoinPrefix + id, null, Disabled: listing.Status != LfgStatus.Open, Style: MessageButtonStyle.Success),
+            // Full is not closed: the same button queues (the server decides from the stored state, never from this label).
+            listing.Status == LfgStatus.Full
+                ? new(L("lfg.button.join_waitlist"), JoinPrefix + id, null, Style: MessageButtonStyle.Primary)
+                : new(L("lfg.button.join"), JoinPrefix + id, null, Disabled: !listing.IsActive, Style: MessageButtonStyle.Success),
             new(L("lfg.button.maybe"), MaybePrefix + id, null, Disabled: !listing.IsActive),
             new(L("lfg.button.leave"), LeavePrefix + id, null, Disabled: !listing.IsActive),
         };
