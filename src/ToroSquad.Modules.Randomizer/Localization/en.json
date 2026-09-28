@@ -7,7 +7,7 @@
   "cmd.randomsayi.maksimum": "Largest value (inclusive)",
   "cmd.randomsayi.minimum": "Smallest value (inclusive, default: 1)",
   "cmd.sec": "Pick one of the given options at random",
-  "cmd.sec.seçenekler": "Comma-separated options, e.g. CS2, Valheim, WoW",
+  "cmd.sec.seçenekler": "Options separated by commas or |, e.g. CS2, Valheim | WoW",
   "cmd.yazitura": "Flip a coin",
   "randomizer.footer.rolled": "Rolled by {0}",
   "randomizer.footer.picked": "Picked for {0}",

@@ -7,7 +7,7 @@
   "cmd.randomsayi.maksimum": "En büyük değer (dahil)",
   "cmd.randomsayi.minimum": "En küçük değer (dahil, varsayılan: 1)",
   "cmd.sec": "Verilen seçeneklerden rastgele birini seçer",
-  "cmd.sec.seçenekler": "Virgülle ayrılmış seçenekler, ör. CS2, Valheim, WoW",
+  "cmd.sec.seçenekler": "Virgül veya | ile ayrılmış seçenekler, ör. CS2, Valheim | WoW",
   "cmd.yazitura": "Yazı tura atar",
   "randomizer.footer.rolled": "{0} tarafından atıldı",
   "randomizer.footer.picked": "{0} için seçildi",

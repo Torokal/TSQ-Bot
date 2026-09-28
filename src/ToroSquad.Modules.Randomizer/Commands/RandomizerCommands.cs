@@ -39,7 +39,7 @@ public sealed class RandomizerCommands(InteractionServices services, RandomizerC
 
     [SlashCommand("sec", "Pick one of the given options at random")]
     public async Task ChooseAsync(
-        [Summary("seçenekler", "Comma-separated options, e.g. CS2, Valheim, WoW"), MinLength(1), MaxLength(ChoiceList.MaxInputLength)] string options)
+        [Summary("seçenekler", "Options separated by commas or |, e.g. CS2, Valheim | WoW"), MinLength(1), MaxLength(ChoiceList.MaxInputLength)] string options)
     {
         logger.LogDebug("Randomizer /sec guild={Guild} user={User} input_length={Length}", Actor.GuildId, Actor.UserId, options.Length);
         await AnswerAsync(cards.Choose(await LangAsync(), options, DisplayName()));
