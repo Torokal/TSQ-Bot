@@ -43,7 +43,8 @@ public static class InfrastructureServiceCollectionExtensions
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
         services.AddSingleton(new DatabaseLocation(databasePath));
         services.AddDbContext<ToroDbContext>(o => o
-            .UseSqlite(DatabaseMaintenance.ConnectionString(databasePath), sqlite => sqlite.MigrationsAssembly("ToroSquad.Bot"))
+            // One connection per context (options are scoped), owned and disposed by the context; opened one at a time.
+            .UseSqlite(DatabaseMaintenance.CreateConnection(databasePath), contextOwnsConnection: true, sqlite => sqlite.MigrationsAssembly("ToroSquad.Bot"))
             .ReplaceService<IModelCacheKeyFactory, ContributorModelCacheKeyFactory>());
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ToroDbContext>());
 
