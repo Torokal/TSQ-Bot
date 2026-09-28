@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "4d7f1f180bad0749be389b1ea6d0fa4d046fe78102c9f0199243b53b7f492b7d",
+  "hash": "7b07a504ca32762fba1d4ea6ccce4cdf590ee9fdcbf33431675f6937a20b91f3",
   "commands": [
     {
       "module": "currency",
@@ -1754,6 +1754,49 @@
             "required": false,
             "min_value": -1000000000,
             "max_value": 1000000000
+          }
+        ]
+      }
+    },
+    {
+      "module": "timezone",
+      "payload": {
+        "type": 1,
+        "name": "saat",
+        "description": "Convert a time to other time zones",
+        "description_localizations": {
+          "tr": "Girilen saati farklı saat dilimlerine çevirir."
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 3,
+            "name": "time",
+            "description": "Time, e.g. 21:00 or 9.30 (today; Türkiye time unless a time zone is given)",
+            "description_localizations": {
+              "tr": "Saat. Örn: 21:00 veya 9.30 (bugün; saat dilimi verilmezse Türkiye saati)"
+            },
+            "required": true,
+            "min_length": 1,
+            "max_length": 10
+          },
+          {
+            "type": 3,
+            "name": "timezone",
+            "description": "Time zone of the entered time (default: Türkiye), e.g. tr, pdt, est, uk, utc",
+            "description_localizations": {
+              "tr": "Girilen saatin saat dilimi (varsayılan: Türkiye). Örn: tr, pdt, est, uk, utc"
+            },
+            "required": false,
+            "autocomplete": true,
+            "max_length": 40
           }
         ]
       }

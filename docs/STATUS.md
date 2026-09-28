@@ -174,6 +174,23 @@ invite link and no global command registration. The source code is public under 
 - **NOT VERIFIED_LIVE**: everything in Discord (command registration incl. the `seçenekler` option name with `ç`, card
   rendering, private refusals). In the manifest but not synced.
 
+## TSQ Saat Dönüştürücü (new, 2026-09-28, branch `feat/timezone-module`)
+
+- Module `timezone`, command `/saat time:<HH:MM>`. Stateless: no table, no migration, no HTTP, no worker, no cache, no
+  configuration, no new package. Off by default (`/modules enable timezone`).
+- **IMPLEMENTED / TESTED_OFFLINE**: `H:MM`/`HH:MM` with `:` or `.` (ASCII digits, culture-independent), read as today in
+  Europe/Istanbul; rows for Europe/Istanbul, Europe/London, America/New_York, America/Chicago, America/Los_Angeles through
+  `TimeZoneInfo` (DST rules tested on both sides of the UK/US switches); "Previous day"/"Next day" marks; one Discord
+  timestamp (`t` + `R`) for the single instant; public card, private refusal, no pings.
+- **IMPLEMENTED / TESTED_OFFLINE** (source time zone): optional `timezone` option with autocomplete — `tr`, `uk`, `ny`,
+  `chicago`, `la`, `utc` and aliases (`pdt`/`pst`/`pt`, `est`/`edt`/`et`, `cst`/`cdt`/`ct`, `gmt`/`bst`, …; case-insensitive,
+  zones never offsets); "today" = the source zone's date; wall times skipped or repeated by a DST switch are refused.
+  Without the option the card is unchanged.
+- Linux: the runtime base image (`mcr.microsoft.com/dotnet/runtime:10.0`, Ubuntu Noble) installs `tzdata`; no Dockerfile
+  change needed.
+- **NOT VERIFIED_LIVE**: everything in Discord (registration, card rendering, the Linux zone data in the Railway
+  container). In the manifest but not synced.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

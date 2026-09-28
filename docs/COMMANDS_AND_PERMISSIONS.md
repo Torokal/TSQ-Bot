@@ -123,6 +123,17 @@ Ayrıntı: [currency/TSQ_CURRENCY.md](currency/TSQ_CURRENCY.md).
 Sonuçlar herkese açık, geçersiz girdi uyarıları yalnızca kullanana görünür (ephemeral); hiçbir cevap ping atmaz. Bot izni
 gerekmez (yalnızca etkileşim cevabı). Ayrıntı: [randomizer/TSQ_RANDOMIZER.md](randomizer/TSQ_RANDOMIZER.md).
 
+## TSQ Saat Dönüştürücü (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/saat time:<saat> [timezone:<bölge>]` | Herkes: `21:00`, `9:00`, `09:00` veya `21.00` — saati kaynak bölgenin **bugünkü tarihiyle** okur (varsayılan Türkiye / Europe/Istanbul; `timezone`: `tr`, `uk`/`gmt`/`bst`, `ny`/`est`/`edt`, `chicago`/`cst`/`cdt`, `la`/`pst`/`pdt`, `utc` vb., autocomplete ile); Türkiye, Birleşik Krallık, New York, Chicago ve Los Angeles karşılıklarını (gün değişiyorsa "Önceki gün"/"Sonraki gün") ve tek bir Discord zaman damgasını (`<t:…:t>` · `<t:…:R>`, izleyenin kendi saatinde) **herkese açık** kartla gösterir |
+
+Dönüşüm işletim sisteminin IANA saat dilimi verisiyle yapılır (DST otomatik, sabit UTC offset yok; `pdt`/`pst` gibi
+kısaltmalar yalnızca bölgeyi seçer, o tarihteki offset'i `TimeZoneInfo` belirler). Kaynak bölgede yaz saati geçişi nedeniyle
+hiç yaşanmayan veya iki kez yaşanan saatler tahmin edilmez, kısa bir uyarıyla reddedilir. Geçersiz saat uyarısı
+yalnızca kullanana görünür (ephemeral); cevap ping atmaz. Bot izni gerekmez (yalnızca etkileşim cevabı). Veri saklanmaz.
+
 ## TSQ Doğum Günü (modül açıkken)
 
 | Komut | Ne yapar |
