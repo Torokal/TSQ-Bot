@@ -136,6 +136,18 @@ public sealed partial class RandomizerArchitectureTests
     }
 
     [Fact]
+    public void No_user_name_is_hardcoded_the_cards_name_whoever_ran_the_command()
+    {
+        // "Toro" was only the example user of the specification: no fixed name in code or texts.
+        var files = SourceFiles().Concat(Directory.GetFiles(Path.Combine(Root(), "Localization"), "*.json"));
+        foreach (var file in files)
+            File.ReadAllText(file).Should().NotMatchRegex(@"\bToro\b", Path.GetFileName(file));
+
+        var commands = File.ReadAllText(Path.Combine(Root(), "Commands", "RandomizerCommands.cs"));
+        Regex.Matches(commands, @"cards\.\w+\([^;]*DisplayName\(\)\)").Should().HaveCount(4, "all four commands pass the invoking member's name");
+    }
+
+    [Fact]
     public void Every_randomizer_interaction_class_declares_its_module_and_the_module_is_off_by_default()
     {
         foreach (var type in Randomizer.GetTypes().Where(t => !t.IsAbstract && typeof(ToroInteractionModule).IsAssignableFrom(t)))

@@ -2,6 +2,8 @@ using ToroSquad.Core.Localization;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Modules.Randomizer;
 using ToroSquad.Modules.Randomizer.Application;
+using ToroSquad.Modules.Randomizer.Commands;
+using ToroSquad.Tests.Support;
 
 namespace ToroSquad.Tests.Unit;
 
@@ -336,6 +338,60 @@ public sealed class RandomizerCardTests
         card.Footer.Should().StartWith("@" + Zwsp + "everyone").And.EndWith("… tarafından atıldı");
         card.Footer.Should().NotContain("\n");
         card.Footer!.Length.Should().BeLessThan(100);
+    }
+
+    [Theory]
+    [InlineData("Hasom")]
+    [InlineData("Oykeli")]
+    [InlineData("Çağrı Ş.")]
+    public void Every_card_names_whoever_ran_the_command(string name)
+    {
+        var cards = Cards(new ScriptedRandom(1));
+        Card(cards.Dice("tr", "2d6", name)).Footer.Should().Be(name + " tarafından atıldı");
+        Card(cards.CoinFlip("tr", name)).Footer.Should().Be(name + " tarafından atıldı");
+        Card(cards.RandomNumber("tr", 100, null, name)).Footer.Should().Be(name + " için seçildi");
+        Card(cards.Choose("tr", "CS2, Valheim", name)).Footer.Should().Be(name + " için seçildi");
+    }
+
+    [Theory]
+    [InlineData("@everyone")]
+    [InlineData("@here")]
+    [InlineData("<@123456789012345678>")]
+    [InlineData("<@!123456789012345678>")]
+    [InlineData("<@&123456789012345678>")]
+    [InlineData("**Hasom** __x__ https://example.com")]
+    public void A_mention_like_display_name_never_becomes_a_mention_or_a_link(string name)
+    {
+        var cards = Cards(new ScriptedRandom(1));
+        foreach (var card in new[]
+                 {
+                     Card(cards.Dice("tr", "2d6", name)), Card(cards.CoinFlip("tr", name)),
+                     Card(cards.RandomNumber("tr", 100, null, name)), Card(cards.Choose("tr", "CS2, Valheim", name)),
+                 })
+        {
+            foreach (var text in new[] { card.Title, card.Description, card.Footer })
+                DiscordText.RawMentionPattern().IsMatch(text ?? "").Should().BeFalse(text);
+            card.Footer.Should().NotContain("://", "links are defused");
+        }
+    }
+
+    [Fact]
+    public void Display_name_source_is_the_member_name_then_global_name_then_username()
+    {
+        // IGuildUser.DisplayName already is Discord.Net's nickname → global name → username for a member (TSQ Quote uses the same).
+        var member = InterfaceFake.Create<global::Discord.IGuildUser>(new()
+        {
+            ["DisplayName"] = "Hasom (sunucu)",
+            ["GlobalName"] = "Hasom",
+            ["Username"] = "hasom",
+        });
+        RandomizerCommands.DisplayNameOf(member).Should().Be("Hasom (sunucu)");
+
+        var user = InterfaceFake.Create<global::Discord.IUser>(new() { ["GlobalName"] = "Oykeli", ["Username"] = "oykeli" });
+        RandomizerCommands.DisplayNameOf(user).Should().Be("Oykeli");
+
+        var plain = InterfaceFake.Create<global::Discord.IUser>(new() { ["Username"] = "oykeli" });
+        RandomizerCommands.DisplayNameOf(plain).Should().Be("oykeli");
     }
 
     [Fact]

@@ -158,12 +158,32 @@ public sealed class RandomizerParserTests
         ChoiceList.Parse("CS2,Valheim").Options.Should().Equal("CS2", "Valheim");
     }
 
+    [Theory]
+    [InlineData("A,B,C")]
+    [InlineData("A|B|C")]
+    [InlineData("A, B | C")]
+    [InlineData("A|||B,,C")]
+    [InlineData(" A |, B ,| C ")]
+    public void Choice_commas_and_pipes_both_separate_even_mixed(string input) =>
+        ChoiceList.Parse(input).Options.Should().Equal("A", "B", "C");
+
     [Fact]
-    public void Choice_supports_pipes_and_then_commas_belong_to_the_option()
+    public void Choice_mixed_separators_give_the_same_options_as_either_one()
     {
-        ChoiceList.Parse("CS2 | Valheim | WoW").Options.Should().Equal("CS2", "Valheim", "WoW");
-        ChoiceList.Parse("Pizza, kola | Burger").Options.Should().Equal("Pizza, kola", "Burger");
-        ChoiceList.Parse("a,b|c,d").Options.Should().Equal(["a,b", "c,d"], "the pipe wins, deterministically");
+        var expected = new[] { "CS2", "Valheim", "WoW" };
+        ChoiceList.Parse("CS2, Valheim, WoW").Options.Should().Equal(expected);
+        ChoiceList.Parse("CS2 | Valheim | WoW").Options.Should().Equal(expected);
+        ChoiceList.Parse("CS2, Valheim | WoW").Options.Should().Equal(expected);
+        ChoiceList.Parse("Pizza, kola | Burger").Options.Should().Equal("Pizza", "kola", "Burger");
+    }
+
+    [Fact]
+    public void Choice_mixed_separator_duplicates_are_cleaned_before_the_count_check()
+    {
+        var result = ChoiceList.Parse("A, a | A");
+        result.Options.Should().BeNull("one distinct option is left");
+        result.ErrorKey.Should().Be(ChoiceList.TooFewKey);
+        ChoiceList.Parse("cs2 | CS2, Valheim | VALHEIM").Options.Should().Equal("cs2", "Valheim");
     }
 
     [Fact]
@@ -228,6 +248,8 @@ public sealed class RandomizerParserTests
         options.Should().Equal("Line one two", "Valheim WoW");
         options.Should().NotContain(o => o.Contains('\n') || o.Contains('\r') || o.Contains('\t'));
         ChoiceList.Parse("\n, \n, a").ErrorKey.Should().Be(ChoiceList.TooFewKey);
+        ChoiceList.Parse("Line\none |\r\n two ,\t\tthree\n").Options.Should().Equal("Line one", "two", "three");
+        ChoiceList.Parse("\n|\n, a").ErrorKey.Should().Be(ChoiceList.TooFewKey);
     }
 
     [Fact]
