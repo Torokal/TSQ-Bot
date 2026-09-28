@@ -37,6 +37,13 @@ public static class CurrencyDailySchedule
         return new DateTimeOffset(local, zone.GetUtcOffset(local));
     }
 
+    /// <summary>
+    /// The absolute delivery deadline of that day's card (the outbox expiry): 09:00 + catch-up + delivery grace, e.g. 09:35.
+    /// Fixed per day — not "staged + grace" — so no card, whenever it was staged, reaches Discord after it.
+    /// </summary>
+    public static DateTimeOffset DeliveryDeadline(DateOnly day, TimeZoneInfo zone, TimeSpan catchUp) =>
+        DueAt(day, zone) + catchUp + CurrencyDailyPoster.DeliveryGrace;
+
     /// <summary>The outbox source key: one daily card per Türkiye day ("day:2026-09-29").</summary>
     public static string SourceKey(DateOnly day) => "day:" + day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 }
@@ -80,8 +87,11 @@ public sealed class CurrencyDailyPoster(
     /// <summary>The longest sleep between passes (the next due time is recomputed from the clock every pass).</summary>
     public static readonly TimeSpan MaxSleep = TimeSpan.FromHours(1);
 
-    /// <summary>A queued card that Discord did not take by the end of the window plus this is not delivered late.</summary>
-    public static readonly TimeSpan DeliveryGrace = TimeSpan.FromHours(1);
+    /// <summary>
+    /// Only so the outbox can still deliver a card staged at the very end of the window: a queued card Discord did not take
+    /// by the end of the window plus this (09:35) expires — no late "morning" card.
+    /// </summary>
+    public static readonly TimeSpan DeliveryGrace = TimeSpan.FromMinutes(5);
 
     private const int SqliteConstraint = 19;
 
@@ -216,7 +226,7 @@ public sealed class CurrencyDailyPoster(
         var queued = 0;
         foreach (var guild in targets)
         {
-            if (await StageAsync(guild, channel, today, end + DeliveryGrace, results, dryRun, ct) is { } outcome)
+            if (await StageAsync(guild, channel, today, CurrencyDailySchedule.DeliveryDeadline(today, zone, o.DailyCatchUp), results, dryRun, ct) is { } outcome)
             {
                 queued++;
                 logger.LogInformation("currency_daily_queued guild={Guild} channel={Channel} localDate={Date} reason={Reason} quotes={Quotes} stage={Stage} dryRun={DryRun}",

@@ -287,6 +287,77 @@ public sealed class CurrencyDailyPostTests
         (await PassAsync(Poster(host))).Should().Be(DailyPassOutcome.Queued);
     }
 
+    // ---------------------------------------------------------------- delivery deadline (outbox expiry)
+
+    private static DateTimeOffset TurkeyTime(DateOnly day, int hour, int minute)
+    {
+        var local = day.ToDateTime(new TimeOnly(hour, minute));
+        return new DateTimeOffset(local, CurrencyTestKit.Turkey.GetUtcOffset(local));
+    }
+
+    [Theory]
+    [InlineData(0)] // 09:00
+    [InlineData(29)] // 09:29
+    [InlineData(30)] // 09:30: the last moment a new card may be staged
+    public async Task Every_card_of_the_day_expires_at_the_same_absolute_deadline_0935(int minutesAfterNine)
+    {
+        var (host, _) = await CreateAsync(NineTr.AddMinutes(minutesAfterNine));
+        await using var _h = host;
+        (await PassAsync(Poster(host))).Should().Be(DailyPassOutcome.Queued);
+
+        var day = new DateOnly(2026, 9, 29);
+        var turkey = CurrencyTestKit.Turkey;
+        CurrencyDailySchedule.DueAt(day, turkey).Should().Be(TurkeyTime(day, 9, 0));
+        (CurrencyDailySchedule.DueAt(day, turkey) + new ToroSquad.Modules.Currency.CurrencyOptions().DailyCatchUp).Should().Be(TurkeyTime(day, 9, 30));
+        CurrencyDailyPoster.DeliveryGrace.Should().Be(TimeSpan.FromMinutes(5));
+        CurrencyDailySchedule.DeliveryDeadline(day, turkey, TimeSpan.FromMinutes(30)).Should().Be(TurkeyTime(day, 9, 35));
+
+        var row = (await RowsAsync(host)).Should().ContainSingle().Subject;
+        row.ExpiresAt.Should().Be(TurkeyTime(day, 9, 35), "an absolute daily deadline, not staged time + 5 minutes");
+        if (minutesAfterNine < 30) // at 09:30 exactly, staged + 5 min happens to be the deadline too
+            row.ExpiresAt.Should().NotBe(host.Clock.GetUtcNow() + CurrencyDailyPoster.DeliveryGrace);
+    }
+
+    [Fact]
+    public async Task After_0930_no_new_card_is_staged()
+    {
+        var (host, _) = await CreateAsync(NineTr.AddMinutes(31));
+        await using var _h = host;
+        (await PassAsync(Poster(host))).Should().Be(DailyPassOutcome.WindowPassed);
+        (await RowsAsync(host)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_card_staged_at_0930_is_still_delivered_before_0935()
+    {
+        var (host, _) = await CreateAsync(NineTr.AddMinutes(30));
+        await using var _h = host;
+        await PassAsync(Poster(host));
+        host.Clock.Advance(TimeSpan.FromMinutes(4)); // 09:34
+        await host.Services.GetRequiredService<OutboxProcessor>().ProcessOnceAsync(CancellationToken.None);
+
+        (await RowsAsync(host)).Single().Status.Should().Be(OutboxStatus.Sent);
+        host.Transport.Messages.Should().ContainSingle(m => m.Channel == Channel);
+    }
+
+    [Fact]
+    public async Task A_pending_card_is_never_delivered_after_0935()
+    {
+        var (host, _) = await CreateAsync(NineTr.AddMinutes(29));
+        await using var _h = host;
+        await PassAsync(Poster(host));
+        host.Clock.Advance(TimeSpan.FromMinutes(7)); // 09:36: Discord never took it in time (outage, restart)
+        await host.Services.GetRequiredService<OutboxProcessor>().ProcessOnceAsync(CancellationToken.None);
+
+        var row = (await RowsAsync(host)).Single();
+        row.Status.Should().Be(OutboxStatus.Expired, "the existing outbox expiry: no late morning card");
+        host.Transport.Messages.Should().BeEmpty();
+
+        // And the next pass that day does not stage a replacement.
+        (await PassAsync(Restarted(host))).Should().Be(DailyPassOutcome.WindowPassed);
+        (await RowsAsync(host)).Should().ContainSingle();
+    }
+
     // ---------------------------------------------------------------- schedule arithmetic (Türkiye time, not UTC)
 
     [Fact]

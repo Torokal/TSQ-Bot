@@ -111,7 +111,10 @@ denenir; böylece Altınkaynak geri geldiğinde en geç yarım dakika içinde te
   (ör. `live|<sunucu>|currency|day:2026-09-29|1242464361855848459|currency-daily`). O gün için outbox'ta herhangi bir durumda
   satır varsa yeniden yazılmaz (gönderilmiş kart düzenlenmez de); eşzamanlı iki tur benzersiz anahtara takılır. Böylece
   09:03'teki bir restart/deploy ikinci kart üretmez. Kanal erişilemezse (403/404) mevcut outbox teslim kuralları işler;
-  09:30 + 1 saate kadar teslim edilemeyen kart geç gönderilmez.
+  kart günün sabit son teslim zamanına kadar gönderilebilir: 09:00 + 30 dk catch-up + **en fazla 5 dk teslim payı** =
+  **09:35** (Türkiye). Bu pay yalnızca 09:30'a yakın outbox'a yazılan kartın teslim edilebilmesi içindir; son yeni kart 09:30'da
+  hazırlanır ve 09:35'ten sonra o günün kartı Discord'a hiç gönderilmez (outbox satırı `Expired` olur, yerine yenisi yazılmaz).
+  Son teslim zamanı kartın ne zaman yazıldığından bağımsızdır (09:00'da da 09:29'da da 09:35).
 - **Modül kapalıysa kart yok:** yalnızca modülü açık (ve izinli) sunuculara kart hazırlanır, onlar için bile fiyat ancak
   gerekirse alınır; teslim anında modül kapısı ayrıca denetlenir. 09:00–09:30 arasında açılan modül o günün kartını alır;
   daha sonra açılırsa geçmiş sabah kartı gönderilmez.
