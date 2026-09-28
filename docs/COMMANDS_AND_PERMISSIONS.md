@@ -123,6 +123,15 @@ Ayrıntı: [currency/TSQ_CURRENCY.md](currency/TSQ_CURRENCY.md).
 Sonuçlar herkese açık, geçersiz girdi uyarıları yalnızca kullanana görünür (ephemeral); hiçbir cevap ping atmaz. Bot izni
 gerekmez (yalnızca etkileşim cevabı). Ayrıntı: [randomizer/TSQ_RANDOMIZER.md](randomizer/TSQ_RANDOMIZER.md).
 
+## TSQ Saat Dönüştürücü (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/saat time:<saat>` | Herkes: `21:00`, `9:00`, `09:00` veya `21.00` — saati **bugünün Türkiye tarihiyle** (Europe/Istanbul) okur; Türkiye, Birleşik Krallık, New York, Chicago ve Los Angeles karşılıklarını (gün değişiyorsa "Önceki gün"/"Sonraki gün") ve tek bir Discord zaman damgasını (`<t:…:t>` · `<t:…:R>`, izleyenin kendi saatinde) **herkese açık** kartla gösterir |
+
+Dönüşüm işletim sisteminin IANA saat dilimi verisiyle yapılır (DST otomatik, sabit UTC offset yok). Geçersiz saat uyarısı
+yalnızca kullanana görünür (ephemeral); cevap ping atmaz. Bot izni gerekmez (yalnızca etkileşim cevabı). Veri saklanmaz.
+
 ## TSQ Doğum Günü (modül açıkken)
 
 | Komut | Ne yapar |
