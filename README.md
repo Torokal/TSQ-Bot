@@ -36,7 +36,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 - **TSQ LFG — Oyuncu Bul** (separate module, off by default): `/ekip` opens a form for a group listing for any game or
   activity (free-text game name, team size from a select, start — now or a date and time in the server's time zone —
   voice channel and opt-in pings, then the duration and optional details); members join/leave with buttons, the owner can edit the
-  listing (✏️ Düzenle), the owner or a moderator closes it, it expires on its own; Maybe RSVP, opt-in pings of the joined
+  listing (✏️ Düzenle), the owner or a moderator closes it, it expires on its own; Maybe RSVP, a first-come first-served
+  waitlist when the team is full (freed slots are filled automatically), opt-in pings of the joined
   players 30 minutes before / at the start, optional voice channel; one generic lifecycle for every game, restart- and
   race-safe.
 - **TSQ Quote** (separate module, off by default): `/quote message:<message id> [channel]` (Copy Message ID; a message
@@ -69,7 +70,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | Volleyball | `/volleyball next\|schedule` | everyone (module on) |
 | Volleyball admin | `/volleyball-admin configure channel\|notifications\|role`, `/volleyball-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
 | TSQ Live admin | `/live-admin doctor` | Manage Server |
-| TSQ LFG | `/ekip` (opens the listing form; buttons: Katıl · Belki · Ayrıl · 🔊 Ses Odası · ✏️ Düzenle (owner only) · İlanı Kapat) | everyone (module on) |
+| TSQ LFG | `/ekip` (opens the listing form; buttons: Katıl (🎟️ Sıraya Gir while full) · Belki · Ayrıl · 🔊 Ses Odası · ✏️ Düzenle (owner only) · İlanı Kapat) | everyone (module on) |
 | TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
 | TSQ Quote | `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |

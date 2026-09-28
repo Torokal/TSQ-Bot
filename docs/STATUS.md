@@ -61,6 +61,11 @@ invite link and no global command registration. The source code is public under 
 - **Production (2026-09-27)**: PR #12 merged and deployed, `/ekip` + `/lfg-admin` synced to the main guild; enabling the
   module (`/modules enable lfg`) and the live checks are done by the owner in Discord.
 - **NOT VERIFIED_LIVE**: the bot editing its own card through the channel endpoint (expiry/close) has not been observed live.
+- **Waitlist IMPLEMENTED / TESTED_OFFLINE** (`feat/lfg-waitlist`): a full team no longer refuses Katıl — the same button
+  (🎟️ Sıraya Gir while full) queues the player first come first served (durable `WaitlistOrder`, assigned under the write
+  lock); every freed slot (leave, maybe, a larger size, /privacy delete) goes to the first in line in the same write;
+  invariant: no free slot while someone waits. Waitlisted players are never pinged and get no voice action; a promoted
+  player is Joined for the next notices (no late reminder). Migration `LfgWaitlist` (one nullable column). NOT VERIFIED_LIVE.
 - **V2 IMPLEMENTED / TESTED_OFFLINE**: Maybe RSVP (never a slot, never pinged), scheduled start (`EventAt`;
   `ExpiresAt = EventAt + duration`), opt-in 30-minute and start notices through the outbox (current Joined players only,
   once across restarts, never late, none for ended listings or a disabled module), `MentionPolicy.ExplicitUsers` (only
