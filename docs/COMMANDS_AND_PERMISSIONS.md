@@ -106,6 +106,7 @@ Ayrıntı: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md).
 |---|---|
 | `/birthday set <tarih>` · `show` · `remove` | Herkes, yalnızca **kendi** kaydı: gün + ay (`14.03`, `14/03`, `14-03`; yıl yok). Başkasının kaydına erişen komut veya liste yok |
 | `/birthday-admin set member:@üye date:14.03` | **Yalnızca Administrator veya sunucu sahibi** (etkin izinlerden, sunucu tarafında; Manage Server yetmez): başka bir üyenin gün + ayını oluşturur/günceller; ephemeral, ping'siz cevap |
+| `/birthday-admin show member:@üye` | **Yalnızca Administrator veya sunucu sahibi** (etkin izinlerden, DB okunmadan önce; Manage Server yetmez): tek bir üyenin kayıtlı gün + ayını gösterir; ephemeral, ping'siz; denetim logu (tarih yok). Liste komutu yok |
 | `/birthday-admin configure channel:` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): duyuru kanalı |
 | `/birthday-admin status` · `doctor` | Yönetici: ayarlar, bugünün durumu, zamanlayıcı; kanal/rol hiyerarşisi/izin/veritabanı kontrolü |
 

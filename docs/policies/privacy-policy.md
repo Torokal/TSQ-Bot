@@ -12,7 +12,9 @@
   tercihiniz ve botun size verdiği bildirim rollerinin kaydı.
 - **Doğum gününüz** (`/birthday set` ile siz ya da bir sunucu yöneticisi — Administrator — kaydederse, TSQ Doğum Günü
   modülü açıksa): yalnızca gün ve ay — doğum yılı sorulmaz ve saklanmaz — ile kutlama/rol kaydı. Doğum gününüzde duyuruda
-  etiketlenirsiniz. `/birthday remove` veya `/privacy delete` ile silinir.
+  etiketlenirsiniz. Kendi kaydınızı `/birthday show` ile görürsünüz; sunucunun Administrator yetkili yöneticileri veya
+  sunucu sahibi yalnızca sizin kaydınızı tek tek görebilir (`/birthday-admin show`, kayıt altına alınır). Doğum günlerinin
+  toplu veya herkese açık bir listesi yoktur. `/birthday remove` veya `/privacy delete` ile silinir.
 - **Okumadığımız veriler**: mesaj akışları, üye listeleri, çevrimiçi durum, profil bilgileri. Tek istisna `/quote`
   (TSQ Quote, modül açıksa): bir üye açıkça istediğinde yalnızca o tek mesajın metni ve yazarının görünen adı, kullanıcı
   adı ve profil fotoğrafı istek sırasında bir kez işlenir ve alıntı görseli olarak kanala gönderilir; mesaj içeriği ve
