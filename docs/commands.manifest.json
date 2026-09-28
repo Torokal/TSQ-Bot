@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "a22902d1295468a313bb4780dd72ba9128b111b94dacb2a45c3d14d849f9633d",
+  "hash": "4d7f1f180bad0749be389b1ea6d0fa4d046fe78102c9f0199243b53b7f492b7d",
   "commands": [
     {
       "module": "currency",
@@ -1722,7 +1722,7 @@
         "name": "randomsayi",
         "description": "Pick a random number from the given range",
         "description_localizations": {
-          "tr": "Belirtilen aralıktan rastgele sayı seçer"
+          "tr": "Belirtilen aralıktan rastgele bir sayı seçer."
         },
         "default_member_permissions": null,
         "nsfw": false,
@@ -1738,7 +1738,7 @@
             "name": "maksimum",
             "description": "Largest value (inclusive)",
             "description_localizations": {
-              "tr": "En büyük değer (dahil)"
+              "tr": "Seçilebilecek en büyük sayı"
             },
             "required": true,
             "min_value": -1000000000,
@@ -1749,7 +1749,7 @@
             "name": "minimum",
             "description": "Smallest value (inclusive, default: 1)",
             "description_localizations": {
-              "tr": "En küçük değer (dahil, varsayılan: 1)"
+              "tr": "Seçilebilecek en küçük sayı (varsayılan: 1)"
             },
             "required": false,
             "min_value": -1000000000,
@@ -1765,7 +1765,7 @@
         "name": "sec",
         "description": "Pick one of the given options at random",
         "description_localizations": {
-          "tr": "Verilen seçeneklerden rastgele birini seçer"
+          "tr": "Verilen seçeneklerden rastgele birini seçer."
         },
         "default_member_permissions": null,
         "nsfw": false,
@@ -1781,7 +1781,7 @@
             "name": "seçenekler",
             "description": "Options separated by commas or |, e.g. CS2, Valheim | WoW",
             "description_localizations": {
-              "tr": "Virgül veya | ile ayrılmış seçenekler, ör. CS2, Valheim | WoW"
+              "tr": "Virgül veya | ile ayrılmış seçenekler. Örn: CS2, Valheim | WoW"
             },
             "required": true,
             "min_length": 1,
@@ -2118,7 +2118,7 @@
         "name": "yazitura",
         "description": "Flip a coin",
         "description_localizations": {
-          "tr": "Yazı tura atar"
+          "tr": "Yazı tura atar."
         },
         "default_member_permissions": null,
         "nsfw": false,
@@ -2138,7 +2138,7 @@
         "name": "zarat",
         "description": "Roll the given dice",
         "description_localizations": {
-          "tr": "Belirtilen zarları atar"
+          "tr": "Belirtilen zarları rastgele atar."
         },
         "default_member_permissions": null,
         "nsfw": false,
@@ -2154,7 +2154,7 @@
             "name": "zar",
             "description": "Number of dice and sides: 1-20, 2-6 or 2d6",
             "description_localizations": {
-              "tr": "Zar sayısı ve yüz sayısı: 1-20, 2-6 veya 2d6"
+              "tr": "Zar biçimi. Örn: 1-20 veya 2d6"
             },
             "required": true,
             "min_length": 1,
