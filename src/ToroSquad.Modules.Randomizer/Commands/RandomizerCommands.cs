@@ -57,6 +57,12 @@ public sealed class RandomizerCommands(InteractionServices services, RandomizerC
             ? SendAsync(null, DiscordConversions.ToEmbed(card), null, ephemeral: false)
             : SendEphemeralAsync(reply.Refusal, null, null);
 
-    /// <summary>Server nickname, else global display name, else username — the name members see in this server.</summary>
-    private string DisplayName() => Context.User is IGuildUser member ? member.DisplayName : Context.User.GlobalName ?? Context.User.Username;
+    private string DisplayName() => DisplayNameOf(Context.User);
+
+    /// <summary>
+    /// The invoking member's name as members see it in this server, in the same order as TSQ Quote: server nickname / global
+    /// display name / username (<see cref="IGuildUser.DisplayName"/>), else global display name, else username. Raw user
+    /// content: <see cref="RandomizerCards"/> defuses it before it is shown.
+    /// </summary>
+    public static string DisplayNameOf(IUser user) => user is IGuildUser member ? member.DisplayName : user.GlobalName ?? user.Username;
 }

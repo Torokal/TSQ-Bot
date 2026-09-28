@@ -6,8 +6,8 @@ namespace ToroSquad.Modules.Randomizer.Application;
 public sealed record ChoiceParseResult(IReadOnlyList<string>? Options, string? ErrorKey);
 
 /// <summary>
-/// Parses the /sec input into options. Separator: a comma — or, when the input contains a pipe, the pipe only (then commas
-/// are part of an option: "Pizza, kola | Burger" is two options). One deterministic rule, no guessing between the two.
+/// Parses the /sec input into options. Separators: comma and pipe, both at once and interchangeably ("CS2, Valheim | WoW"
+/// is three options, exactly like "CS2, Valheim, WoW" and "CS2 | Valheim | WoW").
 /// Each option is trimmed and inner whitespace (newlines included) collapses to one space, so an option can never spread
 /// over several lines. Empty entries ("CS2,,Valheim") are dropped. Duplicates count once — case-insensitively, the first
 /// spelling is kept — so a repeated option never gets twice the weight. The text itself is kept as typed; it is defused
@@ -22,8 +22,8 @@ public static class ChoiceList
     /// <summary>Longest input accepted; also the slash option's max length (25 options of 40 characters, with separators).</summary>
     public const int MaxInputLength = 1000;
 
-    public const char Comma = ',';
-    public const char Pipe = '|';
+    /// <summary>Every one of these separates two options.</summary>
+    private static readonly char[] Separators = [',', '|'];
 
     public const string TooFewKey = "randomizer.choice.too_few";
     public const string TooManyKey = "randomizer.choice.too_many";
@@ -37,10 +37,9 @@ public static class ChoiceList
         if (input.Length > MaxInputLength)
             return new ChoiceParseResult(null, InputTooLongKey);
 
-        var separator = input.Contains(Pipe, StringComparison.Ordinal) ? Pipe : Comma;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var options = new List<string>();
-        foreach (var raw in input.Split(separator))
+        foreach (var raw in input.Split(Separators))
         {
             var option = CollapseWhitespace(raw);
             if (option.Length == 0)
