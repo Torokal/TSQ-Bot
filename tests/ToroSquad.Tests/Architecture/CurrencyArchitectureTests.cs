@@ -56,8 +56,11 @@ public sealed partial class CurrencyArchitectureTests
     public void Currency_is_isolated_and_has_no_storage_no_ai_and_no_new_packages()
     {
         References(Currency).Should().NotContain(r => r.StartsWith("ToroSquad.Modules.", StringComparison.Ordinal) && r != "ToroSquad.Modules.Currency");
-        References(Currency).Should().NotContain(r => r == "ToroSquad.Infrastructure" || r.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal),
-            "prices are never stored: no tables, no migration");
+        // Infrastructure only for the shared outbox (the daily card): no own tables, no model contributor, no migration.
+        Currency.GetTypes().Should().NotContain(t => typeof(ToroSquad.Infrastructure.Persistence.IModelContributor).IsAssignableFrom(t),
+            "prices are never stored: no tables");
+        Directory.GetFiles(Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Bot", "Migrations"))
+            .Should().NotContain(f => Path.GetFileName(f).Contains("Currency", StringComparison.OrdinalIgnoreCase), "no migration");
         References(Currency).Should().NotContain(r => Regex.IsMatch(r, "OpenAI|Anthropic|SemanticKernel|Polly|Caching", RegexOptions.IgnoreCase),
             "deterministic, BCL only: no AI, no resilience or cache packages");
         foreach (var other in new[]
@@ -90,12 +93,33 @@ public sealed partial class CurrencyArchitectureTests
             .Should().NotDependOnAny(Types().That().ResideInNamespace("ToroSquad.Modules.Currency.Providers")));
 
     [Fact]
-    public void Nothing_runs_in_the_background_and_nothing_is_sent_outside_the_interaction()
+    public void The_only_background_job_is_the_daily_card_and_it_only_stages_into_the_outbox()
     {
+        // Nothing in the module sends to Discord directly; the daily card goes through the persistent outbox.
         AssertNoViolations(Types().That().ResideInNamespaceMatching(@"^ToroSquad\.Modules\.Currency(\..*)?$")
-            .Should().NotDependOnAny(Types().That().HaveNameMatching(@"^(IMessageTransport|INotificationOutbox|NotificationRequest|IHostedService|BackgroundService|PeriodicTimer)$")));
-        Currency.GetTypes().Should().NotContain(t => typeof(Microsoft.Extensions.Hosting.IHostedService).IsAssignableFrom(t));
-        typeof(CurrencyModule).GetMethod("AddBackgroundJobs").Should().BeNull("no polling: prices are fetched when a command asks");
+            .Should().NotDependOnAny(Types().That().HaveNameMatching(@"^(IMessageTransport|PeriodicTimer)$")));
+        AssertNoViolations(Types().That().ResideInNamespaceMatching(@"^ToroSquad\.Modules\.Currency(\..*)?$")
+            .And().DoNotHaveName("CurrencyDailyPoster")
+            .Should().NotDependOnAny(Types().That().HaveNameMatching(@"^(INotificationOutbox|NotificationRequest)$")));
+        Currency.GetTypes().Where(t => typeof(Microsoft.Extensions.Hosting.IHostedService).IsAssignableFrom(t)).Should().Equal(typeof(CurrencyDailyWorker));
+        // No price polling: the worker only runs the daily poster, and the poster reads quotes only inside the 09:00 window.
+        var worker = File.ReadAllText(Path.Combine(Root(), "Application", "CurrencyDailyPoster.cs"));
+        worker.Should().NotContain("TimeSpan.FromHours(24)").And.NotContain("TimeSpan.FromDays(1)");
+        typeof(CurrencyDailyWorker).GetConstructors().Single().GetParameters().Select(p => p.ParameterType)
+            .Should().NotContain(t => t == typeof(MarketQuoteService) || t == typeof(IMarketDataSource));
+
+        var services = new ServiceCollection();
+        CurrencyModule.AddBackgroundJobs(services);
+        services.Should().ContainSingle(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService));
+        new CurrencyModule().ConfigureServices(new ServiceCollection(), new ConfigurationBuilder().Build()); // registers no hosted service itself
+    }
+
+    [Fact]
+    public void Commands_and_the_daily_card_never_ping()
+    {
+        var code = string.Join("\n", SourceFiles().Select(File.ReadAllText));
+        code.Should().NotContain("MentionPolicy.EveryoneOnly").And.NotContain("ExplicitUsers").And.NotContain("RoleMention").And.NotContain("@everyone").And.NotContain("@here");
+        File.ReadAllText(Path.Combine(Root(), "Application", "CurrencyDailyPoster.cs")).Should().Contain("new OutgoingMessage(null, cards.RenderDaily(language, results), MentionPolicy.None)");
     }
 
     [Fact]
@@ -121,7 +145,10 @@ public sealed partial class CurrencyArchitectureTests
         var settings = JsonDocument.Parse(File.ReadAllText(Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Bot", "appsettings.json")));
         var section = settings.RootElement.GetProperty("Currency");
         section.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(
-            "AltinkaynakBaseUrl", "TcmbBaseUrl", "TruncgilBaseUrl", "TimeoutSeconds", "FreshSeconds", "FallbackFreshSeconds", "StaleMaxMinutes");
+            "AltinkaynakBaseUrl", "TcmbBaseUrl", "TruncgilBaseUrl", "TimeoutSeconds", "FreshSeconds", "FallbackFreshSeconds", "StaleMaxMinutes",
+            "ChannelId", "DailyCatchUpMinutes");
+        section.GetProperty("ChannelId").GetString().Should().Be("1242464361855848459");
+        section.GetProperty("DailyCatchUpMinutes").GetInt32().Should().Be(30);
         section.GetRawText().Should().NotContainAny("Key", "Token", "Secret", "Password");
 
         var module = new CurrencyModule();

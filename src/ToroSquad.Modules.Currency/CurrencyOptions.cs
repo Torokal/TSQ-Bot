@@ -9,6 +9,24 @@ public sealed class CurrencyOptions
 {
     public const string Section = "Currency";
 
+    /// <summary>The main guild's currency channel (production default).</summary>
+    public const ulong DefaultChannelId = 1242464361855848459;
+
+    /// <summary>Smallest id Discord can issue (timestamp bits above the 22 worker/process/increment bits).</summary>
+    public const ulong MinSnowflake = 1UL << 22;
+
+    /// <summary>
+    /// The only channel where /dolar, /euro and /altın answer, and where the daily 09:00 card is posted. Fixed by
+    /// configuration (no admin command, no table).
+    /// </summary>
+    public ulong ChannelId { get; set; } = DefaultChannelId;
+
+    /// <summary>
+    /// The daily card is due at 09:00 Türkiye time; a bot that was down at 09:00 still posts it until this many minutes
+    /// later, never after (no late "morning" card in the afternoon).
+    /// </summary>
+    public int DailyCatchUpMinutes { get; set; } = 30;
+
     /// <summary>Altınkaynak public web service; "Currency" and "Gold" are read relative to it.</summary>
     public string AltinkaynakBaseUrl { get; set; } = "https://static.altinkaynak.com/public/";
 
@@ -37,6 +55,7 @@ public sealed class CurrencyOptions
     public TimeSpan Fresh => TimeSpan.FromSeconds(FreshSeconds);
     public TimeSpan FallbackFresh => TimeSpan.FromSeconds(FallbackFreshSeconds);
     public TimeSpan StaleMax => TimeSpan.FromMinutes(StaleMaxMinutes);
+    public TimeSpan DailyCatchUp => TimeSpan.FromMinutes(DailyCatchUpMinutes);
 
     public IReadOnlyList<string> Validate()
     {
@@ -53,6 +72,10 @@ public sealed class CurrencyOptions
             errors.Add($"{Section}:FreshSeconds must be 10-3600 (got {FreshSeconds})");
         if (FallbackFreshSeconds < 5 || FallbackFreshSeconds > FreshSeconds)
             errors.Add($"{Section}:FallbackFreshSeconds must be 5-FreshSeconds (got {FallbackFreshSeconds})");
+        if (ChannelId is < MinSnowflake or > long.MaxValue)
+            errors.Add($"{Section}:ChannelId must be a Discord channel id (got {ChannelId})");
+        if (DailyCatchUpMinutes is < 1 or > 180)
+            errors.Add($"{Section}:DailyCatchUpMinutes must be 1-180 (got {DailyCatchUpMinutes})");
         if (StaleMaxMinutes is < 1 or > 60 || StaleMax < Fresh)
             errors.Add($"{Section}:StaleMaxMinutes must be 1-60 and not shorter than FreshSeconds (got {StaleMaxMinutes})");
         return errors;

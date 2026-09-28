@@ -1,11 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- TSQ Döviz & Altın: /dolar, /euro and /altın answer the current USD/TRY, EUR/TRY and gram gold buy/sell prices,
-       fetched on demand from public provider feeds (no API key) and cached in memory. Stateless: no tables, no background
-       jobs. Depends on the shared TSQ layers only (never on another feature module). The Domain, Providers and Application
+       fetched on demand from public provider feeds (no API key) and cached in memory; a daily 09:00 card goes through the
+       shared outbox. No own tables, no migration. Depends on the shared TSQ layers only (never on another feature module). The Domain, Providers and Application
        namespaces must not use the Discord SDK (architecture tests); only Commands talks to Discord.Net. -->
   <ItemGroup>
     <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Infrastructure\ToroSquad.Infrastructure.csproj" />
     <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
   </ItemGroup>
 

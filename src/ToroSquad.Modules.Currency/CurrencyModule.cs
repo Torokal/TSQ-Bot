@@ -14,9 +14,11 @@ namespace ToroSquad.Modules.Currency;
 /// <summary>
 /// TSQ Döviz &amp; Altın: /dolar, /euro and /altın show the current USD/TRY, EUR/TRY and gram gold buy/sell prices
 /// (docs/currency/TSQ_CURRENCY.md). Primary provider Altınkaynak; fallbacks TCMB (indicative rates, USD/EUR) and Trunçgil
-/// (gram gold); then the last good price for up to 15 minutes, clearly marked. Fetched on demand only and cached in memory:
-/// no tables, no background jobs, no API keys, no AI. A separate feature module: depends only on the shared TSQ layers.
-/// Off by default in every guild (/modules enable currency).
+/// (gram gold); then the last good price for up to 15 minutes, clearly marked. The commands answer only in the currency
+/// channel (<see cref="CurrencyOptions.ChannelId"/>); a combined card is posted there every day at 09:00 Türkiye time
+/// through the shared outbox. Prices are fetched when needed and cached in memory: no own tables, no migration, no API
+/// keys, no AI. A separate feature module: depends only on the shared TSQ layers. Off by default in every guild
+/// (/modules enable currency) — and without it, no daily card.
 /// </summary>
 public sealed class CurrencyModule : IToroModule
 {
@@ -33,7 +35,7 @@ public sealed class CurrencyModule : IToroModule
         "module.currency.description",
         IsCore: false,
         EnabledByDefault: false, // explicit activation: /modules enable currency
-        RequiredBotChannelPermissions: GuildPermission.None, // interaction responses only: no channel permission needed
+        RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks, // the daily card
         OptionalBotPermissions: GuildPermission.None,
         AdminCommands: []);
 
@@ -51,6 +53,8 @@ public sealed class CurrencyModule : IToroModule
         services.AddSingleton<IMarketDataSource, MarketDataClient>();
         services.AddSingleton<MarketQuoteService>();
         services.AddSingleton<CurrencyCardRenderer>();
+        services.AddSingleton<CurrencyCommandFlow>();
+        services.AddSingleton<CurrencyDailyPoster>();
         services.AddSingleton<IModuleHealthCheck, CurrencyHealthCheck>();
     }
 
@@ -76,6 +80,9 @@ public sealed class CurrencyModule : IToroModule
                 PooledConnectionLifetime = TimeSpan.FromMinutes(15),
                 ConnectTimeout = sp.GetRequiredService<IOptions<CurrencyOptions>>().Value.Timeout,
             });
+
+    /// <summary>The daily 09:00 card, registered only in the long-running host (never by one-shot CLI verbs or tests).</summary>
+    public static void AddBackgroundJobs(IServiceCollection services) => services.AddHostedService<CurrencyDailyWorker>();
 
     public IReadOnlyList<string> ValidateConfiguration(IConfiguration configuration)
     {

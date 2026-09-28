@@ -81,7 +81,7 @@ public sealed class CurrencyCardTests
         var bulletin = new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.FromHours(3));
         var card = Card(Quote(MarketInstrument.Usd, 48.7901m, 48.8780m, MarketSource.Tcmb, fallback: true, dateOnly: true, updated: bulletin));
         card.Footer.Should().Be("Kaynak: TCMB — Gösterge Kuru");
-        card.Description.Should().Be("Birincil veri kaynağına ulaşılamadı.\nTCMB'nin günlük gösterge kurudur; anlık piyasa fiyatı değildir.");
+        card.Description.Should().Be("Birincil veri kaynağına ulaşılamadı.\nTCMB günlük gösterge kurudur; anlık piyasa fiyatı değildir.");
         Field(card, "Bülten tarihi").Should().Be("25.09.2026");
         card.Fields.Should().NotContain(f => f.Value.Contains("<t:", StringComparison.Ordinal), "a date-only bulletin is not shown as a moment in time");
         Field(card, "Alış").Should().Be("48,7901 ₺");

@@ -92,6 +92,7 @@ public static class ToroHost
             LiveModule.AddBackgroundJobs(services);
             LfgModule.AddBackgroundJobs(services);
             BirthdayModule.AddBackgroundJobs(services);
+            CurrencyModule.AddBackgroundJobs(services);
         }
     }
 
