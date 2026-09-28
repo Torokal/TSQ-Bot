@@ -271,6 +271,28 @@ public sealed class LfgWaitlistTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Three_new_slots_take_the_first_three_of_five_waiting_and_the_other_two_keep_their_places()
+    {
+        var listing = await OpenAsync(10);
+        await FillAsync(listing.Id, 9, Oykeli);
+        await QueueAsync(listing.Id, 201, 202, 203, 204, 205);
+        var stored = (await StoredAsync(listing.Id)).Rows.Where(p => p.UserId is 204 or 205).ToDictionary(p => p.UserId, p => p.WaitlistOrder);
+
+        var edited = await EditPlayersAsync(listing.Id, 13);
+
+        var view = edited.Listing!;
+        (view.Players.Count, view.Status).Should().Be((13, LfgStatus.Full));
+        view.Players.Should().Contain(Users(201, 202, 203));
+        view.WaitlistedPlayers.Should().Equal(Users(204, 205));
+        var after = (await StoredAsync(listing.Id)).Rows.Where(p => p.UserId is 204 or 205).ToDictionary(p => p.UserId, p => p.WaitlistOrder);
+        after.Should().Equal(stored, "the remaining places are not rewritten");
+        (await JoinAsync(listing.Id, 204)).Result.Args.Should().Equal([1], "old #4 is now shown as #1");
+        (await JoinAsync(listing.Id, 205)).Result.Args.Should().Equal([2]);
+        _host.Services.GetRequiredService<LfgCardRenderer>().Render(view, "tr").Embed!.Description.Should().Contain("🎟️ **Bekleme Listesi (2)**\n`1.` <@204> · `2.` <@205>");
+        await InvariantAsync(listing.Id);
+    }
+
+    [Fact]
     public async Task The_team_size_cannot_drop_below_the_joined_players_and_the_waitlist_does_not_count()
     {
         var listing = await OpenAsync(10);
