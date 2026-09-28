@@ -15,7 +15,8 @@ public sealed record TimezoneReply(MessageEmbed? Card, string? Refusal)
 }
 
 /// <summary>
-/// /saat end to end, without the Discord SDK (unit-tested): parse the time, read it as today in Türkiye, convert the one
+/// /saat end to end, without the Discord SDK (unit-tested): parse the time and the source zone (<see cref="SourceTimeZones"/>,
+/// default Türkiye), read the time as today in that zone — refused if a DST switch skips or repeats it there — convert the one
 /// instant to every <see cref="TimeZoneBoard.Zones"/> row and render the card in the TSQ card style (brand colour, emoji
 /// title, fields, who asked in the footer). The Discord timestamp is a single field for the same instant — Discord renders
 /// it in each viewer's own time zone; the rows are the explicit conversions. The display name is defused before it is shown.
@@ -26,28 +27,42 @@ public sealed class TimezoneCards(ILocalizer localizer, ILogger<TimezoneCards> l
     public const uint Color = 0xE8590C; // the TSQ brand colour, as on every other public card
     public const int DisplayNameMax = 64;
     public const string UnavailableKey = "timezone.unavailable";
+    public const string SkippedKey = "timezone.skipped_time";
+    public const string RepeatedKey = "timezone.repeated_time";
 
-    public TimezoneReply Convert(string lang, string? input, DateTimeOffset now, string displayName)
+    /// <param name="zoneInput">The <c>timezone</c> option as typed; <c>null</c> = Türkiye, exactly as before the option existed.</param>
+    public TimezoneReply Convert(string lang, string? input, DateTimeOffset now, string displayName, string? zoneInput = null)
     {
         if (ClockInput.Parse(input) is not { } time)
             return TimezoneReply.Refused(L(lang, ClockInput.InvalidKey));
+        if (SourceTimeZones.Resolve(zoneInput) is not { } from)
+            return TimezoneReply.Refused(L(lang, SourceTimeZones.InvalidKey));
 
-        var missing = TimeZoneBoard.Missing(TimeZoneBoard.Zones.Select(z => z.ZoneId).Append(TimeZoneBoard.SourceZoneId), out var zones);
+        var missing = TimeZoneBoard.Missing(TimeZoneBoard.Zones.Select(z => z.ZoneId).Append(from.ZoneId), out var zones);
         if (missing.Count > 0)
         {
             logger.LogError("Timezone /saat: time zone data not found on this host for {ZoneIds}", string.Join(",", missing));
             return TimezoneReply.Refused(L(lang, UnavailableKey));
         }
 
-        var source = zones[TimeZoneBoard.SourceZoneId];
+        // "Today" is the date in the source zone at this instant — not the host's, not UTC's, not Istanbul's.
+        var source = zones[from.ZoneId];
         var date = TimeZoneBoard.Today(now, source);
+        switch (TimeZoneBoard.Classify(date, time, source))
+        {
+            case LocalTimeKind.Skipped:
+                return TimezoneReply.Refused(L(lang, SkippedKey));
+            case LocalTimeKind.Repeated:
+                return TimezoneReply.Refused(L(lang, RepeatedKey));
+        }
+
         var instant = TimeZoneBoard.Resolve(date, time, source);
         var rows = TimeZoneBoard.Zones.Select(z => TimeZoneBoard.In(z, instant, date, zones[z.ZoneId]));
 
         var fields = new List<EmbedField>
         {
             new(L(lang, "timezone.input"), L(lang, "timezone.input.value", Clock(time),
-                L(lang, "timezone.zone.turkey"), date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture))),
+                L(lang, from.NameKey), date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture))),
             new(L(lang, "timezone.zones"), string.Join("\n", rows.Select(r => Row(lang, r)))),
             new(L(lang, "timezone.discord"), DiscordText.Timestamp(instant, 't') + " · " + DiscordText.Timestamp(instant, 'R')),
         };

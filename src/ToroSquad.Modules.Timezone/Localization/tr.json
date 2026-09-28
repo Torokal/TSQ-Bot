@@ -1,8 +1,8 @@
 {
   "module.timezone.name": "TSQ Saat Dönüştürücü",
-  "module.timezone.description": "Türkiye saatini diğer saat dilimlerinde ve Discord zamanı olarak gösterir: /saat 21:00.",
-  "cmd.saat": "Türkiye saatini farklı saat dilimlerine çevirir.",
-  "cmd.saat.time": "Türkiye saati (bugün). Örn: 21:00 veya 9.30",
+  "module.timezone.description": "Bir saati (varsayılan: Türkiye) diğer saat dilimlerinde ve Discord zamanı olarak gösterir: /saat 21:00 [timezone:pdt].",
+  "cmd.saat": "Girilen saati farklı saat dilimlerine çevirir.",
+  "cmd.saat.time": "Saat. Örn: 21:00 veya 9.30 (bugün; saat dilimi verilmezse Türkiye saati)",
   "timezone.title": "🕐 Saat Dönüştürücü",
   "timezone.input": "Girilen saat",
   "timezone.input.value": "`{0}` · {1} · {2}",
@@ -17,5 +17,13 @@
   "timezone.zone.los_angeles": "Los Angeles",
   "timezone.footer": "{0} tarafından istendi",
   "timezone.invalid_time": "Geçerli bir saat girin. Örnek: `21:00`",
-  "timezone.unavailable": "Saat dilimi verisi şu an kullanılamıyor. Lütfen daha sonra tekrar deneyin."
+  "timezone.unavailable": "Saat dilimi verisi şu an kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+  "cmd.saat.timezone": "Girilen saatin saat dilimi (varsayılan: Türkiye). Örn: tr, pdt, est, uk, utc",
+  "timezone.source.eastern": "New York (Doğu Saati)",
+  "timezone.source.central": "Chicago (Merkezi Saat)",
+  "timezone.source.pacific": "Los Angeles (Pasifik Saati)",
+  "timezone.source.utc": "UTC",
+  "timezone.invalid_zone": "Geçerli bir saat dilimi girin. Örnek: tr, pdt, est, cst, uk veya utc.",
+  "timezone.skipped_time": "Bu saat seçilen saat diliminde yaz saati geçişi nedeniyle mevcut değil.",
+  "timezone.repeated_time": "Bu saat seçilen saat diliminde yaz saati geçişi nedeniyle iki kez yaşanıyor, yani iki farklı ana karşılık gelebilir. Başka bir saat girin veya timezone:utc kullanın."
 }

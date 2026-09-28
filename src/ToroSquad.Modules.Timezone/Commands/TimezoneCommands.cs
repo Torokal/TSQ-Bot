@@ -19,12 +19,14 @@ namespace ToroSquad.Modules.Timezone.Commands;
 public sealed class TimezoneCommands(InteractionServices services, TimezoneCards cards, ILogger<TimezoneCommands> logger)
     : ToroInteractionModule(services)
 {
-    [SlashCommand("saat", "Convert a time in Türkiye to other time zones")]
+    [SlashCommand("saat", "Convert a time to other time zones")]
     public async Task ConvertAsync(
-        [Summary("time", "Time in Türkiye (today), e.g. 21:00 or 9.30"), MinLength(1), MaxLength(ClockInput.MaxInputLength)] string time)
+        [Summary("time", "Time, e.g. 21:00 or 9.30 (today; Türkiye time unless a time zone is given)"), MinLength(1), MaxLength(ClockInput.MaxInputLength)] string time,
+        [Summary("timezone", "Time zone of the entered time (default: Türkiye), e.g. tr, pdt, est, uk, utc"), MaxLength(SourceTimeZones.MaxInputLength),
+         Autocomplete(typeof(SourceZoneAutocomplete))] string? timezone = null)
     {
-        logger.LogDebug("Timezone /saat guild={Guild} user={User} input_length={Length}", Actor.GuildId, Actor.UserId, time.Length);
-        await AnswerAsync(cards.Convert(await LangAsync(), time, Services.Clock.GetUtcNow(), DisplayName()));
+        logger.LogDebug("Timezone /saat guild={Guild} user={User} input_length={Length} zone_given={ZoneGiven}", Actor.GuildId, Actor.UserId, time.Length, timezone is not null);
+        await AnswerAsync(cards.Convert(await LangAsync(), time, Services.Clock.GetUtcNow(), DisplayName(), timezone));
     }
 
     private Task AnswerAsync(TimezoneReply reply) =>
