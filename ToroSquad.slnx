@@ -12,6 +12,7 @@
     <Project Path="src/ToroSquad.Modules.Quote/ToroSquad.Modules.Quote.csproj" />
     <Project Path="src/ToroSquad.Modules.Currency/ToroSquad.Modules.Currency.csproj" />
     <Project Path="src/ToroSquad.Modules.Birthday/ToroSquad.Modules.Birthday.csproj" />
+    <Project Path="src/ToroSquad.Modules.Randomizer/ToroSquad.Modules.Randomizer.csproj" />
     <Project Path="src/ToroSquad.Bot/ToroSquad.Bot.csproj" />
   </Folder>
   <Folder Name="/tests/">

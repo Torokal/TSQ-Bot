@@ -111,6 +111,18 @@ döviz kanalında `ViewChannel` + `SendMessages` + `EmbedLinks` ister; komut cev
 harfe izin verir; manifest doğrulayıcısı Discord'un kuralını uygular (1–32 küçük harf/rakam, `-`, `_`).
 Ayrıntı: [currency/TSQ_CURRENCY.md](currency/TSQ_CURRENCY.md).
 
+## TSQ Randomizer (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/zarat zar:<girdi>` | Herkes: `1-20`, `2-6`, `2d6` (1–20 zar, 2–10.000 yüz) — zarları ve toplamı **herkese açık** kartla gösterir |
+| `/randomsayi maksimum:<sayı> [minimum:<sayı>]` | Herkes: iki ucu dahil rastgele sayı (`minimum` varsayılan 1; negatif olabilir; ±1.000.000.000) |
+| `/sec seçenekler:<metin>` | Herkes: virgül ve/veya `\|` ile (karışık da olur) ayrılmış 2–25 farklı seçenekten birini seçer; seçenek metni mention/markdown olarak görüntülenmez |
+| `/yazitura` | Herkes: YAZI veya TURA |
+
+Sonuçlar herkese açık, geçersiz girdi uyarıları yalnızca kullanana görünür (ephemeral); hiçbir cevap ping atmaz. Bot izni
+gerekmez (yalnızca etkileşim cevabı). Ayrıntı: [randomizer/TSQ_RANDOMIZER.md](randomizer/TSQ_RANDOMIZER.md).
+
 ## TSQ Doğum Günü (modül açıkken)
 
 | Komut | Ne yapar |

@@ -525,6 +525,7 @@
           "ToroSquad.Modules.Lfg": "[0.1.0-dev, )",
           "ToroSquad.Modules.Live": "[0.1.0-dev, )",
           "ToroSquad.Modules.Quote": "[0.1.0-dev, )",
+          "ToroSquad.Modules.Randomizer": "[0.1.0-dev, )",
           "ToroSquad.Modules.Volleyball": "[0.1.0-dev, )"
         }
       },
@@ -623,6 +624,13 @@
           "SixLabors.Fonts": "[2.1.3, )",
           "SixLabors.ImageSharp": "[3.1.12, )",
           "SixLabors.ImageSharp.Drawing": "[2.1.7, )",
+          "ToroSquad.Core": "[0.1.0-dev, )",
+          "ToroSquad.Discord": "[0.1.0-dev, )"
+        }
+      },
+      "torosquad.modules.randomizer": {
+        "type": "Project",
+        "dependencies": {
           "ToroSquad.Core": "[0.1.0-dev, )",
           "ToroSquad.Discord": "[0.1.0-dev, )"
         }

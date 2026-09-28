@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TSQ Randomizer: /zarat, /randomsayi, /sec and /yazitura — dice, a random number, a random pick and a coin flip, all
+       from one cryptographically secure source (RandomNumberGenerator, never System.Random). Stateless: no tables, no
+       migration, no background jobs, no HTTP, no configuration. Depends on the shared TSQ layers only (never on another
+       feature module). The Application namespace must not use the Discord SDK (architecture tests); only Commands talks to
+       Discord.Net. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Randomizer.Localization.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

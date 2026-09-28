@@ -11,6 +11,8 @@ message into a black-and-white quote card with `/quote` ([docs/quote/TSQ_QUOTE.m
 Günü** celebrates members' birthdays (day and month only) with one message and a role for the day
 ([docs/birthday/TSQ_BIRTHDAY.md](docs/birthday/TSQ_BIRTHDAY.md)). **TSQ Döviz & Altın** shows the current US dollar, euro
 and gram gold buy/sell prices with `/dolar`, `/euro` and `/altın` ([docs/currency/TSQ_CURRENCY.md](docs/currency/TSQ_CURRENCY.md)).
+**TSQ Randomizer** rolls dice, picks a number, picks one of your options and flips a coin with `/zarat`, `/randomsayi`,
+`/sec` and `/yazitura` ([docs/randomizer/TSQ_RANDOMIZER.md](docs/randomizer/TSQ_RANDOMIZER.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
 **BOT Greg** and reuses adapted portions of the open-source
@@ -53,6 +55,10 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   the primary source; TCMB's daily indicative rate (USD/EUR, labelled as such) and Trunçgil (gram gold) are fallbacks, then
   the last good price for up to 15 minutes, clearly marked. Fetched on demand only, cached in memory (60 s / 30 s,
   one shared fetch for concurrent requests); no API key, no own table, no price polling.
+- **TSQ Randomizer** (separate module, off by default): `/zarat zar:2d6` (1–20 dice, 2–10,000 sides; `2-6` works too),
+  `/randomsayi maksimum:100 [minimum:1]` (inclusive, ±1,000,000,000), `/sec seçenekler:"CS2, Valheim, WoW"` (2–25 distinct
+  options; `,` and `|` both separate, mixed too), `/yazitura`. Public result cards, private refusals for invalid input; every draw from
+  `RandomNumberGenerator` (never `System.Random`); option text is defused, nothing pings; stateless (nothing stored or logged).
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
@@ -82,6 +88,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Quote | `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
 | TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options; public answer, currency channel only) | everyone (module on) |
+| TSQ Randomizer | `/zarat zar:…`, `/randomsayi maksimum:… [minimum:…]`, `/sec seçenekler:…`, `/yazitura` (public answer) | everyone (module on) |
 | TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
@@ -185,6 +192,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Lfg` | TSQ LFG — Oyuncu Bul (generic group-finder listings: create/join/leave/close/expire, race-safe persistence, card sync) |
 | `ToroSquad.Modules.Quote` | TSQ Quote (`/quote`: message reference parsing, access checks, Discord text → plain text, ImageSharp card renderer with embedded fonts) |
 | `ToroSquad.Modules.Currency` | TSQ Döviz & Altın (`/dolar`, `/euro`, `/altın`: Altınkaynak / TCMB / Trunçgil parsers, dataset cache with single flight, last-known-good) |
+| `ToroSquad.Modules.Randomizer` | TSQ Randomizer (`/zarat`, `/randomsayi`, `/sec`, `/yazitura`: dice notation and option parsers, one secure random source) |
 | `ToroSquad.Modules.Birthday` | TSQ Doğum Günü (day + month registrations, restart-safe daily reconciliation: one announcement, temporary role) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |
