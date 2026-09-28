@@ -1,0 +1,21 @@
+{
+  "module.timezone.name": "TSQ Saat Dönüştürücü",
+  "module.timezone.description": "Türkiye saatini diğer saat dilimlerinde ve Discord zamanı olarak gösterir: /saat 21:00.",
+  "cmd.saat": "Türkiye saatini farklı saat dilimlerine çevirir.",
+  "cmd.saat.time": "Türkiye saati (bugün). Örn: 21:00 veya 9.30",
+  "timezone.title": "🕐 Saat Dönüştürücü",
+  "timezone.input": "Girilen saat",
+  "timezone.input.value": "`{0}` · {1} · {2}",
+  "timezone.zones": "Saat dilimleri",
+  "timezone.discord": "Discord zamanı",
+  "timezone.previous_day": "Önceki gün",
+  "timezone.next_day": "Sonraki gün",
+  "timezone.zone.turkey": "Türkiye",
+  "timezone.zone.uk": "Birleşik Krallık",
+  "timezone.zone.new_york": "New York",
+  "timezone.zone.chicago": "Chicago",
+  "timezone.zone.los_angeles": "Los Angeles",
+  "timezone.footer": "{0} tarafından istendi",
+  "timezone.invalid_time": "Geçerli bir saat girin. Örnek: `21:00`",
+  "timezone.unavailable": "Saat dilimi verisi şu an kullanılamıyor. Lütfen daha sonra tekrar deneyin."
+}

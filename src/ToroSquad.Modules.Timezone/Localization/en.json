@@ -1,0 +1,21 @@
+{
+  "module.timezone.name": "TSQ Time Converter",
+  "module.timezone.description": "Shows a time in Türkiye in other time zones and as a Discord timestamp: /saat 21:00.",
+  "cmd.saat": "Convert a time in Türkiye to other time zones",
+  "cmd.saat.time": "Time in Türkiye (today), e.g. 21:00 or 9.30",
+  "timezone.title": "🕐 Time Converter",
+  "timezone.input": "Entered time",
+  "timezone.input.value": "`{0}` · {1} · {2}",
+  "timezone.zones": "Time zones",
+  "timezone.discord": "Discord time",
+  "timezone.previous_day": "Previous day",
+  "timezone.next_day": "Next day",
+  "timezone.zone.turkey": "Türkiye",
+  "timezone.zone.uk": "United Kingdom",
+  "timezone.zone.new_york": "New York",
+  "timezone.zone.chicago": "Chicago",
+  "timezone.zone.los_angeles": "Los Angeles",
+  "timezone.footer": "Requested by {0}",
+  "timezone.invalid_time": "Enter a valid time. Example: `21:00`",
+  "timezone.unavailable": "Time zone data is not available right now. Please try again later."
+}

@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "4d7f1f180bad0749be389b1ea6d0fa4d046fe78102c9f0199243b53b7f492b7d",
+  "hash": "980d0f7b644aad55b02bab21d427a15095ef0bdc89b33a02c25647672ca9bbff",
   "commands": [
     {
       "module": "currency",
@@ -1754,6 +1754,38 @@
             "required": false,
             "min_value": -1000000000,
             "max_value": 1000000000
+          }
+        ]
+      }
+    },
+    {
+      "module": "timezone",
+      "payload": {
+        "type": 1,
+        "name": "saat",
+        "description": "Convert a time in Türkiye to other time zones",
+        "description_localizations": {
+          "tr": "Türkiye saatini farklı saat dilimlerine çevirir."
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 3,
+            "name": "time",
+            "description": "Time in Türkiye (today), e.g. 21:00 or 9.30",
+            "description_localizations": {
+              "tr": "Türkiye saati (bugün). Örn: 21:00 veya 9.30"
+            },
+            "required": true,
+            "min_length": 1,
+            "max_length": 10
           }
         ]
       }
