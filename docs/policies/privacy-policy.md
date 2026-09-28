@@ -15,6 +15,9 @@
   etiketlenirsiniz. Kendi kaydınızı `/birthday show` ile görürsünüz; sunucunun Administrator yetkili yöneticileri veya
   sunucu sahibi yalnızca sizin kaydınızı tek tek görebilir (`/birthday-admin show`, kayıt altına alınır). Doğum günlerinin
   toplu veya herkese açık bir listesi yoktur. `/birthday remove` veya `/privacy delete` ile silinir.
+- **Randomizer komutları** (`/zarat`, `/randomsayi`, `/sec`, `/yazitura`; TSQ Randomizer modülü açıksa): yazdığınız girdi
+  ve sunucudaki görünen adınız yalnızca o anki sonuç kartı için işlenir; sonuçlar, seçenek metinleri ve adınız saklanmaz ve
+  kayıt (log) dosyalarına yazılmaz.
 - **Okumadığımız veriler**: mesaj akışları, üye listeleri, çevrimiçi durum, profil bilgileri. Tek istisna `/quote`
   (TSQ Quote, modül açıksa): bir üye açıkça istediğinde yalnızca o tek mesajın metni ve yazarının görünen adı, kullanıcı
   adı ve profil fotoğrafı istek sırasında bir kez işlenir ve alıntı görseli olarak kanala gönderilir; mesaj içeriği ve

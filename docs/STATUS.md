@@ -163,6 +163,17 @@ invite link and no global command registration. The source code is public under 
 - **NOT VERIFIED_LIVE**: the commands in Discord (`/altın` registration with the Turkish ı, public defer → card, card
   rendering in clients, the private wrong-channel pointer), the first real 09:00 card and its delivery. `/dolar`, `/euro`, `/altın` are in the manifest but not synced.
 
+## TSQ Randomizer (new, 2026-09-28, branch `feat/randomizer-module`)
+
+- Scope and rules: [randomizer/TSQ_RANDOMIZER.md](randomizer/TSQ_RANDOMIZER.md). Stateless: no table, no migration, no
+  HTTP, no worker, no configuration. Off by default (`/modules enable randomizer`).
+- **IMPLEMENTED / TESTED_OFFLINE**: `/zarat` (`1-20`, `2d6`, 1–20 dice, 2–10,000 sides), `/randomsayi` (inclusive, default
+  minimum 1, ±1,000,000,000), `/sec` (comma or pipe, trim, case-insensitive dedupe, 2–25 options, 100 chars each),
+  `/yazitura` (0 → Yazı, 1 → Tura); one `RandomNumberGenerator` source; public cards, private refusals, no pings,
+  defused option text; `/help` and `/modules` through the manifest/registry.
+- **NOT VERIFIED_LIVE**: everything in Discord (command registration incl. the `seçenekler` option name with `ç`, card
+  rendering, private refusals). In the manifest but not synced.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.
