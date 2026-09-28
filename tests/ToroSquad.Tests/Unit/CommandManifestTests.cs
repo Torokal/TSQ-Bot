@@ -37,7 +37,7 @@ public sealed class CommandManifestTests
         Sub("live-admin").Should().BeEquivalentTo("doctor");
         Sub("lfg-admin").Should().BeEquivalentTo("channel", "status");
         Sub("birthday").Should().BeEquivalentTo("set", "show", "remove");
-        Sub("birthday-admin").Should().BeEquivalentTo("set", "configure", "status", "doctor");
+        Sub("birthday-admin").Should().BeEquivalentTo("set", "show", "configure", "status", "doctor");
     }
 
     [Fact]

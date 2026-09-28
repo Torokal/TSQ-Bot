@@ -11,16 +11,20 @@ namespace ToroSquad.Modules.Birthday.Application;
 
 /// <summary>
 /// /birthday set|show|remove work on the CALLER's own registration in the CALLER's guild — both come from the interaction,
-/// never from an option. The one exception is <see cref="SetForMemberAsync"/> (/birthday-admin set): it changes another
-/// member's day + month and requires Discord's Administrator permission (or guild ownership), not Manage Server. Both paths
-/// write the same unique (guild, user) registration. Self-service logs never contain the typed text or the date; the admin
-/// path logs day + month as an audit trail (never a year — there is none).
+/// never from an option. The only exceptions are <see cref="SetForMemberAsync"/> (/birthday-admin set) and
+/// <see cref="GetForMemberAsync"/> (/birthday-admin show): they change or read another member's day + month and require
+/// Discord's Administrator permission (or guild ownership), not Manage Server. Both set paths write the same unique
+/// (guild, user) registration. Self-service logs never contain the typed text or the date; the admin set logs day + month
+/// as an audit trail, the admin lookup logs who looked at whose record without the date (never a year — there is none).
 /// </summary>
 public sealed class BirthdayService(ToroDbContext db, TimeProvider clock, ILogger<BirthdayService> logger)
 {
     private const int SqliteConstraint = 19;
 
-    /// <summary>Changing someone else's personal data: Administrator only (<see cref="ActorContext.Has"/> also admits the guild owner).</summary>
+    /// <summary>
+    /// Reading or changing someone else's birthday: Administrator only (<see cref="ActorContext.Has"/> also admits the guild
+    /// owner). Used by /birthday-admin set and /birthday-admin show.
+    /// </summary>
     public const GuildPermission SetForMemberPermission = GuildPermission.Administrator;
 
     private DbSet<BirthdayRegistrationEntity> Registrations => db.Set<BirthdayRegistrationEntity>();
@@ -116,6 +120,25 @@ public sealed class BirthdayService(ToroDbContext db, TimeProvider clock, ILogge
         }
 
         return Change.Created;
+    }
+
+    /// <summary>
+    /// /birthday-admin show: another member's saved day + month. Same authorization as <see cref="SetForMemberAsync"/>
+    /// (Administrator or guild owner), checked before the database is read, so a refused caller learns nothing — not even
+    /// whether a registration exists. Only rows of <c>actor.GuildId</c> are read. Every lookup is audited (who looked at
+    /// whose record, and whether one existed); the day and month are not logged.
+    /// </summary>
+    public async Task<(OperationResult Result, BirthdayDate? Date)> GetForMemberAsync(ActorContext actor, UserId member, bool memberIsEligible, CancellationToken ct)
+    {
+        if (!Authorize.Require(actor, actor.GuildId, SetForMemberPermission).IsAllowed)
+            return (OperationResult.Fail(OperationError.Forbidden, "birthday.admin_set.forbidden"), null);
+        if (!memberIsEligible)
+            return (OperationResult.Fail(OperationError.InvalidInput, "birthday.admin_show.not_member"), null);
+
+        var row = await Registrations.AsNoTracking().FirstOrDefaultAsync(r => r.GuildId == actor.GuildId.Value && r.UserId == member.Value, ct);
+        var date = row is null ? null : BirthdayDate.Create(row.Day, row.Month);
+        logger.LogInformation("birthday_admin_viewed guild={Guild} admin={Admin} target={TargetUser} found={Found}", actor.GuildId, actor.UserId, member, date is not null);
+        return date is null ? (OperationResult.Ok("birthday.admin_show.none"), null) : (OperationResult.Ok("birthday.admin_show.value"), date);
     }
 
     public async Task<BirthdayDate?> GetAsync(ActorContext actor, CancellationToken ct)

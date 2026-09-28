@@ -702,6 +702,122 @@ public sealed class BirthdayTests
             Entries.Add((formatter(state, exception), state as IReadOnlyList<KeyValuePair<string, object?>> ?? []));
     }
 
+    // ---------- /birthday-admin show ----------
+
+    private static Task<(OperationResult Result, BirthdayDate? Date)> AdminShowAsync(TestHost host, ActorContext actor, ulong member, bool eligible = true) =>
+        host.InScopeAsync(sp => sp.GetRequiredService<BirthdayService>().GetForMemberAsync(actor, new UserId(member), eligible, Ct));
+
+    [Fact]
+    public async Task Administrator_and_guild_owner_see_a_members_saved_birthday_or_that_there_is_none()
+    {
+        await using var host = await HostAsync(March14.AddDays(-30));
+        await RegisterAsync(host, Alice, "14.03");
+
+        foreach (var actor in new[] { Administrator(), Owner() })
+        {
+            var (found, date) = await AdminShowAsync(host, actor, Alice);
+            found.Succeeded.Should().BeTrue();
+            found.MessageKey.Should().Be("birthday.admin_show.value");
+            date.Should().Be(BirthdayDate.Create(14, 3));
+
+            var (none, nothing) = await AdminShowAsync(host, actor, Bob);
+            none.Succeeded.Should().BeTrue();
+            none.MessageKey.Should().Be("birthday.admin_show.none");
+            nothing.Should().BeNull();
+        }
+
+        var catalog = ToroSquad.Tests.Unit.BirthdayDateTests.Localizer();
+        catalog.Get("tr", "birthday.admin_show.value", "<@11>", "14 Mart").Should().Be("🎂 <@11> kullanıcısının kayıtlı doğum günü: 14 Mart");
+        catalog.Get("tr", "birthday.admin_show.none", "<@22>").Should().Be("🎂 <@22> kullanıcısının kayıtlı bir doğum günü yok.");
+        (await RegistrationsAsync(host)).Should().ContainSingle("reading changes nothing");
+    }
+
+    [Fact]
+    public async Task Without_administrator_the_lookup_is_refused_before_the_database_and_reveals_nothing()
+    {
+        await using var host = await HostAsync(March14.AddDays(-30));
+        await RegisterAsync(host, Alice, "14.03"); // Bob has none
+        var manageServer = TestHost.Admin(Guild); // Manage Server + Manage Roles, no Administrator
+        var everythingElse = new ActorContext(Guild, new UserId(3), (GuildPermission)ulong.MaxValue & ~GuildPermission.Administrator, [], false, 99);
+        var logs = new CapturingLogger();
+
+        await host.InScopeAsync(async sp =>
+        {
+            var service = new BirthdayService(sp.GetRequiredService<ToroDbContext>(), host.Clock, logs);
+            foreach (var actor in new[] { manageServer, User(Cem), everythingElse })
+            {
+                var withRecord = await service.GetForMemberAsync(actor, new UserId(Alice), true, Ct);
+                var withoutRecord = await service.GetForMemberAsync(actor, new UserId(Bob), true, Ct);
+                var notMember = await service.GetForMemberAsync(actor, new UserId(Bob), false, Ct);
+                foreach (var (result, date) in new[] { withRecord, withoutRecord, notMember })
+                {
+                    result.Succeeded.Should().BeFalse();
+                    result.Error.Should().Be(OperationError.Forbidden);
+                    result.MessageKey.Should().Be("birthday.admin_set.forbidden", "the same Administrator message as /birthday-admin set");
+                    result.Args.Should().BeEmpty();
+                    date.Should().BeNull();
+                }
+            }
+        });
+
+        logs.Entries.Should().BeEmpty("a refused caller never reaches the lookup, so nothing is audited as viewed");
+    }
+
+    [Fact]
+    public async Task Admin_lookup_reads_only_this_guild_and_refuses_bots_and_non_members()
+    {
+        await using var host = await HostAsync(March14.AddDays(-30));
+        await SetUpGuildAsync(host, OtherGuild, OtherChannel);
+        await RegisterAsync(host, Alice, "20.07", OtherGuild);
+        await RegisterAsync(host, Bob, "14.03");
+        await RegisterAsync(host, Bob, "01.01", OtherGuild);
+
+        (await AdminShowAsync(host, Administrator(), Alice)).Result.MessageKey.Should().Be("birthday.admin_show.none", "Alice's record belongs to the other guild");
+        (await AdminShowAsync(host, Administrator(), Bob)).Date.Should().Be(BirthdayDate.Create(14, 3), "this guild's row, never the other guild's");
+
+        var (bot, date) = await AdminShowAsync(host, Administrator(), Bob, eligible: false);
+        bot.Error.Should().Be(OperationError.InvalidInput);
+        bot.MessageKey.Should().Be("birthday.admin_show.not_member");
+        date.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Member_show_stays_self_only()
+    {
+        await using var host = await HostAsync(March14.AddDays(-30));
+        await RegisterAsync(host, Alice, "14.03");
+
+        (await host.InScopeAsync(sp => sp.GetRequiredService<BirthdayService>().GetAsync(User(Bob), Ct))).Should().BeNull("Bob only ever sees his own");
+        (await host.InScopeAsync(sp => sp.GetRequiredService<BirthdayService>().GetAsync(User(Alice), Ct))).Should().Be(BirthdayDate.Create(14, 3));
+        typeof(BirthdayService).GetMethod(nameof(BirthdayService.GetAsync))!.GetParameters().Select(p => p.ParameterType)
+            .Should().Equal([typeof(ActorContext), typeof(CancellationToken)], "no target parameter: the caller is the target");
+    }
+
+    [Fact]
+    public async Task Admin_lookup_is_audited_with_admin_and_target_but_never_the_date()
+    {
+        await using var host = await HostAsync(March14.AddDays(-30));
+        await RegisterAsync(host, Alice, "14.03");
+        var logs = new CapturingLogger();
+        await host.InScopeAsync(async sp =>
+        {
+            var service = new BirthdayService(sp.GetRequiredService<ToroDbContext>(), host.Clock, logs);
+            await service.GetForMemberAsync(Administrator(1), new UserId(Alice), true, Ct);
+            await service.GetForMemberAsync(Owner(2), new UserId(Bob), true, Ct);
+        });
+
+        logs.Entries.Should().HaveCount(2);
+        logs.Entries[0].Message.Should().Be("birthday_admin_viewed guild=900 admin=1 target=11 found=True");
+        logs.Entries[0].Values.Should().Contain(new KeyValuePair<string, object?>("Guild", Guild))
+            .And.Contain(new KeyValuePair<string, object?>("Admin", new UserId(1)))
+            .And.Contain(new KeyValuePair<string, object?>("TargetUser", new UserId(Alice)))
+            .And.Contain(new KeyValuePair<string, object?>("Found", true));
+        logs.Entries[1].Message.Should().Be("birthday_admin_viewed guild=900 admin=2 target=22 found=False");
+        logs.Entries.SelectMany(e => e.Values).Select(v => v.Key).Should().NotContain(["Day", "Month", "Date"]);
+        logs.Entries.Should().NotContain(e => e.Message.Contains("14.03", StringComparison.Ordinal) || e.Message.Contains("Mart", StringComparison.Ordinal)
+                                               || e.Message.Contains("day=", StringComparison.Ordinal) || e.Message.Contains("month=", StringComparison.Ordinal));
+    }
+
     // ---------- isolation and privacy ----------
 
     [Fact]

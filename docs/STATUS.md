@@ -133,10 +133,13 @@ invite link and no global command registration. The source code is public under 
 - **Delta (2026-09-28)**: `/birthday-admin set member date` (Administrator or guild owner via `Authorize.Require`; Manage
   Server is not enough; same registration row and date rules; audit log `source=admin`); the announcement now pings
   exactly the celebrants it names (`MentionPolicy.ExplicitUsers`, second and last user-ping producer besides LFG).
+- **Delta (2026-09-28, branch `feat/birthday-admin-show`)**: `/birthday-admin show member` — one member's saved day + month
+  for an Administrator or the guild owner (same check as `set`, before the database is read; Manage Server refused),
+  private and ping-free, audit log `birthday_admin_viewed` without the date. No list, no new data.
 - `IGuildGateway.GetMemberAsync` (REST member lookup) added for the member check and the member's current roles.
 - **NOT VERIFIED_LIVE**: everything (announcement and its user pings in Discord, `/birthday-admin set` with a real
   Administrator / owner / Manage-Server-only account, role grant/removal and the real hierarchy on TSQ, REST member lookup,
-  midnight run on Railway). Off by default; commands in the manifest but not synced.
+  midnight run on Railway). Off by default. Deployed and synced 2026-09-28 (PR #19, #20); `show` needs a new sync.
 
 ## What has been verified against real Discord / real APIs
 

@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "004b08ee66d94ee33fe853934dc0265bfd937639d45107695df643f440ba7e80",
+  "hash": "7760538718f1ce32bd9eaa20da923bbfbf76e0692c2016f4f54ee125170acf6e",
   "commands": [
     {
       "module": "birthday",
@@ -99,6 +99,25 @@
                 "description": "Day and month: 14.03, 14/03 or 14-03 (no year)",
                 "description_localizations": {
                   "tr": "Gün ve ay: 14.03, 14/03 veya 14-03 (yıl yok)"
+                },
+                "required": true
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "show",
+            "description": "Show a member's saved birthday (Administrator only)",
+            "description_localizations": {
+              "tr": "Bir üyenin kayıtlı doğum gününü göster (yalnızca Yönetici/Administrator)"
+            },
+            "options": [
+              {
+                "type": 6,
+                "name": "member",
+                "description": "Member whose birthday you want to see",
+                "description_localizations": {
+                  "tr": "Doğum günü gösterilecek üye"
                 },
                 "required": true
               }

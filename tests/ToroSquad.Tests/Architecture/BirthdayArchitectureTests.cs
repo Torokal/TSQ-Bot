@@ -90,6 +90,36 @@ public sealed partial class BirthdayArchitectureTests
     }
 
     [Fact]
+    public void Admin_show_answers_privately_without_pings_and_shares_the_set_authorization_and_member_check()
+    {
+        var commands = File.ReadAllText(Path.Combine(Root(), "Commands", "BirthdayAdminCommands.cs"));
+        var start = commands.IndexOf("public async Task ShowAsync(", StringComparison.Ordinal);
+        start.Should().BePositive();
+        var body = commands[start..commands.IndexOf("private bool IsHumanMemberHere", start, StringComparison.Ordinal)];
+        // Only the base class's private, ping-free replies; no public answer, no allowed_mentions of its own.
+        Regex.Matches(body, @"\b(\w+Async)\(").Select(m => m.Groups[1].Value).Distinct()
+            .Should().BeEquivalentTo("ShowAsync", "DeferEphemeralAsync", "GetForMemberAsync", "ReplyResultAsync", "ReplyTextAsync", "DateTextAsync");
+        body.Should().NotContain("ephemeral: false").And.NotContain("AllowedMentions").And.NotContain("MentionPolicy");
+        body.Should().Contain("IsHumanMemberHere(member)");
+        commands.Should().Contain("birthdays.SetForMemberAsync(Actor, new UserId(member.Id), IsHumanMemberHere(member)", "set and show share the member check");
+
+        // The base class: ReplyTextAsync -> SendEphemeralAsync -> ephemeral, allowed_mentions = none.
+        var baseClass = File.ReadAllText(Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Discord", "Interactions", "ToroInteractionModule.cs")).ReplaceLineEndings("\n");
+        baseClass.Should().Contain("protected async Task ReplyTextAsync(string key, params object?[] args) =>\n        await SendEphemeralAsync(")
+            .And.Contain("SendAsync(text, embed, components, ephemeral: true)")
+            .And.Contain("var none = DiscordConversions.ToAllowedMentions(MentionPolicy.None);");
+        var none = ToroSquad.Discord.Transport.DiscordConversions.ToAllowedMentions(ToroSquad.Core.Messaging.MentionPolicy.None);
+        none.AllowedTypes.Should().Be(global::Discord.AllowedMentionTypes.None);
+        none.UserIds.Should().BeNullOrEmpty();
+        none.RoleIds.Should().BeNullOrEmpty();
+
+        var service = File.ReadAllText(Path.Combine(Root(), "Application", "BirthdayService.cs"));
+        var lookup = service[service.IndexOf("public async Task<(OperationResult Result, BirthdayDate? Date)> GetForMemberAsync(", StringComparison.Ordinal)..];
+        lookup.IndexOf("Authorize.Require(actor, actor.GuildId, SetForMemberPermission)", StringComparison.Ordinal)
+            .Should().BeLessThan(lookup.IndexOf("Registrations.", StringComparison.Ordinal), "authorization before any database read");
+    }
+
+    [Fact]
     public void No_year_or_birth_date_is_stored()
     {
         var registration = typeof(BirthdayRegistrationEntity).GetProperties().Select(p => p.Name);

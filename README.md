@@ -73,7 +73,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
 | TSQ Quote | `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
-| TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set member date` | Manage Server; `set`: Administrator or server owner |
+| TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
 [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md). The generated, test-checked schema is

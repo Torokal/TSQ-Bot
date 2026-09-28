@@ -13,12 +13,14 @@ Her sunucuda varsayılan kapalıdır (`/modules enable birthday`).
 | `/birthday show` | herkes | Yalnızca kendi kaydını gösterir |
 | `/birthday remove` | herkes | Kendi kaydını siler; o gün botun verdiği rol bir sonraki turda geri alınır |
 | `/birthday-admin set member:@üye date:14.03` | **Administrator** veya sunucu sahibi | Başka bir üyenin gün + ayını oluşturur/günceller (aynı `(sunucu, kullanıcı)` kaydı, aynı tarih kuralları). Manage Server yetmez. Hedef bu sunucunun insan üyesi olmalı |
+| `/birthday-admin show member:@üye` | **Administrator** veya sunucu sahibi | Tek bir üyenin kayıtlı gün + ayını gösterir ("🎂 @X kullanıcısının kayıtlı doğum günü: 14 Mart" / "… kayıtlı bir doğum günü yok."). Yetki DB okunmadan önce denetlenir; yetkisiz kişi kayıt olup olmadığını bile öğrenemez. Her bakış denetim logudur (tarih loglanmaz). Hedef bu sunucunun insan üyesi olmalı |
 | `/birthday-admin configure channel:` | Manage Server | Duyuru kanalı (bu sunucuda, botun görebildiği metin kanalı; tahmin edilmez) |
 | `/birthday-admin status` | Manage Server | Modül, kanal, rol ID, saat dilimi ve bugünün tarihi, kayıt sayısı, bugünkü kutlama sayısı ve duyuru durumu, aktif/sorunlu rol sayısı, zamanlayıcı |
 | `/birthday-admin doctor` | Manage Server | Yapılandırma, modül, veritabanı, kanal (var mı, görme, mesaj gönderme), rol (var mı, Rolleri Yönet, **hiyerarşi**, yönetilen rol, ek izin), zamanlayıcı, gönderim modu |
 
-Tüm cevaplar ephemeral ve ping'siz. Başkasının doğum gününü gösteren komut ve liste **yoktur**; değiştiren tek yol
-`/birthday-admin set`. Discord bir alt komutu ayrı gizleyemediği için `set` Manage Server sahiplerine de görünür; yetki
+Tüm cevaplar ephemeral ve ping'siz. Toplu/herkese açık doğum günü listesi **yoktur**. Başkasının kaydını yalnızca
+`/birthday-admin show` (tek üye, okuma) ve `/birthday-admin set` (yazma) görür/değiştirir. Discord bir alt komutu ayrı
+gizleyemediği için `set` ve `show` Manage Server sahiplerine de görünür; yetki
 sunucu tarafında çağıranın gerçek izinlerinden denetlenir (`Authorize.Require(..., Administrator)`; `ActorContext.Has`
 sunucu sahibini de kabul eder = `user.Id == guild.OwnerId || Administrator`; rol adına bakılmaz). Yetkisiz çağrı hiçbir şey
 yazmaz: "❌ Bu işlem için Yönetici (Administrator) yetkisine sahip olmalısınız." Bugünün tarihine yapılan admin-set normal
@@ -87,7 +89,8 @@ Rol ID yapılandırmadır: `Birthday:RoleId` (varsayılan `1553890408348520468`;
 kişi sayısı, durum), `birthday_guild_config` (kanal, kanal sorunu). Migration yalnızca yeni tablo/indeks ekler. Kutlamalar
 geçen yıldan eskiyse, duyurular 30 günden eskiyse, modülün outbox satırları (mention ID'leri içerir) teslimden 2 gün sonra
 silinir. Loglarda kullanıcı ID'si bulunur; üyenin kendi kaydında girilen metin ve tarih loglanmaz (`source=self`). Admin-set
-denetim izi için `source=admin admin=<id> user=<id> day month` loglar (yıl yok).
+denetim izi için `source=admin admin=<id> user=<id> day month` loglar (yıl yok). Admin-show
+`birthday_admin_viewed guild admin target found` loglar; gün/ay loglanmaz.
 
 Log olayları: `birthday_registered`, `birthday_updated`, `birthday_removed`, `birthday_detected`,
 `birthday_member_missing`, `birthday_announcement_queued|sent|skipped|failed`, `birthday_role_assigned`,

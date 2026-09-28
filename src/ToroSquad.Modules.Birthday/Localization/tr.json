@@ -32,6 +32,9 @@
   "birthday.admin_set.unchanged": "🎂 {0} kullanıcısının doğum günü zaten {1} olarak kayıtlı.",
   "birthday.admin_set.forbidden": "❌ Bu işlem için Yönetici (Administrator) yetkisine sahip olmalısınız.",
   "birthday.admin_set.not_member": "❌ Bu kişi bu sunucunun üyesi değil ya da bir bot; doğum günü kaydedilemez.",
+  "birthday.admin_show.value": "🎂 {0} kullanıcısının kayıtlı doğum günü: {1}",
+  "birthday.admin_show.none": "🎂 {0} kullanıcısının kayıtlı bir doğum günü yok.",
+  "birthday.admin_show.not_member": "❌ Bu kişi bu sunucunun üyesi değil ya da bir bot.",
   "birthday.config.channel_invalid": "Bu kanal kullanılamıyor: bu sunucuda, botun görebildiği bir metin kanalı olmalı.",
   "birthday.config.saved": "Doğum günü duyuruları artık {0} kanalına gönderilecek.",
   "birthday.config.saved_missing_permissions": "Kaydedildi: {0}. Uyarı: botun bu kanalda eksik izni var ({1}); duyurular gönderilemez.",
@@ -123,6 +126,8 @@
   "cmd.birthday-admin.set": "Bir üyenin doğum gününü ayarla (yalnızca Yönetici/Administrator)",
   "cmd.birthday-admin.set.member": "Doğum günü ayarlanacak üye",
   "cmd.birthday-admin.set.date": "Gün ve ay: 14.03, 14/03 veya 14-03 (yıl yok)",
+  "cmd.birthday-admin.show": "Bir üyenin kayıtlı doğum gününü göster (yalnızca Yönetici/Administrator)",
+  "cmd.birthday-admin.show.member": "Doğum günü gösterilecek üye",
   "cmd.birthday-admin.status": "Doğum günü modülü ayarları ve bugünün durumu",
   "cmd.birthday-admin.doctor": "Kanal, rol hiyerarşisi, izinler, veritabanı ve zamanlayıcı kontrolü"
 }
