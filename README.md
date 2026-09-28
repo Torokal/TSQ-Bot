@@ -57,7 +57,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   one shared fetch for concurrent requests); no API key, no own table, no price polling.
 - **TSQ Randomizer** (separate module, off by default): `/zarat zar:2d6` (1–20 dice, 2–10,000 sides; `2-6` works too),
   `/randomsayi maksimum:100 [minimum:1]` (inclusive, ±1,000,000,000), `/sec seçenekler:"CS2, Valheim, WoW"` (2–25 distinct
-  options; `|` also separates), `/yazitura`. Public result cards, private refusals for invalid input; every draw from
+  options; `,` and `|` both separate, mixed too), `/yazitura`. Public result cards, private refusals for invalid input; every draw from
   `RandomNumberGenerator` (never `System.Random`); option text is defused, nothing pings; stateless (nothing stored or logged).
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message

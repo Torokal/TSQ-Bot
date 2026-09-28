@@ -23,10 +23,12 @@ Kart düzeni dördünde aynıdır (TSQ turuncu kart rengi, emoji'li başlık, k�
 🎲 2d6 atıldı
 Zarlar: `4` `6`
 Toplam: 10
-Toro tarafından atıldı
+Hasom tarafından atıldı
 ```
 
-Altbilgideki ad, üyenin bu sunucudaki görünen adıdır (takma ad → global ad → kullanıcı adı); düz metindir, mention değildir.
+Altbilgideki ad, komutu kim çalıştırdıysa onun bu sunucudaki görünen adıdır (Discord.Net `IGuildUser.DisplayName`: takma ad →
+global ad → kullanıcı adı; TSQ Quote ile aynı sıra) — sabit bir ad yoktur. Düz metindir (`DiscordText.UntrustedPlain`):
+mention, `@everyone`/`@here` ve bağlantı oluşturmaz.
 
 ## `/zarat`
 
@@ -51,8 +53,8 @@ Altbilgideki ad, üyenin bu sunucudaki görünen adıdır (takma ad → global a
 
 ## `/sec`
 
-- Ayırıcı: **virgül** (`CS2, Valheim, WoW`). Girdide `|` varsa **yalnızca `|`** ayırıcıdır ve virgüller seçeneğin
-  parçasıdır (`Pizza, kola | Burger` → 2 seçenek). Tek, deterministik kural; tahmin yok.
+- Ayırıcılar: **virgül** ve **`|`** — ikisi de her zaman ve aynı girdide birlikte geçerlidir. `CS2, Valheim, WoW`,
+  `CS2 | Valheim | WoW` ve `CS2, Valheim | WoW` aynı üç seçeneği verir; `A|||B,,C` → A, B, C.
 - Her seçenek kırpılır, içteki boşluklar (satır sonları dahil) tek boşluğa indirilir — bir seçenek birden çok satıra
   yayılamaz. Boş girdiler atlanır (`CS2,,Valheim` → 2 seçenek).
 - Yinelenen seçenekler **bir kez** sayılır, büyük/küçük harf duyarsız (`CS2, cs2, Valheim` → `CS2`, `Valheim`); ilk yazım

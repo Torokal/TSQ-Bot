@@ -117,7 +117,7 @@ Ayrıntı: [currency/TSQ_CURRENCY.md](currency/TSQ_CURRENCY.md).
 |---|---|
 | `/zarat zar:<girdi>` | Herkes: `1-20`, `2-6`, `2d6` (1–20 zar, 2–10.000 yüz) — zarları ve toplamı **herkese açık** kartla gösterir |
 | `/randomsayi maksimum:<sayı> [minimum:<sayı>]` | Herkes: iki ucu dahil rastgele sayı (`minimum` varsayılan 1; negatif olabilir; ±1.000.000.000) |
-| `/sec seçenekler:<metin>` | Herkes: virgülle (veya `\|` ile) ayrılmış 2–25 farklı seçenekten birini seçer; seçenek metni mention/markdown olarak görüntülenmez |
+| `/sec seçenekler:<metin>` | Herkes: virgül ve/veya `\|` ile (karışık da olur) ayrılmış 2–25 farklı seçenekten birini seçer; seçenek metni mention/markdown olarak görüntülenmez |
 | `/yazitura` | Herkes: YAZI veya TURA |
 
 Sonuçlar herkese açık, geçersiz girdi uyarıları yalnızca kullanana görünür (ephemeral); hiçbir cevap ping atmaz. Bot izni

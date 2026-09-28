@@ -168,7 +168,7 @@ invite link and no global command registration. The source code is public under 
 - Scope and rules: [randomizer/TSQ_RANDOMIZER.md](randomizer/TSQ_RANDOMIZER.md). Stateless: no table, no migration, no
   HTTP, no worker, no configuration. Off by default (`/modules enable randomizer`).
 - **IMPLEMENTED / TESTED_OFFLINE**: `/zarat` (`1-20`, `2d6`, 1–20 dice, 2–10,000 sides), `/randomsayi` (inclusive, default
-  minimum 1, ±1,000,000,000), `/sec` (comma or pipe, trim, case-insensitive dedupe, 2–25 options, 100 chars each),
+  minimum 1, ±1,000,000,000), `/sec` (comma and/or pipe, trim, case-insensitive dedupe, 2–25 options, 100 chars each),
   `/yazitura` (0 → Yazı, 1 → Tura); one `RandomNumberGenerator` source; public cards, private refusals, no pings,
   defused option text; `/help` and `/modules` through the manifest/registry.
 - **NOT VERIFIED_LIVE**: everything in Discord (command registration incl. the `seçenekler` option name with `ç`, card
