@@ -12,7 +12,9 @@ Günü** celebrates members' birthdays (day and month only) with one message and
 ([docs/birthday/TSQ_BIRTHDAY.md](docs/birthday/TSQ_BIRTHDAY.md)). **TSQ Döviz & Altın** shows the current US dollar, euro
 and gram gold buy/sell prices with `/dolar`, `/euro` and `/altın` ([docs/currency/TSQ_CURRENCY.md](docs/currency/TSQ_CURRENCY.md)).
 **TSQ Randomizer** rolls dice, picks a number, picks one of your options and flips a coin with `/zarat`, `/randomsayi`,
-`/sec` and `/yazitura` ([docs/randomizer/TSQ_RANDOMIZER.md](docs/randomizer/TSQ_RANDOMIZER.md)).
+`/sec` and `/yazitura` ([docs/randomizer/TSQ_RANDOMIZER.md](docs/randomizer/TSQ_RANDOMIZER.md)). **TSQ Çekiliş** runs reaction
+giveaways: `/giveaway create` opens a form, members enter with 🎉, winners are drawn automatically
+([docs/giveaway/TSQ_GIVEAWAY.md](docs/giveaway/TSQ_GIVEAWAY.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
 **BOT Greg** and reuses adapted portions of the open-source
@@ -59,6 +61,11 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   `/randomsayi maksimum:100 [minimum:1]` (inclusive, ±1,000,000,000), `/sec seçenekler:"CS2, Valheim, WoW"` (2–25 distinct
   options; `,` and `|` both separate, mixed too), `/yazitura`. Public result cards, private refusals for invalid input; every draw from
   `RandomNumberGenerator` (never `System.Random`); option text is defused, nothing pings; stateless (nothing stored or logged).
+- **TSQ Çekiliş** (separate module, off by default): `/giveaway create` opens a form (prize, duration such as `30m`/`2h`/`1d 12h`,
+  1–10 winners, optional description); the bot posts the card and adds 🎉, members enter with Discord's own 🎉 reaction, and
+  when the time is up the bot reads every reaction page, draws unique non-bot members and turns the same card into the
+  result with one short message that pings only the winners. `/giveaway end|cancel|reroll` for admins (reroll leaves
+  earlier winners out). Restart-safe (stored giveaways, one worker loop) and race-safe (drawn at most once).
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
@@ -89,6 +96,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
 | TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options; public answer, currency channel only) | everyone (module on) |
 | TSQ Randomizer | `/zarat zar:…`, `/randomsayi maksimum:… [minimum:…]`, `/sec seçenekler:…`, `/yazitura` (public answer) | everyone (module on) |
+| TSQ Çekiliş | `/giveaway create` (form → card → 🎉 → automatic draw), `/giveaway end\|cancel\|reroll giveaway:<#number \| message link \| id>` | Manage Server (module on); entering: everyone, with 🎉 |
 | TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
@@ -193,6 +201,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Quote` | TSQ Quote (`/quote`: message reference parsing, access checks, Discord text → plain text, ImageSharp card renderer with embedded fonts) |
 | `ToroSquad.Modules.Currency` | TSQ Döviz & Altın (`/dolar`, `/euro`, `/altın`: Altınkaynak / TCMB / Trunçgil parsers, dataset cache with single flight, last-known-good) |
 | `ToroSquad.Modules.Randomizer` | TSQ Randomizer (`/zarat`, `/randomsayi`, `/sec`, `/yazitura`: dice notation and option parsers, one secure random source) |
+| `ToroSquad.Modules.Giveaway` | TSQ Çekiliş (`/giveaway`: form and duration parser, restart-safe draw worker, paged 🎉 reaction reading, unbiased winner draw, card sync, winner announcement via the outbox) |
 | `ToroSquad.Modules.Birthday` | TSQ Doğum Günü (day + month registrations, restart-safe daily reconciliation: one announcement, temporary role) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |

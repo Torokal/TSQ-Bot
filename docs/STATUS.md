@@ -191,6 +191,21 @@ invite link and no global command registration. The source code is public under 
 - **NOT VERIFIED_LIVE**: everything in Discord (registration, card rendering, the Linux zone data in the Railway
   container). In the manifest but not synced.
 
+## TSQ Çekiliş (new, 2026-09-29, branch `feat/giveaway-module`)
+
+- Module `giveaway`, command `/giveaway create|end|cancel|reroll` (Manage Server). Tables `giveaway` and
+  `giveaway_winner` (additive migration `GiveawayModule`), worker `GiveawayWorker` (~30 s). Off by default
+  (`/modules enable giveaway`).
+- **IMPLEMENTED / TESTED_OFFLINE**: form validation (duration `30m`/`2h`/`1d 12h`/`30dk`/`2s`/`1g`, 1 min–30 days;
+  1–10 winners; prize ≤ 100, description ≤ 500), channel permission precheck, card post incl. ambiguous-send reconciliation,
+  bot 🎉; draw from all reaction pages (contract test with 237 users over 3 pages), bots/duplicates/removed reactions
+  excluded, members who left skipped, unbiased partial Fisher–Yates; result card edit, winner-only ping via the outbox;
+  end/cancel/reroll (earlier winners excluded, fallbacks), restart catch-up, draw-once under worker/end/cancel races,
+  backoff when Discord cannot be read, orphaning of deleted cards, privacy export/delete.
+- **NOT VERIFIED_LIVE**: everything in Discord (command registration, modal, 🎉 on the card, reading real reactions,
+  edits, the winner ping). The bot role needs **Add Reactions** (not in the 84992 invite integer). In the manifest but not
+  synced; not merged, not deployed.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.
