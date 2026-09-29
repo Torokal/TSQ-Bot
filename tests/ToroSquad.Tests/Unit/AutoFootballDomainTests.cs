@@ -27,7 +27,43 @@ public sealed class AutoFootballDomainTests
     [InlineData("FENERBAHÇE SK", "FB")]
     [InlineData("Besiktas JK", "BJK")]
     [InlineData("Beşiktaş", "BJK")]
-    public void The_three_clubs_match_by_their_exact_known_names(string name, string code) => TrackedTeams.Match(name)!.Code.Should().Be(code);
+    public void The_three_clubs_match_by_their_exact_known_names(string name, string code)
+    {
+        TrackedTeams.Match(name, TeamScope.Club)!.Code.Should().Be(code);
+        TrackedTeams.Match(name, TeamScope.National).Should().BeNull("a club is never a national team");
+    }
+
+    [Theory]
+    [InlineData("Turkey")]
+    [InlineData("Türkiye")]
+    [InlineData("Turkiye")]
+    [InlineData("  TURKEY ")]
+    public void The_turkiye_mens_senior_team_matches_only_in_national_competitions(string name)
+    {
+        var team = TrackedTeams.Match(name, TeamScope.National)!;
+        (team.Code, team.DisplayName, team.Scope).Should().Be(("TR", "Türkiye", TeamScope.National));
+        TrackedTeams.Match(name, TeamScope.Club).Should().BeNull("\"Turkey\" is never a club: no country filter for Turkish clubs");
+    }
+
+    [Theory]
+    [InlineData("Turkey U21")]
+    [InlineData("Turkey U19")]
+    [InlineData("Turkey Women")]
+    [InlineData("Turkey W")]
+    [InlineData("Türkiye Futsal")]
+    [InlineData("Turkey Beach Soccer")]
+    [InlineData("Turkey Olympic")]
+    [InlineData("Turk")]
+    [InlineData("Kazakhstan")]
+    public void Youth_women_futsal_beach_and_similar_national_names_never_match(string name) => TrackedTeams.Match(name, TeamScope.National).Should().BeNull();
+
+    [Fact]
+    public void The_followed_teams_are_defined_in_one_place_with_unique_codes()
+    {
+        TrackedTeams.All.Select(t => t.Code).Should().Equal("GS", "FB", "BJK", "TR");
+        TrackedTeams.All.Select(t => t.Code).Should().OnlyHaveUniqueItems();
+        TrackedTeams.All.Count(t => t.Scope == TeamScope.National).Should().Be(1);
+    }
 
     [Theory]
     [InlineData("Fenerbahce U19")]
@@ -40,7 +76,7 @@ public sealed class AutoFootballDomainTests
     [InlineData("Fenerbahçe Beko")]
     [InlineData("")]
     [InlineData(null)]
-    public void Similar_youth_women_other_sports_and_partial_names_never_match(string? name) => TrackedTeams.Match(name).Should().BeNull();
+    public void Similar_youth_women_other_sports_and_partial_names_never_match(string? name) => TrackedTeams.Match(name, TeamScope.Club).Should().BeNull();
 
     // ---- the schedule (Europe/Istanbul, whatever the machine's zone) ----
 
@@ -182,6 +218,33 @@ public sealed class AutoFootballDomainTests
     }
 
     [Fact]
+    public void A_set_of_a_bookmaker_whose_rule_is_not_verified_is_never_chosen_but_is_reported()
+    {
+        var match = Match(Book("pinnacle", 1.8m, 3.3m, 4.0m), Book("onexbet", 1.85m, 3.4m, 4.2m));
+        var none = OddsSelector.Choose(match, Priority, [], Now, TimeSpan.FromMinutes(30));
+        (none.Odds, none.Reason, none.Unapproved!.BookmakerKey).Should().Be(((SelectedOdds?)null, AutoBlockReason.MarketRuleUnverified, "pinnacle"),
+            "valid data rejected by OUR rule — not \"no odds\"");
+        var onlyMarathon = OddsSelector.Choose(match, Priority, ["marathonbet"], Now, TimeSpan.FromMinutes(30));
+        (onlyMarathon.Odds, onlyMarathon.Reason).Should().Be(((SelectedOdds?)null, AutoBlockReason.BookmakerNotApproved));
+        OddsSelector.Choose(match, Priority, ["onexbet"], Now, TimeSpan.FromMinutes(30)).Odds!.BookmakerKey.Should().Be("onexbet", "the first APPROVED bookmaker");
+        AutoBlockCodes.Code(AutoBlockReason.MarketRuleUnverified).Should().Be("MARKET_RULE_UNVERIFIED");
+        AutoBlockCodes.Code(AutoBlockReason.BookmakerNotApproved).Should().Be("BOOKMAKER_NOT_APPROVED");
+    }
+
+    [Fact]
+    public void Club_and_national_competitions_are_allow_listed_match_keys_never_outrights()
+    {
+        AutoFootballOptions.NationalCompetitions.Should().Equal("soccer_uefa_nations_league", "soccer_uefa_euro_qualification", "soccer_uefa_european_championship",
+            "soccer_fifa_world_cup_qualifiers_europe", "soccer_fifa_world_cup");
+        AutoFootballOptions.NationalCompetitions.Should().OnlyContain(k => AutoFootballOptions.ScopeOf(k) == TeamScope.National);
+        AutoFootballOptions.ClubCompetitions.Should().OnlyContain(k => AutoFootballOptions.ScopeOf(k) == TeamScope.Club);
+        AutoFootballOptions.KnownCompetitions.Should().NotContain(k => k.EndsWith("_winner", StringComparison.Ordinal) || k.Contains("friendl", StringComparison.Ordinal));
+        AutoFootballOptions.ScopeOf("soccer_fifa_world_cup_winner").Should().BeNull();
+        new AutoFootballOptions { CompetitionKeys = ["soccer_fifa_world_cup_winner"] }.Problems().Should().NotBeEmpty();
+        new AutoFootballOptions { CompetitionKeys = ["soccer_uefa_nations_league"] }.Problems().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Stale_future_or_missing_market_times_are_refused()
     {
         var maxAge = TimeSpan.FromMinutes(30);
@@ -237,8 +300,8 @@ public sealed class AutoFootballDomainTests
         var o = new AutoFootballOptions();
         o.Problems().Should().BeEmpty();
         o.ParsedMode.Should().Be(AutomationMode.Disabled);
-        o.Competitions.Should().Equal("soccer_turkey_super_league", "soccer_uefa_champs_league", "soccer_uefa_champs_league_qualification",
-            "soccer_uefa_europa_league", "soccer_uefa_europa_conference_league");
+        o.Competitions.Should().Equal(AutoFootballOptions.KnownCompetitions);
+        o.Competitions.Should().HaveCount(10);
         o.Bookmakers.Should().NotContain(b => AutoFootballOptions.IsExchange(b));
         o.Timing()!.PublishLocalTime.Should().Be(new TimeOnly(9, 0));
         typeof(AutoFootballOptions).GetProperties().Select(p => p.Name).Should().NotContain(n => n.Contains("Key", StringComparison.Ordinal) && n != nameof(AutoFootballOptions.CompetitionKeys),

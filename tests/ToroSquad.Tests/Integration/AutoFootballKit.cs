@@ -18,6 +18,9 @@ public sealed class FakeFootballOdds : IFootballOddsProvider
 {
     public const string SuperLig = "soccer_turkey_super_league";
     public const string Europa = "soccer_uefa_europa_league";
+    public const string NationsLeague = "soccer_uefa_nations_league";
+    public const string WorldCupQualifiers = "soccer_fifa_world_cup_qualifiers_europe";
+    public const string Euro = "soccer_uefa_european_championship";
 
     private readonly Lock _lock = new();
 
@@ -25,6 +28,12 @@ public sealed class FakeFootballOdds : IFootballOddsProvider
     public bool IsConfigured { get; set; } = true;
     public TimeProvider? Clock { get; set; }
     public HashSet<string> Active { get; } = [.. AutoFootballOptions.KnownCompetitions];
+
+    /// <summary>Catalog entries that are outright ("who wins") markets, listed with has_outrights.</summary>
+    public HashSet<string> Outrights { get; } = ["soccer_fifa_world_cup_winner"];
+
+    /// <summary>Malformed items the next events answers report as dropped (a partial list).</summary>
+    public int DroppedEvents { get; set; }
     public Dictionary<string, List<ProviderEvent>> Events { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, (decimal Home, decimal Draw, decimal Away, string Bookmaker, TimeSpan Age)> Prices { get; } = new(StringComparer.Ordinal);
     public int Remaining { get; set; } = 400;
@@ -61,12 +70,13 @@ public sealed class FakeFootballOdds : IFootballOddsProvider
 
     private ProviderQuota Quota(int last) => OmitUsageHeaders ? ProviderQuota.None : new ProviderQuota(Remaining, 500 - Remaining, last);
 
-    public Task<ProviderCall<IReadOnlyList<ProviderSport>>> GetSportsAsync(CancellationToken cancellationToken)
+    public Task<ProviderCall<IReadOnlyList<ProviderSport>>> GetSportsAsync(bool includeInactive, CancellationToken cancellationToken)
     {
-        Record("sports");
+        Record("sports" + (includeInactive ? ":all" : ""));
         if (FailEverything is { } fail)
             return Task.FromResult(new ProviderCall<IReadOnlyList<ProviderSport>>(fail, null, Quota(0), RetryAfter: RetryAfter));
-        IReadOnlyList<ProviderSport> sports = AutoFootballOptions.KnownCompetitions.Select(k => new ProviderSport(k, k, Active.Contains(k))).ToList();
+        IReadOnlyList<ProviderSport> sports = AutoFootballOptions.KnownCompetitions.Select(k => new ProviderSport(k, k, Active.Contains(k), Outrights.Contains(k)))
+            .Concat(Outrights.Select(k => new ProviderSport(k, k, true, true))).Where(s => includeInactive || s.Active).ToList();
         return Task.FromResult(new ProviderCall<IReadOnlyList<ProviderSport>>(ProviderCallOutcome.Ok, sports, Quota(0)));
     }
 
@@ -76,7 +86,7 @@ public sealed class FakeFootballOdds : IFootballOddsProvider
         if (FailEverything is { } fail)
             return Task.FromResult(new ProviderCall<IReadOnlyList<ProviderEvent>>(fail, null, Quota(0), RetryAfter: RetryAfter));
         IReadOnlyList<ProviderEvent> list = (Events.GetValueOrDefault(sportKey) ?? []).Where(e => e.CommenceTime >= from && e.CommenceTime <= to).ToList();
-        return Task.FromResult(new ProviderCall<IReadOnlyList<ProviderEvent>>(ProviderCallOutcome.Ok, list, Quota(0)));
+        return Task.FromResult(new ProviderCall<IReadOnlyList<ProviderEvent>>(ProviderCallOutcome.Ok, list, Quota(0), Dropped: DroppedEvents));
     }
 
     public async Task<ProviderCall<IReadOnlyList<ProviderOddsEvent>>> GetOddsAsync(string sportKey, IReadOnlyCollection<string> eventIds, CancellationToken cancellationToken)
@@ -124,10 +134,17 @@ public static class AutoFootballKit
         return settings;
     }
 
+    /// <summary>SYNTHETIC approval for the tests (production approves only bookmakers whose rule is verified — none today).</summary>
+    public static readonly FootballMarketRules TestRules = new(["pinnacle", "onexbet"]);
+
     public static async Task<PredictionTestKit> CreateAsync(FakeFootballOdds odds, string mode, DateTimeOffset start, Dictionary<string, string?>? extra = null,
-        string? directory = null, FakeMessageTransport? transport = null)
+        string? directory = null, FakeMessageTransport? transport = null, FootballMarketRules? rules = null)
     {
-        var kit = await PredictionTestKit.CreateAsync(start, Settings(mode, extra), directory, transport, s => s.AddSingleton<IFootballOddsProvider>(odds));
+        var kit = await PredictionTestKit.CreateAsync(start, Settings(mode, extra), directory, transport, s =>
+        {
+            s.AddSingleton<IFootballOddsProvider>(odds);
+            s.AddSingleton(rules ?? TestRules);
+        });
         odds.Clock = kit.Host.Clock;
         return kit;
     }

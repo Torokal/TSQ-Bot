@@ -232,6 +232,191 @@ public sealed class AutoFootballTests : IAsyncLifetime
         (await _kit.AutoRowsAsync()).Single(r => r.ExternalEventId == early.Id).PublishAt.Should().Be(NineTr);
     }
 
+    // ---- the Türkiye men's senior national team ----
+
+    [Theory]
+    [InlineData(FakeFootballOdds.NationsLeague, "Turkey", "Romania", "Türkiye - Romania maç sonucu ne olur?", "Türkiye kazanır", "Romania kazanır")]
+    [InlineData(FakeFootballOdds.WorldCupQualifiers, "Spain", "Turkey", "Spain - Türkiye maç sonucu ne olur?", "Spain kazanır", "Türkiye kazanır")]
+    [InlineData(FakeFootballOdds.Euro, "Turkey", "Georgia", "Türkiye - Georgia maç sonucu ne olur?", "Türkiye kazanır", "Georgia kazanır")] // neutral venue: the provider's order stays
+    public async Task A_turkiye_match_opens_with_the_turkish_name_the_providers_side_order_and_unflipped_odds(string competition, string home, string away, string title,
+        string homeLabel, string awayLabel)
+    {
+        var e = _odds.Add(7, home, away, Kickoff, competition);
+        _odds.Price(e, home: 2.10m, draw: 3.30m, away: 3.60m);
+        await _kit.PassAsync();
+        _kit.Host.Clock.SetUtcNow(NineTr);
+        await _kit.PassAsync();
+
+        var prediction = (await _kit.AutoPredictionsAsync()).Should().ContainSingle().Subject;
+        prediction.Title.Should().Be(title);
+        var view = (await _kit.Service(s => s.GetAsync(prediction.Id, Ct)))!;
+        view.Outcomes.Select(o => (o.Label, o.OddsX100)).Should().Equal([(homeLabel, 210), ("Beraberlik", 330), (awayLabel, 360)], "home odds stay with the home side");
+        (await _kit.AutoRowsAsync()).Single().Should().Match<PredictionAutoEventEntity>(r => r.TrackedTeams == "TR" && r.HomeTeam == home && r.AwayTeam == away,
+            "the provider's raw names are kept for matching the odds");
+        var card = Shown(_kit.Transport.Messages.Should().ContainSingle().Subject);
+        card.Embed!.Footer.Should().EndWith("· Otomatik · Sabit oran");
+        string.Join("\n", card.Embed.Fields.Select(f => f.Name + f.Value)).Should().NotContain("Turnuva").And.NotContain("Turkey");
+        (await _kit.CountAsync<PredictionWalletEntity>()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Only_matches_of_turkiye_are_followed_in_national_competitions_and_turkey_is_never_a_club()
+    {
+        _odds.Add(1, "Spain", "Italy", Kickoff, FakeFootballOdds.NationsLeague);
+        _odds.Add(2, "Turkey U21", "Wales U21", Kickoff, FakeFootballOdds.NationsLeague);
+        _odds.Add(3, "Turkey Women", "Norway Women", Kickoff, FakeFootballOdds.WorldCupQualifiers);
+        _odds.Add(4, "Turkey", "Trabzonspor", Kickoff); // a nonsense club fixture: "Turkey" is never a club
+        _odds.Add(5, "Galatasaray", "Italy", Kickoff, FakeFootballOdds.NationsLeague); // a club name is never a national team
+        foreach (var n in new[] { 1, 2, 3, 4, 5 })
+            _odds.Prices[FakeFootballOdds.Id(n)] = (2m, 3m, 4m, "pinnacle", TimeSpan.FromMinutes(5));
+        await _kit.PassAsync();
+        _kit.Host.Clock.SetUtcNow(NineTr);
+        await _kit.PassAsync();
+        (await _kit.AutoRowsAsync()).Should().BeEmpty();
+        _odds.OddsCalls.Should().Be(0, "no paid request for matches without a followed team");
+        (await _kit.AutoPredictionsAsync()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_turkiye_match_is_opened_once_across_observe_two_processes_restarts_and_a_new_tournament()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(odds.Add(8, "Turkey", "Spain", Kickoff, FakeFootballOdds.WorldCupQualifiers));
+        await using (var observe = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr))
+        {
+            await observe.PassAsync();
+            (await observe.AutoRowsAsync()).Single().State.Should().Be(AutoEventState.Observed);
+
+            await using var a = await AutoFootballKit.CreateAsync(odds, "Live", NineTr + TimeSpan.FromMinutes(20), directory: observe.Host.Directory, transport: observe.Transport);
+            await using var b = await AutoFootballKit.CreateAsync(odds, "Live", NineTr + TimeSpan.FromMinutes(20), directory: observe.Host.Directory, transport: observe.Transport);
+            await a.TogetherAsync(() => a.PassAsync(), () => b.PassAsync());
+            (await a.AutoPredictionsAsync()).Should().ContainSingle("the observed row did not count as published; two processes open it once");
+
+            await a.ParticipateAsync(1);
+            var view = (await a.Service(s => s.GetAsync(a.AutoPredictionsAsync().Result.Single().Id, Ct)))!;
+            (await a.CancelAsync(Admin(), view)).Result.Succeeded.Should().BeTrue();
+            (await a.ConfirmEndAsync(Admin(), (await a.EndTokenAsync(Admin()))!)).Result.Succeeded.Should().BeTrue();
+            await using var restarted = await AutoFootballKit.CreateAsync(odds, "Live", NineTr + TimeSpan.FromMinutes(60), directory: observe.Host.Directory, transport: observe.Transport);
+            await restarted.PassAsync();
+            (await restarted.AutoPredictionsAsync()).Should().ContainSingle("restart and a new tournament never reopen the match");
+        }
+    }
+
+    [Fact]
+    public async Task A_supported_competition_that_is_not_in_season_joins_when_a_later_catalog_lists_it_active()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Active.Remove(FakeFootballOdds.NationsLeague);
+        var match = odds.Add(9, "Turkey", "Hungary", Kickoff + TimeSpan.FromDays(1), FakeFootballOdds.NationsLeague);
+        odds.Price(match);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", Morning);
+        await kit.PassAsync();
+        odds.Calls.Should().NotContain(c => c == "events:" + FakeFootballOdds.NationsLeague, "not in season: its list is not read");
+        (await kit.AutoRowsAsync()).Should().BeEmpty();
+
+        odds.Active.Add(FakeFootballOdds.NationsLeague);
+        kit.Host.Clock.Advance(TimeSpan.FromHours(13)); // the next catalog refresh
+        await kit.PassAsync();
+        (await kit.AutoRowsAsync()).Should().ContainSingle().Which.ExternalEventId.Should().Be(match.Id);
+        odds.Calls.Should().NotContain(c => c.Contains("winner", StringComparison.Ordinal), "an outright is never read");
+    }
+
+    // ---- market rule gate ----
+
+    [Fact]
+    public async Task With_the_production_rules_live_makes_no_paid_call_and_observe_shows_the_candidate_with_the_reason()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff));
+        await using (var live = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production))
+        {
+            await live.PassAsync();
+            odds.OddsCalls.Should().Be(0, "no bookmaker's full-time rule is verified: nothing could be published");
+            (await live.AutoRowsAsync()).Single().Reason.Should().Be(AutoBlockReason.MarketRuleUnverified);
+            live.Transport.Messages.Should().BeEmpty();
+            var health = await live.Host.InScopeAsync(sp => sp.GetRequiredService<AutoFootballService>().HealthAsync(Ct));
+            health.Should().Contain(h => h.Component == "predictions.health.auto_rule" && h.State == HealthState.Degraded);
+        }
+
+        await using var observe = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, rules: FootballMarketRules.Production);
+        await observe.PassAsync();
+        var row = (await observe.AutoRowsAsync()).Single();
+        (row.State, row.Reason, row.BookmakerKey, row.HomeOddsX100).Should().Be((AutoEventState.Observed, AutoBlockReason.MarketRuleUnverified, "pinnacle", 185));
+    }
+
+    // ---- missing matches ----
+
+    [Theory]
+    [InlineData(ProviderCallOutcome.Unavailable)]
+    [InlineData(ProviderCallOutcome.Timeout)]
+    [InlineData(ProviderCallOutcome.RateLimited)]
+    [InlineData(ProviderCallOutcome.AuthFailed)]
+    [InlineData(ProviderCallOutcome.BadResponse)]
+    public async Task A_failed_list_never_counts_a_match_as_missing(ProviderCallOutcome failure)
+    {
+        var view = await PublishDerbyAsync();
+        _odds.FailEverything = failure;
+        for (var i = 0; i < 3; i++)
+        {
+            _kit.Host.Clock.Advance(TimeSpan.FromMinutes(20));
+            await _kit.PassAsync();
+        }
+
+        (await _kit.AutoRowsAsync()).Single().MissingCount.Should().Be(0);
+        (await _kit.RowAsync(view.Id)).Status.Should().Be(PredictionStatus.Open);
+    }
+
+    [Fact]
+    public async Task A_partial_list_never_counts_a_match_as_missing_and_a_reappearing_match_clears_the_count()
+    {
+        var view = await PublishDerbyAsync();
+        var events = _odds.Events[FakeFootballOdds.SuperLig];
+        var derby = events.Single();
+        events.Clear();
+        _odds.DroppedEvents = 1; // the list had a malformed item: partial
+        _kit.Host.Clock.Advance(TimeSpan.FromMinutes(20));
+        await _kit.PassAsync();
+        (await _kit.AutoRowsAsync()).Single().MissingCount.Should().Be(0, "a partial list proves nothing");
+
+        _odds.DroppedEvents = 0;
+        _kit.Host.Clock.Advance(TimeSpan.FromMinutes(20));
+        await _kit.PassAsync();
+        (await _kit.AutoRowsAsync()).Single().MissingCount.Should().Be(1, "a complete list without it");
+        events.Add(derby);
+        _kit.Host.Clock.Advance(TimeSpan.FromMinutes(20));
+        await _kit.PassAsync();
+        (await _kit.AutoRowsAsync()).Single().MissingCount.Should().Be(0, "seen again");
+        (await _kit.RowAsync(view.Id)).Status.Should().Be(PredictionStatus.Open);
+    }
+
+    // ---- quota renewal ----
+
+    [Fact]
+    public async Task Renewed_credits_measured_by_free_discovery_lift_only_the_quota_block()
+    {
+        _odds.Remaining = 50; // exactly the reserve
+        var e = Derby();
+        _odds.Price(e);
+        await _kit.PassAsync();
+        _kit.Host.Clock.SetUtcNow(NineTr);
+        await _kit.PassAsync();
+        _odds.OddsCalls.Should().Be(0);
+        (await _kit.AutoRowsAsync()).Single().Reason.Should().Be(AutoBlockReason.QuotaPaused);
+
+        _odds.Remaining = 500; // the provider renewed the credits (the app never assumes it on a date)
+        await _kit.SetEnabledAsync(false);
+        _kit.Host.Clock.Advance(TimeSpan.FromMinutes(20));
+        await _kit.PassAsync();
+        (await _kit.ProviderRowAsync())!.RemainingCredits.Should().Be(500, "measured from the free discovery answer");
+        _odds.OddsCalls.Should().Be(0, "the module is still off: the renewal lifts only the quota block");
+
+        await _kit.SetEnabledAsync(true);
+        _kit.Host.Clock.Advance(TimeSpan.FromMinutes(20));
+        await _kit.PassAsync();
+        _odds.OddsCalls.Should().Be(1);
+        (await _kit.AutoPredictionsAsync()).Should().ContainSingle();
+    }
+
     // ---- odds rules and attempts ----
 
     [Fact]
@@ -444,7 +629,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         }
 
         _odds.OddsCalls.Should().Be(0);
-        _odds.FreeCalls.Should().BeLessThanOrEqualTo(12 * 6, "discovery at most every 15 minutes, catalog rarely");
+        _odds.FreeCalls.Should().BeLessThanOrEqualTo(12 * (ToroSquad.Modules.Predictions.AutoFootballOptions.KnownCompetitions.Count + 1), "one free list per in-season competition per discovery, catalog rarely");
         (await _kit.AutoRowsAsync()).Should().BeEmpty();
     }
 
@@ -457,14 +642,24 @@ public sealed class AutoFootballTests : IAsyncLifetime
         odds.Add(3, "Galatasaray Istanbul FK", "Rizespor", Kickoff);
         var options = new ToroSquad.Modules.Predictions.AutoFootballOptions();
 
-        var check = new AutoFootballVerification(odds, options, _kit.Host.Clock);
+        var check = new AutoFootballVerification(odds, options, _kit.Host.Clock, AutoFootballKit.TestRules);
         (await check.RunAsync(withOdds: true, budget: 1, Ct)).Should().BeTrue();
-        check.CreditsSpent.Should().Be(1, "the budget");
+        check.CreditsSpent.Should().Be(1, "the total budget");
         odds.OddsCalls.Should().Be(1);
         check.TrackedMatches.Should().Be(2);
-        check.Lines.Should().Contain(l => l.Contains("would open with pinnacle: 1.85 / 3.40 / 4.20", StringComparison.Ordinal));
-        check.Lines.Should().Contain(l => l.Contains("REVIEW: similar name not matched: 'Galatasaray Istanbul FK'", StringComparison.Ordinal));
-        check.Lines.Should().Contain(l => l.Contains("skipped (budget 1 reached)", StringComparison.Ordinal));
+        check.Lines.Should().Contain(l => l.StartsWith("source: live HTTP (FakeFootballOdds) to api.the-odds-api.com", StringComparison.Ordinal));
+        check.Lines.Should().Contain(l => l.Contains("selected pinnacle: raw 1.85 / 3.40 / 4.20 → fixed 1.85 / 3.40 / 4.20", StringComparison.Ordinal));
+        check.Lines.Should().Contain("    ACCEPTED");
+        check.Lines.Should().Contain(l => l.Contains("REVIEW: similar name not matched (not followed): 'Galatasaray Istanbul FK'", StringComparison.Ordinal));
+        check.Lines.Should().Contain(l => l.Contains("skipped (total budget 1 reached)", StringComparison.Ordinal));
+        check.Lines.Should().Contain(l => l.Contains("excluded outright (tournament winner, not a match): soccer_fifa_world_cup_winner", StringComparison.Ordinal));
+
+        // Production approval (no bookmaker's full-time rule verified yet): the data is shown, never accepted.
+        var production = new AutoFootballVerification(odds, options, _kit.Host.Clock);
+        (await production.RunAsync(withOdds: true, budget: 1, Ct)).Should().BeTrue();
+        production.Lines.Should().Contain(l => l.Contains("NONE — MARKET_RULE_UNVERIFIED", StringComparison.Ordinal));
+        production.Lines.Should().Contain(l => l.Contains("candidate pinnacle", StringComparison.Ordinal));
+        production.Lines.Should().Contain("    REJECTED: MARKET_RULE_UNVERIFIED");
         (await _kit.AutoRowsAsync()).Should().BeEmpty("the check writes nothing");
         _kit.Transport.Messages.Should().BeEmpty();
 

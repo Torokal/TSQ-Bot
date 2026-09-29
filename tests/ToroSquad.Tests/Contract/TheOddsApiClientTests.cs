@@ -80,6 +80,7 @@ public sealed class TheOddsApiClientTests
     private const string SportsBody = """
         [{"key":"soccer_turkey_super_league","group":"Soccer","title":"Turkey Super League","description":"Turkish Soccer","active":true,"has_outrights":false},
          {"key":"soccer_uefa_europa_league","group":"Soccer","title":"UEFA Europa League","description":"","active":false,"has_outrights":false},
+         {"key":"soccer_fifa_world_cup_winner","group":"Soccer","title":"FIFA World Cup Winner","description":"","active":true,"has_outrights":true},
          {"key":"broken","title":"no active flag"}]
         """;
 
@@ -115,10 +116,13 @@ public sealed class TheOddsApiClientTests
             _ => Json(OddsBody),
         }));
 
-        var sports = await client.GetSportsAsync(Ct);
-        sports.Value!.Select(s => (s.Key, s.Active)).Should().Equal(("soccer_turkey_super_league", true), ("soccer_uefa_europa_league", false));
+        var sports = await client.GetSportsAsync(includeInactive: true, Ct);
+        sports.Value!.Select(s => (s.Key, s.Active, s.HasOutrights)).Should().Equal(("soccer_turkey_super_league", true, false), ("soccer_uefa_europa_league", false, false),
+            ("soccer_fifa_world_cup_winner", true, true));
+        sports.Dropped.Should().Be(1, "the malformed entry is reported, not silently lost");
 
         var events = await client.GetEventsAsync("soccer_turkey_super_league", T0, T0.AddHours(48), Ct);
+        events.Dropped.Should().Be(2);
         events.Value!.Should().ContainSingle("an event without a time or with a time without its offset is dropped").Which
             .Should().Be(new ProviderEvent("aaaa0000bbbb1111cccc2222dddd3333", "soccer_turkey_super_league", new DateTimeOffset(2026, 10, 5, 17, 0, 0, TimeSpan.Zero),
                 "Galatasaray", "Fenerbahce"));
@@ -136,6 +140,7 @@ public sealed class TheOddsApiClientTests
         requests.Select(r => r.RequestUri!.AbsolutePath).Should().Equal("/v4/sports", "/v4/sports/soccer_turkey_super_league/events", "/v4/sports/soccer_turkey_super_league/odds");
         var q = requests.Select(r => System.Web.HttpUtility.ParseQueryString(r.RequestUri!.Query)).ToList();
         q.Should().OnlyContain(x => x["apiKey"] == Key, "the provider takes the key only as a query parameter");
+        q[0]["all"].Should().Be("true", "the whole catalog, inactive competitions included");
         (q[1]["commenceTimeFrom"], q[1]["commenceTimeTo"], q[1]["dateFormat"]).Should().Be(("2026-10-05T06:00:00Z", "2026-10-07T06:00:00Z", "iso"));
         (q[2]["regions"], q[2]["markets"], q[2]["oddsFormat"], q[2]["eventIds"]).Should().Be(("eu", "h2h", "decimal", "aaaa0000bbbb1111cccc2222dddd3333"));
         requests.Should().OnlyContain(r => r.Method == HttpMethod.Get && r.RequestUri!.Host == "api.the-odds-api.com");
@@ -146,7 +151,7 @@ public sealed class TheOddsApiClientTests
     {
         var (client, requests, _) = Create((_, _) => throw new InvalidOperationException("no call expected"), key: " ");
         client.IsConfigured.Should().BeFalse();
-        (await client.GetSportsAsync(Ct)).Outcome.Should().Be(ProviderCallOutcome.NotConfigured);
+        (await client.GetSportsAsync(true, Ct)).Outcome.Should().Be(ProviderCallOutcome.NotConfigured);
         (await client.GetOddsAsync("soccer_turkey_super_league", ["abc"], Ct)).Outcome.Should().Be(ProviderCallOutcome.NotConfigured);
         requests.Should().BeEmpty();
     }
