@@ -94,12 +94,36 @@ public sealed record MessageButton(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] MessageButtonStyle Style = MessageButtonStyle.Secondary,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NewRow = false);
 
-/// <summary>SDK-agnostic outgoing message. Rendered by modules, delivered by an <see cref="IMessageTransport"/>.</summary>
+/// <summary>One choice of a <see cref="MessageSelectMenu"/>: Discord allows labels and descriptions of at most 100 characters.</summary>
+public sealed record MessageSelectOption(
+    string Label,
+    string Value,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description = null);
+
+/// <summary>
+/// A single-choice string select, drawn in its own row above any buttons. Discord allows at most 25 options; the custom id
+/// carries no authority (the handler re-checks everything server-side).
+/// </summary>
+public sealed record MessageSelectMenu(
+    string CustomId,
+    string? Placeholder,
+    IReadOnlyList<MessageSelectOption> Options,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Disabled = false)
+{
+    public const int MaxOptions = 25;
+    public const int MaxLabelLength = 100;
+}
+
+/// <summary>
+/// SDK-agnostic outgoing message. Rendered by modules, delivered by an <see cref="IMessageTransport"/>. <see cref="Select"/>
+/// is left out of the stored payload while absent, so existing payload hashes are unchanged.
+/// </summary>
 public sealed record OutgoingMessage(
     string? Content,
     MessageEmbed? Embed,
     MentionPolicy Mentions,
-    IReadOnlyList<MessageButton>? Buttons = null)
+    IReadOnlyList<MessageButton>? Buttons = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MessageSelectMenu? Select = null)
 {
     /// <summary>Same visible content, but guaranteed not to ping anyone (previews, edits, retries).</summary>
     public OutgoingMessage WithoutPings() => this with { Mentions = MentionPolicy.None };
