@@ -78,7 +78,7 @@ public sealed class SummaryAiClientTests
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
         root.GetProperty("model").GetString().Should().Be("deepseek-v4.1-flash", "the API model id, without the CLI's provider prefix");
-        root.GetProperty("max_tokens").GetInt32().Should().Be(900);
+        root.GetProperty("max_tokens").GetInt32().Should().Be(2500, "room for hidden reasoning plus the short answer");
         root.GetProperty("temperature").GetDouble().Should().Be(0.3);
         root.GetProperty("top_p").GetDouble().Should().Be(0.9);
         root.GetProperty("reasoning_effort").GetString().Should().Be("low");

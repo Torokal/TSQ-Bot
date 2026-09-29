@@ -60,15 +60,18 @@ arasına konur. Kurallar:
 |---|---|
 | Uç nokta | OpenCode Go, OpenAI uyumlu `POST https://opencode.ai/zen/go/v1/chat/completions` |
 | Model | `Summary:Model` = `deepseek-v4.1-flash` (API model ID'si; CLI'daki `opencode-go/` öneki yok, `/models` listesinden doğrulandı) |
-| Ayarlar | `reasoning_effort: low`, `temperature: 0.3`, `top_p: 0.9`, `max_tokens: 900`, `stream: false`; tool yok, web araması yok |
+| Ayarlar | `reasoning_effort: low`, `temperature: 0.3`, `top_p: 0.9`, `max_tokens: 2500`, `stream: false`; tool yok, web araması yok |
 | Oturum | Her özet için yeni rastgele `x-opencode-session` (GUID); içinde sunucu, kanal, isim veya metin yok |
 | User-Agent | `TSQBot/<sürüm> SummaryModule (+https://github.com/Torokal/TSQ-Bot)` (dürüst tanıtım; kodlama ajanı taklidi yok) |
 | Zaman aşımı | 25 sn; aşılırsa istek iptal edilir ve kanala hiçbir şey gönderilmez |
 | Retry | **Yok.** 400/401/403/404, 429, 5xx, ağ hatası ve zaman aşımı olduğu gibi döner. Tekrar denemek isteyen üye `/ozetle`'yi yeniden çalıştırır. |
 
-`max_tokens` 900'dür, spesifikasyondaki yaklaşık 700 değil. Sebep: DeepSeek "low" ayarında da reasoning token'ı üretiyor ve
-bunlar `max_tokens` içinden sayılıyor. A/B testinde yaklaşık 230 reasoning ve 600 cevap token'ı görüldü; 700'lük sınır özeti
-keserdi. Model yine de sınıra takılırsa (`finish_reason: length`) yarım kalan son satır atılır.
+`max_tokens` 2500'dür, spesifikasyondaki yaklaşık 700 değil. Sebep: DeepSeek "low" ayarında da gizli reasoning token'ı
+üretiyor, bunlar `max_tokens` içinden sayılıyor ve OpenCode Go reasoning'i kapatma seçeneği sunmuyor. A/B testinde yaklaşık 230
+reasoning token görülmüştü; ilk canlı `/ozetle` ise (100 gerçek mesaj, 2026-09-29) 900'lük sınırın tamamını reasoning'e
+harcadı ve metin üretemedi (`finish_reason: length`, özet gönderilmedi). Görünen özetin uzunluğunu prompt belirler (150–250
+kelime, ~600 token); 2500 reasoning için pay bırakır. Model yine de sınıra takılırsa yarım kalan son satır atılır, hiç metin
+yoksa kullanıcıya özel "Özet oluşturulamadı" mesajı gider.
 
 ## Kötüye kullanım koruması
 
@@ -92,7 +95,7 @@ keserdi. Model yine de sınıra takılırsa (`finish_reason: length`) yarım kal
 | `ChannelCooldownSeconds` | `60` |
 | `MaxConcurrentRequests` | `2` |
 | `RequestTimeoutSeconds` | `25` |
-| `MaxOutputTokens` | `900` |
+| `MaxOutputTokens` | `2500` |
 | `ReasoningEffort` | `low` |
 | `Temperature` | `0.3` |
 | `TopP` | `0.9` |
