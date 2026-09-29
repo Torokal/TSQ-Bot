@@ -32,8 +32,9 @@ public sealed class SummaryCommands(InteractionServices services, SummaryService
     {
         var settings = await SettingsAsync();
         var zone = GuildTime.TryResolve(settings.TimeZoneId, out var resolved) ? resolved : TimeZoneInfo.Utc;
-        var request = new SummaryRequest(Actor.GuildId, new ChannelId(Context.Interaction.ChannelId ?? Context.Channel.Id), Actor.UserId,
-            settings.Language, zone);
+        var actor = Actor; // roles from the interaction payload: no REST read
+        var request = new SummaryRequest(actor.GuildId, new ChannelId(Context.Interaction.ChannelId ?? Context.Channel.Id), actor.UserId,
+            settings.Language, zone, actor.RoleIds.Select(r => r.Value).ToHashSet());
         await summaries.RunAsync(request, new DiscordSummarySource(Context.Client, (IGuildUser)Context.User), this);
     }
 

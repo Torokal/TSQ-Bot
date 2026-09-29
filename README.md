@@ -70,7 +70,9 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 - **TSQ Özet** (separate module, off by default): `/ozetle` reads the latest 100 member messages of the channel or thread
   when it runs (REST; no message events, no cache, nothing stored), sends them as a normalized transcript to one AI model
   (OpenCode Go, `deepseek-v4.1-flash`) in a single request, and posts a short Turkish summary publicly without pings. No
-  retry, no fallback model; cooldowns, one summary per channel at a time, at most two bot-wide; refusals are private.
+  retry, no fallback model; refusals are private. Only members with at least one of the configured roles
+  (`Summary:AllowedRoleIds`) may use it; in a channel or thread that already has a TSQ summary, at least 100 new member
+  messages are required, and successful summaries of the same channel or thread are at least 2 minutes apart.
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
@@ -102,7 +104,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options; public answer, currency channel only) | everyone (module on) |
 | TSQ Randomizer | `/zarat zar:…`, `/randomsayi maksimum:… [minimum:…]`, `/sec seçenekler:…`, `/yazitura` (public answer) | everyone (module on) |
 | TSQ Çekiliş | `/giveaway create` (form → card → 🎉 → automatic draw), `/giveaway end\|cancel\|reroll giveaway:<#number \| message link \| id>` | Manage Server (module on); entering: everyone, with 🎉 |
-| TSQ Özet | `/ozetle` (no options; public summary of this channel's latest messages) | everyone (module on) |
+| TSQ Özet | `/ozetle` (no options; public summary of this channel's latest messages) | members with any one of the configured roles (module on) |
 | TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:

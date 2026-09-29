@@ -17,7 +17,7 @@ namespace ToroSquad.Tests.Unit;
 /// concurrency, the answer is posted publicly (and only then), and no log line ever contains message text, names, the
 /// prompt or the answer.
 /// </summary>
-public sealed class SummaryFlowTests
+public sealed partial class SummaryFlowTests
 {
     private const string Secret = "GİZLİ-MESAJ-7d3f çok özel bir cümle";
     private const string SecretName = "GizliİsimUye";
@@ -30,6 +30,9 @@ public sealed class SummaryFlowTests
     private static readonly UserId Member = new(500000000000000001);
     private static readonly UserId Member2 = new(500000000000000002);
     private static readonly TimeZoneInfo Istanbul = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
+
+    /// <summary>One of the six default allowed roles (any one is enough).</summary>
+    private const ulong AllowedRole = 702465621992144926;
 
     private sealed class CapturingLoggers
     {
@@ -81,6 +84,10 @@ public sealed class SummaryFlowTests
         }
     }
 
+    /// <summary>
+    /// A guild whose channels each have their own history (<see cref="Channels"/>; <see cref="Messages"/> for any other
+    /// channel), served newest first in pages of 100 like Discord. Counts every history page read.
+    /// </summary>
     private sealed class FakeDiscord : ISummaryDiscord
     {
         private int _fetches;
@@ -93,21 +100,44 @@ public sealed class SummaryFlowTests
 
         public List<SummarySourceMessage> Messages { get; set; } = Conversation(12);
 
+        public Dictionary<ulong, List<SummarySourceMessage>> Channels { get; } = [];
+
+        public Dictionary<ulong, string> Roles { get; } = new()
+        {
+            [1338605015417487440] = "TSQ Yönetim",
+            [1254401028359458887] = "Moderatör",
+            [700799880549105674] = "VIP",
+            [702465621992144926] = "Destekçi",
+            [1066826260803764234] = "Oyuncu",
+            [1333687724669931602] = "Yayıncı",
+        };
+
         public bool? ContentAccess { get; set; } = true;
 
         public int Fetches => Volatile.Read(ref _fetches);
 
-        public SummaryChannel? GetChannel(GuildId guild, ChannelId channel) => new(channel, Supported, channel);
+        public ConcurrentQueue<ulong> ReadChannels { get; } = new();
+
+        /// <summary><see cref="Thread"/> is a thread of <see cref="Here"/>: access is decided in the parent, history is its own.</summary>
+        public SummaryChannel? GetChannel(GuildId guild, ChannelId channel) => new(channel, Supported, channel == Thread ? Here : channel);
 
         public GuildPermission? InvokerPermissions(ChannelId channel) => Invoker;
 
-        public Task<SummaryFetch> FetchRecentAsync(GuildId guild, ChannelId channel, int memberMessages, CancellationToken cancellationToken)
+        public string? RoleName(GuildId guild, ulong role) => Roles.GetValueOrDefault(role);
+
+        public Task<SummaryHistoryPage> ReadHistoryPageAsync(GuildId guild, ChannelId channel, ulong? before, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _fetches);
-            return Task.FromResult(Status == SummaryFetchStatus.Ok
-                ? new SummaryFetch(SummaryFetchStatus.Ok, Messages, SummaryMentionNames.Empty)
-                : new SummaryFetch(Status, [], SummaryMentionNames.Empty));
+            ReadChannels.Enqueue(channel.Value);
+            if (Status != SummaryFetchStatus.Ok)
+                return Task.FromResult(new SummaryHistoryPage(Status, [], false));
+            var page = (Channels.GetValueOrDefault(channel.Value) ?? Messages)
+                .Where(m => before is null || m.Id < before).OrderByDescending(m => m.Id).Take(100).ToList();
+            return Task.FromResult(new SummaryHistoryPage(SummaryFetchStatus.Ok, page, page.Count < 100));
         }
+
+        public Task<SummaryNames> ResolveNamesAsync(GuildId guild, IReadOnlyList<SummarySourceMessage> messages, CancellationToken cancellationToken) =>
+            Task.FromResult(SummaryNames.Empty);
 
         public Task<bool?> HasMessageContentAccessAsync() => Task.FromResult(ContentAccess);
     }
@@ -165,8 +195,8 @@ public sealed class SummaryFlowTests
             Service = new SummaryService(Ai, new SummaryThrottle(options, Clock), Guilds, localizer, options, Clock, Logs.For<SummaryService>());
         }
 
-        public Task<SummaryOutcome> RunAsync(FakeResponder responder, ChannelId? channel = null, UserId? member = null) =>
-            Service.RunAsync(new SummaryRequest(Guild, channel ?? Here, member ?? Member, "tr", Istanbul), Discord, responder);
+        public Task<SummaryOutcome> RunAsync(FakeResponder responder, ChannelId? channel = null, UserId? member = null, ulong[]? roles = null) =>
+            Service.RunAsync(new SummaryRequest(Guild, channel ?? Here, member ?? Member, "tr", Istanbul, roles ?? [AllowedRole]), Discord, responder);
 
         public string AllLogs => string.Join("\n", Logs.Lines);
     }
@@ -276,14 +306,16 @@ public sealed class SummaryFlowTests
 
         var sameChannel = new FakeResponder();
         (await world.RunAsync(sameChannel, member: Member2)).Should().Be(SummaryOutcome.Throttled);
-        sameChannel.Private.Single().Should().Be("Bu kanal az önce özetlendi. Yeni bir özet için 60 saniye bekleyin.");
+        sameChannel.Private.Single().Should().Be("Bu kanalda tekrar özet oluşturmak için **2 dk** beklemelisin.");
         world.Ai.Calls.Should().Be(1);
 
         world.Clock.Advance(TimeSpan.FromSeconds(31));
         (await world.RunAsync(new FakeResponder(), channel: Other)).Should().Be(SummaryOutcome.Posted, "the member cooldown is over; another channel");
-        (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Throttled, "the channel still waits");
-        world.Clock.Advance(TimeSpan.FromSeconds(30));
-        (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Posted);
+        var stillWaiting = new FakeResponder();
+        (await world.RunAsync(stillWaiting, member: Member2)).Should().Be(SummaryOutcome.Throttled, "the channel still waits");
+        stillWaiting.Private.Single().Should().Be("Bu kanalda tekrar özet oluşturmak için **1 dk 29 sn** beklemelisin.");
+        world.Clock.Advance(TimeSpan.FromSeconds(89));
+        (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Posted, "exactly 120 s after the summary");
         world.Ai.Calls.Should().Be(3);
     }
 
@@ -426,7 +458,7 @@ public sealed class SummaryFlowTests
     }
 
     [Fact]
-    public async Task Discord_refusing_the_post_is_reported_but_the_inference_still_counts()
+    public async Task Discord_refusing_the_post_is_not_a_successful_summary_and_locks_only_briefly()
     {
         var world = new World();
         var responder = new FakeResponder { PostSucceeds = false };
@@ -434,7 +466,9 @@ public sealed class SummaryFlowTests
         (await world.RunAsync(responder)).Should().Be(SummaryOutcome.PostFailed);
 
         world.Ai.Calls.Should().Be(1);
-        (await world.RunAsync(new FakeResponder())).Should().Be(SummaryOutcome.Throttled, "the spent inference starts the cooldowns");
+        (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Throttled, "the short failure cooldown");
+        world.Clock.Advance(SummaryThrottle.FailureCooldown);
+        (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Posted, "no 120 s cooldown: nothing reached the channel");
     }
 
     [Fact]

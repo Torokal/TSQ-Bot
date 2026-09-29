@@ -12,24 +12,24 @@ namespace ToroSquad.Modules.Summary.Commands;
 
 /// <summary>
 /// <see cref="ISummaryDiscord"/> over Discord.Net. Channels and roles come from the gateway cache (Guilds intent — no
-/// privileged gateway intents, no message events, no message cache); the messages are a few REST page reads of THIS channel
-/// only, made when /ozetle runs (a thread is read without its parent). Message Content access (Developer Portal) is what
+/// privileged gateway intents, no message events, no message cache); the messages are REST page reads of THIS channel only,
+/// made when /ozetle runs (a thread is read without its parent; <see cref="SummaryHistory"/> decides how many pages). Message Content access (Developer Portal) is what
 /// makes REST return other members' text. Authors' server names come from the cache or a bounded number of single-member
 /// REST reads. Nothing read here is stored or logged. Created per interaction with the invoking member (roles from the
 /// interaction payload).
 /// </summary>
 public sealed partial class DiscordSummarySource(DiscordSocketClient client, IGuildUser invoker) : ISummaryDiscord
 {
-    /// <summary>Discord's page size for channel history.</summary>
+    /// <summary>Discord's page size for channel history (the page count is bounded by <see cref="SummaryHistory.MaxPages"/>).</summary>
     public const int PageSize = 100;
-
-    /// <summary>At most this many history pages per summary (bot-heavy channels still reach enough member messages).</summary>
-    public const int MaxPages = 3;
 
     /// <summary>At most this many member look-ups (for server nicknames) per summary; others show their global name.</summary>
     public const int MaxMemberLookups = 20;
 
     private const int RequestTimeoutMs = 10_000;
+
+    /// <summary>The messages read during this interaction, for resolving the selected ones' names (never kept beyond it).</summary>
+    private readonly Dictionary<ulong, IMessage> _read = [];
 
     public SummaryChannel? GetChannel(GuildId guild, ChannelId channel)
     {
@@ -49,49 +49,55 @@ public sealed partial class DiscordSummarySource(DiscordSocketClient client, IGu
     public CorePermission? InvokerPermissions(ChannelId channel) =>
         client.GetGuild(invoker.GuildId)?.GetChannel(channel.Value) is { } target ? (CorePermission)invoker.GetPermissions(target).RawValue : null;
 
-    public async Task<SummaryFetch> FetchRecentAsync(GuildId guild, ChannelId channel, int memberMessages, CancellationToken cancellationToken)
-    {
-        var g = client.GetGuild(guild.Value);
-        if (g?.GetChannel(channel.Value) is not IMessageChannel history)
-            return SummaryFetch.NoAccess;
+    public string? RoleName(GuildId guild, ulong role) => client.GetGuild(guild.Value)?.GetRole(role)?.Name;
 
-        var read = new List<IMessage>();
+    public async Task<SummaryHistoryPage> ReadHistoryPageAsync(GuildId guild, ChannelId channel, ulong? before, CancellationToken cancellationToken)
+    {
+        if (client.GetGuild(guild.Value)?.GetChannel(channel.Value) is not IMessageChannel history)
+            return SummaryHistoryPage.NoAccess;
+
+        List<IMessage> batch;
         try
         {
-            ulong? before = null;
-            for (var page = 0; page < MaxPages; page++)
-            {
-                var batch = (before is { } oldest
-                    ? await history.GetMessagesAsync(oldest, Direction.Before, PageSize, CacheMode.AllowDownload, Options(cancellationToken)).FlattenAsync()
-                    : await history.GetMessagesAsync(PageSize, CacheMode.AllowDownload, Options(cancellationToken)).FlattenAsync()).ToList();
-                read.AddRange(batch);
-                if (batch.Count < PageSize || read.Count(IsMemberMessage) >= memberMessages)
-                    break;
-                before = batch.Min(m => m.Id);
-            }
+            batch = (before is { } oldest
+                ? await history.GetMessagesAsync(oldest, Direction.Before, PageSize, CacheMode.AllowDownload, Options(cancellationToken)).FlattenAsync()
+                : await history.GetMessagesAsync(PageSize, CacheMode.AllowDownload, Options(cancellationToken)).FlattenAsync()).ToList();
         }
         catch (HttpException ex) when (ex.HttpCode is HttpStatusCode.Forbidden)
         {
-            return SummaryFetch.NoAccess;
+            return SummaryHistoryPage.NoAccess;
         }
         catch (Exception ex) when (ex is HttpException or TimeoutException or HttpRequestException or OperationCanceledException)
         {
-            return SummaryFetch.Failed;
+            return SummaryHistoryPage.Failed;
         }
 
-        var names = await AuthorNamesAsync(g, read.Where(IsMemberMessage), cancellationToken);
-        var messages = read.Select(m => new SummarySourceMessage(
+        var self = client.CurrentUser?.Id;
+        foreach (var message in batch)
+            _read[message.Id] = message;
+        var messages = batch.Select(m => new SummarySourceMessage(
             m.Id,
             m.Timestamp,
             Kind(m),
-            names.TryGetValue(m.Author.Id, out var name) ? name : m.Author.GlobalName ?? m.Author.Username,
+            m.Author.GlobalName ?? m.Author.Username,
             m.Content ?? "",
             m.Attachments.Select(a => new SummaryAttachment(a.Filename, a.ContentType)).ToList(),
             m.Stickers.Select(s => s.Name).ToList(),
             IsForward: m.Reference?.ReferenceType.GetValueOrDefault() == MessageReferenceType.Forward,
             HasPoll: (m as IUserMessage)?.Poll is not null,
-            HasEmbeds: m.Embeds.Count > 0)).ToList();
-        return new SummaryFetch(SummaryFetchStatus.Ok, messages, Mentions(g, read, names));
+            HasEmbeds: m.Embeds.Count > 0,
+            AuthorId: m.Author.Id,
+            FromThisBot: self is { } me && m.Author.Id == me)).ToList();
+        return new SummaryHistoryPage(SummaryFetchStatus.Ok, messages, ReachedStart: batch.Count < PageSize);
+    }
+
+    public async Task<SummaryNames> ResolveNamesAsync(GuildId guild, IReadOnlyList<SummarySourceMessage> messages, CancellationToken cancellationToken)
+    {
+        if (client.GetGuild(guild.Value) is not { } g)
+            return SummaryNames.Empty;
+        var selected = messages.Select(m => _read.GetValueOrDefault(m.Id)).OfType<IMessage>().ToList();
+        var authors = await AuthorNamesAsync(g, selected, cancellationToken);
+        return new SummaryNames(authors, Mentions(g, selected, authors));
     }
 
     public async Task<bool?> HasMessageContentAccessAsync()

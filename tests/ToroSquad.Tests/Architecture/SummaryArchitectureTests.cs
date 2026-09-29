@@ -167,6 +167,27 @@ public sealed partial class SummaryArchitectureTests
     }
 
     [Fact]
+    public void Allowed_roles_live_in_one_place_and_bind_from_configuration()
+    {
+        foreach (var id in SummaryOptions.DefaultAllowedRoleIds)
+        {
+            var literal = id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            SourceFiles().Where(f => File.ReadAllText(f).Contains(literal, StringComparison.Ordinal)).Select(Path.GetFileName)
+                .Should().Equal("SummaryOptions.cs");
+        }
+
+        var configured = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Summary:AllowedRoleIds:0"] = "123456789012345678",
+            ["Summary:AllowedRoleIds:1"] = "223456789012345678",
+        }).Build().GetSection(SummaryOptions.Section).Get<SummaryOptions>()!;
+        configured.EffectiveAllowedRoleIds.Should().Equal(123456789012345678UL, 223456789012345678UL);
+        (new ConfigurationBuilder().Build().GetSection(SummaryOptions.Section).Get<SummaryOptions>() ?? new SummaryOptions())
+            .EffectiveAllowedRoleIds.Should().Equal(SummaryOptions.DefaultAllowedRoleIds);
+        new SummaryOptions { AllowedRoleIds = [5] }.Validate().Should().ContainSingle(e => e.Contains("AllowedRoleIds", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Invalid_configuration_is_reported_without_secret_values()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>

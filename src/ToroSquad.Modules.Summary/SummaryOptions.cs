@@ -13,23 +13,45 @@ public sealed class SummaryOptions
     /// <summary>The OpenCode Go API key: an environment variable (Railway Variables), or a user-secrets key of the same name.</summary>
     public const string ApiKeyVariable = "OPENCODE_GO_API_KEY";
 
+    /// <summary>Smallest id Discord can issue (timestamp bits above the 22 worker/process/increment bits).</summary>
+    public const ulong MinSnowflake = 1UL << 22;
+
     /// <summary>OpenCode Go's OpenAI-compatible endpoint; "chat/completions" is read relative to it.</summary>
     public string BaseUrl { get; set; } = "https://opencode.ai/zen/go/v1/";
 
     /// <summary>The API model id (the <c>model</c> field, without the CLI's "opencode-go/" provider prefix).</summary>
     public string Model { get; set; } = "deepseek-v4.1-flash";
 
-    /// <summary>The most member messages one summary reads (newest first when collecting, sent oldest → newest).</summary>
+    /// <summary>
+    /// The most member messages one summary reads (newest first when collecting, sent oldest → newest) — and, once the
+    /// channel or thread has an earlier TSQ summary, how many new member messages must follow it before the next one.
+    /// </summary>
     public int MaxMessages { get; set; } = 100;
 
-    /// <summary>Fewer usable member messages than this: no AI request, a private "not enough messages" answer.</summary>
+    /// <summary>
+    /// First summary of a channel or thread (no earlier TSQ summary in its history): fewer usable member messages than this
+    /// means no AI request and a private "not enough messages" answer.
+    /// </summary>
     public int MinMessages { get; set; } = 5;
 
-    /// <summary>After a summary was produced, the same member waits this long before the next one.</summary>
+    /// <summary>After a summary was posted, the same member waits this long before the next one.</summary>
     public int UserCooldownSeconds { get; set; } = 30;
 
-    /// <summary>After a summary was produced, the same channel waits this long before the next one.</summary>
-    public int ChannelCooldownSeconds { get; set; } = 60;
+    /// <summary>After a summary was posted, the same channel or thread waits this long before the next one (whoever asks).</summary>
+    public int ChannelCooldownSeconds { get; set; } = 120;
+
+    /// <summary>The roles that may use /ozetle when nothing is configured (any one of them is enough).</summary>
+    public static readonly IReadOnlyList<ulong> DefaultAllowedRoleIds =
+        [1338605015417487440, 1254401028359458887, 700799880549105674, 702465621992144926, 1066826260803764234, 1333687724669931602];
+
+    /// <summary>
+    /// Members need at least ONE of these roles (any-of, never all). Empty (not configured) means
+    /// <see cref="DefaultAllowedRoleIds"/>; a configured list replaces the defaults (the configuration binder would otherwise
+    /// append to an initialized list).
+    /// </summary>
+    public ulong[] AllowedRoleIds { get; set; } = [];
+
+    public IReadOnlyList<ulong> EffectiveAllowedRoleIds => AllowedRoleIds.Length > 0 ? AllowedRoleIds : DefaultAllowedRoleIds;
 
     /// <summary>AI requests running at the same time across the bot; more are refused at once (no queue).</summary>
     public int MaxConcurrentRequests { get; set; } = 2;
@@ -92,6 +114,8 @@ public sealed class SummaryOptions
             errors.Add(string.Create(CultureInfo.InvariantCulture, $"{Section}:Temperature must be 0-2 (got {Temperature})"));
         if (TopP is <= 0 or > 1 || double.IsNaN(TopP))
             errors.Add(string.Create(CultureInfo.InvariantCulture, $"{Section}:TopP must be greater than 0 and at most 1 (got {TopP})"));
+        if (AllowedRoleIds.Any(id => id is < MinSnowflake or > long.MaxValue))
+            errors.Add($"{Section}:AllowedRoleIds must contain Discord role ids only (got {string.Join(", ", AllowedRoleIds)})");
         return errors;
     }
 }

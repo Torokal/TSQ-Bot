@@ -3,19 +3,22 @@
 `/ozetle`, komutun çalıştırıldığı kanalın veya thread'in **son üye mesajlarını** o anda okur ve tek bir AI isteğiyle kısa bir
 Türkçe özet çıkarır. Özet kanala herkesin görebileceği normal bir Discord mesajı olarak gönderilir.
 
-- Herkes kullanabilir (yönetici rolü gerekmez). Yalnızca sunucuda çalışır ve ana sunucu kısıtı geçerlidir.
+- Yalnızca `Summary:AllowedRoleIds` rollerinden **en az birine** sahip üyeler kullanabilir (hepsi gerekmez; ayrıntı aşağıda).
+  Komut herkese görünür, rol kontrolü çalışma anında yapılır. Yalnızca sunucuda çalışır ve ana sunucu kısıtı geçerlidir.
+- Aynı kanal veya thread'de önceki başarılı özetten sonra en az **100 yeni üye mesajı** gerekir.
+- Aynı kanal veya thread için başarılı özetler arasında **2 dakika** bekleme vardır.
 - Modül her sunucuda varsayılan olarak **kapalıdır**: `/modules enable summary`. Geri alma: `/modules disable summary`.
 - Tablo, migration, arka plan işi, mesaj dinleyicisi ve önbellek yoktur.
 
 ## Akış
 
-1. Aşağıdaki denetimler anında yapılır; herhangi biri tutmazsa cevap **yalnızca kullanana görünür** (ephemeral) ve AI isteği
-   yapılmaz: API anahtarı, kanal türü, üyenin ve botun **Kanalı Görüntüle + Mesaj Geçmişini Oku** izni, kanal kilidi,
-   cooldown ve eşzamanlılık sınırı.
+1. Aşağıdaki denetimler anında yapılır; herhangi biri tutmazsa cevap **yalnızca kullanana görünür** (ephemeral), geçmiş
+   okunmaz ve AI isteği yapılmaz. Sırasıyla: rol, API anahtarı, kanal türü, üyenin ve botun **Kanalı Görüntüle + Mesaj
+   Geçmişini Oku** izni, aynı kanalda süren özet, cooldown'lar ve eşzamanlılık sınırı.
 2. Komut yalnızca kullanana görünen "düşünüyor" durumuyla onaylanır.
-3. Kanal REST ile okunur. Sayfa başına 100 mesaj, en fazla 3 sayfa. Hedef son 100 üye mesajıdır. Thread'de yalnızca
-   thread'in kendisi okunur, üst kanal karışmaz.
-4. Transcript hazırlanır (ayrıntısı aşağıda). 5'ten az kullanılabilir mesaj varsa AI isteği yapılmaz.
+3. Geçmiş REST ile yeniden eskiye taranır (aşağıdaki "Önceki özet ve 100 mesaj kuralı"). Thread'de yalnızca thread'in kendisi
+   okunur; üst kanalın mesajları ve özetleri karışmaz, aynı şekilde üst kanal hesabına thread mesajları girmez.
+4. Transcript hazırlanır (ayrıntısı aşağıda). İlk özette 5'ten az kullanılabilir mesaj varsa AI isteği yapılmaz.
 5. Model tek istekle çağrılır. Retry yoktur, yedek model yoktur, ikinci bir düzeltme turu yoktur.
 6. Cevap deterministik olarak temizlenir: kod bloğu ve giriş cümlesi atılır, ana başlık tam olarak
    `# Son Mesajların Özeti` yapılır, alt başlıklar `##` olur, `@everyone`/`@here` etkisizleştirilir.
@@ -83,10 +86,49 @@ gönderilir.
 kelime, ölçümde 640–760 token); 1200 uzun sohbetler için pay bırakır. Model yine de sınıra takılırsa yarım kalan son satır atılır.
 Hiç metin yoksa kullanıcıya özel "Özet oluşturulamadı" mesajı gider.
 
+## Rol kontrolü
+
+`/ozetle` yalnızca `Summary:AllowedRoleIds` rollerinden **en az birine** sahip üyelerde çalışır (any-of; tümü gerekmez).
+Varsayılan liste: `1338605015417487440`, `1254401028359458887`, `700799880549105674`, `702465621992144926`,
+`1066826260803764234`, `1333687724669931602`. Config'de liste verilirse varsayılanın yerine geçer.
+
+- Kontrol her şeyden önce yapılır; rol ID'leri interaction payload'undan gelir, ek REST çağrısı yoktur. Rolü olmayan üye için
+  geçmiş okunmaz, AI çağrılmaz, kanala bir şey gönderilmez.
+- Ret mesajı, rollerin sunucudaki **güncel adlarını** guild cache'inden okur, kalın ve etkisizleştirilmiş gösterir (mention
+  yok, ping yok): "Bu komutu kullanmak için şu rollerden en az birine sahip olmalısın: **A**, **B**, … Bu rollerden yalnızca
+  biri yeterli." Sunucuda artık bulunmayan bir rol `Rol <id>` olarak gösterilir ve log'a uyarı düşülür.
+- Rol gizleme, Discord komut izinleri (command permissions API) ile yapılmaz.
+
+## Önceki özet ve 100 mesaj kuralı
+
+Durum veritabanında tutulmaz; kaynak Discord'daki gerçek özet mesajıdır. **Önceki özet işareti** yalnızca şu koşulları
+birlikte sağlayan mesajdır: yazarı TSQ Bot'un kendi kullanıcısı ve içeriği tam olarak `# Son Mesajların Özeti` ile başlıyor.
+Bölünmüş bir özette ilk parça yeterlidir. Aynı başlığı bir üye ya da başka bir bot yazarsa işaret sayılmaz.
+
+Sayılan mesajlar, transcript ile aynı tanıma göre üye mesajlarıdır (kişinin kendi normal veya yanıt mesajı). Botlar (TSQ
+Bot'un eski çıktıları dahil), webhook'lar ve sistem olayları sayılmaz; bot trafiği eşiği dolduramaz.
+
+Geçmiş yeniden eskiye, 100'lük sayfalar halinde en fazla **10 sayfa** (1000 mesaj) taranır. Şu dört durumdan ilki olunca durur:
+
+| Durum | Sonuç |
+|---|---|
+| Önce 100 üye mesajı bulundu | Yeterli; daha eskiye bakılmaz, bu 100 mesaj özetlenir |
+| Önce TSQ Bot'un önceki özeti bulundu | Ondan sonraki üye mesajı 100'den azsa AI çağrılmaz: "Son özetten beri **37** yeni mesaj var. Tekrar özetlemek için **63** mesaj daha gerekiyor." (99 → ret, 100 → izin) |
+| Kanalın gerçek başına ulaşıldı, özet yok | İlk özet; `MinMessages` (5) kuralı geçerli |
+| 10 sayfa bitti; ne 100 mesaj, ne özet, ne kanal başı | Belirsiz, AI çağrılmaz: "Önceki özet kontrol edilemedi. Biraz sonra tekrar dene." |
+
+Log: `history_page_count`, `eligible_message_count`, `summary_marker_found`, `history_exhausted`, `history_limit_hit` (içerik
+yok).
+
 ## Kötüye kullanım koruması
 
-- Üye cooldown'u 30 sn, kanal cooldown'u 60 sn. İkisi de yalnızca bir özet üretildikten sonra başlar.
-- AI isteği başarısız olursa yalnızca 10 sn beklenir. AI'dan önceki retlerde (izin, yetersiz mesaj) cooldown uygulanmaz.
+- Kanal/thread cooldown'u **120 sn**. Başarılı bir özet kanala gönderildikten sonra başlar, özeti kim isterse istesin
+  geçerlidir. Her kanal ve her thread bağımsızdır. Ret mesajı kalan süreyi gösterir: "Bu kanalda tekrar özet oluşturmak için
+  **1 dk 18 sn** beklemelisin."
+- Üye cooldown'u 30 sn; o da yalnızca başarılı bir özetten sonra başlar.
+- Cooldown ve 100 mesaj kuralı birbirinden bağımsızdır; ikisinin de geçmesi gerekir.
+- AI isteği başarısız olursa veya özet Discord'a gönderilemezse bu başarılı özet sayılmaz: yalnızca 10 sn beklenir, 120 sn'lik
+  cooldown başlamaz. AI'dan önceki retlerde (rol, izin, yetersiz mesaj) cooldown uygulanmaz.
 - Aynı kanalda bir özet hazırlanırken ikinci istek başlamaz: "Bu kanal için zaten bir özet hazırlanıyor."
 - Bot genelinde aynı anda en fazla 2 özet hazırlanır. Fazlası hemen reddedilir; kuyruk tutulmaz.
 - Cooldown'lar bellekte tutulur ve yeniden başlatmada sıfırlanır.
@@ -102,7 +144,8 @@ Hiç metin yoksa kullanıcıya özel "Özet oluşturulamadı" mesajı gider.
 | `MaxMessages` | `100` |
 | `MinMessages` | `5` |
 | `UserCooldownSeconds` | `30` |
-| `ChannelCooldownSeconds` | `60` |
+| `ChannelCooldownSeconds` | `120` |
+| `AllowedRoleIds` | yukarıdaki 6 rol ID'si (`Summary__AllowedRoleIds__0` …) |
 | `MaxConcurrentRequests` | `2` |
 | `RequestTimeoutSeconds` | `25` |
 | `MaxOutputTokens` | `1200` |

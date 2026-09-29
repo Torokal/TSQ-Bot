@@ -25,7 +25,8 @@ public sealed record SummaryAttachment(string FileName, string? ContentType);
 
 /// <summary>
 /// One message as Discord returned it (SDK-free). <paramref name="Content"/> is the raw text with Discord markup
-/// (mentions, custom emoji, timestamps); <see cref="SummaryTranscript"/> makes it readable.
+/// (mentions, custom emoji, timestamps); <see cref="SummaryTranscript"/> makes it readable. <paramref name="FromThisBot"/>:
+/// written by TSQ Bot itself (its own user id) — the only author whose summary title marks an earlier summary.
 /// </summary>
 public sealed record SummarySourceMessage(
     ulong Id,
@@ -37,7 +38,9 @@ public sealed record SummarySourceMessage(
     IReadOnlyList<string> Stickers,
     bool IsForward = false,
     bool HasPoll = false,
-    bool HasEmbeds = false);
+    bool HasEmbeds = false,
+    ulong AuthorId = 0,
+    bool FromThisBot = false);
 
 /// <summary>Display names for the ids that appear in message markup (users, roles, channels).</summary>
 public sealed record SummaryMentionNames(

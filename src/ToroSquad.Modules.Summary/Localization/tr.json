@@ -8,7 +8,7 @@
   "summary.bot_no_access": "Bu kanalın mesajlarını okuyamıyorum. Bota bu kanalda **Kanalı Görüntüle** ve **Mesaj Geçmişini Oku** izinleri verilmeli.",
   "summary.channel_busy": "Bu kanal için zaten bir özet hazırlanıyor.",
   "summary.user_cooldown": "Yeni bir özet için {0} saniye bekleyin.",
-  "summary.channel_cooldown": "Bu kanal az önce özetlendi. Yeni bir özet için {0} saniye bekleyin.",
+  "summary.channel_cooldown": "Bu kanalda tekrar özet oluşturmak için **{0}** beklemelisin.",
   "summary.at_capacity": "Şu anda başka özetler hazırlanıyor. Birazdan tekrar deneyin.",
   "summary.fetch_failed": "Kanal mesajları şu anda okunamadı. Birazdan tekrar deneyin.",
   "summary.content_unavailable": "Mesajların içeriği Discord tarafından bota iletilmedi. Message Content erişiminin açık olduğundan emin olun.",
@@ -24,5 +24,12 @@
   "summary.health.idle": "Hazır; henüz özet istenmedi",
   "summary.health.ok": "Son özet isteği tamamlandı: {0}",
   "summary.health.ai_failed": "Son özet isteği başarısız ({0}): {1}",
-  "summary.health.discord_failed": "Son özet isteğinde Discord okuma/gönderme hatası: {0}"
+  "summary.health.discord_failed": "Son özet isteğinde Discord okuma/gönderme hatası: {0}",
+  "summary.role_required": "Bu komutu kullanmak için şu rollerden en az birine sahip olmalısın: {0}. Bu rollerden yalnızca biri yeterli.",
+  "summary.role_fallback": "Rol {0}",
+  "summary.not_enough_new": "Son özetten beri **{0}** yeni mesaj var. Tekrar özetlemek için **{1}** mesaj daha gerekiyor.",
+  "summary.history_unknown": "Önceki özet kontrol edilemedi. Biraz sonra tekrar dene.",
+  "summary.duration.seconds": "{0} sn",
+  "summary.duration.minutes": "{0} dk",
+  "summary.duration.minutes_seconds": "{0} dk {1} sn"
 }
