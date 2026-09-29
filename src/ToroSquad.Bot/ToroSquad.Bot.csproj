@@ -23,6 +23,7 @@
     <ProjectReference Include="..\ToroSquad.Modules.Randomizer\ToroSquad.Modules.Randomizer.csproj" />
     <ProjectReference Include="..\ToroSquad.Modules.Timezone\ToroSquad.Modules.Timezone.csproj" />
     <ProjectReference Include="..\ToroSquad.Modules.Giveaway\ToroSquad.Modules.Giveaway.csproj" />
+    <ProjectReference Include="..\ToroSquad.Modules.Summary\ToroSquad.Modules.Summary.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -527,6 +527,7 @@
           "ToroSquad.Modules.Live": "[0.1.0-dev, )",
           "ToroSquad.Modules.Quote": "[0.1.0-dev, )",
           "ToroSquad.Modules.Randomizer": "[0.1.0-dev, )",
+          "ToroSquad.Modules.Summary": "[0.1.0-dev, )",
           "ToroSquad.Modules.Timezone": "[0.1.0-dev, )",
           "ToroSquad.Modules.Volleyball": "[0.1.0-dev, )"
         }
@@ -641,6 +642,15 @@
       "torosquad.modules.randomizer": {
         "type": "Project",
         "dependencies": {
+          "ToroSquad.Core": "[0.1.0-dev, )",
+          "ToroSquad.Discord": "[0.1.0-dev, )"
+        }
+      },
+      "torosquad.modules.summary": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Http": "[10.0.12, )",
+          "Microsoft.Extensions.Options.ConfigurationExtensions": "[10.0.12, )",
           "ToroSquad.Core": "[0.1.0-dev, )",
           "ToroSquad.Discord": "[0.1.0-dev, )"
         }

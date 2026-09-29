@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TSQ Özet: /ozetle reads the latest member messages of the channel or thread it ran in (REST, on demand — no listener, no
+       cache, no storage) and asks one AI model (OpenCode Go, configured model) for one short Turkish summary, posted publicly.
+       Stateless: no tables, no migration, no background jobs. Depends on the shared TSQ layers only (never on another feature
+       module). The Application and Providers namespaces must not use the Discord SDK (architecture tests); only Commands talks
+       to Discord.Net. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Summary.Localization.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

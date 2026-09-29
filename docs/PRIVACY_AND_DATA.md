@@ -1,12 +1,19 @@
 # Gizlilik ve veri saklama (teknik kayıt)
 
 TSQ Bot mesaj akışı okumaz (mesaj olayları dinlenmez; gateway intent'i yalnızca Guilds), üye listesi indirmez (Guild
-Members intent kapalı), presence izlemez. Profil, avatar, kullanıcı adı **saklanmaz**. Tek istisna TSQ Quote'tur: uygulama
+Members intent kapalı), presence izlemez. Profil, avatar, kullanıcı adı **saklanmaz**. İlk istisna TSQ Quote'tur: uygulama
 bunun için Message Content erişimini (Developer Portal) kullanır ve `/quote` bir üyenin açıkça verdiği **tek** mesajı
 (erişim denetimlerinden sonra) bir kez REST ile okur, yazarının görünen adını, kullanıcı adını ve profil fotoğrafını
 (Discord CDN) alır, görseli üretip kanala gönderir. Akış: oku → düz metne çevir → çiz → at. Mesaj metni, isim, avatar URL'si
 ve baytları yalnızca o isteğin belleğinde yaşar; veritabanına, önbelleğe ve loglara yazılmaz (loglarda yalnızca
 kimlikler ve sonuç) ([quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md)).
+
+İkinci istisna TSQ Özet'tir: `/ozetle` çalıştırıldığı anda o kanalın (thread'de yalnızca thread'in) son üye mesajlarını REST
+ile okur. Görünen adları ve okunur hale getirilmiş metni ("Ad: mesaj"; ID yok, bağlantılar yalnızca alan adı, ekler
+indirilmeden yer tutucu) **tek bir istekle üçüncü taraf AI işleyicisine**, yani OpenCode Go'ya ve onun üst sağlayıcısına
+(DeepSeek, Global bölge) gönderir. Gelen özet kanala normal mesaj olarak yazılır. Mesajlar, transcript, prompt ve cevap
+yalnızca o isteğin belleğinde yaşar; veritabanına, dosyaya, önbelleğe ve loglara yazılmaz. Loglarda yalnızca kimlikler,
+sayılar, token kullanımı, süre ve sonuç bulunur ([summary/TSQ_SUMMARY.md](summary/TSQ_SUMMARY.md)).
 
 ## Tutulan kayıtlar
 
@@ -42,6 +49,10 @@ kaydedilmez ve loglanmaz (yalnızca Debug düzeyinde komut/sunucu/kullanıcı ID
 
 TSQ Quote tablo kullanmaz; `/privacy export/delete` kapsamında kaydı yoktur (gönderilen alıntı görseli normal bir kanal
 mesajıdır; kanaldan Discord'da silinir).
+
+TSQ Özet tablo kullanmaz; `/privacy export/delete` kapsamında kaydı yoktur. Cooldown'lar yalnızca bellekte tutulan
+kullanıcı/kanal ID'si ve süreden ibarettir ve yeniden başlatmada silinir. Gönderilen özet normal bir kanal mesajıdır;
+Discord'da silinir.
 
 Discord ID'leri kayıpsız (64-bit) saklanır.
 

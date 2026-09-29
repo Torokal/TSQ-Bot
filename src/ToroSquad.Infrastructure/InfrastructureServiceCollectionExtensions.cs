@@ -30,7 +30,11 @@ public static class InfrastructureServiceCollectionExtensions
         "Live:Twitch:ClientSecret",
         "Live:Kick:ClientId",
         "Live:Kick:ClientSecret",
+        "OPENCODE_GO_API_KEY",
     ];
+
+    /// <summary>Secrets read from plain (unprefixed) environment variables rather than configuration (redacted the same way).</summary>
+    public static readonly IReadOnlyList<string> SecretEnvironmentVariables = ["OPENCODE_GO_API_KEY"];
 
     public static IServiceCollection AddToroInfrastructure(this IServiceCollection services, IConfiguration configuration, string contentRoot)
     {
@@ -48,7 +52,8 @@ public static class InfrastructureServiceCollectionExtensions
             .ReplaceService<IModelCacheKeyFactory, ContributorModelCacheKeyFactory>());
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<ToroDbContext>());
 
-        services.AddSingleton(new SecretRedactor(SecretConfigurationKeys.Select(k => configuration[k])));
+        services.AddSingleton(new SecretRedactor(SecretConfigurationKeys.Select(k => configuration[k])
+            .Concat(SecretEnvironmentVariables.Select(Environment.GetEnvironmentVariable))));
 
         services.AddSingleton<ModuleRegistry>();
         services.AddSingleton<ILocalizer>(sp => new LocalizationCatalog(sp.GetServices<LocalizationSource>()));

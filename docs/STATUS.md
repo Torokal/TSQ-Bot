@@ -208,6 +208,27 @@ invite link and no global command registration. The source code is public under 
   module stops new giveaways only; started ones finish with their announcement. In the manifest but not synced; not
   merged, not deployed.
 
+## TSQ Özet (new, 2026-09-29, branch `feat/summary-module`)
+
+- Module `summary`, command `/ozetle` (everyone, no options). Stateless: no table, no migration, no background job, no
+  message listener or cache (gateway Identify stays Guilds). Off by default (`/modules enable summary`).
+- One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
+  verified from the live `/models` list), `reasoning_effort: low`, temperature 0.3, top_p 0.9, `max_tokens` 900, no tools,
+  25 s timeout, **no retry, no fallback model, no second pass**. Fresh random `x-opencode-session` per summary; honest
+  User-Agent `TSQBot/<version> SummaryModule`. Key only from `OPENCODE_GO_API_KEY` (redacted); without it `/ozetle`
+  says "not configured" and nothing else is affected.
+- **IMPLEMENTED / TESTED_OFFLINE**: member-only transcript (bots incl. earlier summaries, webhooks, system events out),
+  oldest → newest, newest 100, mention/role/channel/emoji/timestamp normalization, links → `[link: host]`, attachment and
+  sticker placeholders, 1500-char message cap and 40k transcript cap (newest kept), delimiter/fake-line injection defused;
+  fixed system prompt with untrusted-data and attribution rules; deterministic clean-up (fences, preamble, exact
+  `# Son Mesajların Özeti`, `##` headings, defused `@everyone`/`@here`) and 2000-char split at section/bullet/line/space;
+  zero AI requests on every refusal (config, channel type, member/bot permissions, too few messages, withheld content,
+  Discord read failure); cooldowns (30 s member / 60 s channel after a produced summary, 10 s after a failed request),
+  one run per channel, at most two bot-wide without a queue; 400/401/403/429/5xx/network/timeout each after exactly one
+  request; logs with ids, counts, tokens, latency and outcome only.
+- **NOT VERIFIED_LIVE**: everything in Discord (registration, reading a real channel through Message Content, the public
+  post, thread handling) and a real OpenCode Go summary from the bot.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

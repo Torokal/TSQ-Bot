@@ -23,6 +23,7 @@ COPY src/ToroSquad.Modules.Birthday/ToroSquad.Modules.Birthday.csproj src/ToroSq
 COPY src/ToroSquad.Modules.Randomizer/ToroSquad.Modules.Randomizer.csproj src/ToroSquad.Modules.Randomizer/packages.lock.json src/ToroSquad.Modules.Randomizer/
 COPY src/ToroSquad.Modules.Timezone/ToroSquad.Modules.Timezone.csproj src/ToroSquad.Modules.Timezone/packages.lock.json src/ToroSquad.Modules.Timezone/
 COPY src/ToroSquad.Modules.Giveaway/ToroSquad.Modules.Giveaway.csproj src/ToroSquad.Modules.Giveaway/packages.lock.json src/ToroSquad.Modules.Giveaway/
+COPY src/ToroSquad.Modules.Summary/ToroSquad.Modules.Summary.csproj src/ToroSquad.Modules.Summary/packages.lock.json src/ToroSquad.Modules.Summary/
 COPY src/ToroSquad.Bot/ToroSquad.Bot.csproj src/ToroSquad.Bot/packages.lock.json src/ToroSquad.Bot/
 RUN dotnet restore src/ToroSquad.Bot/ToroSquad.Bot.csproj --locked-mode
 
