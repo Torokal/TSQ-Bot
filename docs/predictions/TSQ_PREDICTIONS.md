@@ -146,18 +146,32 @@ buton her zaman yeniden başlatır). Aynı anda gelen sonuçlandırma ve iptalde
 
 ## Oluşturma
 
-`/ongoru yarat` tek bir form açar: **Başlık** (5–200), **Seçenekler ve oranlar** (her satır `Seçenek | oran`), isteğe bağlı
-**Otomatik kilitlenme** (Türkiye saati `GG.AA.YYYY SS:DD`, ISO de kabul; boşsa elle kilitlenir), isteğe bağlı **Açıklama /
-sonuçlandırma kuralı** (≤ 1000).
+`/ongoru yarat` tek bir **🔮 Öngörü Oluştur** formu açar (beş alan, Discord sınırı):
+
+| Alan | Açıklama (formda) | Örnek metin | Kural (arka planda) |
+|---|---|---|---|
+| Başlık | Öngörünün sorusunu kısa ve net yaz. | Galatasaray - Fenerbahçe maç sonucu ne olur? | zorunlu, 5–200 karakter |
+| Seçenekler ve oranlar | Her seçeneği yeni satıra yaz. Oran eklemek için \| kullan. Oran yazmazsan 2.00 kullanılır. | üç satırlık gerçek örnek (`Galatasaray Kazanır \| 1.10` …) | zorunlu, aşağıdaki kurallar |
+| Kilitlenme tarihi | Boş bırakırsan öngörü manuel olarak kilitlenir. | 05.10.2026 | isteğe bağlı, `GG.AA.YYYY` (ISO `YYYY-AA-GG` de kabul) |
+| Kilitlenme saati | Türkiye saati. | 20:00 | isteğe bağlı, `SS:DD` (`20.00` de kabul) |
+| Sonuç kuralı | Sonucun nasıl belirleneceğini gerekiyorsa belirt. | Normal süre sonucu geçerlidir; uzatmalar dahil değildir. | isteğe bağlı, ≤ 1000 karakter; kartta gösterilir |
+
+Formda karakter sınırı veya biçim ayrıntısı gösterilmez; bunlar yalnızca bir değer geçersiz olduğunda, alanı ve satırı
+belirten Türkçe hata mesajında söylenir (ör. "**Seçenekler**: 3. satırdaki oran geçerli değil. Örnek: 2.30 (en az 1.01, en
+fazla 1000.00).", "**Seçenekler**: en az 2 seçenek girmelisin; …"). Varsayılan oran yapılandırmadan gelir (`Predictions:DefaultOdds`).
 
 - 2–25 seçenek; boş satırlar yok sayılır; 26. seçenek reddedilir (kesilmez). Seçenek adı ≤ 80; boş/tekrar (kırpma, boşluk
   birleştirme ve Türkçe küçük harf sonrası) ve ad içinde `|` reddedilir.
 - Oran `1.10`/`1,10`, en fazla iki ondalık, 1.01–1000.00; negatif, sıfır, NaN, Infinity, bilimsel gösterim reddedilir, asla
   varsayılana çevrilmez. Oran yazılmayan satır 2.00 alır ve önizleme bunu söyler.
+- Tarih ve saat ikisi de boşsa öngörü elle kilitlenir. Yalnız biri girilirse tahmin edilmez, reddedilir: "Kilitlenme tarihi
+  girdiysen saat de girmelisin." / "Kilitlenme saati girdiysen tarih de girmelisin." İkisi birlikte Europe/Istanbul duvar saati
+  olarak okunur ve UTC saklanır.
 - Kilit zamanı gelecekte olmalı (en az 1 dk, en fazla 1 yıl); belirsiz/var olmayan saatler reddedilir; yayımlarken tekrar denetlenir.
 
-Form önce **özel önizleme** açar (`[📢 Yayımla] [✏️ Düzenle] [Vazgeç]`); hatalar alan ve satırıyla listelenir, Düzenle formu
-girilen değerlerle yeniden açar. Taslaklar yalnızca bellekte (kullanıcı + sunucu + kanal + turnuva, 128 bit rastgele kimlik,
+Form önce **özel önizleme** açar (`[✅ Yayımla] [✏️ Düzenle] [❌ Vazgeç]`); önizlemedeki kartta ⏳ Kilitlenme, tarih ve
+saatten oluşan tek zaman olarak (göreli + tam Discord zaman damgası) ya da "Manuel" olarak görünür. Hatalar alan ve satırıyla
+listelenir; Düzenle formu tarih ve saat dahil girilen beş değerle yeniden açar, hiçbir girdi kaybolmaz. Taslaklar yalnızca bellekte (kullanıcı + sunucu + kanal + turnuva, 128 bit rastgele kimlik,
 30 dk). **Yayımla** taslağı tek seferlik alır (çift tıklama tek kayıt; benzersiz `PublishKey` yedektir), her şeyi yeniden
 denetler (eski taslak yeni turnuvaya taşınmaz), satırı `Publishing` olarak kaydeder, yaratıcının bu turnuvadaki cüzdanını
 açar ve kartı gönderir. Kesin reddedilen gönderim satırı siler ve taslağı geri verir; belirsiz gönderim son mesajlarda aranır,
