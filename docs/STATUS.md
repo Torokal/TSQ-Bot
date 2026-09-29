@@ -223,7 +223,12 @@ invite link and no global command registration. The source code is public under 
   `**Spoiler (konu):**` label, `konu belirtilmemiş` fallback, no leak into Ana konu / headings / plans / atmosphere, no mixing
   of topics, no invented spoilers); output converts `<spoiler>`/`\|\|` to native `||` and closes an unclosed one; the
   2000-char split never cuts inside a spoiler (an oversized one is closed and reopened). TESTED_OFFLINE; model compliance
-  NOT_VERIFIED (no live inference).
+  NOT_VERIFIED (no live inference). Deployed (#35); first live run after it mentioned spoilers only generically (no `||`).
+- Display names (branch `fix/summary-display-names`): live summaries had become over-anonymous ("bir kullanıcı …") although
+  the transcript carries server display names; the prompt rule "names only when really needed" is replaced by: use the
+  display name when a view, question, joke, experience, plan or action belongs to one person; no "bir kullanıcı" when the
+  name is known; at most 2–3 names per bullet; plain names from the transcript only; attribution and spoiler rules
+  unchanged. TESTED_OFFLINE.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
   `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
