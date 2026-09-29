@@ -10,10 +10,10 @@ Otomatik futbol öngörüleri ([AUTO_FOOTBALL.md](AUTO_FOOTBALL.md)) için tek s
 | Galatasaray | Süper Lig, Şampiyonlar Ligi | evet (2026-09-30) | evet | pinnacle / onexbet (aday) | yok (A: sessiz, B: okunamadı) | PROVIDER_VERIFIED_READ_ONLY · MARKET_RULE_UNVERIFIED |
 | Fenerbahçe | Süper Lig, Şampiyonlar Ligi | evet (2026-09-30) | evet | pinnacle / onexbet (aday) | yok | PROVIDER_VERIFIED_READ_ONLY · MARKET_RULE_UNVERIFIED |
 | Beşiktaş | Süper Lig, Avrupa Ligi | evet (2026-09-30) | evet | pinnacle (aday) | yok | PROVIDER_VERIFIED_READ_ONLY · MARKET_RULE_UNVERIFIED |
-| Türkiye (erkek A millî) | Uluslar Ligi, EURO elemeleri, EURO, DK Avrupa elemeleri, DK | **hayır** — bu turda gerçek sorgu yapılmadı | — | — | yok | NATIONAL_TEAM_NOT_OBSERVED · BLOCKED_KEY_ROTATION |
+| Türkiye (erkek A millî) | Uluslar Ligi (gözlendi); EURO elemeleri, EURO, DK Avrupa elemeleri, DK sezon dışı | **evet** (2026-09-30, Belgium – Turkey) | evet | pinnacle (aday) | yok | PROVIDER_VERIFIED_READ_ONLY · MARKET_RULE_UNVERIFIED |
 
-Genel: **PROVIDER_PARTIALLY_VERIFIED** (üç kulüp salt-okunur doğrulandı; millî takım gözlenmedi; pazar kuralı
-doğrulanmadı). Kulüplerdeki başarı Türkiye doğrulaması yerine sayılmaz.
+Genel: **PROVIDER_VERIFIED_READ_ONLY** dört hedef için (maç keşfi + eksiksiz h2h seti), **MARKET_RULE_UNVERIFIED** (hiçbir
+kaynağın normal süre kuralı resmî kaynağından doğrulanmadı → Live kart açmaz).
 
 2026-09-30 kontrolü: ücretsiz planlı gerçek anahtarla, yerelde (Development, `TheOddsApiClient`, host
 `api.the-odds-api.com`, canlı HTTP, fixture/cache yok) `predictions football-check --days 16 --odds --budget 5`
@@ -21,9 +21,29 @@ salt-okunur çalıştırıldı; Discord'a hiçbir şey gönderilmedi, bot verita
 görünmedi. O kontrolde millî organizasyonlar henüz allow-list'te değildi (sorgulanmadı). Gerçek API okuması Discord
 kartının canlı doğrulaması değildir; testlerdeki yanıtlar SENTETİKTİR ve ücretsiz kapsamın kanıtı değildir.
 
-**Anahtar yenileme (2026-09-30):** o kontrolde kullanılan anahtar bir ekran görüntüsünde göründü. Yerel secrets dosyası o
-zamandan beri değişmedi → anahtar **henüz yenilenmedi**; bu yüzden bu turda gerçek sorgu yapılmadı
-(**BLOCKED_KEY_ROTATION**). Yeni anahtar tanımlanınca aşağıdaki "Doğrulama listesi" çalıştırılacak.
+**Anahtar yenileme (2026-09-30):** o kontrolde kullanılan anahtar bir ekran görüntüsünde göründü; sahibi yenisini tanımladı
+(yerel secrets dosyası 01:11 TR'de güncellendi; değer hiçbir yerde gösterilmedi). Eski anahtarın panelden iptali sahibin
+işidir. Yeni anahtarla ilk ölçüm `x-requests-remaining=500`.
+
+## Türkiye millî takımı (2026-09-30 22:12Z, yeni anahtar)
+
+Ortam Development, istemci `TheOddsApiClient`, host `api.the-odds-api.com`, canlı HTTP (fixture/cache yok), kontrol
+`predictions football-check --days 30` (ücretsiz) ve `--days 30 --odds --budget 5 --focus TR --preview` (1 kredi).
+
+| Konu | Gözlenen |
+|---|---|
+| Millî organizasyonlar (katalog `all=true`) | `soccer_uefa_nations_league` **sezonda**; `soccer_uefa_euro_qualification`, `soccer_uefa_european_championship`, `soccer_fifa_world_cup_qualifiers_europe`, `soccer_fifa_world_cup` **destekleniyor, sezon dışı**; `soccer_fifa_world_cup_winner` outright (okunmadı). Kulüplerde ŞL elemesi sezon dışı. |
+| Sağlayıcının Türkiye adı | **"Turkey"** (gözlendi). "Türkiye"/"Turkiye" gözlenmedi (alias olarak kalır). |
+| Maç | Uluslar Ligi, event `429e47b7c49fba99d5cbcba70b9c48c5`, **Belgium (ev) – Turkey (deplasman)**, 2026-10-02 18:45Z / **02.10.2026 21:45 TR**; 30 günde başka Türkiye maçı yok |
+| Oran çağrısı | 1 çağrı, `x-requests-last=1`, kalan 500 → **499** |
+| Dönen bookmaker'lar (h2h) | onexbet, betclic_fr, winamax_de, winamax_fr, betfair_ex_eu, suprabets, matchbook, mybookieag, williamhill, pinnacle, marathonbet, unibet_se, leovegas_se, pmu_fr, sport888, nordicbet, betsson, betonlineag (18) |
+| Sonuçlar | Belgium / Draw / Turkey (adla eşlendi) |
+| Aday set | pinnacle: ham 1.5 / 4.93 / 5.99 → sabit 1.50 / 4.93 / 5.99; pazar güncelleme 22:12:16Z (okumada 14 sn) |
+| Karar | **RED: MARKET_RULE_UNVERIFIED** — geçerli veri, bizim kural kapımız reddetti (sağlayıcı oran veriyor) |
+| Yerel kart önizlemesi | başlık "Belgium - Türkiye maç sonucu ne olur?" (sağlayıcı sırası), "Belgium kazanır 1.50 · Beraberlik 4.93 · Türkiye kazanır 5.99", yayın 02.10.2026 09:00 TR, kilit 21:43 TR, altbilgi "TSQ Öngörü #… · Otomatik · Sabit oran", dört buton; gönderilmedi, saklanmadı |
+
+Dört hedef içindeki **ilk uygun maç: 02.10.2026 21:45 TR, Belgium – Türkiye** (yayın hedefi 09:00 TR). Sonraki kulüp maçı
+09.10 Galatasaray – Kasimpasa SK.
 
 ## Belgeden doğrulananlar (2026-09-29)
 
@@ -96,7 +116,7 @@ The Odds API'ye sorulabilecek soru (taslak; kullanıcı onayı olmadan gönderil
 - Canlı/başlamış maç yanıtı, erteleme veya saat değişikliği (sağlayıcıda durum alanı yok; yalnızca `commence_time`).
 - Ay dönümünde kota yenilenmesi; 401/403/429/5xx yanıtları.
 - ŞL eleme ve Konferans Ligi'nde takip edilen kulüp maçı; Türkiye Kupası/Süper Kupa (anahtar yok, okunmuyor).
-- **Türkiye millî takımının** sağlayıcıdaki adı, maçları, organizasyonların aktif/pasif durumu ve oranları.
+- EURO elemeleri, EURO, DK Avrupa elemeleri ve DK'da Türkiye maçı (şu an sezon dışı).
 - Discord'da gerçek otomatik kart (canlı doğrulama değil).
 
 ## Doğrulama listesi (tekrar çalıştırmak için)

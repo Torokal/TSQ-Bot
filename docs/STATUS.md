@@ -309,8 +309,9 @@ invite link and no global command registration. The source code is public under 
   home/away, complete fresh 1-X-2 sets. NOT_OBSERVED: h2h regular-time semantics, live/postponed data, error responses.
   Nothing deployed; no automatic card in Discord.
 - Türkiye men's senior national team added as the fourth target (national competitions: Nations League, Euro
-  qualification, Euro, World Cup qualifiers Europe, World Cup; outrights and friendlies excluded). **NATIONAL_TEAM_NOT_OBSERVED**
-  (the exposed key is not rotated yet: BLOCKED_KEY_ROTATION). **MARKET_RULE_UNVERIFIED**: no bookmaker's regular-time rule
+  qualification, Euro, World Cup qualifiers Europe, World Cup; outrights and friendlies excluded). Observed read-only with
+  the rotated key (2026-09-30, 1 credit): Nations League in season, provider name "Turkey", Belgium – Turkey on
+  02.10.2026 21:45 TR with a complete fresh h2h set. **MARKET_RULE_UNVERIFIED**: no bookmaker's regular-time rule
   verified from its official rules, so Live opens no card and makes no paid call; Observe shows candidates.
 
 ## What has been verified against real Discord / real APIs

@@ -8,8 +8,8 @@ iptal/iade, aynı turnuva. **Sonuç otomatik girilmez**; ödemeyi her zaman yön
 
 Varsayılan: **Disabled**. Sağlayıcı kapsamı ve gerçek veri doğrulaması: [PROVIDER_VERIFICATION.md](PROVIDER_VERIFICATION.md)
 (2026-09-30: üç kulüp için gerçek ücretsiz anahtarla salt-okunur doğrulandı — Süper Lig, Şampiyonlar Ligi ve Avrupa
-Ligi maçları ve eksiksiz h2h setleri gözlendi; **Türkiye millî takımı henüz gözlenmedi**; bookmaker'ların normal süre
-kuralı doğrulanamadığı için **Live bugün hiçbir kart açmaz** — aşağıda "Pazar kuralı kapısı").
+Ligi maçları ve eksiksiz h2h setleri gözlendi; Türkiye millî takımı Uluslar Ligi'nde "Turkey" adıyla gözlendi;
+bookmaker'ların normal süre kuralı doğrulanamadığı için **Live bugün hiçbir kart açmaz** — aşağıda "Pazar kuralı kapısı").
 
 ## Kapsam
 
@@ -30,7 +30,7 @@ gerçek para, bahis sitesine yönlendirme, ücretli API, ikinci sağlayıcı, ye
 | GS | Galatasaray | kulüp | Galatasaray, Galatasaray SK, Galatasaray AS | "Galatasaray" gerçek veride gözlendi (2026-09-30) |
 | FB | Fenerbahçe | kulüp | Fenerbahce, Fenerbahçe, Fenerbahce SK, Fenerbahçe SK | "Fenerbahce" gözlendi |
 | BJK | Beşiktaş | kulüp | Besiktas, Beşiktaş, Besiktas JK, Beşiktaş JK | "Besiktas JK" gözlendi |
-| TR | Türkiye | millî | Turkey, Türkiye, Turkiye | **gözlenmedi**; "Turkey" sağlayıcının diğer İngilizce takım adları düzenine, "Türkiye" resmî ada, "Turkiye" ASCII biçimine dayanır |
+| TR | Türkiye | millî | Turkey, Türkiye, Turkiye | **"Turkey" gözlendi** (2026-09-30, Uluslar Ligi); "Türkiye" resmî ad, "Turkiye" ASCII biçimi (gözlenmedi) |
 
 **Organizasyonlar (açık allow-list, kapsamıyla):**
 - Kulüp: `soccer_turkey_super_league`, `soccer_uefa_champs_league`, `soccer_uefa_champs_league_qualification`,
@@ -256,7 +256,6 @@ PROVIDER_VERIFICATION.md'de). Liste **bugün boş**: Pinnacle ve 1xBet'in resmî
   zamandan 2 dakika öncedir; maç geç başlarsa katılım yine planlanan zamana göre kapanır.
 - `h2h` pazarının normal süre olduğunu sağlayıcı belgesi yazmaz ve bookmaker kuralları doğrulanamadı: Live bugün kart
   açmaz (yukarıdaki "Pazar kuralı kapısı"). Kart kural metni sağlayıcı semantiğinin kanıtı değildir.
-- Türkiye millî takımı gerçek veride henüz gözlenmedi; adı ("Turkey"?) ve maçları bir sonraki gerçek kontrolde doğrulanacak.
 - Türkiye Kupası, Süper Kupa ve hazırlık/dostluk maçları kapsam dışı (belgelenmiş anahtar yok).
 - Aynı maç için elle serbest metinle açılmış bir kart dış maç kimliği taşımadığından kesin tespit edilemez; başlık
   benzerliğinden hareketle hiçbir kullanıcı kartı silinmez veya iptal edilmez.
