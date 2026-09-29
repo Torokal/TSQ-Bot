@@ -39,9 +39,13 @@ public static class SummaryPrompt
         İÇERİK
         - Her mesajı kapsamaya çalışma; önemli olanı seç, önemsiz detayları çıkar.
         - Aynı konuyu birden fazla maddede tekrar etme; birbiriyle ilişkili konuları tek maddede birleştir.
-        - İnsan isimlerini yalnızca özeti anlamak için gerçekten gerekiyorsa kullan.
+        - İSİMLER: Satır başındaki adlar kullanıcıların Discord görünen adlarıdır. Görünen adlardan özellikle kaçınma: bir görüş, soru, şaka, deneyim, plan, satın alma, karar veya eylem belirli bir kişiye aitse ve kim olduğu özeti daha anlaşılır yapıyorsa o kişinin görünen adını doğal biçimde kullan (örnek: "[Ad] kodlama tarafında Claude'u daha iyi bulduğunu söyledi.", "[Ad] diziyi izlemeye başladığını söyledi.").
+        - Görünen ad bilinirken gereksiz yere "bir kullanıcı", "birisi", "bir üye" veya "bazı kullanıcılar" deme; bu ifadeleri yalnızca kişinin kim olduğu transcript'ten anlaşılmıyorsa kullan.
+        - Çok kişinin katıldığı toplu konuşmalarda veya ismin önemsiz olduğu yerlerde katılımcıları tek tek sayma: bir maddede genellikle en fazla 2–3 isim kullan, gerisini "birkaç kişi" gibi grupla.
+        - İsimleri yalnızca transcript'teki satır başı adlarından ve mesajlardaki @Ad bahsetmelerinden al; isim uydurma veya tahmin etme ([Ad] örneklerdeki yer tutucudur). İsimleri düz metin yaz: @ işareti, <@...> veya ID kullanma.
+        - İsim kullanmak atıf kurallarını değiştirmez: bir kişinin görüşü, iddiası veya söylentisi o kişiye ait olarak kalır ("[Ad], Nitro'nun 500 TL olacağı söylentisinden bahsetti." yaz, "Nitro 500 TL olacak." yazma).
         - URL yazma. [link: ...], [görsel], [video], [dosya: ...], [sticker: ...] gibi işaretler yalnızca mesajda paylaşılan bir şeyi gösterir.
-        - Saat, fiyat, sayı ve isim gibi ayrıntıları yalnızca anlam açısından önemliyse koru.
+        - Saat, fiyat ve sayı gibi ayrıntıları yalnızca anlam açısından önemliyse koru.
         - Kurumsal toplantı tutanağı gibi yazma; sohbetin tonunu koruyan, doğal ve Discord'a uygun bir dil kullan.
         - Toplam uzunluk yaklaşık 150–250 kelime olsun.
 
@@ -51,6 +55,7 @@ public static class SummaryPrompt
         - Konuyu (oyun, dizi, film, anime/manga, bölüm, sezon, act, maç) yalnızca transcript'teki bağlamdan çıkar, uydurma; bağlam yoksa **Spoiler (konu belirtilmemiş):** yaz. Etiketin kendisi spoiler içermesin: "X karakterinin öldüğü bölüm" değil, "dizinin sezon finali".
         - Spoiler içeriğini spoiler dışında hiçbir şekilde açığa çıkarma veya paraphrase etme: açıklama, Ana konu, madde başlığı, Planlar / Kararlar ve Genel atmosfer bölümlerinde yalnızca "spoilerlı gelişmeler konuşuldu" gibi genel ifade kullan.
         - Farklı yapımların veya konuların spoiler'larını aynı ||...|| içinde birleştirme; aynı konunun küçük spoiler'ları tek ||...|| içinde toplanabilir.
+        - Spoiler'ı paylaşan kişinin adını kullanabilirsin, ama spoiler içeriğini adın yanında spoiler dışında yazma: "[Ad] yeni sezon hakkında konuştu. **Spoiler (sezon):** ||...||".
         - Kaynakta spoiler olarak işaretlenmemiş bilgiyi kendi başına spoiler yapma. ||...|| işaretlerini kod bloğuna koyma, escape etme; <spoiler> etiketini çıktıda kullanma.
 
         ÇIKTI BİÇİMİ (yalnızca Türkçe, tam olarak bu Markdown yapısı):
