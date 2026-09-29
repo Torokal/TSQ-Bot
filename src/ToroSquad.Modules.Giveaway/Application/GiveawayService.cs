@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using ToroSquad.Core;
 using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Messaging;
+using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Roles;
 using ToroSquad.Core.Security;
@@ -42,6 +43,7 @@ public sealed class GiveawayService(
     IGiveawayRandom random,
     INotificationOutbox outbox,
     IGuildSettingsStore settings,
+    IModuleGate gate,
     GiveawayCards cards,
     GiveawayAnnouncementRenderer announcements,
     GiveawayCardSync cardSync,
@@ -80,18 +82,29 @@ public sealed class GiveawayService(
 
     // ---- create ----
 
-    /// <summary>Before the form opens: permission, a channel the bot can run a giveaway in, the per-guild limit. Advisory only.</summary>
+    /// <summary>
+    /// Before the form opens and again on submit: permission, the module enabled here (disabling stops NEW giveaways only),
+    /// a channel the bot can run a giveaway in — Add Reactions included: the bot's own 🎉 is how members enter — and the
+    /// per-guild limit.
+    /// </summary>
     public async Task<OperationResult?> PrecheckCreateAsync(ActorContext actor, ChannelId channel, CancellationToken ct)
     {
         var auth = Authorize.Require(actor, actor.GuildId, ManagePermission);
         if (!auth.IsAllowed)
             return OperationResult.Forbidden(auth);
+        if (!await gate.IsEnabledAsync(actor.GuildId, GiveawayModule.ModuleIdTyped, ct))
+            return OperationResult.Fail(OperationError.ModuleDisabled, "error.module_disabled");
 
         var access = await guilds.GetBotChannelAccessAsync(actor.GuildId, channel, ct);
         if (!access.Exists || !access.IsTextBased)
             return OperationResult.Fail(OperationError.InvalidInput, "giveaway.create.channel_type");
+        var missing = GiveawayRules.RequiredChannelPermissions & ~access.Permissions;
         if (!access.Permissions.Grants(GiveawayRules.RequiredChannelPermissions))
-            return OperationResult.Fail(OperationError.Forbidden, "giveaway.create.channel_permissions", (GiveawayRules.RequiredChannelPermissions & ~access.Permissions).ToString());
+        {
+            return missing == GuildPermission.AddReactions
+                ? OperationResult.Fail(OperationError.Forbidden, "giveaway.create.add_reactions")
+                : OperationResult.Fail(OperationError.Forbidden, "giveaway.create.channel_permissions", missing.ToString());
+        }
 
         return await ActiveCountAsync(actor.GuildId, ct) >= GiveawayRules.MaxActivePerGuild
             ? OperationResult.Fail(OperationError.Conflict, "giveaway.create.limit", GiveawayRules.MaxActivePerGuild)
@@ -148,11 +161,31 @@ public sealed class GiveawayService(
         }
 
         await Giveaways.Where(x => x.Id == id && x.MessageId == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.MessageId, (ulong?)message.Value), ct);
-        var reacted = await reactions.AddEntryReactionAsync(channel, message, ct);
-        logger.LogInformation("giveaway_created {Giveaway} guild={Guild} channel={Channel} message={Message} winners={Winners} ends={EndsAt:O} reaction={Reaction}",
-            id, guild, channel, message, view.WinnerCount, view.EndsAt, reacted);
-        return new(OperationResult.Ok(reacted == ReactionAddOutcome.Added ? "giveaway.create.done" : "giveaway.create.no_reaction",
-            GiveawayCards.Number(id), DiscordText.Timestamp(view.EndsAt, 'R')), id);
+        if (await reactions.AddEntryReactionAsync(channel, message, ct) != ReactionAddOutcome.Added)
+        {
+            // The bot's own 🎉 IS the entry point: without it the giveaway does not run. The card exists already (the
+            // permission changed after the precheck, or Discord refused), so it is turned into the cancelled card.
+            await WriteAsync(async () =>
+            {
+                if (await Giveaways.FirstOrDefaultAsync(x => x.Id == id, ct) is { Status: GiveawayStatus.Active } row)
+                {
+                    row.Status = GiveawayStatus.Cancelled;
+                    row.EndedAt = clock.GetUtcNow();
+                    row.EndedByUserId = actor.UserId.Value;
+                    MarkCardStale(row);
+                    await db.SaveChangesAsync(ct);
+                }
+
+                return 0;
+            }, ct);
+            logger.LogWarning("Giveaway {Giveaway}: the bot's reaction could not be added; cancelled at once (guild {Guild}, channel {Channel})", id, guild, channel);
+            await SyncCardAsync(id, ct);
+            return new(OperationResult.Fail(OperationError.Forbidden, "giveaway.create.reaction_failed"), id);
+        }
+
+        logger.LogInformation("giveaway_created {Giveaway} guild={Guild} channel={Channel} message={Message} winners={Winners} ends={EndsAt:O}",
+            id, guild, channel, message, view.WinnerCount, view.EndsAt);
+        return new(OperationResult.Ok("giveaway.create.done", GiveawayCards.Number(id), DiscordText.Timestamp(view.EndsAt, 'R')), id);
     }
 
     private enum CardPost

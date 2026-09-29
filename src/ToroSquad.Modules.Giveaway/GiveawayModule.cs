@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
+using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
 using ToroSquad.Discord;
@@ -63,6 +64,7 @@ public sealed class GiveawayModule : IToroModule
         services.AddScoped<GiveawayService>();
         services.AddScoped<GiveawayCardSync>();
         services.AddScoped<IUserDataContributor, GiveawayUserData>();
+        services.AddScoped<IDeliveryPolicy, GiveawayDeliveryPolicy>();
     }
 
     /// <summary>Draw + card loop, registered only in the long-running host (never by one-shot CLI verbs or tests).</summary>

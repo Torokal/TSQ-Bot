@@ -150,15 +150,15 @@ public sealed class OutboxProcessor(
             return;
         }
 
+        var policy = sp.GetServices<IDeliveryPolicy>().FirstOrDefault(p => p.Module == module);
         var gate = sp.GetRequiredService<IModuleGate>();
-        if (!await gate.IsEnabledAsync(guild, module, cancellationToken))
+        if (!await gate.IsEnabledAsync(guild, module, cancellationToken) && policy?.DeliversWhileModuleDisabled(row.Kind) != true)
         {
             CancelOrDropEdit(row, isEdit, "module_disabled", now);
             await db.SaveChangesAsync(cancellationToken);
             return;
         }
 
-        var policy = sp.GetServices<IDeliveryPolicy>().FirstOrDefault(p => p.Module == module);
         if (policy is not null && await policy.CanDeliverAsync(guild, channel, row.Kind, cancellationToken) is DeliveryDecision.Cancel cancel)
         {
             CancelOrDropEdit(row, isEdit, cancel.Reason, now);

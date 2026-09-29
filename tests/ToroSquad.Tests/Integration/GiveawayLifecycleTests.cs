@@ -217,14 +217,100 @@ public sealed class GiveawayLifecycleTests : IAsyncLifetime
         _host.Transport.Messages.Should().ContainSingle().Which.Id.Should().Be(giveaway.Message!.Value);
     }
 
+    private Task<int> GiveawayCountAsync(TestHost? host = null) =>
+        (host ?? _host).InScopeAsync(sp => sp.GetRequiredService<ToroDbContext>().Set<GiveawayEntity>().CountAsync());
+
     [Fact]
-    public async Task Without_add_reactions_the_giveaway_still_starts_and_says_so()
+    public async Task Without_add_reactions_nothing_is_created_posted_or_stored()
+    {
+        _host.Guilds.SetChannel(Guild, Channel, new BotChannelAccess(true, true, ChannelPermissions & ~GuildPermission.AddReactions));
+
+        var refusal = (await Giveaways(s => s.PrecheckCreateAsync(Admin, Channel, Ct)))!;
+        refusal.MessageKey.Should().Be("giveaway.create.add_reactions", "checked before the form opens");
+        var created = await CreateAsync();
+        created.Result.Succeeded.Should().BeFalse();
+        created.Result.MessageKey.Should().Be("giveaway.create.add_reactions", "and again on submit");
+        created.GiveawayId.Should().BeNull();
+
+        _host.Transport.Messages.Should().BeEmpty("no card is sent");
+        _host.Transport.SendCalls.Should().Be(0);
+        (await GiveawayCountAsync()).Should().Be(0, "no row is stored");
+        Reactions().BotReactions.Should().BeEmpty();
+        _host.Services.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>().Get("tr", refusal.MessageKey)
+            .Should().Be("❌ Botun bu kanalda **Tepki Ekle (Add Reactions)** iznine ihtiyacı var.");
+        _host.Services.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>().Get("en", refusal.MessageKey)
+            .Should().Be("❌ The bot needs the **Add Reactions** permission in this channel.");
+
+        // With Add Reactions (Administrator implies it) creation continues normally.
+        _host.Guilds.SetChannel(Guild, Channel, new BotChannelAccess(true, true, ChannelPermissions));
+        (await CreateAsync()).Result.MessageKey.Should().Be("giveaway.create.done");
+        _host.Guilds.SetChannel(Guild, Channel, new BotChannelAccess(true, true, GuildPermission.Administrator));
+        (await CreateAsync()).Result.MessageKey.Should().Be("giveaway.create.done");
+        (await GiveawayCountAsync()).Should().Be(2);
+        Reactions().BotReactions.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task A_bot_reaction_discord_refuses_after_the_precheck_cancels_the_giveaway_at_once()
     {
         Reactions().ScriptedAdds.Enqueue(ReactionAddOutcome.Failed);
         var created = await CreateAsync();
-        created.Result.Succeeded.Should().BeTrue();
-        created.Result.MessageKey.Should().Be("giveaway.create.no_reaction");
-        (await RowAsync(created.GiveawayId!.Value)).Status.Should().Be(GiveawayStatus.Active);
+
+        created.Result.Succeeded.Should().BeFalse();
+        created.Result.MessageKey.Should().Be("giveaway.create.reaction_failed");
+        var row = await RowAsync(created.GiveawayId!.Value);
+        row.Status.Should().Be(GiveawayStatus.Cancelled, "a giveaway without the bot's 🎉 never runs");
+        Shown(_host.Transport.Messages.Single()).Title.Should().Be("🚫 ÇEKİLİŞ İPTAL EDİLDİ");
+        await TickAsync(TimeSpan.FromHours(1));
+        Reactions().Reads.Should().Be(0);
+        Announcements().Should().BeEmpty();
+    }
+
+    // ---- module disabled: new giveaways stop, started ones finish ----
+
+    [Fact]
+    public async Task Disabling_the_module_stops_new_giveaways_but_a_started_one_completes_with_its_announcement()
+    {
+        var giveaway = await OpenAsync();
+        Enter(giveaway, Range(5));
+        await _host.InScopeAsync(async sp =>
+            (await sp.GetRequiredService<ModuleManagementService>().SetEnabledAsync(Admin, "giveaway", false, Ct)).Succeeded.Should().BeTrue());
+        (await RowAsync(giveaway.Id)).Status.Should().Be(GiveawayStatus.Active, "disabling never cancels a started giveaway");
+
+        (await Giveaways(s => s.PrecheckCreateAsync(Admin, Channel, Ct)))!.MessageKey.Should().Be("error.module_disabled");
+        (await CreateAsync()).Result.MessageKey.Should().Be("error.module_disabled");
+        (await GiveawayCountAsync()).Should().Be(1);
+        _host.Transport.Messages.Should().ContainSingle("no new card");
+
+        await TickAsync(TimeSpan.FromMinutes(30));
+        await TickAsync(TimeSpan.FromMinutes(1));
+
+        var row = await RowAsync(giveaway.Id);
+        row.Status.Should().Be(GiveawayStatus.Finished);
+        var winner = (await WinnerRowsAsync(giveaway.Id)).Should().ContainSingle().Subject;
+        Shown(Card(giveaway)).Title.Should().Be("🎉 ÇEKİLİŞ SONUÇLANDI");
+        var announcement = Announcements().Should().ContainSingle().Subject;
+        Pinged(announcement).Should().Equal(winner.UserId);
+        (await AnnouncementRowsAsync()).Should().ContainSingle().Which.Status.Should().Be(ToroSquad.Core.Notifications.OutboxStatus.Sent);
+    }
+
+    [Fact]
+    public async Task While_disabled_the_create_command_is_refused_by_the_module_gate()
+    {
+        await _host.InScopeAsync(async sp =>
+        {
+            (await sp.GetRequiredService<ModuleManagementService>().SetEnabledAsync(Admin, "giveaway", false, Ct)).Succeeded.Should().BeTrue();
+            var gated = new ToroSquad.Discord.Interactions.ToroModuleAttribute(ToroSquad.Modules.Giveaway.GiveawayModule.ModuleIdValue);
+            var guild = InterfaceFake.Create<global::Discord.IGuild>(new() { ["Id"] = Guild.Value, ["OwnerId"] = 1UL });
+            var user = InterfaceFake.Create<global::Discord.IGuildUser>(new()
+            {
+                ["Id"] = Admin.UserId.Value,
+                ["GuildPermissions"] = new global::Discord.GuildPermissions((ulong)GuildPermission.ManageGuild),
+                ["RoleIds"] = (IReadOnlyCollection<ulong>)Array.Empty<ulong>(),
+            });
+            var context = InterfaceFake.Create<global::Discord.IInteractionContext>(new() { ["Guild"] = guild, ["User"] = user });
+            (await gated.CheckRequirementsAsync(context, null!, sp)).ErrorReason.Should().Be(ToroSquad.Discord.Interactions.ToroModuleAttribute.ModuleDisabledError);
+        });
     }
 
     // ---- the draw ----

@@ -108,6 +108,24 @@ public sealed partial class GiveawayArchitectureTests
     }
 
     [Fact]
+    public void Only_giveaway_announcements_pass_the_outbox_module_gate_while_disabled()
+    {
+        var src = Path.Combine(CommandManifestTests.RepoRoot(), "src");
+        Directory.GetFiles(src, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p is "bin" or "obj"))
+            .Where(f => System.IO.File.ReadAllText(f).Contains("DeliversWhileModuleDisabled", StringComparison.Ordinal))
+            .Select(f => Path.GetFileName(f))
+            .Should().BeEquivalentTo("Notifications.cs", "OutboxProcessor.cs", "GiveawayDeliveryPolicy.cs");
+
+        var policy = new GiveawayDeliveryPolicy(Microsoft.Extensions.Logging.Abstractions.NullLogger<GiveawayDeliveryPolicy>.Instance);
+        policy.DeliversWhileModuleDisabled(GiveawayService.AnnouncementKind(0)).Should().BeTrue();
+        policy.DeliversWhileModuleDisabled(GiveawayService.AnnouncementKind(2)).Should().BeTrue();
+        policy.DeliversWhileModuleDisabled("lfg-start").Should().BeFalse();
+        ((ToroSquad.Core.Notifications.IDeliveryPolicy)new ToroSquad.Modules.Birthday.Application.BirthdayDeliveryPolicy(null!, TimeProvider.System))
+            .DeliversWhileModuleDisabled("birthday").Should().BeFalse("every other module keeps the gate");
+    }
+
+    [Fact]
     public void Logs_carry_ids_and_counts_never_the_entrants_or_winners()
     {
         foreach (Match call in Regex.Matches(Code(), @"\blogger\.Log\w+\((?<args>[^;]*)\);"))
