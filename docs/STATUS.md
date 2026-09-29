@@ -311,8 +311,13 @@ invite link and no global command registration. The source code is public under 
 - Türkiye men's senior national team added as the fourth target (national competitions: Nations League, Euro
   qualification, Euro, World Cup qualifiers Europe, World Cup; outrights and friendlies excluded). Observed read-only with
   the rotated key (2026-09-30, 1 credit): Nations League in season, provider name "Turkey", Belgium – Turkey on
-  02.10.2026 21:45 TR with a complete fresh h2h set. **MARKET_RULE_UNVERIFIED**: no bookmaker's regular-time rule
-  verified from its official rules, so Live opens no card and makes no paid call; Observe shows candidates.
+  02.10.2026 21:45 TR with a complete fresh h2h set.
+- Narrow market-rule approval: only `pinnacle` (Pinnacle betting rules, Soccer rule 1: regular 90 minutes plus added
+  time), only The Odds API's pre-match h2h 1-X-2 of men's senior teams in the allow-listed competitions; 1xBet and others
+  stay unapproved and are never a fallback. Read-only re-check (2026-09-30, 1 credit): Belgium – Turkey Pinnacle set
+  ACCEPTED, card preview "Belçika - Türkiye". Italy – Türkiye (05.10, official fixture) is not yet listed by the provider
+  (COVERAGE_INCOMPLETE). Observations refused only for the missing rule are judged again (attempts kept, old odds not
+  reused). Nothing deployed; no automatic card in Discord.
 
 ## What has been verified against real Discord / real APIs
 

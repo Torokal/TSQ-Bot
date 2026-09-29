@@ -7,13 +7,17 @@ Otomatik futbol öngörüleri ([AUTO_FOOTBALL.md](AUTO_FOOTBALL.md)) için tek s
 
 | Hedef | Organizasyon | Gerçek maç gözlendi mi | Geçerli 1-X-2 | Seçilen kaynak | Normal süre kanıtı | Sonuç |
 |---|---|---|---|---|---|---|
-| Galatasaray | Süper Lig, Şampiyonlar Ligi | evet (2026-09-30) | evet | pinnacle / onexbet (aday) | yok (A: sessiz, B: okunamadı) | PROVIDER_VERIFIED_READ_ONLY · MARKET_RULE_UNVERIFIED |
-| Fenerbahçe | Süper Lig, Şampiyonlar Ligi | evet (2026-09-30) | evet | pinnacle / onexbet (aday) | yok | PROVIDER_VERIFIED_READ_ONLY · MARKET_RULE_UNVERIFIED |
-| Beşiktaş | Süper Lig, Avrupa Ligi | evet (2026-09-30) | evet | pinnacle (aday) | yok | PROVIDER_VERIFIED_READ_ONLY · MARKET_RULE_UNVERIFIED |
-| Türkiye (erkek A millî) | Uluslar Ligi (gözlendi); EURO elemeleri, EURO, DK Avrupa elemeleri, DK sezon dışı | **evet** (2026-09-30, Belgium – Turkey) | evet | pinnacle (aday) | yok | PROVIDER_VERIFIED_READ_ONLY · MARKET_RULE_UNVERIFIED |
+| Galatasaray | Süper Lig, Şampiyonlar Ligi | evet (2026-09-30) | evet | Süper Lig: pinnacle; ŞL (Barcelona): yalnız onexbet görüldü | pinnacle: Soccer madde 1 | PROVIDER_VERIFIED_READ_ONLY · onexbet onaysız |
+| Fenerbahçe | Süper Lig, Şampiyonlar Ligi | evet (2026-09-30) | evet | Süper Lig: pinnacle; ŞL (Aston Villa): yalnız onexbet görüldü | pinnacle: Soccer madde 1 | PROVIDER_VERIFIED_READ_ONLY · onexbet onaysız |
+| Beşiktaş | Süper Lig, Avrupa Ligi | evet (2026-09-30) | evet | pinnacle | pinnacle: Soccer madde 1 | PROVIDER_VERIFIED_READ_ONLY |
+| Türkiye (erkek A millî) | Uluslar Ligi (gözlendi); EURO elemeleri, EURO, DK Avrupa elemeleri, DK sezon dışı | **evet** (Belgium – Turkey); İtalya – Türkiye sağlayıcıda **henüz yok** | evet | pinnacle (**KABUL**, 2026-09-30 22:37Z) | pinnacle: Soccer madde 1 | PROVIDER_VERIFIED_READ_ONLY · COVERAGE_INCOMPLETE |
 
-Genel: **PROVIDER_VERIFIED_READ_ONLY** dört hedef için (maç keşfi + eksiksiz h2h seti), **MARKET_RULE_UNVERIFIED** (hiçbir
-kaynağın normal süre kuralı resmî kaynağından doğrulanmadı → Live kart açmaz).
+Genel, ayrı ayrı:
+- **Kaynak uygunluğu:** yalnız `pinnacle`, dar kapsamla onaylı (aşağıda "Normal süre kuralı"); `onexbet` ve diğerleri onaysız.
+- **Sağlayıcı erişimi:** PROVIDER_VERIFIED_READ_ONLY (dört hedef; gerçek maç keşfi + eksiksiz h2h seti).
+- **Kapsam bütünlüğü:** COVERAGE_INCOMPLETE — resmî fikstürdeki her maç sağlayıcıda (henüz) yok; tüm Türkiye maçlarının
+  kapsandığı söylenemez.
+- **Discord canlı doğrulaması:** yok (hiçbir otomatik kart gönderilmedi).
 
 2026-09-30 kontrolü: ücretsiz planlı gerçek anahtarla, yerelde (Development, `TheOddsApiClient`, host
 `api.the-odds-api.com`, canlı HTTP, fixture/cache yok) `predictions football-check --days 16 --odds --budget 5`
@@ -44,6 +48,24 @@ Ortam Development, istemci `TheOddsApiClient`, host `api.the-odds-api.com`, canl
 
 Dört hedef içindeki **ilk uygun maç: 02.10.2026 21:45 TR, Belgium – Türkiye** (yayın hedefi 09:00 TR). Sonraki kulüp maçı
 09.10 Galatasaray – Kasimpasa SK.
+
+### Pinnacle onayı sonrası (2026-09-29 22:37Z = 30.09 01:37 TR)
+
+`football-check --days 30 --odds --budget 1 --focus TR --preview` (Development, canlı HTTP, 1 kredi, kalan 499 → **498**):
+Belgium – Turkey `pinnacle` ham 1.5 / 4.93 / 5.99 → sabit 1.50 / 4.93 / 5.99, pazar 22:36:58Z (14 sn) → **KABUL**.
+Yerel önizleme (gönderilmedi): "Belçika - Türkiye maç sonucu ne olur?" · "Belçika kazanır 1.50 · Beraberlik 4.93 ·
+Türkiye kazanır 5.99", oran kaynağı "Pinnacle", yayın 02.10.2026 09:00 TR, kilit 21:43 TR. Oranlar maç gününe kadar
+değişir; bunlar yalnız o anın gözlemidir.
+
+### İtalya – Türkiye (resmî fikstür: 05.10.2026 21:45 TR)
+
+TFF ve UEFA fikstüründe 02.10 Belçika – Türkiye ve 05.10 İtalya – Türkiye var. Ücretsiz ham `events` çağrısı
+(`soccer_uefa_nations_league`, zaman filtresi yok, 2026-09-29 22:28Z, 0 kredi): **25 maç, hepsi 01.10–04.10 arasında**;
+Türkiye maçı yalnız Belgium – Turkey; 05.10 ve sonrası için hiçbir maç yok (France – Italy 02.10 var). Bizim kodda
+eleme yok: pencere now−3 sa … now+30 gün (UTC), doğru anahtar, eventIds filtresi yok, takım başına First/Take yok,
+maçlar yalnız event id ile ayrılır, önbellek yok. Sonuç: **resmî fikstürde var, mevcut sağlayıcı yanıtında gözlenmedi**
+(sağlayıcı ikinci maç gününü henüz listelemiyor). Sahte maç/oran eklenmedi; sağlayıcı listeleyince normal keşif
+(48 saat ufuk) onu bulur — bunu testler iki farklı günde aynı takımın iki maçıyla doğrular.
 
 ## Belgeden doğrulananlar (2026-09-29)
 
@@ -96,12 +118,22 @@ birebir eşleşti; eşleşmeyen benzer ad (`REVIEW:`) çıkmadı; kadın/genç t
 
 | Kanıt | Durum |
 |---|---|
-| A) The Odds API pazar açıklaması | `h2h`: "Bet on the winning team or player of a game (includes the draw for soccer)". Normal süre / uzatma / penaltı ayrımı **yazılmıyor**; "turu geçen" pazarı ayrıca tanımlanmıyor. |
-| B) Bookmaker'ın resmî kuralı | **Pinnacle**: pinnacle.com kural sayfaları bu ortamdan okunamadı (bağlantı sıfırlandı; help.pinnacle.com çözümlenmedi). **1xBet**: 1xbet.com kural sayfası okunamadı (bağlantı sıfırlandı). Erişim engeli aşılmadı (proxy/arşiv yok). → **doğrulanmadı** |
-| C) Gerçek API'de gözlenen eşleme | 2026-09-30: takip edilen her maçta `h2h` içinde tam 3 sonuç, adlar ev sahibi / `Draw` / deplasman ile birebir. 1X2 ile tutarlı, fakat normal süre anlamının kanıtı değil. |
+| A) The Odds API pazar açıklaması (https://the-odds-api.com/sports-odds-data/betting-markets.html, okundu 2026-09-30) | `h2h`: "Bet on the winning team or player of a game (includes the draw for soccer)". `h2h_lay` yalnız borsalar için ayrı bir anahtar, `draw_no_bet` ayrı bir anahtar. Normal süre / uzatma / penaltı ayrımı `h2h` için **yazılmıyor**. |
+| B) Bookmaker'ın resmî kuralı | **Pinnacle** — https://www.pinnacle.com/en/future/betting-rules, bölüm **Soccer, madde 1** (kontrol 2026-09-30). Özet: aksi belirtilmedikçe futbol maç pazarları planlanan 90 dakika ve hakemin eklediği süre üzerinden sonuçlanır; uzatma devreleri ve penaltı atışları dahil değildir. Erişim notu: sayfa bu çalışma ortamının araçlarıyla açılamadı (doğrudan okuma bağlantı sıfırlandı; yerleşik tarayıcı bu alan adını güvenlik kısıtıyla açmıyor) ve erişim engeli aşılmadı; URL, bölüm ve içerik proje sahibinin resmî sayfadan aktarımıdır. **1xBet**: resmî kural okunmadı → onaysız. |
+| C) Gerçek API'de gözlenen yapı | 2026-09-30 22:37Z, Uluslar Ligi Belgium – Turkey: 17 bookmaker; `pinnacle` altında tek `h2h` pazarı, tam 3 sonuç Belgium / `Draw` / Turkey (maçın takım adlarıyla birebir). 1X2 ile tutarlı; bu, The Odds API'nin Pinnacle kuralını `h2h`'ye doğru eşlediğinin **bağımsız denetimi değildir**. |
 
-Sonuç: **MARKET_RULE_UNVERIFIED** — `RuleVerifiedBookmakers` boş; Live hiçbir kart açmaz, Observe ve `football-check`
-veriyi aday olarak gösterir. Genel bahis kaynaklarındaki "90 dakika kuralı" anlatımları (üçüncü taraf) resmî kanıt sayılmadı.
+Sonuç: **dar onay** — `RuleVerifiedBookmakers = ["pinnacle"]`, yalnızca şu kapsamda: sağlayıcı The Odds API; bookmaker
+`pinnacle`; erkek A futbol takımları, allow-list organizasyonları; standart maç öncesi `h2h` 1-X-2 (ev / `Draw` /
+deplasman, tam üç sonuç); normal süre + hakemin eklediği süre. Diğer bütün kontroller aynen sürer (maç/takım eşleşmesi,
+eksiksiz üçlü, tek bookmaker, oran sınırları, tazelik, yayın penceresi, sunucu/modül/mod kapıları, kota, tekillik).
+`h2h_lay`, `draw_no_bet`, devre sonucu, tur atlama, outright ve başka spor pazarları okunmaz. Pinnacle'ın iptal/ertelenme
+kuralları alınmadı: otomatik kartın sonucu ve iptali yine yöneticinin elindedir. Pinnacle seti yoksa veya geçersizse Live
+başka (onaysız) bir kaynağa **düşmez**, kart açılmaz. Genel `MARKET_RULE_UNVERIFIED` kapısı kodda kalır (onaylı liste
+boşalırsa Live yine hiçbir şey açmaz). Genel bahis kaynaklarındaki "90 dakika kuralı" anlatımları (üçüncü taraf) kanıt
+sayılmadı.
+
+Bu politikanın etkisi: daha önce ŞL'de yalnız `onexbet` seti görülen maçlar (Galatasaray – Barcelona 13.10, Aston Villa –
+Fenerbahce 14.10) maç günü Pinnacle seti gelmezse **açılmayabilir**; Pinnacle'ın o gün oran vereceği garanti değildir.
 
 The Odds API'ye sorulabilecek soru (taslak; kullanıcı onayı olmadan gönderilmez, team@the-odds-api.com):
 
@@ -112,7 +144,8 @@ The Odds API'ye sorulabilecek soru (taslak; kullanıcı onayı olmadan gönderil
 
 ## Hâlâ gözlenmeyenler
 
-- `h2h` pazarının normal süre (90 dk + uzatma dakikaları) anlamı — belge açıkça yazmıyor, veriden anlaşılamaz.
+- The Odds API'nin Pinnacle kuralını `h2h`'ye eşlemesi bağımsız denetlenmedi (sağlayıcı belgesi `h2h` için süre yazmıyor).
+- İtalya – Türkiye (05.10) sağlayıcı yanıtında henüz yok.
 - Canlı/başlamış maç yanıtı, erteleme veya saat değişikliği (sağlayıcıda durum alanı yok; yalnızca `commence_time`).
 - Ay dönümünde kota yenilenmesi; 401/403/429/5xx yanıtları.
 - ŞL eleme ve Konferans Ligi'nde takip edilen kulüp maçı; Türkiye Kupası/Süper Kupa (anahtar yok, okunmuyor).

@@ -9,7 +9,7 @@ iptal/iade, aynı turnuva. **Sonuç otomatik girilmez**; ödemeyi her zaman yön
 Varsayılan: **Disabled**. Sağlayıcı kapsamı ve gerçek veri doğrulaması: [PROVIDER_VERIFICATION.md](PROVIDER_VERIFICATION.md)
 (2026-09-30: üç kulüp için gerçek ücretsiz anahtarla salt-okunur doğrulandı — Süper Lig, Şampiyonlar Ligi ve Avrupa
 Ligi maçları ve eksiksiz h2h setleri gözlendi; Türkiye millî takımı Uluslar Ligi'nde "Turkey" adıyla gözlendi;
-bookmaker'ların normal süre kuralı doğrulanamadığı için **Live bugün hiçbir kart açmaz** — aşağıda "Pazar kuralı kapısı").
+Live yalnızca Pinnacle setini kullanır — aşağıda "Pazar kuralı kapısı").
 
 ## Kapsam
 
@@ -149,8 +149,10 @@ redaction'a kayıtlıdır ve ayrıca `apiKey=` sorgu desenini her log/doctor ç�
 TSQ Öngörü #42 · Otomatik · Sabit oran
 ```
 
-Gerçek ev/deplasman sırası kullanılır; takip edilen kulüpler kendi Türkçe adıyla, rakip sağlayıcının yazdığı gibi
-(etkisizleştirilmiş, ping'siz) yazılır. Kanal: `Predictions:ChannelId` (ikinci bir kanal ayarı yok). Kartta TSQ turnuvası
+Gerçek ev/deplasman sırası kullanılır (Türkiye her zaman öne alınmaz); takip edilen takımlar kendi Türkçe adıyla,
+Türkiye'nin güncel birkaç millî rakibi Türkçe kartta Türkçe adıyla ("Belgium" → "Belçika", "Italy" → "İtalya",
+"France" → "Fransa"; ülke veritabanı değil), diğer rakipler sağlayıcının yazdığı gibi (etkisizleştirilmiş, ping'siz)
+yazılır. Bu yalnız görünümdür: oranlar sağlayıcının ham adlarıyla eşlenir. Kanal: `Predictions:ChannelId` (ikinci bir kanal ayarı yok). Kartta TSQ turnuvası
 görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Kilit bir "maç başladı" bildirimi değildir.
 
 ## Yetki, ekonomi, tekillik
@@ -198,12 +200,18 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
 `h2h` ve üç sonuç görülmesi, pazarın **normal süre** (90 dakika + hakemin eklediği süre; uzatma devreleri ve penaltılar
 hariç) olduğunun kanıtı değildir. Bu yüzden Live yalnızca **kendi resmî kuralı normal süre olarak doğrulanmış**
 bookmaker'ların setini kullanır (`AutoFootballOptions.RuleVerifiedBookmakers`; her giriş için kanıt
-PROVIDER_VERIFICATION.md'de). Liste **bugün boş**: Pinnacle ve 1xBet'in resmî kural sayfaları bu ortamdan okunamadı
-(bağlantı sıfırlandı; erişim engeli aşılmadı). Sonuç:
-- **Live:** hiçbir kart açılmaz, bu yüzden hiçbir ücretli oran çağrısı da yapılmaz; maç `MARKET_RULE_UNVERIFIED`
-  nedeniyle bekler/atlanır; `/bot status` bunu gösterir.
+PROVIDER_VERIFICATION.md'de). Liste bugün yalnız **`pinnacle`** (Pinnacle betting rules, Soccer madde 1), dar kapsamla:
+The Odds API, standart maç öncesi `h2h` (ev / `Draw` / deplasman), erkek A takımları, allow-list organizasyonları.
+1xBet ve diğerleri onaysız. Sonuç:
+- **Live:** yalnız eksiksiz, taze, geçerli bir Pinnacle seti kart açar. Pinnacle yoksa veya seti geçersizse başka bir
+  kaynağa düşülmez; maç `BOOKMAKER_NOT_APPROVED` (onaysız bir set vardı) veya ilgili neden (`NO_ODDS`, `STALE_ODDS`…) ile
+  bekler, süresi dolunca atlanır. Onaylı liste boşalırsa Live yine ücretli çağrı yapmaz (`MARKET_RULE_UNVERIFIED`).
 - **Observe ve `football-check`:** veri görülebilir — onaysız kaynağın seti "aday" olarak, neden
   (`MARKET_RULE_UNVERIFIED` / `BOOKMAKER_NOT_APPROVED`) ile kaydedilir; hiçbir zaman yayımlanmaz.
+- **Yeniden değerlendirme:** onaylı kaynak yokken `MARKET_RULE_UNVERIFIED` ile gözlenmiş bir maç, onay varken ve son
+  yayın anından önce yeniden beklemeye alınır (kullanılmış deneme sayısı korunur, yayımlanmış sayılmaz, Live tekilliğini
+  etkilemez). Eski oran seti kayıt için durur ama yeniden kullanılmaz (bu karar için çekilmemiştir; `last_update`
+  değiştirilmez) — yeni bir çağrı gerekir. Denemeleri bitmişse sayaç sıfırlanmaz: satır `ATTEMPTS_EXHAUSTED` ile atlanır.
 - Bir kaynağın kuralı doğrulanınca listeye kodla (kanıt bağlantısıyla, test ve inceleme ile) eklenir; ayarla açılamaz.
 
 ## Kota ve maliyet
@@ -248,14 +256,17 @@ PROVIDER_VERIFICATION.md'de). Liste **bugün boş**: Pinnacle ve 1xBet'in resmî
   seçilen/aday kaynak, ham ve sabit oranlar, pazar zamanı ve yaşı, KABUL/RET nedeni; `--preview` ile ilk maçın kartının
   yerel metin önizlemesi (hiçbir şey gönderilmez veya saklanmaz).
 - Loglar: `the_odds_api endpoint=… status=… remaining=…`, `auto_football_observed`, `auto_football_published`,
-  `auto_football_skipped … code=…`, `auto_football_review` — URL ve anahtar asla.
+  `auto_football_skipped … code=…`, `auto_football_recheck … code=REOPENED|ATTEMPTS_EXHAUSTED`, `auto_football_review` —
+  URL ve anahtar asla.
 
 ## Bilinen sınırlar
 
 - Sağlayıcı yalnızca **planlanan** başlangıç zamanı verir; "maç gerçekten başladı" bilgisi yoktur. Kilit planlanan
   zamandan 2 dakika öncedir; maç geç başlarsa katılım yine planlanan zamana göre kapanır.
-- `h2h` pazarının normal süre olduğunu sağlayıcı belgesi yazmaz ve bookmaker kuralları doğrulanamadı: Live bugün kart
-  açmaz (yukarıdaki "Pazar kuralı kapısı"). Kart kural metni sağlayıcı semantiğinin kanıtı değildir.
+- `h2h` pazarının normal süre olduğunu sağlayıcı belgesi yazmaz; Live yalnız kuralı normal süre olan Pinnacle'ın setini
+  kullanır. Sağlayıcının bu eşlemesi bağımsız denetlenmedi. Pinnacle seti olmayan maç (ör. yalnız 1xBet) açılmaz.
+- Sağlayıcı resmî fikstürdeki her maçı hemen listelemez (2026-09-30: İtalya – Türkiye 05.10 henüz yok); listelenmeyen maç
+  için kart açılmaz, sahte maç eklenmez.
 - Türkiye Kupası, Süper Kupa ve hazırlık/dostluk maçları kapsam dışı (belgelenmiş anahtar yok).
 - Aynı maç için elle serbest metinle açılmış bir kart dış maç kimliği taşımadığından kesin tespit edilemez; başlık
   benzerliğinden hareketle hiçbir kullanıcı kartı silinmez veya iptal edilmez.
@@ -275,7 +286,7 @@ PROVIDER_VERIFICATION.md'de). Liste **bugün boş**: Pinnacle ve 1xBet'in resmî
    `DOTNET_ENVIRONMENT=Development` kullanılmaz.
 2. Yerelde (Development) `predictions football-check --days 30`, ardından `--odds --budget 5 --focus TR --preview`;
    PROVIDER_VERIFICATION.md'yi gözlenen sonuçlarla güncelle.
-3. Bir bookmaker'ın normal süre kuralını resmî kaynağından doğrula (kanıtla birlikte) ve `RuleVerifiedBookmakers`'a ekle;
-   o zamana kadar Live kart açmaz.
+3. Pinnacle dar onayı eklendi (kanıt PROVIDER_VERIFICATION.md). Başka bir bookmaker ancak resmî kuralı aynı şekilde
+   kanıtlanırsa eklenir.
 4. Ayrı onayla deploy ve `Mode = Observe` (Railway anahtarı ortam değişkeniyle).
 5. Ayrı onayla `Mode = Live`; ilk otomatik kartı canlıda kontrol et (başlık, ev/deplasman, oranlar, kilit, kural).
