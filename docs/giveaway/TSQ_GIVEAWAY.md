@@ -25,6 +25,14 @@ Hedef: kartın altbilgisindeki numara (`#12`, otomatik tamamlama önerir), mesaj
 sunucunun çekilişi "bulunamadı" görünür. Tüm yanıtlar yalnızca komutu kullanana görünür; sunucuda aynı anda en fazla 20
 aktif çekiliş olabilir.
 
+## Kart düzeni
+
+Her durumda aynı iskelet: başlık durumu söyler (`🎉 ÇEKİLİŞ` / `🎉 ÇEKİLİŞ SONUÇLANDI` / `⚠️ ÇEKİLİŞ İPTAL EDİLDİ`),
+hemen altında `🎁 ÖDÜL` ve ödül **başlık boyutunda** (kartın en büyük metni). Sonra alanlar — aktif: Kazanan Sayısı ve
+Bitiş yan yana (önce kalan süre, altında tam tarih), Katılım; sonuçlandı: Kazanan(lar) (🥇 🥈 🥉, sonra 4., 5. …), Katılımcı
+ve Bitti yan yana; iptal: Durum. Açıklama varsa her zaman en sonda `📝 Açıklama` alanıdır. Altbilgi: `Başlatan: … · Çekiliş #12`
+(yeniden çekildiyse sonuna eklenir).
+
 ## Kurallar
 
 - **Katılım** yalnızca karttaki 🎉 tepkisidir (Discord'un kendi tepkisi; ayrı `/katıl` yok). Çekiliş anında Discord'daki
