@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "daeb0dec93777719573a3907bca468a2955cc92e191a900ec43ec8b90febd2d9",
+  "hash": "0e37a88d6200cf05048651e2c603e4531d146a5283e6c68a5fba941ae7b6d47a",
   "commands": [
     {
       "module": "currency",
@@ -1751,80 +1751,6 @@
           },
           {
             "type": 1,
-            "name": "kilitle",
-            "description": "Stop new entries to a prediction now",
-            "description_localizations": {
-              "tr": "Bir öngörüye yeni katılımı hemen durdur"
-            },
-            "options": [
-              {
-                "type": 3,
-                "name": "ongoru",
-                "description": "Prediction number (#12), card link or message ID",
-                "description_localizations": {
-                  "tr": "Öngörü numarası (#12), kart bağlantısı veya mesaj ID'si"
-                },
-                "required": true,
-                "autocomplete": true,
-                "max_length": 120
-              }
-            ]
-          },
-          {
-            "type": 1,
-            "name": "sonuclandir",
-            "description": "Choose the winning outcome and pay out",
-            "description_localizations": {
-              "tr": "Kazanan sonucu seç ve ödemeleri yap"
-            },
-            "options": [
-              {
-                "type": 3,
-                "name": "ongoru",
-                "description": "Prediction number (#12), card link or message ID",
-                "description_localizations": {
-                  "tr": "Öngörü numarası (#12), kart bağlantısı veya mesaj ID'si"
-                },
-                "required": true,
-                "autocomplete": true,
-                "max_length": 120
-              }
-            ]
-          },
-          {
-            "type": 1,
-            "name": "iptal",
-            "description": "Cancel a prediction and refund every stake",
-            "description_localizations": {
-              "tr": "Bir öngörüyü iptal et ve tüm yatırımları iade et"
-            },
-            "options": [
-              {
-                "type": 3,
-                "name": "ongoru",
-                "description": "Prediction number (#12), card link or message ID",
-                "description_localizations": {
-                  "tr": "Öngörü numarası (#12), kart bağlantısı veya mesaj ID'si"
-                },
-                "required": true,
-                "autocomplete": true,
-                "max_length": 120
-              },
-              {
-                "type": 3,
-                "name": "gerekce",
-                "description": "Why it is cancelled (shown on the card)",
-                "description_localizations": {
-                  "tr": "İptal gerekçesi (kartta gösterilir)"
-                },
-                "required": true,
-                "min_length": 3,
-                "max_length": 300
-              }
-            ]
-          },
-          {
-            "type": 1,
             "name": "cuzdan",
             "description": "Your TSQ Coin balance, pending coins and record",
             "description_localizations": {
@@ -1874,9 +1800,9 @@
               {
                 "type": 1,
                 "name": "bitir",
-                "description": "End the tournament and reset balances (administrators)",
+                "description": "End the tournament and start a new one at 1000 TSQ Coin (administrators)",
                 "description_localizations": {
-                  "tr": "Turnuvayı bitir ve bakiyeleri yenile (yöneticiler)"
+                  "tr": "Turnuvayı bitirir, yenisini 1000 TSQ Coin ile başlatır (yöneticiler)"
                 }
               }
             ]

@@ -265,8 +265,10 @@ invite link and no global command registration. The source code is public under 
 ## TSQ Öngörü (new, 2026-09-29, branch `feat/predictions`)
 
 - Module `predictions`, command group `/ongoru` (no default member permissions; every subcommand authorizes itself):
-  `yarat`, `kilitle`, `sonuclandir`, `iptal` (predictions channel), `cuzdan`, `gunluk`, `tahminlerim`, `liderlik`,
-  `turnuva durum|bitir` (commands channel). Tables `prediction_tournament`, `prediction_wallet`, `prediction`,
+  `yarat` (predictions channel), `cuzdan`, `gunluk`, `tahminlerim`, `liderlik`, `turnuva durum|bitir` (commands channel;
+  `bitir` Administrator/owner only). Management lives on the card: 🎯 Tahmin Yap, 🔒 Kilitle, ✅ Sonuçlandır,
+  ↩️ İptal / İade (creator with the role, Administrator or owner; checked server-side on every click). No coin reset
+  command; `/privacy delete` keeps the game records. Tables `prediction_tournament`, `prediction_wallet`, `prediction`,
   `prediction_outcome`, `prediction_entry`, `prediction_ledger`, `prediction_daily_claim`, `prediction_standing` (additive
   migration `PredictionsModule`), worker `PredictionWorker` (~10 s). Off by default (`/modules enable predictions`).
   Shared change: `OutgoingMessage.Select` (optional single-choice string select, omitted from stored payloads when absent).
@@ -277,9 +279,12 @@ invite link and no global command registration. The source code is public under 
   math (rounding down, overflow), settle/cancel/no-winner, settle-vs-cancel race, daily reward (bounds, parallel claims,
   Türkiye midnight, no second claim after a tournament reset), tournament close (blocking, two admins, stale and expired
   confirmations, frozen podium, fresh 1000 wallets, announcement retry from the snapshot), leaderboards (tie order,
-  isolation), deleted/failing cards, restart, module disable/enable, privacy export/delete, health lines.
-- **NOT VERIFIED_LIVE**: everything in Discord (command registration, the modal, the select on the card, edits, the
-  announcement). Not merged, not deployed, not synced.
+  isolation, eligibility: entered or created in the active tournament), card-button authorization (creator lost role,
+  wrong message/channel, unauthorized clicks without side effects), parallel lock/settle/cancel, no coin reset path,
+  deleted cards (replacement management card), failing cards, restart, module disable/enable, privacy export/delete,
+  health lines.
+- **NOT VERIFIED_LIVE**: everything in Discord (command registration, the modal with a select, the card buttons, edits,
+  the announcement). Not merged, not deployed, not synced.
 
 ## What has been verified against real Discord / real APIs
 

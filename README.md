@@ -69,12 +69,14 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   result with one short message that pings only the winners. `/giveaway end|cancel|reroll` for admins (reroll leaves
   earlier winners out). Restart-safe (stored giveaways, one worker loop) and race-safe (drawn at most once).
 - **TSQ Öngörü** (separate module, off by default): members of the creator role publish a question with 2–25 outcomes and
-  fixed odds (`/ongoru yarat`: form → private preview → one public card) in the predictions channel; members pick an outcome
-  on the card, type a stake and confirm (virtual TSQ Coin only — no real money, no transfers, no shop). The creator (while
-  holding the role) or an administrator locks, settles or cancels by hand; payouts (stake × fixed odds, rounded down) and
-  refunds are booked in one SQLite write transaction. Every tournament starts each member at 1000 TSQ Coin; a daily reward
-  of 10–100 per Türkiye calendar day; administrators end a tournament (frozen top 3, public announcement). Member commands
-  (`cuzdan`, `gunluk`, `tahminlerim`, `liderlik`, `turnuva`) only in the commands channel.
+  fixed odds (`/ongoru yarat`: form → private preview → one public card) in the predictions channel; members press
+  🎯 Tahmin Yap on the card, pick an outcome and a stake in one form and confirm a private preview (virtual TSQ Coin only —
+  no real money, no transfers, no shop). The card itself carries 🔒 Kilitle / ✅ Sonuçlandır / ↩️ İptal / İade for its creator
+  (while holding the role) or an administrator, each with a private confirmation; payouts (stake × fixed odds, rounded
+  down) and refunds are booked in one SQLite write transaction. Every tournament starts each member at 1000 TSQ Coin
+  (there is no coin reset command; only a new tournament starts from 1000); a daily reward of 10–100 per Türkiye calendar
+  day; administrators end a tournament with `/ongoru turnuva bitir` (frozen top 3, public announcement without pings).
+  Member commands (`cuzdan`, `gunluk`, `tahminlerim`, `liderlik`, `turnuva`) only in the commands channel.
 - **TSQ Özet** (separate module, off by default): `/ozetle` reads the latest 100 member messages of the channel or thread
   when it runs (REST; no message events, no cache, nothing stored), sends them as a normalized transcript to one AI model
   (OpenCode Go, `deepseek-v4.1-flash`) in a single request, and posts a short Turkish summary publicly without pings. No
@@ -113,7 +115,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Randomizer | `/zarat zar:…`, `/randomsayi maksimum:… [minimum:…]`, `/sec seçenekler:…`, `/yazitura` (public answer) | everyone (module on) |
 | TSQ Çekiliş | `/giveaway create` (form → card → 🎉 → automatic draw), `/giveaway end\|cancel\|reroll giveaway:<#number \| message link \| id>` | Manage Server (module on); entering: everyone, with 🎉 |
 | TSQ Özet | `/ozetle` (no options; public summary of this channel's latest messages) | members with any one of the configured roles (module on) |
-| TSQ Öngörü | predictions channel: `/ongoru yarat\|kilitle\|sonuclandir\|iptal`; commands channel: `/ongoru cuzdan\|gunluk\|tahminlerim\|liderlik`, `/ongoru turnuva durum\|bitir` | create: the creator role; manage: its creator (with the role) or Administrator/owner; end tournament: Administrator/owner; the rest: everyone (module on) |
+| TSQ Öngörü | predictions channel: `/ongoru yarat` + card buttons (🎯 Tahmin Yap, 🔒 Kilitle, ✅ Sonuçlandır, ↩️ İptal / İade); commands channel: `/ongoru cuzdan\|gunluk\|tahminlerim\|liderlik`, `/ongoru turnuva durum\|bitir` | create: the creator role; card management buttons: its creator (with the role) or Administrator/owner; end tournament: Administrator/owner; the rest: everyone (module on) |
 | TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:

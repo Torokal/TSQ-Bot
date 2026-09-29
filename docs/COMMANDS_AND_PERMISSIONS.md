@@ -167,13 +167,17 @@ View Channel, Read Message History. Ayrıntı: [summary/TSQ_SUMMARY.md](summary/
 | Komut | Kanal | Kim | Görünürlük |
 |---|---|---|---|
 | `/ongoru yarat` | öngörü kanalı | yaratıcı rolü (Administrator tek başına yetmez) | form + özel önizleme; kart herkese açık |
-| `/ongoru kilitle ongoru:<hedef>` | öngörü kanalı | kendi öngörüsü için yaratıcı (rolü varken), tümü için Administrator/sunucu sahibi | özel |
-| `/ongoru sonuclandir ongoru:<hedef>` | öngörü kanalı | aynı | özel önizleme + onay |
-| `/ongoru iptal ongoru:<hedef> gerekce:<metin>` | öngörü kanalı | aynı | özel önizleme + onay |
 | `/ongoru cuzdan`, `/ongoru gunluk`, `/ongoru tahminlerim` | komut kanalı | herkes | özel |
 | `/ongoru liderlik`, `/ongoru turnuva durum` | komut kanalı | herkes | herkese açık, ping'siz |
-| `/ongoru turnuva bitir` | komut kanalı | Administrator veya sunucu sahibi | özel önizleme + onay; kapanış duyurusu herkese açık |
-| Karttaki seçim menüsü → tutar formu → Onayla | öngörü kanalı | herkes (botlar hariç) | özel önizleme ve makbuz |
+| `/ongoru turnuva bitir` | komut kanalı | Administrator veya sunucu sahibi (yaratıcı rolü yetmez) | özel önizleme + [🏁 Turnuvayı Bitir]; kapanış duyurusu herkese açık, ping'siz |
+| Kart: 🎯 Tahmin Yap → form (sonuç + tutar) → Onayla | öngörü kanalı | herkes (botlar hariç) | özel önizleme ve makbuz |
+| Kart: 🔒 Kilitle | öngörü kanalı | öngörünün yaratıcısı (rolü hâlâ varken), Administrator veya sunucu sahibi | özel onay |
+| Kart: ✅ Sonuçlandır | öngörü kanalı | aynı | özel sonuç seçimi + önizleme + onay |
+| Kart: ↩️ İptal / İade | öngörü kanalı | aynı | gerekçe formu + özel önizleme + onay |
+
+Yönetim ayrı slash komutuyla değil yalnızca kart butonlarıyla yapılır (`/ongoru kilitle|sonuclandir|iptal` ve
+`/ongoru-admin` yoktur). Yetkisiz tıklama yalnızca tıklayana "Bu öngörüyü yönetme yetkiniz yok." gösterir ve hiçbir şey
+değiştirmez. Kullanıcının TSQ Coin'ini sıfırlayan bir komut yoktur; 1000 TSQ Coin yalnızca yeni turnuvada verilir.
 
 Kanallar ve rol yapılandırmadan gelir (`Predictions:ChannelId`, `Predictions:CommandsChannelId`, `Predictions:CreatorRoleId`)
 ve ID birebir eşleşmelidir (thread'ler, DM ve diğer kanallar reddedilir; yöneticiler dahil). Yetki her komutta, form
