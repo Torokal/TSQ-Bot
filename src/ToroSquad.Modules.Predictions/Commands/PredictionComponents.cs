@@ -53,7 +53,7 @@ public sealed class PredictionComponents(
         }
 
         var language = await LangAsync();
-        await RespondWithModalAsync(PredictionFormUi.CreateModal(draftId, draft.Values, key => Localizer.Get(language, key)));
+        await RespondWithModalAsync(PredictionFormUi.CreateModal(draftId, draft.Values, predictions.DefaultOddsText, key => Localizer.Get(language, key)));
     }
 
     [ComponentInteraction(PredictionMessages.PublishPrefix + "*", ignoreGroupNames: true)]

@@ -123,10 +123,10 @@ public sealed class PredictionDomainTests
 
     // ---- the form ----
 
-    private static PredictionFormCheck Parse(string? title = "Galatasaray - Fenerbahçe Maç Sonucu Ne Olur?", string? outcomes = null, string? lockAt = null,
-        string? rules = null, int max = 25) =>
-        PredictionForm.Parse(new PredictionFormValues(title, outcomes ?? "Galatasaray Kazanır | 1.10\nBeraberlik | 2.30\nFenerbahçe Kazanır | 3.10", lockAt, rules),
-            200, max, Turkey, Now);
+    private static PredictionFormCheck Parse(string? title = "Galatasaray - Fenerbahçe Maç Sonucu Ne Olur?", string? outcomes = null, string? lockDate = null,
+        string? lockTime = null, string? rules = null, int max = 25) =>
+        PredictionForm.Parse(new PredictionFormValues(title, outcomes ?? "Galatasaray Kazanır | 1.10\nBeraberlik | 2.30\nFenerbahçe Kazanır | 3.10", lockDate, lockTime,
+            rules), 200, max, Turkey, Now);
 
     private static string Lines(int count) => string.Join("\n", Enumerable.Range(1, count).Select(i => $"Sonuç {i} | {1 + i / 10.0:0.00}".Replace(',', '.')));
 
@@ -213,44 +213,123 @@ public sealed class PredictionDomainTests
     [Fact]
     public void All_field_problems_are_reported_together()
     {
-        var check = Parse(title: "", outcomes: "Tek", lockAt: "yarın", rules: new string('r', 1200));
+        var check = Parse(title: "", outcomes: "Tek", lockDate: "yarın", lockTime: "akşam", rules: new string('r', 1200));
         check.Errors.Select(e => e.Key).Should().BeEquivalentTo(
-            "predictions.form.error.title_required", "predictions.form.error.outcomes_too_few", "predictions.form.error.lock_format", "predictions.form.error.rules_length");
+            "predictions.form.error.title_required", "predictions.form.error.outcomes_too_few", "predictions.form.error.lock_date_format",
+            "predictions.form.error.lock_time_format", "predictions.form.error.rules_length");
+    }
+
+    [Fact]
+    public void The_business_rules_did_not_change_with_the_form_wording()
+    {
+        Parse(outcomes: Lines(2)).Ok.Should().BeTrue();
+        Parse(outcomes: Lines(25)).Ok.Should().BeTrue();
+        Parse(outcomes: Lines(1)).Errors.Select(e => e.Key).Should().Equal("predictions.form.error.outcomes_too_few");
+        Parse(outcomes: Lines(26)).Errors.Select(e => e.Key).Should().Equal("predictions.form.error.outcomes_too_many");
+        Parse(outcomes: "Evet | 1,10\nHayır | 2.30\nBelki").Input!.Outcomes.Select(o => (o.OddsX100, o.DefaultOdds))
+            .Should().Equal((110, false), (230, false), (200, true));
+        Parse(outcomes: "Evet | 2\nevet | 3").Errors.Select(e => e.Key).Should().Equal("predictions.form.error.outcome_duplicate");
+        Parse(outcomes: "Evet | 1.00\nHayır | 2").Errors.Select(e => e.Key).Should().Equal("predictions.form.error.odds_range");
+        Parse(outcomes: "Evet | 1000.01\nHayır | 2").Errors.Select(e => e.Key).Should().Equal("predictions.form.error.odds_range");
+        Parse(outcomes: "Evet | 1.01\nHayır | 1000").Ok.Should().BeTrue();
+        Parse(outcomes: "Evet | iki\nHayır | 2").Errors.Select(e => e.Key).Should().Equal("predictions.form.error.odds_format");
+    }
+
+    [Fact]
+    public void Validation_messages_are_plain_turkish_and_name_the_limit_only_when_it_is_broken()
+    {
+        var catalog = Localizer();
+        string Text(FormError e) => catalog.Get("tr", e.Key, [.. e.Args]);
+
+        Text(Parse(outcomes: "Evet | 2\nHayır | 2\nBelki | x").Errors.Single()).Should().Be("**Seçenekler**: 3. satırdaki oran geçerli değil. Örnek: 2.30 (en az 1.01, en fazla 1000.00).");
+        Text(Parse(outcomes: "Tek").Errors.Single()).Should().Be("**Seçenekler**: en az 2 seçenek girmelisin; her seçeneği yeni satıra yaz.");
+        Text(Parse(title: "Kim?").Errors.Single()).Should().Be("**Başlık** 5–200 karakter olmalı.");
+        Text(Parse(rules: new string('k', 1001)).Errors.Single()).Should().Be("**Sonuç kuralı** en fazla 1000 karakter olabilir.");
+        Text(Parse(lockDate: "05.10.2026").Errors.Single()).Should().Be("Kilitlenme tarihi girdiysen saat de girmelisin.");
+        Text(Parse(lockTime: "20:00").Errors.Single()).Should().Be("Kilitlenme saati girdiysen tarih de girmelisin.");
+        Text(Parse(lockDate: "31.02.2026", lockTime: "20:00").Errors.Single()).Should().Be("**Kilitlenme tarihi** geçerli değil. Örnek: 05.10.2026");
+        Text(Parse(lockDate: "05.10.2026", lockTime: "25:00").Errors.Single()).Should().Be("**Kilitlenme saati** geçerli değil. Örnek: 20:00");
+        Text(Parse(lockDate: "28.09.2026", lockTime: "20:00").Errors.Single()).Should().Contain("ileri bir tarih ve saat");
     }
 
     // ---- lock dates ----
 
     [Theory]
-    [InlineData("05.10.2026 20:00", 2026, 10, 5, 17, 0)] // Türkiye is UTC+3 all year
-    [InlineData("5.10.2026 8:05", 2026, 10, 5, 5, 5)]
-    [InlineData("2026-10-05 20:00", 2026, 10, 5, 17, 0)]
-    [InlineData("29.09.2026 15:01", 2026, 9, 29, 12, 1)]
-    public void Lock_times_are_turkiye_wall_clock_converted_to_utc(string text, int y, int m, int d, int h, int min)
+    [InlineData(null, null)]
+    [InlineData("", "")]
+    [InlineData("   ", " ")]
+    public void An_empty_lock_date_and_time_mean_a_manual_lock(string? date, string? time)
     {
-        var (at, error) = PredictionLockDate.Resolve(text, Turkey, Now);
-        error.Should().Be(LockDateError.None);
-        at.Should().Be(new DateTimeOffset(y, m, d, h, min, 0, TimeSpan.Zero));
+        var (at, errors) = PredictionLockDate.Resolve(date, time, Turkey, Now);
+        at.Should().BeNull();
+        errors.Should().BeEmpty();
+        Parse(lockDate: date, lockTime: time).Input!.LockAt.Should().BeNull();
     }
 
     [Theory]
-    [InlineData("29.09.2026 15:00", LockDateError.NotInFuture)] // now
-    [InlineData("28.09.2026 20:00", LockDateError.NotInFuture)]
-    [InlineData("01.10.2027 20:00", LockDateError.TooFar)]
-    [InlineData("31.02.2026 20:00", LockDateError.Format)]
-    [InlineData("05.10.26 20:00", LockDateError.Format)] // no two-digit years
-    [InlineData("yarın 20:00", LockDateError.Format)]
-    [InlineData("05/10/2026 20:00", LockDateError.Format)]
-    [InlineData("05.10.2026 24:00", LockDateError.Format)]
-    public void Past_far_or_unreadable_lock_times_are_refused(string text, LockDateError error) =>
-        PredictionLockDate.Resolve(text, Turkey, Now).Error.Should().Be(error);
+    [InlineData("05.10.2026", "20:00", 2026, 10, 5, 17, 0)] // Türkiye is UTC+3 all year
+    [InlineData("5.10.2026", "8:05", 2026, 10, 5, 5, 5)]
+    [InlineData("2026-10-05", "20:00", 2026, 10, 5, 17, 0)]
+    [InlineData("05.10.2026", "20.00", 2026, 10, 5, 17, 0)]
+    [InlineData(" 29.09.2026 ", " 15:01 ", 2026, 9, 29, 12, 1)]
+    [InlineData("31.12.2026", "23:59", 2026, 12, 31, 20, 59)]
+    public void The_lock_date_and_time_are_one_turkiye_wall_clock_instant_stored_in_utc(string date, string time, int y, int m, int d, int h, int min)
+    {
+        var (at, errors) = PredictionLockDate.Resolve(date, time, Turkey, Now);
+        errors.Should().BeEmpty();
+        at.Should().Be(new DateTimeOffset(y, m, d, h, min, 0, TimeSpan.Zero));
+        at!.Value.Offset.Should().Be(TimeSpan.Zero);
+        Parse(lockDate: date, lockTime: time).Input!.LockAt.Should().Be(at);
+    }
+
+    [Theory]
+    [InlineData("05.10.2026", "", LockDateError.TimeMissing)]
+    [InlineData("05.10.2026", null, LockDateError.TimeMissing)]
+    [InlineData("", "20:00", LockDateError.DateMissing)]
+    [InlineData(null, "20:00", LockDateError.DateMissing)]
+    [InlineData("yarın", "", LockDateError.TimeMissing)] // the missing half is named first
+    public void A_date_without_a_time_or_a_time_without_a_date_is_refused_not_guessed(string? date, string? time, LockDateError error) =>
+        PredictionLockDate.Resolve(date, time, Turkey, Now).Errors.Should().Equal(error);
+
+    [Theory]
+    [InlineData("31.02.2026")]
+    [InlineData("05.10.26")] // no two-digit years
+    [InlineData("05/10/2026")]
+    [InlineData("yarın")]
+    [InlineData("05.13.2026")]
+    [InlineData("05.10.2026 20:00")] // the time has its own field
+    public void An_unreadable_date_is_refused(string date) =>
+        PredictionLockDate.Resolve(date, "20:00", Turkey, Now).Errors.Should().Equal(LockDateError.DateFormat);
+
+    [Theory]
+    [InlineData("24:00")]
+    [InlineData("20:60")]
+    [InlineData("20")]
+    [InlineData("akşam")]
+    [InlineData("8:5")]
+    [InlineData("20:00:00")]
+    public void An_unreadable_time_is_refused(string time) =>
+        PredictionLockDate.Resolve("05.10.2026", time, Turkey, Now).Errors.Should().Equal(LockDateError.TimeFormat);
+
+    [Fact]
+    public void An_unreadable_date_and_time_are_both_reported() =>
+        PredictionLockDate.Resolve("yarın", "akşam", Turkey, Now).Errors.Should().Equal(LockDateError.DateFormat, LockDateError.TimeFormat);
+
+    [Theory]
+    [InlineData("29.09.2026", "15:00", LockDateError.NotInFuture)] // now
+    [InlineData("29.09.2026", "14:59", LockDateError.NotInFuture)]
+    [InlineData("28.09.2026", "20:00", LockDateError.NotInFuture)]
+    [InlineData("01.10.2027", "20:00", LockDateError.TooFar)]
+    public void Past_or_far_lock_times_are_refused(string date, string time, LockDateError error) =>
+        PredictionLockDate.Resolve(date, time, Turkey, Now).Errors.Should().Equal(error);
 
     [Fact]
     public void Wall_clock_times_that_do_not_exist_or_exist_twice_are_refused_not_guessed()
     {
         GuildTime.TryResolve("Europe/Berlin", out var berlin).Should().BeTrue();
         var march = new DateTimeOffset(2027, 3, 1, 12, 0, 0, TimeSpan.Zero);
-        PredictionLockDate.Resolve("28.03.2027 02:30", berlin, march).Error.Should().Be(LockDateError.NotInTimeZone);
-        PredictionLockDate.Resolve("31.10.2027 02:30", berlin, march).Error.Should().Be(LockDateError.Ambiguous);
+        PredictionLockDate.Resolve("28.03.2027", "02:30", berlin, march).Errors.Should().Equal(LockDateError.NotInTimeZone);
+        PredictionLockDate.Resolve("31.10.2027", "02:30", berlin, march).Errors.Should().Equal(LockDateError.Ambiguous);
     }
 
     [Fact]
@@ -329,7 +408,7 @@ public sealed class PredictionDomainTests
         card.Buttons!.Select(b => (b.Label, b.CustomId, b.Style, b.NewRow)).Should().Equal(
             ("🎯 Tahmin Yap", "tsq:pred:enter:12", MessageButtonStyle.Primary, false), ("🔒 Kilitle", "tsq:pred:lock:12", MessageButtonStyle.Secondary, true),
             ("✅ Sonuçlandır", "tsq:pred:settle:12", MessageButtonStyle.Success, false), ("↩️ İptal / İade", "tsq:pred:cancel:12", MessageButtonStyle.Danger, false));
-        card.Embed.Fields.Should().Contain(f => f.Name == "⏳ Kilitlenme" && f.Value == "Manuel kilitlenecek");
+        card.Embed.Fields.Should().Contain(f => f.Name == "⏳ Kilitlenme" && f.Value == "Manuel");
         card.Embed.Fields.Should().Contain(f => f.Name == "👥 Katılım" && f.Value == "3 katılımcı\n🪙 300 TSQ Coin yatırıldı");
         Cards.Fits(View(outcomes)).Should().BeTrue();
         Cards.Render(View(outcomes), "tr", preview: true).Buttons.Should().BeNull("the private preview has its own buttons");

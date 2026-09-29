@@ -74,6 +74,9 @@ public sealed class PredictionService(
 
     private PredictionsOptions Options => options.Value;
 
+    /// <summary>The odds a creation-form line without odds gets (named in the form).</summary>
+    public string DefaultOddsText => Odds.Format(Options.DefaultOddsX100);
+
     // ---- create ----
 
     /// <summary>/ongoru yarat: every refusal that does not depend on the form, then a draft bound to this channel and tournament.</summary>

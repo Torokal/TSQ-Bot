@@ -4,9 +4,9 @@ using System.Text;
 namespace ToroSquad.Modules.Predictions.Domain;
 
 /// <summary>The creation form exactly as typed (kept whole between the steps, so a correction never loses the input).</summary>
-public sealed record PredictionFormValues(string? Title, string? Outcomes, string? LockAt, string? Rules)
+public sealed record PredictionFormValues(string? Title, string? Outcomes, string? LockDate, string? LockTime, string? Rules)
 {
-    public static PredictionFormValues Empty { get; } = new(null, null, null, null);
+    public static PredictionFormValues Empty { get; } = new(null, null, null, null, null);
 }
 
 /// <summary>One validated outcome: its label and fixed odds (×100); <see cref="DefaultOdds"/> when the line had none.</summary>
@@ -53,16 +53,8 @@ public static class PredictionForm
 
         var outcomes = ParseOutcomes(values.Outcomes, defaultOddsX100, maxOutcomes, errors);
 
-        DateTimeOffset? lockAt = null;
-        var lockText = values.LockAt?.Trim();
-        if (!string.IsNullOrEmpty(lockText))
-        {
-            var (at, error) = PredictionLockDate.Resolve(lockText, zone, now);
-            if (error == LockDateError.None)
-                lockAt = at;
-            else
-                errors.Add(FormError.Of("predictions.form.error.lock_" + LockErrorKey(error)));
-        }
+        var (lockAt, lockErrors) = PredictionLockDate.Resolve(values.LockDate, values.LockTime, zone, now);
+        errors.AddRange(lockErrors.Select(e => FormError.Of("predictions.form.error.lock_" + LockErrorKey(e))));
 
         var rules = values.Rules?.Trim();
         if (rules is { Length: > 0 } && Length(rules) > PredictionRules.RulesMaxLength)
@@ -176,7 +168,10 @@ public static class PredictionForm
         LockDateError.TooFar => "too_far",
         LockDateError.NotInTimeZone => "not_in_zone",
         LockDateError.Ambiguous => "ambiguous",
-        _ => "format",
+        LockDateError.DateMissing => "date_missing",
+        LockDateError.TimeMissing => "time_missing",
+        LockDateError.TimeFormat => "time_format",
+        _ => "date_format",
     };
 
     private static string OddsErrorKey(OddsError error) => error switch

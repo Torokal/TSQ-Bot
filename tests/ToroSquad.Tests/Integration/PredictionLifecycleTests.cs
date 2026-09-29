@@ -9,10 +9,14 @@ using ToroSquad.Core.Roles;
 using ToroSquad.Core.Security;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Predictions.Application;
+using ToroSquad.Modules.Predictions.Commands;
 using ToroSquad.Modules.Predictions.Domain;
 using ToroSquad.Modules.Predictions.Persistence;
 using ToroSquad.Tests.Support;
+using ToroSquad.Tests.Unit;
 using static ToroSquad.Tests.Integration.PredictionTestKit;
+using LabelComponent = Discord.LabelComponent;
+using TextInputComponent = Discord.TextInputComponent;
 
 namespace ToroSquad.Tests.Integration;
 
@@ -190,6 +194,8 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
         preview.View.Content.Should().Contain("Sabit oran");
         preview.View.Buttons!.Select(b => b.CustomId).Should().Equal(PredictionMessages.PublishPrefix + draft, PredictionMessages.EditPrefix + draft,
             PredictionMessages.DiscardPrefix + draft);
+        preview.View.Buttons!.Select(b => b.Label).Should().Equal("✅ Yayımla", "✏️ Düzenle", "❌ Vazgeç");
+        preview.View.Embed.Fields.Should().Contain(f => f.Name == "⏳ Kilitlenme" && f.Value == "Manuel", "no lock date and time: locked by hand");
         _kit.Transport.Messages.Should().BeEmpty("the preview is private; nothing is public before Yayımla");
 
         (await _kit.PublishAsync(draft)).Result.MessageKey.Should().Be("predictions.publish.done");
@@ -226,12 +232,28 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     {
         var draft = await _kit.OpenFormAsync();
         var outcomes = "A | 1.10\nA | 2\nB | 1,005";
-        var reply = await _kit.SubmitAsync(draft, "Kim", outcomes, "31.02.2026 20:00", "kural");
+        var reply = await _kit.SubmitAsync(draft, "Kim", outcomes, "31.02.2026", "20:00", "kural");
         reply.Result.Succeeded.Should().BeFalse();
-        reply.View!.Content.Should().Contain("**Başlık**").And.Contain("satır 2").And.Contain("satır 3").And.Contain("**Otomatik kilitlenme**");
+        reply.View!.Content.Should().Contain("**Başlık**").And.Contain("2. satır").And.Contain("3. satırdaki oran").And
+            .Contain("**Kilitlenme tarihi** geçerli değil. Örnek: 05.10.2026");
         reply.View.Buttons!.Select(b => b.CustomId).Should().Equal(PredictionMessages.EditPrefix + draft, PredictionMessages.DiscardPrefix + draft);
-        _kit.Host.Services.GetRequiredService<PredictionTokens>().Get<FormDraftStep>(draft, Creator())!.Values
-            .Should().Be(new PredictionFormValues("Kim", outcomes, "31.02.2026 20:00", "kural"));
+        var kept = _kit.Host.Services.GetRequiredService<PredictionTokens>().Get<FormDraftStep>(draft, Creator())!.Values;
+        kept.Should().Be(new PredictionFormValues("Kim", outcomes, "31.02.2026", "20:00", "kural"), "the date and the time are kept apart, as typed");
+
+        // Düzenle reopens the five fields with exactly that input.
+        var catalog = PredictionDomainTests.Localizer();
+        var defaultOdds = await _kit.Service(s => Task.FromResult(s.DefaultOddsText));
+        defaultOdds.Should().Be("2.00");
+        var modal = PredictionFormUi.CreateModal(draft, kept, defaultOdds, key => catalog.Get("tr", key));
+        modal.Component.Components.Select(c => ((TextInputComponent)((LabelComponent)c).Component).Value)
+            .Should().Equal("Kim", outcomes, "31.02.2026", "20:00", "kural");
+
+        (await _kit.SubmitAsync(draft, lockDate: "05.10.2026")).View!.Content.Should().Contain("Kilitlenme tarihi girdiysen saat de girmelisin.");
+        (await _kit.SubmitAsync(draft, lockTime: "20:00")).View!.Content.Should().Contain("Kilitlenme saati girdiysen tarih de girmelisin.");
+        var dated = await _kit.SubmitAsync(draft, lockDate: "05.10.2026", lockTime: "20:00");
+        dated.Result.Succeeded.Should().BeTrue();
+        dated.View!.Embed!.Fields.Should().Contain(f => f.Name == "⏳ Kilitlenme" && f.Value == "<t:1791219600:R>\n<t:1791219600:F>",
+            "the two fields come back as one readable Türkiye time (20:00 = 17:00 UTC)");
 
         (await _kit.SubmitAsync(draft, outcomes: "A | 1.10\nB")).View!.Content.Should().Contain("**2.00**", "the default odds are named in the preview");
     }
@@ -240,10 +262,10 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     public async Task The_lock_time_is_checked_again_when_publishing()
     {
         var draft = await _kit.OpenFormAsync();
-        (await _kit.SubmitAsync(draft, lockAt: "24.09.2026 15:03")).Result.Succeeded.Should().BeTrue(); // T0 is 15:00 in Türkiye
+        (await _kit.SubmitAsync(draft, lockDate: "24.09.2026", lockTime: "15:03")).Result.Succeeded.Should().BeTrue(); // T0 is 15:00 in Türkiye
         _kit.Host.Clock.Advance(TimeSpan.FromMinutes(5));
         var reply = await _kit.PublishAsync(draft);
-        reply.View!.Content.Should().Contain("gelecekte olmalı");
+        reply.View!.Content.Should().Contain("ileri bir tarih ve saat");
         (await _kit.CountAsync<PredictionEntity>()).Should().Be(0);
     }
 
