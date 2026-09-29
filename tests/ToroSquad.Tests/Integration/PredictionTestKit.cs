@@ -121,17 +121,18 @@ public sealed class PredictionTestKit : IAsyncDisposable
     }
 
     public Task<PredictionReply> SubmitAsync(string draftId, string title = "Galatasaray - Fenerbahçe Maç Sonucu Ne Olur?", string outcomes = Outcomes3,
-        string? lockAt = null, string? rules = null, ActorContext? actor = null, ChannelId? channel = null) =>
-        Service(s => s.SubmitFormAsync(actor ?? Creator(), channel ?? Predictions, draftId, new PredictionFormValues(title, outcomes, lockAt, rules), "Kaan", Ct));
+        string? lockDate = null, string? lockTime = null, string? rules = null, ActorContext? actor = null, ChannelId? channel = null) =>
+        Service(s => s.SubmitFormAsync(actor ?? Creator(), channel ?? Predictions, draftId, new PredictionFormValues(title, outcomes, lockDate, lockTime, rules), "Kaan", Ct));
 
     public Task<PredictionReply> PublishAsync(string draftId, ActorContext? actor = null, ChannelId? channel = null) =>
         Service(s => s.PublishAsync(actor ?? Creator(), channel ?? Predictions, draftId, "Kaan", Ct));
 
-    /// <summary>A published prediction (form → preview → publish) with its outcomes.</summary>
+    /// <summary>A published prediction (form → preview → publish) with its outcomes; <paramref name="lockAt"/> is "date time", typed into the two fields.</summary>
     public async Task<PredictionView> CreatePredictionAsync(string outcomes = Outcomes3, string? lockAt = null, ActorContext? creator = null, string? title = null)
     {
         var draft = await OpenFormAsync(creator);
-        var preview = await SubmitAsync(draft, title ?? "Galatasaray - Fenerbahçe Maç Sonucu Ne Olur?", outcomes, lockAt, actor: creator);
+        var lockParts = lockAt?.Split(' ');
+        var preview = await SubmitAsync(draft, title ?? "Galatasaray - Fenerbahçe Maç Sonucu Ne Olur?", outcomes, lockParts?[0], lockParts?[1], actor: creator);
         preview.Result.Succeeded.Should().BeTrue(preview.View?.Content ?? preview.Result.MessageKey);
         var published = await PublishAsync(draft, creator);
         published.Result.MessageKey.Should().Be("predictions.publish.done", string.Join(",", published.Result.Args));

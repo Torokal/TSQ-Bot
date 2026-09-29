@@ -224,19 +224,20 @@ public sealed partial class PredictionsArchitectureTests
         foreach (var language in new[] { "tr", "en" })
         {
             string L(string key) => catalog.Get(language, key);
-            var create = PredictionFormUi.CreateModal("draft", new PredictionFormValues("t", "o", "l", "r"), L);
+            var create = PredictionFormUi.CreateModal("draft", new PredictionFormValues("t", "o", "d", "s", "r"), "2.00", L);
             create.Title.Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxTitleLength);
             create.CustomId.Should().Be(PredictionMessages.FormModalPrefix + "draft");
             PredictionFormUi.StakeModal(new EntryFormInfo(12, 1, "Başlık", outcomes, 100_000), "1000", L).CustomId.Should().Be("tsq:pred:stake:12");
             PredictionFormUi.StakeModal(new EntryFormInfo(12, 1, "Başlık", outcomes, 100_000, 101, "12.50", "tok"), "1000", L).CustomId.Should().Be("tsq:pred:stake:12.tok");
             PredictionFormUi.CancelModal(12, L).CustomId.Should().Be("tsq:pred:cancel-reason:12");
-            foreach (var key in new[] { "predictions.form.question", "predictions.form.outcomes", "predictions.form.lock", "predictions.form.rules", "predictions.stake.amount",
+            foreach (var key in new[] { "predictions.form.question", "predictions.form.outcomes", "predictions.form.lock_date", "predictions.form.lock_time", "predictions.form.rules", "predictions.stake.amount",
                          "predictions.stake.outcome", "predictions.stake.title", "predictions.form.title", "predictions.cancel.form_title", "predictions.cancel.reason" })
                 L(key).Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxTitleLength, key);
-            foreach (var key in new[] { "predictions.form.question_hint", "predictions.form.outcomes_hint", "predictions.form.lock_hint", "predictions.form.rules_hint",
-                         "predictions.form.question_placeholder", "predictions.form.outcomes_placeholder", "predictions.form.lock_placeholder", "predictions.form.rules_placeholder",
+            foreach (var key in new[] { "predictions.form.question_hint", "predictions.form.lock_date_hint", "predictions.form.lock_time_hint", "predictions.form.rules_hint",
+                         "predictions.form.question_placeholder", "predictions.form.outcomes_placeholder", "predictions.form.lock_date_placeholder", "predictions.form.lock_time_placeholder", "predictions.form.rules_placeholder",
                          "predictions.stake.outcome_placeholder", "predictions.cancel.reason_placeholder", "predictions.cancel.reason_hint" })
                 L(key).Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxHintLength, key);
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, L("predictions.form.outcomes_hint"), "1000.00").Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxHintLength);
             string.Format(System.Globalization.CultureInfo.InvariantCulture, L("predictions.stake.hint"), "1.000.000.000,00").Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxHintLength);
         }
     }
