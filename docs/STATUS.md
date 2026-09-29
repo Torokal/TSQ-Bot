@@ -292,6 +292,20 @@ invite link and no global command registration. The source code is public under 
   `/ongoru`. **NOT VERIFIED_LIVE**: every member interaction in Discord (both modals, the select, the card buttons, edits,
   the announcement).
 
+## TSQ Öngörü automatic football (2026-09-29, local branch `feat/predictions-auto-football`, not pushed)
+
+- Opens fixed-odds predictions for Galatasaray / Fenerbahçe / Beşiktaş matches of five allow-listed competitions on the
+  match day (09:00 Türkiye time, or 2 h before an early kickoff), locks 2 min before the planned kickoff; results stay
+  manual. The Odds API (h2h, eu, decimal; one call per competition per due batch), modes Disabled (default) / Observe /
+  Live; tables `prediction_auto_event`, `prediction_auto_provider`, column `prediction.Origin` (migration
+  `PredictionsAutoFootball`, additive). CLI `predictions football-check` (read-only). Docs: docs/predictions/AUTO_FOOTBALL.md.
+- **IMPLEMENTED / TESTED_OFFLINE** (synthetic provider data, real SQLite): schedule and late start, club matching, derby,
+  odds selection/conversion/freshness, bounded attempts across restarts, quota reserve/unknown usage/429/401/5xx, one
+  match = one prediction (two processes, restart, new tournament, cancelled card), tournament race, uncertain delivery,
+  late/stopped post, schedule change and vanished match after publishing, admin-only management, no wallet/eligibility,
+  key redaction.
+- **PROVIDER_VERIFICATION_PENDING**: no The Odds API key configured locally; no real request made. Nothing deployed.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.
