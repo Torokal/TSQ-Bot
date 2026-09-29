@@ -94,7 +94,7 @@ public sealed class PredictionStore(ToroDbContext db, IOptions<PredictionsOption
     /// <summary>
     /// THE leaderboard eligibility rule (the one definition; the leaderboards, the tournament status, the end preview and the
     /// frozen podium all start from it): a wallet of <paramref name="tournamentId"/> whose member, IN THAT tournament, made at
-    /// least one entry or published at least one prediction (open, locked, settled or cancelled — not one whose card never
+    /// least one entry (a withdrawn one included: the member took part) or published at least one prediction (open, locked, settled or cancelled — not one whose card never
     /// appeared). Only looking at the wallet, the daily reward or a lazily created wallet does not qualify; activity in an
     /// earlier tournament does not carry over.
     /// </summary>

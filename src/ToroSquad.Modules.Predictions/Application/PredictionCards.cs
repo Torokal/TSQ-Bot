@@ -44,7 +44,8 @@ public sealed record PredictionView(
 /// <summary>
 /// The one public card of a prediction, edited in place through its life. The QUESTION is the largest text (a "## " heading
 /// in the description, defused first so only the bot's own heading exists); the small title line says the state, and the
-/// "TSQ Öngörü" label lives in the footer with the tournament and prediction numbers and the creator's display name. Below
+/// "TSQ Öngörü" label lives in the footer with the prediction number and the creator's display name (never the tournament:
+/// it stays in the data, not on the card). Below
 /// the question: the numbered outcomes (1️⃣ …) each with its fixed odds; then participants and staked coins, the lock time
 /// (Discord timestamps — no per-second edits) or "locked manually", the result (settled) or the reason and refund
 /// (cancelled), and the creator's rules.
@@ -52,7 +53,7 @@ public sealed record PredictionView(
 /// Buttons carry only the prediction number; every click is authorized server-side on the stored prediction. Open:
 /// 🎯 Tahmin Yap, then 🔒 Kilitle · ✅ Sonuçlandır · ↩️ İptal / İade. Locked: entries shown closed (disabled), Sonuçlandır ·
 /// İptal / İade. Settled / cancelled: no components (nothing more can happen). Nothing on the card keeps per-member
-/// state, so pressing Tahmin Yap again always starts afresh. Sent and edited with allowed_mentions = none.
+/// state: Tahmin Yap reads the member's active entry from the database each time. Sent and edited with allowed_mentions = none.
 /// </para>
 /// <para>
 /// No silent cuts: the layout falls back from markdown lines to a code block to fields when the text is long, and the form
@@ -129,7 +130,7 @@ public sealed class PredictionCards(ILocalizer localizer)
         }
 
         var creator = string.IsNullOrWhiteSpace(view.CreatorName) ? L("predictions.card.creator_unknown") : DiscordText.UntrustedPlain(view.CreatorName, CreatorNameMax);
-        var footer = L("predictions.card.footer", Number(view.Id), view.TournamentNumber, creator);
+        var footer = L("predictions.card.footer", Number(view.Id), creator); // the tournament is never shown on the card
         var buttons = Buttons(view, language, preview);
 
         // Markdown lines → code block → fields: the first layout Discord accepts. Nothing is cut.

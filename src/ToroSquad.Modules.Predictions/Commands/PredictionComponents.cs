@@ -13,8 +13,9 @@ using ToroSquad.Modules.Predictions.Domain;
 namespace ToroSquad.Modules.Predictions.Commands;
 
 /// <summary>
-/// Every click, select and form submit of TSQ Öngörü: the creation form, and the card's buttons (🎯 Tahmin Yap, 🔒 Kilitle,
-/// ✅ Sonuçlandır, ↩️ İptal / İade) with their private follow-ups. The card's custom ids carry only the prediction number,
+/// Every click, select and form submit of TSQ Öngörü: the creation form, the card's buttons (🎯 Tahmin Yap, 🔒 Kilitle,
+/// ✅ Sonuçlandır, ↩️ İptal / İade) with their private follow-ups, and the member's own entry (✏️ Tahminimi Değiştir,
+/// ↩️ Tahminimi Geri Çek, 🎯 Tekrar Tahmin Yap on private answers — they act on the clicker's own entry only). The card's custom ids carry only the prediction number,
 /// so they keep working after a restart; each click reloads the prediction and is re-checked by the services (guild,
 /// channel, the card's own message, module, manager, stored state) — a custom id carries no authority and the button's own
 /// state is never trusted. Management answers and confirmations are private; the public card is only ever edited by the
@@ -86,8 +87,8 @@ public sealed class PredictionComponents(
     // ---- 🎯 Tahmin Yap ----
 
     /// <summary>
-    /// 🎯 Tahmin Yap on the public card: every check first, then the entry form (outcome select + amount). No coin moves
-    /// here; closing the form changes nothing, and pressing the button again always starts afresh.
+    /// 🎯 Tahmin Yap on the public card: every check first; a member with an active entry sees it (with ✏️ / ↩️), anyone
+    /// else gets the entry form (outcome select + amount). No coin moves here; closing the form changes nothing.
     /// </summary>
     [ComponentInteraction(PredictionCards.EnterPrefix + "*", ignoreGroupNames: true)]
     public async Task EnterAsync(string id)
@@ -96,44 +97,81 @@ public sealed class PredictionComponents(
             return;
         if (await CardPredictionAsync(id) is not { } predictionId)
             return;
-        var (refusal, info) = await predictions.StartEntryAsync(Actor, Here, predictionId, CardMessage, CancellationToken.None);
-        await OpenEntryFormAsync(refusal, info);
+        await OpenEntryFormAsync(await predictions.StartEntryAsync(Actor, Here, predictionId, CardMessage, CancellationToken.None));
     }
 
-    /// <summary>✏️ Düzenle on the entry preview: the form again with the earlier choice and amount.</summary>
-    [ComponentInteraction(PredictionMessages.EntryEditPrefix + "*", ignoreGroupNames: true)]
-    public async Task EditEntryAsync(string token)
+    /// <summary>🎯 Tekrar Tahmin Yap on the private answer of a withdrawal: the same as the card's button.</summary>
+    [ComponentInteraction(PredictionMessages.AgainPrefix + "*", ignoreGroupNames: true)]
+    public async Task EnterAgainAsync(string id)
     {
         if (await RefuseBotAsync())
             return;
-        var (refusal, info) = await predictions.EditEntryAsync(Actor, Here, token, CancellationToken.None);
-        await OpenEntryFormAsync(refusal, info);
+        if (!TryId(id, out var predictionId))
+        {
+            await ReplyResultAsync(PredictionService.NotFound());
+            return;
+        }
+
+        await OpenEntryFormAsync(await predictions.StartEntryAsync(Actor, Here, predictionId, null, CancellationToken.None));
     }
 
+    /// <summary>The entry form was submitted: this IS the entry (coins are debited now) — the answer is the receipt.</summary>
     [ModalInteraction(PredictionMessages.StakeModalPrefix + "*", ignoreGroupNames: true)]
-    public async Task SubmitEntryAsync(string value, PredictionStakeModal modal)
+    public async Task SubmitEntryAsync(string id, PredictionStakeModal modal)
     {
         if (await RefuseBotAsync())
             return;
-        var parts = value.Split(PredictionMessages.Separator, 2);
-        if (!long.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var predictionId))
+        if (!TryId(id, out var predictionId))
         {
             await ReplyResultAsync(PredictionService.NotFound());
             return;
         }
 
         var outcome = PredictionFormUi.ReadValue(((IModalInteraction)Context.Interaction).Data.Components, PredictionFormUi.OutcomeField);
-        var reply = await predictions.PreviewEntryAsync(Actor, Here, predictionId, outcome, modal.Amount, parts.Length > 1 ? parts[1] : null, CancellationToken.None);
-        await ShowFromModalAsync(reply);
+        await ShowFromModalAsync(await predictions.SubmitEntryAsync(Actor, Here, predictionId, outcome, modal.Amount, DisplayName(), CancellationToken.None));
     }
 
-    [ComponentInteraction(PredictionMessages.EntryConfirmPrefix + "*", ignoreGroupNames: true)]
-    public async Task ConfirmEntryAsync(string token)
+    /// <summary>✏️ Tahminimi Değiştir: the form prefilled with the active entry's outcome and stake.</summary>
+    [ComponentInteraction(PredictionMessages.ChangePrefix + "*", ignoreGroupNames: true)]
+    public async Task ChangeEntryAsync(string id)
+    {
+        if (await RefuseBotAsync())
+            return;
+        if (!TryId(id, out var predictionId))
+        {
+            await ReplyResultAsync(PredictionService.NotFound());
+            return;
+        }
+
+        await OpenEntryFormAsync(await predictions.StartChangeAsync(Actor, Here, predictionId, CancellationToken.None));
+    }
+
+    /// <summary>The change form was submitted: this IS the change (only the difference of the stake moves).</summary>
+    [ModalInteraction(PredictionMessages.ChangeModalPrefix + "*", ignoreGroupNames: true)]
+    public async Task SubmitChangeAsync(string id, PredictionStakeModal modal)
+    {
+        if (await RefuseBotAsync())
+            return;
+        if (!TryId(id, out var predictionId))
+        {
+            await ReplyResultAsync(PredictionService.NotFound());
+            return;
+        }
+
+        var outcome = PredictionFormUi.ReadValue(((IModalInteraction)Context.Interaction).Data.Components, PredictionFormUi.OutcomeField);
+        await ShowFromModalAsync(await predictions.ChangeEntryAsync(Actor, Here, predictionId, outcome, modal.Amount, CancellationToken.None));
+    }
+
+    /// <summary>↩️ Tahminimi Geri Çek: the click is the decision (no second question); the private message becomes the result.</summary>
+    [ComponentInteraction(PredictionMessages.WithdrawPrefix + "*", ignoreGroupNames: true)]
+    public async Task WithdrawEntryAsync(string id)
     {
         if (await RefuseBotAsync())
             return;
         await DeferEphemeralAsync();
-        await ReplaceAsync(await predictions.ConfirmEntryAsync(Actor, Here, token, DisplayName(), CancellationToken.None));
+        await ReplaceAsync(TryId(id, out var predictionId)
+            ? await predictions.WithdrawEntryAsync(Actor, Here, predictionId, CancellationToken.None)
+            : PredictionService.NotFound());
     }
 
     // ---- 🔒 Kilitle ----
@@ -267,16 +305,18 @@ public sealed class PredictionComponents(
 
     private static bool TryId(string text, out long id) => long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out id) && id > 0;
 
-    private async Task OpenEntryFormAsync(OperationResult? refusal, EntryFormInfo? info)
+    /// <summary>The entry form, or the private answer instead of it (a refusal, or the member's active entry with ✏️ / ↩️).</summary>
+    private async Task OpenEntryFormAsync(EntryStart start)
     {
-        if (refusal is not null || info is null)
+        if (start.Form is not { } info)
         {
-            await ReplyResultAsync(refusal ?? PredictionService.NotFound());
+            await ReplyViewAsync(start.Reply ?? PredictionService.NotFound());
             return;
         }
 
         var language = await LangAsync();
-        await RespondWithModalAsync(PredictionFormUi.StakeModal(info, Coins.Format(info.AvailableMinor, language), key => Localizer.Get(language, key)));
+        await RespondWithModalAsync(PredictionFormUi.StakeModal(info, Coins.Format(info.AvailableMinor, language),
+            info.CurrentStakeMinor is { } current ? Coins.Format(current, language) : null, key => Localizer.Get(language, key)));
     }
 
     /// <summary>

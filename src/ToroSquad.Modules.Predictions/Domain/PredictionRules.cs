@@ -28,12 +28,18 @@ public enum PredictionLockReason
     CardMissing = 2,
 }
 
+/// <summary>
+/// An entry's life: <see cref="Pending"/> is the one ACTIVE bet (its stake is in the wallet's pending coins); while the
+/// prediction is open the member may change it or withdraw it (<see cref="Withdrawn"/>: the stake is back, the bet takes no
+/// part in anything any more) and enter again (Withdrawn → Pending, the same row). Won / Lost / Refunded are final.
+/// </summary>
 public enum PredictionEntryStatus
 {
     Pending = 0,
     Won = 1,
     Lost = 2,
     Refunded = 3,
+    Withdrawn = 4,
 }
 
 /// <summary>Every coin movement: a signed amount and the balance after it.</summary>
@@ -41,9 +47,23 @@ public enum PredictionLedgerKind
 {
     Initial = 0,
     Daily = 1,
+
+    /// <summary>A new entry (or a new entry after a withdrawal): the stake is debited.</summary>
     Stake = 2,
+
     Payout = 3,
+
+    /// <summary>The prediction was cancelled: the stake comes back.</summary>
     Refund = 4,
+
+    /// <summary>The member raised the stake of their entry: only the difference is debited.</summary>
+    StakeIncrease = 5,
+
+    /// <summary>The member lowered the stake of their entry: only the difference comes back.</summary>
+    StakeDecrease = 6,
+
+    /// <summary>The member withdrew their entry: the stake (never a possible payout) comes back.</summary>
+    Withdrawal = 7,
 }
 
 public enum PredictionTournamentStatus

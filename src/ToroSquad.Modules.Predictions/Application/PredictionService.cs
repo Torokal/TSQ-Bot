@@ -23,8 +23,8 @@ public sealed record PredictionReply(OperationResult Result, OutgoingMessage? Vi
 }
 
 /// <summary>
-/// What the entry form needs (after every check passed): the outcomes to choose from and the available balance; when it is
-/// reopened with Düzenle, the earlier choice, amount and the preview it replaces.
+/// What the entry form needs (after every check passed): the outcomes to choose from and the available balance; for
+/// ✏️ Tahminimi Değiştir also the active entry's outcome and stake (prefilled, and the form submits as a change).
 /// </summary>
 public sealed record EntryFormInfo(
     long PredictionId,
@@ -34,13 +34,21 @@ public sealed record EntryFormInfo(
     long AvailableMinor,
     long? SelectedOutcomeId = null,
     string? Amount = null,
-    string? ReplacesToken = null);
+    long? CurrentStakeMinor = null)
+{
+    public bool IsChange => CurrentStakeMinor is not null;
+}
+
+/// <summary>What 🎯 Tahmin Yap / ✏️ Tahminimi Değiştir lead to: a private answer (a refusal or the active entry) or the form.</summary>
+public sealed record EntryStart(PredictionReply? Reply, EntryFormInfo? Form);
 
 /// <summary>
 /// The prediction lifecycle. Create: form → private preview → publish (row in Publishing, card posted by the bot, row
-/// Open) — never a second card for one draft. Enter: 🎯 Tahmin Yap → form (outcome + amount) → private preview → Onayla → ONE write
-/// transaction that re-checks everything (module, channel, tournament, status, deadline, outcome, existing entry,
-/// balance) and stores the entry, the debit, the ledger row and the card numbers together. Lock (card button or deadline
+/// Open) — never a second card for one draft. Enter: 🎯 Tahmin Yap → form (outcome + amount) → Submit = ONE write transaction
+/// that re-checks everything (module, channel, tournament, status, deadline, outcome, existing entry, balance) and stores
+/// the entry, the debit, the ledger row and the card numbers together — no second confirmation. While the prediction is
+/// open (stored status AND lock time) the member may change the outcome and stake (only the difference moves) or withdraw
+/// (the stake comes back), each one transaction too. Lock (card button or deadline
 /// sweep), settle and cancel (card buttons with private confirmations) are single transactions too, each re-checking the
 /// manager and the stored status first, so a prediction pays
 /// out or refunds at most once. Discord is only called after a commit. Only ids, counts and amounts are logged.
@@ -286,181 +294,345 @@ public sealed class PredictionService(
         }
     }
 
-    // ---- enter ----
-
-    /// <summary>🎯 Tahmin Yap on the card: every check before the form opens (nothing is debited or created here).</summary>
-    public async Task<(OperationResult? Refusal, EntryFormInfo? Info)> StartEntryAsync(ActorContext actor, ChannelId here, long predictionId, MessageId? card, CancellationToken ct) =>
-        await EntryCheckAsync(actor, here, predictionId, null, card, ct);
-
-    /// <summary>✏️ Düzenle on the entry preview: the same form again, filled with the chosen outcome and amount (nothing changes).</summary>
-    public async Task<(OperationResult? Refusal, EntryFormInfo? Info)> EditEntryAsync(ActorContext actor, ChannelId here, string token, CancellationToken ct)
-    {
-        if (tokens.Get<EntryStep>(token, actor) is not { } step)
-            return (OperationResult.Fail(OperationError.Expired, "predictions.entry.expired"), null);
-        var (refusal, info) = await EntryCheckAsync(actor, here, step.PredictionId, null, null, ct);
-        return refusal is not null ? (refusal, null) : (null, info! with { SelectedOutcomeId = step.OutcomeId, Amount = Coins.FormatInput(step.AmountMinor), ReplacesToken = token });
-    }
+    // ---- enter, change, withdraw ----
 
     /// <summary>
-    /// The entry form was submitted (outcome + amount): parsed and checked, then the private preview with Onayla / Düzenle /
-    /// Vazgeç. A form reopened with Düzenle replaces its earlier preview (that confirmation is dropped).
+    /// 🎯 Tahmin Yap (on the card, or 🎯 Tekrar Tahmin Yap on a private answer): every check first. A member with an ACTIVE
+    /// entry gets it back, read from the database, with ✏️ Tahminimi Değiştir / ↩️ Tahminimi Geri Çek — the card stays the way
+    /// back when a private answer is gone; otherwise the entry form opens. Nothing is debited or created here.
     /// </summary>
-    public async Task<PredictionReply> PreviewEntryAsync(ActorContext actor, ChannelId here, long predictionId, string? outcomeValue, string? amountText,
-        string? replacesToken, CancellationToken ct)
+    public async Task<EntryStart> StartEntryAsync(ActorContext actor, ChannelId here, long predictionId, MessageId? card, CancellationToken ct)
     {
-        if (replacesToken is not null)
-            tokens.Remove(replacesToken, actor);
-        if (!long.TryParse(outcomeValue, NumberStyles.None, CultureInfo.InvariantCulture, out var outcomeId))
-            return OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.outcome_required");
-        var (refusal, info) = await EntryCheckAsync(actor, here, predictionId, outcomeId, null, ct);
-        if (refusal is not null)
-            return refusal;
-        var outcome = info!.Outcomes.Single(o => o.Id == outcomeId);
+        var (prediction, refusal) = await OpenForEntriesAsync(actor, here, predictionId, card, "predictions.entry.closed", ct);
+        if (prediction is null)
+            return new EntryStart(refusal!, null);
         var language = await LanguageAsync(actor.GuildId, ct);
-        var amount = Coins.ParseAmount(amountText);
-        if (!amount.Ok)
-            return OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.amount_" + AmountErrorKey(amount.Error), Coins.Format(Coins.MinStakeMinor, language));
-        if (amount.Minor > info.AvailableMinor)
-            return OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.insufficient", Coins.Format(info.AvailableMinor, language));
+        if (await CurrentEntryAsync(prediction, actor, null, language, ct) is { } current)
+            return new EntryStart(current, null);
+        var available = await AvailableAsync(prediction.TournamentId, actor, ct);
+        if (available < Coins.MinStakeMinor)
+            return new EntryStart(OperationResult.Fail(OperationError.Conflict, "predictions.entry.no_coins"), null);
+        return new EntryStart(null, new EntryFormInfo(predictionId, prediction.TournamentId, prediction.Title, await OutcomesAsync(predictionId, ct), available));
+    }
 
-        long payout;
-        try
-        {
-            payout = Coins.Payout(amount.Minor, outcome.OddsX100);
-        }
-        catch (OverflowException)
-        {
-            return OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.too_large");
-        }
-
-        var token = tokens.Create(actor, new EntryStep(predictionId, outcomeId, amount.Minor, info.TournamentId), PredictionTokens.ConfirmLifetime);
-        return new PredictionReply(OperationResult.Ok("predictions.entry.preview"),
-            messages.EntryPreview(info.Title, outcome.Label, outcome.OddsX100, amount.Minor, payout, info.AvailableMinor - amount.Minor, token, language));
+    /// <summary>✏️ Tahminimi Değiştir: the form again, filled with the active entry's outcome and stake (nothing changes yet).</summary>
+    public async Task<EntryStart> StartChangeAsync(ActorContext actor, ChannelId here, long predictionId, CancellationToken ct)
+    {
+        var (prediction, refusal) = await OpenForEntriesAsync(actor, here, predictionId, null, "predictions.change.locked", ct);
+        if (prediction is null)
+            return new EntryStart(refusal!, null);
+        var entry = await store.Entries.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.PredictionId == predictionId && e.UserId == actor.UserId.Value && e.Status == PredictionEntryStatus.Pending, ct);
+        if (entry is null)
+            return new EntryStart(OperationResult.Fail(OperationError.Conflict, "predictions.change.none"), null);
+        var available = await AvailableAsync(prediction.TournamentId, actor, ct);
+        return new EntryStart(null, new EntryFormInfo(predictionId, prediction.TournamentId, prediction.Title, await OutcomesAsync(predictionId, ct), available,
+            entry.OutcomeId, Coins.FormatInput(entry.StakeMinor), entry.StakeMinor));
     }
 
     /// <summary>
-    /// Onayla: the ONLY place coins are debited. The token is taken (a double click acts once) and everything is checked
-    /// again inside one write transaction; the unique (prediction, member) index makes a second entry impossible even
-    /// across processes. The card is edited after the commit (coalesced).
+    /// The entry form was submitted: THIS is the confirmation (no second step). Everything is checked again inside ONE write
+    /// transaction (module, channel, tournament, status, deadline, outcome, existing entry, balance), then the entry, the
+    /// debit, the ledger row and the card numbers are stored together. A member who already has an active entry — a
+    /// repeated submit, a second open form — changes nothing and gets that entry back; one who withdrew enters again with the
+    /// same row. The unique (prediction, member) index makes a second entry impossible even across processes.
     /// </summary>
-    public async Task<PredictionReply> ConfirmEntryAsync(ActorContext actor, ChannelId here, string token, string displayName, CancellationToken ct)
+    public async Task<PredictionReply> SubmitEntryAsync(ActorContext actor, ChannelId here, long predictionId, string? outcomeValue, string? amountText,
+        string displayName, CancellationToken ct)
     {
-        if (tokens.Take<EntryStep>(token, actor) is not { } step)
-            return OperationResult.Fail(OperationError.Expired, "predictions.entry.expired");
-        if ((guards.InPredictionsChannel(here) ?? await guards.EnabledAsync(actor.GuildId, ct)) is { } refusal)
-            return refusal;
+        var (prediction, refusal) = await OpenForEntriesAsync(actor, here, predictionId, null, "predictions.entry.closed", ct);
+        if (prediction is null)
+            return refusal!;
+        var language = await LanguageAsync(actor.GuildId, ct);
+        var (outcomeId, amount, invalid) = ParseEntryInput(outcomeValue, amountText, language);
+        if (invalid is not null)
+            return invalid;
 
         var now = clock.GetUtcNow();
-        var language = await LanguageAsync(actor.GuildId, ct);
         EntryCommit result;
         try
         {
             result = await PredictionWrites.RunAsync(store.Db, async () =>
             {
-                var tournament = await store.ActiveTournamentAsync(actor.GuildId, ct);
-                if (tournament is null || tournament.Id != step.TournamentId)
-                    return Fail("predictions.entry.tournament_changed");
-                var prediction = await store.Predictions.FirstOrDefaultAsync(p => p.Id == step.PredictionId && p.GuildId == actor.GuildId.Value, ct);
-                if (prediction is null || prediction.TournamentId != tournament.Id || prediction.ChannelId != here.Value)
-                    return Fail("predictions.not_found");
-                if (prediction.Status != PredictionStatus.Open || prediction.LockAt is { } lockAt && now >= lockAt)
-                    return Fail("predictions.entry.closed");
-                var outcome = await store.Outcomes.FirstOrDefaultAsync(o => o.Id == step.OutcomeId && o.PredictionId == prediction.Id, ct);
-                if (outcome is null)
-                    return Fail("predictions.not_found");
-                if (await store.Entries.AnyAsync(e => e.PredictionId == prediction.Id && e.UserId == actor.UserId.Value, ct))
-                    return Fail("predictions.entry.already");
+                var (row, tournament, outcome, error) = await LoadForEntryAsync(actor, here, predictionId, outcomeId, "predictions.entry.closed", now, ct);
+                if (error is not null)
+                    return EntryCommit.Fail(error);
+                var entry = await store.Entries.FirstOrDefaultAsync(e => e.PredictionId == row!.Id && e.UserId == actor.UserId.Value, ct);
+                if (entry is { Status: PredictionEntryStatus.Pending })
+                    return EntryCommit.Fail("predictions.entry.already");
+                if (entry is not (null or { Status: PredictionEntryStatus.Withdrawn }))
+                    return EntryCommit.Fail("predictions.entry.closed");
 
-                var wallet = await store.EnsureWalletAsync(tournament, actor.UserId, now, ct, displayName);
-                if (step.AmountMinor > wallet.BalanceMinor)
-                    return Fail("predictions.entry.insufficient", Coins.Format(wallet.BalanceMinor, language));
-                var payout = Coins.Payout(step.AmountMinor, outcome.OddsX100);
-                var possible = await store.Entries.Where(e => e.WalletId == wallet.Id && e.Status == PredictionEntryStatus.Pending).SumAsync(e => (long?)e.PotentialPayoutMinor, ct) ?? 0;
-                if ((Int128)wallet.BalanceMinor - step.AmountMinor + possible + payout > Coins.WalletCeilingMinor)
-                    return Fail("predictions.entry.too_large");
+                var wallet = await store.EnsureWalletAsync(tournament!, actor.UserId, now, ct, displayName);
+                if (amount > wallet.BalanceMinor)
+                    return EntryCommit.Fail("predictions.entry.insufficient", Coins.Format(wallet.BalanceMinor, language));
+                var payout = Coins.Payout(amount, outcome!.OddsX100);
+                if (await ExceedsCeilingAsync(wallet, -amount, payout, null, ct))
+                    return EntryCommit.Fail("predictions.entry.too_large");
 
-                var entry = new PredictionEntryEntity
+                var again = entry is not null;
+                if (entry is null)
                 {
-                    PredictionId = prediction.Id,
-                    OutcomeId = outcome.Id,
-                    TournamentId = tournament.Id,
-                    WalletId = wallet.Id,
-                    GuildId = actor.GuildId.Value,
-                    UserId = actor.UserId.Value,
-                    StakeMinor = step.AmountMinor,
-                    OddsX100 = outcome.OddsX100,
-                    PotentialPayoutMinor = payout,
-                    Status = PredictionEntryStatus.Pending,
-                    CreatedAt = now,
-                };
-                store.Entries.Add(entry);
-                wallet.BalanceMinor = Coins.Subtract(wallet.BalanceMinor, step.AmountMinor);
-                wallet.PendingMinor = Coins.Add(wallet.PendingMinor, step.AmountMinor);
+                    entry = new PredictionEntryEntity
+                    {
+                        PredictionId = row!.Id,
+                        TournamentId = tournament!.Id,
+                        WalletId = wallet.Id,
+                        GuildId = actor.GuildId.Value,
+                        UserId = actor.UserId.Value,
+                        CreatedAt = now,
+                    };
+                    store.Entries.Add(entry);
+                }
+                else
+                {
+                    entry.Revision++;
+                    entry.UpdatedAt = now;
+                }
+
+                entry.OutcomeId = outcome.Id;
+                entry.StakeMinor = amount;
+                entry.OddsX100 = outcome.OddsX100;
+                entry.PotentialPayoutMinor = payout;
+                entry.Status = PredictionEntryStatus.Pending;
+                wallet.BalanceMinor = Coins.Subtract(wallet.BalanceMinor, amount);
+                wallet.PendingMinor = Coins.Add(wallet.PendingMinor, amount);
                 wallet.UpdatedAt = now;
-                prediction.EntryCount++;
-                prediction.StakeTotalMinor = Coins.Add(prediction.StakeTotalMinor, step.AmountMinor);
-                PredictionStore.Touch(prediction);
+                row!.EntryCount++;
+                row.StakeTotalMinor = Coins.Add(row.StakeTotalMinor, amount);
+                PredictionStore.Touch(row);
                 await store.Db.SaveChangesAsync(ct);
-                store.Book(wallet, PredictionLedgerKind.Stake, -step.AmountMinor, PredictionStore.Key("stake", 'e', entry.Id), now, prediction.Id, entry.Id);
+                store.Book(wallet, PredictionLedgerKind.Stake, -amount, EntryKey("stake", entry, again), now, row.Id, entry.Id);
                 await store.Db.SaveChangesAsync(ct);
-                return new EntryCommit(null, [], entry, wallet.BalanceMinor);
+                return new EntryCommit(null, [], entry, wallet.BalanceMinor, 0);
             }, ct);
         }
         catch (DbUpdateException ex) when (PredictionWrites.IsUniqueViolation(ex))
         {
-            return OperationResult.Fail(OperationError.Conflict, "predictions.entry.already");
+            result = EntryCommit.Fail("predictions.entry.already");
         }
 
+        if (result.Error == "predictions.entry.already" && await CurrentEntryAsync(prediction, actor, "predictions.entry.already", language, ct) is { } current)
+            return current with { Result = OperationResult.Fail(OperationError.Conflict, "predictions.entry.already") };
         if (result.Error is not null)
             return OperationResult.Fail(OperationError.Conflict, result.Error, result.Args);
 
-        var entry = result.Entry!;
-        logger.LogInformation("prediction_entry {Prediction} guild={Guild} user={User} outcome={Outcome} stake={Stake} odds={Odds}",
-            entry.PredictionId, actor.GuildId, actor.UserId, entry.OutcomeId, entry.StakeMinor, entry.OddsX100);
-        await cardSync.RequestAsync(entry.PredictionId, ct);
-        var view = (await store.ViewAsync(entry.PredictionId, ct))!;
-        var outcomeView = view.Outcomes.First(o => o.Id == entry.OutcomeId);
-        return new PredictionReply(OperationResult.Ok("predictions.entry.done"),
-            messages.EntryReceipt(view.Title, outcomeView.Label, entry.OddsX100, entry.StakeMinor, entry.PotentialPayoutMinor, result.Balance, language));
-
-        static EntryCommit Fail(string key, params object[] args) => new(key, args, null, 0);
+        var entryRow = result.Entry!;
+        logger.LogInformation("prediction_entry {Prediction} guild={Guild} user={User} outcome={Outcome} stake={Stake} odds={Odds} revision={Revision}",
+            entryRow.PredictionId, actor.GuildId, actor.UserId, entryRow.OutcomeId, entryRow.StakeMinor, entryRow.OddsX100, entryRow.Revision);
+        await cardSync.RequestAsync(entryRow.PredictionId, ct);
+        return await ReceiptAsync(entryRow, result.Balance, "predictions.entry.done", false, language, ct);
     }
 
-    private sealed record EntryCommit(string? Error, object[] Args, PredictionEntryEntity? Entry, long Balance);
+    /// <summary>
+    /// The change form was submitted (THIS is the confirmation): in ONE write transaction the active entry takes the new
+    /// outcome and stake. Only the DIFFERENCE moves (100 → 150 debits 50, 150 → 100 returns 50, same stake nothing); the odds
+    /// snapshot is the stored odds of the outcome now chosen. Not enough coins for the difference: nothing changes at all.
+    /// The form carries absolute values, so a repeated submit changes nothing more.
+    /// </summary>
+    public async Task<PredictionReply> ChangeEntryAsync(ActorContext actor, ChannelId here, long predictionId, string? outcomeValue, string? amountText,
+        CancellationToken ct)
+    {
+        var (prediction, refusal) = await OpenForEntriesAsync(actor, here, predictionId, null, "predictions.change.locked", ct);
+        if (prediction is null)
+            return refusal!;
+        var language = await LanguageAsync(actor.GuildId, ct);
+        var (outcomeId, amount, invalid) = ParseEntryInput(outcomeValue, amountText, language);
+        if (invalid is not null)
+            return invalid;
 
-    /// <summary>Every entry check that can be made before the transaction (it repeats them all). No outcome: the form is about to open.</summary>
-    private async Task<(OperationResult? Refusal, EntryFormInfo? Info)> EntryCheckAsync(ActorContext actor, ChannelId here, long predictionId, long? outcomeId,
-        MessageId? card, CancellationToken ct)
+        var now = clock.GetUtcNow();
+        var result = await PredictionWrites.RunAsync(store.Db, async () =>
+        {
+            var (row, _, outcome, error) = await LoadForEntryAsync(actor, here, predictionId, outcomeId, "predictions.change.locked", now, ct);
+            if (error is not null)
+                return EntryCommit.Fail(error);
+            var entry = await store.Entries.FirstOrDefaultAsync(e => e.PredictionId == row!.Id && e.UserId == actor.UserId.Value, ct);
+            if (entry is not { Status: PredictionEntryStatus.Pending })
+                return EntryCommit.Fail("predictions.change.none");
+            var wallet = await store.Wallets.FirstAsync(w => w.Id == entry.WalletId, ct);
+
+            var delta = amount - entry.StakeMinor;
+            if (delta > wallet.BalanceMinor)
+                return EntryCommit.Fail("predictions.change.insufficient", Coins.Format(delta, language), Coins.Format(wallet.BalanceMinor, language));
+            var odds = outcome!.Id == entry.OutcomeId ? entry.OddsX100 : outcome.OddsX100;
+            var payout = Coins.Payout(amount, odds);
+            if (await ExceedsCeilingAsync(wallet, -delta, payout, entry.Id, ct))
+                return EntryCommit.Fail("predictions.entry.too_large");
+            if (delta == 0 && outcome.Id == entry.OutcomeId)
+                return new EntryCommit(null, [], entry, wallet.BalanceMinor, 0); // already exactly this: nothing to do
+
+            entry.Revision++;
+            entry.UpdatedAt = now;
+            entry.OutcomeId = outcome.Id;
+            entry.OddsX100 = odds;
+            entry.StakeMinor = amount;
+            entry.PotentialPayoutMinor = payout;
+            if (delta != 0)
+            {
+                wallet.BalanceMinor = Coins.Subtract(wallet.BalanceMinor, delta);
+                wallet.PendingMinor = Coins.Add(wallet.PendingMinor, delta);
+                wallet.UpdatedAt = now;
+                row!.StakeTotalMinor = Coins.Add(row.StakeTotalMinor, delta);
+                store.Book(wallet, delta > 0 ? PredictionLedgerKind.StakeIncrease : PredictionLedgerKind.StakeDecrease, -delta,
+                    EntryKey(delta > 0 ? "stake-up" : "stake-down", entry, true), now, row.Id, entry.Id);
+            }
+
+            PredictionStore.Touch(row!);
+            await store.Db.SaveChangesAsync(ct);
+            return new EntryCommit(null, [], entry, wallet.BalanceMinor, delta);
+        }, ct);
+        if (result.Error is not null)
+            return OperationResult.Fail(OperationError.Conflict, result.Error, result.Args);
+
+        var changed = result.Entry!;
+        logger.LogInformation("prediction_entry_changed {Prediction} guild={Guild} user={User} outcome={Outcome} stake={Stake} delta={Delta} revision={Revision}",
+            changed.PredictionId, actor.GuildId, actor.UserId, changed.OutcomeId, changed.StakeMinor, result.Delta, changed.Revision);
+        if (result.Delta != 0)
+            await cardSync.RequestAsync(changed.PredictionId, ct);
+        return await ReceiptAsync(changed, result.Balance, "predictions.change.done", true, language, ct);
+    }
+
+    /// <summary>
+    /// ↩️ Tahminimi Geri Çek (the click is the decision; no second question): in ONE write transaction the active entry is
+    /// withdrawn and its STAKE — never a possible payout — returns to the wallet. The entry stays as history (the member still
+    /// took part in this tournament) but no longer counts anywhere: not on the card, not in a settlement or a cancellation,
+    /// not in the member's record. A second click finds nothing active and returns nothing.
+    /// </summary>
+    public async Task<PredictionReply> WithdrawEntryAsync(ActorContext actor, ChannelId here, long predictionId, CancellationToken ct)
+    {
+        var (prediction, refusal) = await OpenForEntriesAsync(actor, here, predictionId, null, "predictions.change.locked", ct);
+        if (prediction is null)
+            return refusal!;
+        var language = await LanguageAsync(actor.GuildId, ct);
+        var now = clock.GetUtcNow();
+        var result = await PredictionWrites.RunAsync(store.Db, async () =>
+        {
+            var (row, _, _, error) = await LoadForEntryAsync(actor, here, predictionId, null, "predictions.change.locked", now, ct);
+            if (error is not null)
+                return EntryCommit.Fail(error);
+            var entry = await store.Entries.FirstOrDefaultAsync(e => e.PredictionId == row!.Id && e.UserId == actor.UserId.Value, ct);
+            if (entry is not { Status: PredictionEntryStatus.Pending })
+                return EntryCommit.Fail("predictions.withdraw.none");
+            var wallet = await store.Wallets.FirstAsync(w => w.Id == entry.WalletId, ct);
+
+            entry.Status = PredictionEntryStatus.Withdrawn;
+            entry.Revision++;
+            entry.UpdatedAt = now;
+            wallet.PendingMinor = Coins.Subtract(wallet.PendingMinor, entry.StakeMinor);
+            wallet.BalanceMinor = Coins.Add(wallet.BalanceMinor, entry.StakeMinor);
+            wallet.UpdatedAt = now;
+            row!.EntryCount--;
+            row.StakeTotalMinor = Coins.Subtract(row.StakeTotalMinor, entry.StakeMinor);
+            PredictionStore.Touch(row);
+            store.Book(wallet, PredictionLedgerKind.Withdrawal, entry.StakeMinor, EntryKey("withdraw", entry, true), now, row.Id, entry.Id);
+            await store.Db.SaveChangesAsync(ct);
+            return new EntryCommit(null, [], entry, wallet.BalanceMinor, -entry.StakeMinor);
+        }, ct);
+        if (result.Error is not null)
+            return OperationResult.Fail(OperationError.Conflict, result.Error, result.Args);
+
+        var withdrawn = result.Entry!;
+        logger.LogInformation("prediction_entry_withdrawn {Prediction} guild={Guild} user={User} refund={Refund} revision={Revision}",
+            withdrawn.PredictionId, actor.GuildId, actor.UserId, withdrawn.StakeMinor, withdrawn.Revision);
+        await cardSync.RequestAsync(withdrawn.PredictionId, ct);
+        return new PredictionReply(OperationResult.Ok("predictions.withdraw.done"),
+            messages.Withdrawn(predictionId, withdrawn.StakeMinor, result.Balance, language));
+    }
+
+    private sealed record EntryCommit(string? Error, object[] Args, PredictionEntryEntity? Entry, long Balance, long Delta)
+    {
+        public static EntryCommit Fail(string key, params object[] args) => new(key, args, null, 0, 0);
+    }
+
+    /// <summary>The ledger key of an entry operation: the first stake keeps "stake:e3"; every later one carries the revision.</summary>
+    private static string EntryKey(string kind, PredictionEntryEntity entry, bool revised) =>
+        PredictionStore.Key(kind, 'e', entry.Id) + (revised ? ":r" + entry.Revision.ToString(CultureInfo.InvariantCulture) : "");
+
+    /// <summary>Would the wallet's possible total (spendable + every possible payout) pass the coin ceiling after this change?</summary>
+    private async Task<bool> ExceedsCeilingAsync(PredictionWalletEntity wallet, long balanceChange, long payout, long? replacedEntryId, CancellationToken ct)
+    {
+        var possible = await store.Entries.Where(e => e.WalletId == wallet.Id && e.Status == PredictionEntryStatus.Pending && e.Id != replacedEntryId)
+            .SumAsync(e => (long?)e.PotentialPayoutMinor, ct) ?? 0;
+        return (Int128)wallet.BalanceMinor + balanceChange + possible + payout > Coins.WalletCeilingMinor;
+    }
+
+    /// <summary>The outcome (a number from the select) and the amount, both required; a refusal names what is wrong.</summary>
+    private static (long OutcomeId, long Amount, OperationResult? Refusal) ParseEntryInput(string? outcomeValue, string? amountText, string language)
+    {
+        if (!long.TryParse(outcomeValue, NumberStyles.None, CultureInfo.InvariantCulture, out var outcomeId))
+            return (0, 0, OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.outcome_required"));
+        var amount = Coins.ParseAmount(amountText);
+        if (!amount.Ok)
+            return (0, 0, OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.amount_" + AmountErrorKey(amount.Error), Coins.Format(Coins.MinStakeMinor, language)));
+        return (outcomeId, amount.Minor, null);
+    }
+
+    /// <summary>
+    /// Inside the write transaction: the prediction (this guild and channel), open for entries at THIS moment — the stored
+    /// status and the lock time itself, never the worker —, in the active tournament, and the chosen outcome of this prediction.
+    /// </summary>
+    private async Task<(PredictionEntity? Prediction, PredictionTournamentEntity? Tournament, PredictionOutcomeEntity? Outcome, string? Error)> LoadForEntryAsync(
+        ActorContext actor, ChannelId here, long predictionId, long? outcomeId, string closedKey, DateTimeOffset now, CancellationToken ct)
+    {
+        var prediction = await store.Predictions.FirstOrDefaultAsync(p => p.Id == predictionId && p.GuildId == actor.GuildId.Value, ct);
+        if (prediction is null || prediction.ChannelId != here.Value)
+            return (null, null, null, "predictions.not_found");
+        var tournament = await store.ActiveTournamentAsync(actor.GuildId, ct);
+        if (!IsOpenForEntries(prediction, now) || tournament is null || tournament.Id != prediction.TournamentId)
+            return (null, null, null, closedKey);
+        if (outcomeId is not { } chosen)
+            return (prediction, tournament, null, null);
+        var outcome = await store.Outcomes.FirstOrDefaultAsync(o => o.Id == chosen && o.PredictionId == prediction.Id, ct);
+        return outcome is null ? (null, null, null, "predictions.not_found") : (prediction, tournament, outcome, null);
+    }
+
+    /// <summary>Before any form or transaction: the prediction as reached (guild, channel, card), open for entries now, in the active tournament.</summary>
+    private async Task<(PredictionEntity? Prediction, OperationResult? Refusal)> OpenForEntriesAsync(ActorContext actor, ChannelId here, long predictionId,
+        MessageId? card, string closedKey, CancellationToken ct)
     {
         var (prediction, refusal) = await LoadInChannelAsync(actor, here, predictionId, card, ct);
         if (prediction is null)
-            return (refusal, null);
+            return (null, refusal);
         if (prediction.Status == PredictionStatus.Publishing)
-            return (OperationResult.Fail(OperationError.Conflict, "predictions.entry.publishing"), null);
-        if (prediction.Status != PredictionStatus.Open || prediction.LockAt is { } lockAt && clock.GetUtcNow() >= lockAt)
-            return (OperationResult.Fail(OperationError.Conflict, "predictions.entry.closed"), null);
-        var outcomes = await store.Outcomes.AsNoTracking().Where(o => o.PredictionId == predictionId).OrderBy(o => o.Position)
-            .Select(o => new OutcomeView(o.Id, o.Position, o.Label, o.OddsX100)).ToListAsync(ct);
-        if (outcomeId is { } chosenOutcome && outcomes.All(o => o.Id != chosenOutcome))
-            return (NotFound(), null);
-        var tournament = await store.ActiveTournamentAsync(actor.GuildId, ct);
-        if (tournament is null || tournament.Id != prediction.TournamentId)
-            return (OperationResult.Fail(OperationError.Conflict, "predictions.entry.closed"), null);
-
-        var existing = await store.Entries.AsNoTracking().Where(e => e.PredictionId == predictionId && e.UserId == actor.UserId.Value)
-            .Select(e => (long?)e.OutcomeId).FirstOrDefaultAsync(ct);
-        if (existing is { } chosen)
-        {
-            var label = outcomes.FirstOrDefault(o => o.Id == chosen)?.Label ?? "";
-            return (OperationResult.Fail(OperationError.Conflict, "predictions.entry.already_chosen", DiscordText.Untrusted(label, 400)), null);
-        }
-
-        var available = await store.Wallets.AsNoTracking().Where(w => w.TournamentId == tournament.Id && w.UserId == actor.UserId.Value)
-            .Select(w => (long?)w.BalanceMinor).FirstOrDefaultAsync(ct) ?? Options.InitialBalanceMinor;
-        if (available < Coins.MinStakeMinor)
-            return (OperationResult.Fail(OperationError.Conflict, "predictions.entry.no_coins"), null);
-        return (null, new EntryFormInfo(predictionId, tournament.Id, prediction.Title, outcomes, available));
+            return (null, OperationResult.Fail(OperationError.Conflict, "predictions.entry.publishing"));
+        var active = await store.Tournaments.AsNoTracking()
+            .AnyAsync(t => t.Id == prediction.TournamentId && t.GuildId == actor.GuildId.Value && t.Status == PredictionTournamentStatus.Active, ct);
+        return IsOpenForEntries(prediction, clock.GetUtcNow()) && active ? (prediction, null) : (null, OperationResult.Fail(OperationError.Conflict, closedKey));
     }
+
+    private static bool IsOpenForEntries(PredictionEntity prediction, DateTimeOffset now) =>
+        prediction.Status == PredictionStatus.Open && (prediction.LockAt is not { } lockAt || now < lockAt);
+
+    /// <summary>The member's ACTIVE entry of this prediction as a private view with ✏️ / ↩️ (null: none).</summary>
+    private async Task<PredictionReply?> CurrentEntryAsync(PredictionEntity prediction, ActorContext actor, string? note, string language, CancellationToken ct)
+    {
+        var entry = await store.Entries.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.PredictionId == prediction.Id && e.UserId == actor.UserId.Value && e.Status == PredictionEntryStatus.Pending, ct);
+        if (entry is null)
+            return null;
+        var label = await store.Outcomes.AsNoTracking().Where(o => o.Id == entry.OutcomeId).Select(o => o.Label).FirstAsync(ct);
+        var balance = await store.Wallets.AsNoTracking().Where(w => w.Id == entry.WalletId).Select(w => w.BalanceMinor).FirstAsync(ct);
+        return new PredictionReply(OperationResult.Ok("predictions.entry.current"),
+            messages.CurrentEntry(prediction.Id, prediction.Title, label, entry.OddsX100, entry.StakeMinor, entry.PotentialPayoutMinor, balance, note, language));
+    }
+
+    private async Task<PredictionReply> ReceiptAsync(PredictionEntryEntity entry, long balance, string key, bool changed, string language, CancellationToken ct)
+    {
+        var title = await store.Predictions.AsNoTracking().Where(p => p.Id == entry.PredictionId).Select(p => p.Title).FirstAsync(ct);
+        var label = await store.Outcomes.AsNoTracking().Where(o => o.Id == entry.OutcomeId).Select(o => o.Label).FirstAsync(ct);
+        return new PredictionReply(OperationResult.Ok(key),
+            messages.EntryReceipt(entry.PredictionId, title, label, entry.OddsX100, entry.StakeMinor, entry.PotentialPayoutMinor, balance, changed, language));
+    }
+
+    private Task<List<OutcomeView>> OutcomesAsync(long predictionId, CancellationToken ct) =>
+        store.Outcomes.AsNoTracking().Where(o => o.PredictionId == predictionId).OrderBy(o => o.Position)
+            .Select(o => new OutcomeView(o.Id, o.Position, o.Label, o.OddsX100)).ToListAsync(ct);
+
+    /// <summary>The member's spendable coins in this tournament (the starting balance when they have no wallet yet).</summary>
+    private async Task<long> AvailableAsync(long tournamentId, ActorContext actor, CancellationToken ct) =>
+        await store.Wallets.AsNoTracking().Where(w => w.TournamentId == tournamentId && w.UserId == actor.UserId.Value)
+            .Select(w => (long?)w.BalanceMinor).FirstOrDefaultAsync(ct) ?? Options.InitialBalanceMinor;
 
     // ---- manage from the card: lock ----
 

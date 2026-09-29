@@ -12,9 +12,9 @@ namespace ToroSquad.Modules.Predictions.Commands;
 /// are named by the validation messages when something is wrong. Prefilled with the draft's values when reopened
 /// (Düzenle), so a correction never loses the input. Entry
 /// (🎯 Tahmin Yap): the outcome as a single-choice string select inside the modal (Discord.Net 3.20 label components, as
-/// TSQ LFG's form) plus the stake; reopened with Düzenle it is prefilled with the earlier choice and amount. Cancel: the
-/// reason. Custom ids carry only the draft id, the prediction number and a random token; everything is validated again
-/// server-side. Discord: modal titles and labels at most 45 characters, label descriptions and placeholders at most 100.
+/// TSQ LFG's form) plus the stake — its submit IS the entry, no second confirmation; ✏️ Tahminimi Değiştir opens the same
+/// form prefilled with the active entry's outcome and stake. Cancel: the reason. Custom ids carry only the draft id, the
+/// prediction number and a random token; everything is validated again server-side. Discord: modal titles and labels at most 45 characters, label descriptions and placeholders at most 100.
 /// </summary>
 public static class PredictionFormUi
 {
@@ -56,11 +56,13 @@ public static class PredictionFormUi
             Cut(L("predictions.form.rules_hint"), MaxHintLength))
         .Build();
 
-    /// <summary>The custom id of the entry form: the prediction number, plus the preview it replaces when reopened with Düzenle.</summary>
-    public static string StakeModalId(EntryFormInfo info) => PredictionMessages.StakeModalPrefix + info.PredictionId.ToString(CultureInfo.InvariantCulture) +
-                                                              (info.ReplacesToken is { } token ? PredictionMessages.Separator + token : "");
+    /// <summary>The custom id of the entry form: the prediction number, as a new entry or as a change of the active one.</summary>
+    public static string StakeModalId(EntryFormInfo info) =>
+        (info.IsChange ? PredictionMessages.ChangeModalPrefix : PredictionMessages.StakeModalPrefix) + info.PredictionId.ToString(CultureInfo.InvariantCulture);
 
-    public static Modal StakeModal(EntryFormInfo info, string balance, Func<string, string> L)
+    /// <param name="balance">The spendable coins, formatted.</param>
+    /// <param name="current">For a change: the stake of the active entry, formatted.</param>
+    public static Modal StakeModal(EntryFormInfo info, string balance, string? current, Func<string, string> L)
     {
         var outcomes = new SelectMenuBuilder()
             .WithCustomId(OutcomeField)
@@ -74,13 +76,16 @@ public static class PredictionFormUi
                 isDefault: outcome.Id == info.SelectedOutcomeId);
         }
 
+        var hint = info.IsChange
+            ? string.Format(CultureInfo.InvariantCulture, L("predictions.change.hint"), current, balance)
+            : string.Format(CultureInfo.InvariantCulture, L("predictions.stake.hint"), balance);
         return new ModalBuilder()
-            .WithTitle(Cut(L("predictions.stake.title"), MaxTitleLength))
+            .WithTitle(Cut(L(info.IsChange ? "predictions.change.title" : "predictions.stake.title"), MaxTitleLength))
             .WithCustomId(StakeModalId(info))
             .AddLabel(Cut(L("predictions.stake.outcome"), MaxTitleLength), outcomes, Cut(Plain(info.Title, MaxHintLength), MaxHintLength))
             .AddLabel(Cut(L("predictions.stake.amount"), MaxTitleLength),
                 Input(AmountField, TextInputStyle.Short, L("predictions.stake.placeholder"), 1, PredictionRules.AmountInputMaxLength, true, info.Amount),
-                Cut(string.Format(CultureInfo.InvariantCulture, L("predictions.stake.hint"), balance), MaxHintLength))
+                Cut(hint, MaxHintLength))
             .Build();
     }
 
