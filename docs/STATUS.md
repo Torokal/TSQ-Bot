@@ -304,7 +304,10 @@ invite link and no global command registration. The source code is public under 
   match = one prediction (two processes, restart, new tournament, cancelled card), tournament race, uncertain delivery,
   late/stopped post, schedule change and vanished match after publishing, admin-only management, no wallet/eligibility,
   key redaction.
-- **PROVIDER_VERIFICATION_PENDING**: no The Odds API key configured locally; no real request made. Nothing deployed.
+- **PROVIDER_VERIFIED_READ_ONLY** (2026-09-30, local read-only check, 3 credits): catalog, events and h2h odds for
+  Galatasaray / Fenerbahçe / Beşiktaş in Süper Lig, Champions League and Europa League; exact club names, correct
+  home/away, complete fresh 1-X-2 sets. NOT_OBSERVED: h2h regular-time semantics, live/postponed data, error responses.
+  Nothing deployed; no automatic card in Discord.
 
 ## What has been verified against real Discord / real APIs
 

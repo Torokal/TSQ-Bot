@@ -5,7 +5,9 @@ otomatik olarak **sabit oranlı** bir TSQ Öngörü açan, mevcut Öngörü mod�
 veya ayrı bot yoktur. Açılan kart normal bir öngörüdür: aynı katılım/değiştirme/geri çekme, aynı sonuçlandırma ve
 iptal/iade, aynı turnuva. **Sonuç otomatik girilmez**; ödemeyi her zaman yönetici karttan yapar.
 
-Varsayılan: **Disabled**. Sağlayıcı kapsamı ve gerçek veri doğrulaması: [PROVIDER_VERIFICATION.md](PROVIDER_VERIFICATION.md).
+Varsayılan: **Disabled**. Sağlayıcı kapsamı ve gerçek veri doğrulaması: [PROVIDER_VERIFICATION.md](PROVIDER_VERIFICATION.md)
+(2026-09-30: gerçek ücretsiz anahtarla salt-okunur doğrulandı — Süper Lig, Şampiyonlar Ligi ve Avrupa Ligi maçları ve
+eksiksiz h2h setleri gözlendi).
 
 ## Kapsam
 
@@ -189,10 +191,10 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
   son hata sınıfı, incelemedeki maç sayısı. Anahtarın değeri asla. Kanala uyarı gönderilmez (repo'da admin bildirim kanalı
   yok; yeni kanal uydurulmadı).
 - `doctor`: mod, anahtar "set (value hidden)" / "NOT SET", ayar sorunları.
-- `predictions football-check [--odds] [--budget N]`: salt-okunur sağlayıcı kontrolü (geçici veri dizini, sahte Discord,
-  bot veritabanına yazmaz). Katalog, takip edilen maçlar (ev/deplasman, Türkiye saati), eşleşmeyen benzer adlar ve
-  `--odds` ile en fazla N (varsayılan 5, en fazla 25) kredilik oran okuması: bookmaker'lar, h2h varlığı, seçilecek set veya
-  neden.
+- `predictions football-check [--odds] [--budget N] [--days D]`: salt-okunur sağlayıcı kontrolü (geçici veri dizini,
+  sahte Discord, bot veritabanına yazmaz). Katalog, önümüzdeki D gündeki (varsayılan 7, en fazla 30) takip edilen maçlar
+  (ev/deplasman, Türkiye saati), eşleşmeyen benzer adlar ve `--odds` ile en fazla N (varsayılan 5, en fazla 25) kredilik
+  oran okuması: bookmaker'lar, h2h varlığı, seçilecek set veya neden.
 - Loglar: `the_odds_api endpoint=… status=… remaining=…`, `auto_football_observed`, `auto_football_published`,
   `auto_football_skipped … code=…`, `auto_football_review` — URL ve anahtar asla.
 
@@ -211,6 +213,7 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
 ## Üretim kontrol listesi
 
 1. Ücretsiz The Odds API anahtarını al (hesap/abonelik sahibin işi; ücretli plan yok) ve secret olarak tanımla.
-2. Yerelde `predictions football-check`, ardından `--odds --budget 5`; PROVIDER_VERIFICATION.md'yi gözlenen sonuçlarla güncelle.
+2. Yerelde `predictions football-check --days 16`, ardından `--odds --budget 5` (2026-09-30'da yapıldı: 3 kredi); maç
+   günlerine yakın tekrar edip PROVIDER_VERIFICATION.md'yi güncel tut.
 3. Ayrı onayla deploy; `Mode = Observe` ile birkaç maç günü gözle (`/bot status`, loglar, `prediction_auto_event`).
 4. Ayrı onayla `Mode = Live`; ilk otomatik kartı canlıda kontrol et (başlık, ev/deplasman, oranlar, kilit, kural).
