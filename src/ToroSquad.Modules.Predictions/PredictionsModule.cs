@@ -72,6 +72,7 @@ public sealed class PredictionsModule : IToroModule
         services.AddOptions<AutoFootballOptions>().Bind(configuration.GetSection(AutoFootballOptions.Section));
         services.AddSingleton(new FootballOddsApiKey(configuration[AutoFootballOptions.ApiKeySetting]));
         services.AddSingleton<AutoFootballRuntime>();
+        services.AddSingleton(FootballMarketRules.Production);
         services.AddSingleton<IFootballOddsProvider, TheOddsApiClient>();
         services.AddScoped<AutoFootballService>();
         services.AddSingleton<AutoFootballWorker>();

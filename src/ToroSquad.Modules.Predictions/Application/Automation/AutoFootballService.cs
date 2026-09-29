@@ -44,9 +44,11 @@ public sealed class AutoFootballRuntime
 /// <item>Bookkeeping (database only, in every mode): automatic predictions whose uncertain card was found or abandoned.</item>
 /// <item>Disabled (configured, or forced by a configuration problem, a missing key or no single allowed guild): nothing
 /// else — no HTTP call, no planning.</item>
-/// <item>Discovery, about every <see cref="AutoFootballOptions.DiscoveryIntervalMinutes"/>: the provider's catalog now and
-/// then (which allow-listed competitions are in season), then each such competition's free events list; only matches of
-/// the three followed clubs (exact names) become rows — one row per real match, so a derby is ONE row. A changed kickoff
+/// <item>Discovery, about every <see cref="AutoFootballOptions.DiscoveryIntervalMinutes"/>: the provider's whole catalog now
+/// and then (which allow-listed MATCH competitions are in season — outrights never; an inactive one joins as soon as a later
+/// catalog lists it active), then each such competition's free events list; only matches of the followed teams (exact
+/// names, club teams in club competitions, the national team in national ones) become rows — one row per real match, so a
+/// derby is ONE row. A changed kickoff
 /// re-plans a row that is not published yet; for a published one it is kept next to the original, the open card is locked
 /// and the row waits for an administrator. A match that stops appearing is never taken as cancelled.</item>
 /// <item>Due rows (publish time reached, Türkiye day of the kickoff, at least the minimum lead left): the odds of the
@@ -68,6 +70,7 @@ public sealed class AutoFootballService(
     DeploymentPolicy deployment,
     IGuildSettingsStore guildSettings,
     IModuleGate moduleGate,
+    FootballMarketRules rules,
     ILocalizer localizer,
     AutoFootballRuntime runtime,
     TimeProvider clock,
@@ -198,11 +201,11 @@ public sealed class AutoFootballService(
         var active = state.ActiveCompetitions;
         if (state.LastCatalogAt is not { } catalogAt || pass.Now - catalogAt >= pass.Settings.Options.CatalogInterval || active is null)
         {
-            var sports = await provider.GetSportsAsync(ct);
+            var sports = await provider.GetSportsAsync(includeInactive: true, ct);
             await RecordAsync(sports, costly: false, ct);
             if (sports.Ok)
             {
-                active = string.Join(',', sports.Value!.Where(s => s.Active && AutoFootballOptions.KnownCompetitions.Contains(s.Key, StringComparer.Ordinal))
+                active = string.Join(',', sports.Value!.Where(s => s.Active && !s.HasOutrights && AutoFootballOptions.KnownCompetitions.Contains(s.Key, StringComparer.Ordinal))
                     .Select(s => s.Key).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
                 await UpdateProviderAsync(p =>
                 {
@@ -231,7 +234,7 @@ public sealed class AutoFootballService(
             }
 
             any = true;
-            await UpsertAsync(pass, sport, events.Value!, from, to, ct);
+            await UpsertAsync(pass, sport, events.Value!, complete: events.Dropped == 0, to, ct);
         }
 
         if (any)
@@ -244,12 +247,18 @@ public sealed class AutoFootballService(
         return pass.Settings.Options.Competitions.Where(c => inSeason.Contains(c, StringComparer.Ordinal));
     }
 
-    /// <summary>One transaction per competition: new tracked matches become rows, known ones follow the provider's data.</summary>
-    private async Task UpsertAsync(Pass pass, string sport, IReadOnlyList<ProviderEvent> events, DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
+    /// <summary>
+    /// One transaction per competition: new tracked matches become rows, known ones follow the provider's data. A known match
+    /// counts as missing only from a COMPLETE successful list of its own competition (a failed call never gets here; a list
+    /// with dropped items is partial) whose time window covers it.
+    /// </summary>
+    private async Task UpsertAsync(Pass pass, string sport, IReadOnlyList<ProviderEvent> events, bool complete, DateTimeOffset to, CancellationToken ct)
     {
+        if (AutoFootballOptions.ScopeOf(sport) is not { } scope)
+            return;
         var tracked = events.Where(e => string.Equals(e.SportKey, sport, StringComparison.Ordinal))
             .GroupBy(e => e.Id, StringComparer.Ordinal).Select(g => g.First())
-            .Select(e => (Event: e, Home: TrackedTeams.Match(e.HomeTeam), Away: TrackedTeams.Match(e.AwayTeam)))
+            .Select(e => (Event: e, Home: TrackedTeams.Match(e.HomeTeam, scope), Away: TrackedTeams.Match(e.AwayTeam, scope)))
             .Where(x => x.Home is not null || x.Away is not null).ToList();
         var ids = tracked.Select(x => x.Event.Id).ToList();
         var locks = new List<long>();
@@ -298,7 +307,7 @@ public sealed class AutoFootballService(
             }
 
             // Known matches of this competition the provider no longer lists: counted, never taken as cancelled.
-            foreach (var row in rows.Where(r => r.CompetitionKey == sport && !ids.Contains(r.ExternalEventId) && r.LatestKickoffAt > pass.Now && r.LatestKickoffAt <= to &&
+            foreach (var row in rows.Where(r => complete && r.CompetitionKey == sport && !ids.Contains(r.ExternalEventId) && r.LatestKickoffAt > pass.Now && r.LatestKickoffAt <= to &&
                                                 r.State is AutoEventState.Planned or AutoEventState.WaitingForOdds or AutoEventState.Publishing or AutoEventState.Published))
             {
                 row.MissingCount++;
@@ -384,8 +393,10 @@ public sealed class AutoFootballService(
             .OrderBy(a => a.KickoffAt).Take(Batch).ToListAsync(ct);
         var state = await ProviderStateAsync(ct);
         var inSeason = (state.ActiveCompetitions ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
-        // Live with the module disabled: no paid call for a card that could not be opened anyway.
+        // Live with the module disabled, or without any bookmaker whose full-time rule is verified: no paid call for a card
+        // that could not be opened anyway.
         var moduleOff = pass.Mode == AutomationMode.Live && !await moduleGate.IsEnabledAsync(pass.Guild, PredictionsModule.ModuleIdTyped, ct);
+        var ruleUnverified = pass.Mode == AutomationMode.Live && rules.Usable(pass.Settings.Options.Bookmakers).Count == 0;
         var fetch = new List<PredictionAutoEventEntity>();
         foreach (var row in rows)
         {
@@ -414,9 +425,9 @@ public sealed class AutoFootballService(
                 continue;
             }
 
-            if (moduleOff)
+            if (moduleOff || ruleUnverified)
             {
-                await WaitOrSkipAsync(pass, row.Id, AutoBlockReason.ModuleDisabled, ct);
+                await WaitOrSkipAsync(pass, row.Id, moduleOff ? AutoBlockReason.ModuleDisabled : AutoBlockReason.MarketRuleUnverified, ct);
                 continue;
             }
 
@@ -519,27 +530,46 @@ public sealed class AutoFootballService(
                 continue;
             }
 
-            var (odds, why) = OddsSelector.Select(match, pass.Settings.Options.Bookmakers, pass.Now, pass.Settings.Options.MaxOddsAge);
-            if (odds is null)
+            var choice = OddsSelector.Choose(match, pass.Settings.Options.Bookmakers, rules.ApprovedBookmakers, pass.Now, pass.Settings.Options.MaxOddsAge);
+            if (choice.Odds is not { } odds)
             {
-                await UpdateRowAsync(row.Id, r => r.Reason = why, ct);
+                if (pass.Mode == AutomationMode.Observe && choice.Unapproved is { } candidate)
+                {
+                    // Observe shows what the data offers even when OUR rule would not publish it — with that reason.
+                    await UpdateRowAsync(row.Id, r =>
+                    {
+                        Snapshot(r, candidate, pass.Now);
+                        r.State = AutoEventState.Observed;
+                        r.Reason = choice.Reason;
+                        r.NextAttemptAt = null;
+                    }, ct);
+                    pass.Observed++;
+                    continue;
+                }
+
+                await UpdateRowAsync(row.Id, r => r.Reason = choice.Reason, ct);
                 continue;
             }
 
             await UpdateRowAsync(row.Id, r =>
             {
-                r.BookmakerKey = odds.BookmakerKey;
-                r.BookmakerTitle = odds.BookmakerTitle;
-                r.OddsUpdatedAt = odds.LastUpdate;
-                r.OddsFetchedAt = pass.Now;
-                r.HomeOddsX100 = odds.HomeX100;
-                r.DrawOddsX100 = odds.DrawX100;
-                r.AwayOddsX100 = odds.AwayX100;
-                r.RawPrices = OddsSelector.Raw(odds.HomeRaw) + "|" + OddsSelector.Raw(odds.DrawRaw) + "|" + OddsSelector.Raw(odds.AwayRaw);
+                Snapshot(r, odds, pass.Now);
                 r.Reason = AutoBlockReason.None;
             }, ct);
             await DecideAsync(pass, row, odds, ct);
         }
+    }
+
+    private static void Snapshot(PredictionAutoEventEntity row, SelectedOdds odds, DateTimeOffset now)
+    {
+        row.BookmakerKey = odds.BookmakerKey;
+        row.BookmakerTitle = odds.BookmakerTitle;
+        row.OddsUpdatedAt = odds.LastUpdate;
+        row.OddsFetchedAt = now;
+        row.HomeOddsX100 = odds.HomeX100;
+        row.DrawOddsX100 = odds.DrawX100;
+        row.AwayOddsX100 = odds.AwayX100;
+        row.RawPrices = OddsSelector.Raw(odds.HomeRaw) + "|" + OddsSelector.Raw(odds.DrawRaw) + "|" + OddsSelector.Raw(odds.AwayRaw);
     }
 
     /// <summary>Observe: record the decision only. Live: open the prediction (every gate checked again there).</summary>
@@ -562,15 +592,14 @@ public sealed class AutoFootballService(
         }
 
         var language = (await guildSettings.GetAsync(pass.Guild, ct)).Language;
-        string L(string key, params object?[] args) => localizer.Get(language, key, args);
-        var home = TeamName(row.HomeTeam);
-        var away = TeamName(row.AwayTeam);
+        var scope = AutoFootballOptions.ScopeOf(row.CompetitionKey) ?? TeamScope.Club;
+        var (title, rulesText, outcomes) = AutoFootballTexts.Build(localizer, language, row.HomeTeam, row.AwayTeam, scope, pass.Settings.Options.LockBeforeKickoffMinutes, odds);
         var plan = new AutoPublishPlan(
             row.Id,
             pass.Guild,
-            L("predictions.auto.title", home, away),
-            L("predictions.auto.rules", pass.Settings.Options.LockBeforeKickoffMinutes),
-            [(L("predictions.auto.wins", home), odds.HomeX100), (L("predictions.auto.draw"), odds.DrawX100), (L("predictions.auto.wins", away), odds.AwayX100)],
+            title,
+            rulesText,
+            outcomes,
             lockAt,
             AutoSchedule.Deadline(row.KickoffAt, pass.Timing),
             PublishKey(pass.Guild, row),
@@ -597,9 +626,6 @@ public sealed class AutoFootballService(
                 break;
         }
     }
-
-    /// <summary>A followed club by its own (Turkish) name; any other team as the provider names it (defused by the card).</summary>
-    private static string TeamName(string providerName) => TrackedTeams.Match(providerName)?.DisplayName ?? providerName.Trim();
 
     /// <summary>The prediction's unique publish key: a hash of guild, provider, match and market (never a tournament).</summary>
     public static string PublishKey(GuildId guild, PredictionAutoEventEntity row)
@@ -670,6 +696,8 @@ public sealed class AutoFootballService(
             entries.Add(new HealthEntry("predictions.health.auto", HealthState.NotConfigured, "predictions.health.auto_no_guild"));
         else
             entries.Add(new HealthEntry("predictions.health.auto", HealthState.Healthy, "predictions.health.auto_mode", [s.Mode.ToString()]));
+        if (s.ConfiguredMode == AutomationMode.Live && rules.Usable(s.Options.Bookmakers).Count == 0)
+            entries.Add(new HealthEntry("predictions.health.auto_rule", HealthState.Degraded, "predictions.health.auto_rule_unverified"));
 
         var state = await ProviderStateAsync(ct);
         var now = clock.GetUtcNow();

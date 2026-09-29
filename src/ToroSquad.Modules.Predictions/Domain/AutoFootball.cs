@@ -74,6 +74,12 @@ public enum AutoBlockReason
     EventMissing = 15,
     DeliveryUnknown = 16,
     AutomationStopped = 17,
+
+    /// <summary>A complete set exists, but only from a bookmaker whose full-time rule is not verified (never used by Live).</summary>
+    BookmakerNotApproved = 18,
+
+    /// <summary>No bookmaker of the priority has a verified full-time (90 minutes + stoppage time) rule: Live opens nothing.</summary>
+    MarketRuleUnverified = 19,
 }
 
 public static class AutoBlockCodes
@@ -98,32 +104,46 @@ public static class AutoBlockCodes
         AutoBlockReason.EventMissing => "EVENT_MISSING",
         AutoBlockReason.DeliveryUnknown => "DELIVERY_UNKNOWN",
         AutoBlockReason.AutomationStopped => "AUTOMATION_STOPPED",
+        AutoBlockReason.BookmakerNotApproved => "BOOKMAKER_NOT_APPROVED",
+        AutoBlockReason.MarketRuleUnverified => "MARKET_RULE_UNVERIFIED",
         _ => "UNKNOWN",
     };
 }
 
-/// <summary>One followed club (men's senior football team) and the exact provider names that mean it.</summary>
-public sealed record TrackedTeam(string Code, string DisplayName, IReadOnlyList<string> Aliases);
+/// <summary>Club football or national-team football: a team and a competition must have the same scope to match.</summary>
+public enum TeamScope
+{
+    Club = 0,
+    National = 1,
+}
+
+/// <summary>One followed men's senior football team, its scope, its Turkish display name and the exact provider names that mean it.</summary>
+public sealed record TrackedTeam(string Code, string DisplayName, TeamScope Scope, IReadOnlyList<string> Aliases);
 
 /// <summary>
-/// The three followed clubs, matched by EXACT name after a controlled fold (trim, one space, lower case, Turkish letters to
-/// their ASCII base: "Beşiktaş JK" = "besiktas jk"). No substring or fuzzy match: "Fenerbahçe U19", "Galatasaray W" or
-/// "Besiktas Women" never count; an unknown similar name is not a tracked club. The aliases are the provider's spellings
-/// seen in its data plus the Turkish forms; a new spelling is added here after it is verified, never guessed at runtime.
+/// THE list of followed teams (one place; add a team here, nowhere else): the three clubs and the Türkiye men's senior
+/// national team. A provider name matches by EXACT name after a controlled fold (trim, one space, lower case, Turkish
+/// letters to their ASCII base: "Beşiktaş JK" = "besiktas jk") AND only inside a competition of the same scope — so
+/// "Turkey" is never a club and a club name never a national team. No substring or fuzzy match: "Fenerbahçe U19",
+/// "Galatasaray W", "Turkey U21", "Turkey Women" or "Fener" never count; an unknown similar name is not a followed team.
+/// The aliases are the provider's spellings seen in its data plus the Turkish forms; a new spelling is added here after it
+/// is verified, never guessed at runtime. (Türkiye: "Turkey" is the English form the provider's other team names follow,
+/// "Türkiye" the official name, "Turkiye" its ASCII form — none of the three observed in the provider's data yet.)
 /// </summary>
 public static class TrackedTeams
 {
-    public static readonly TrackedTeam Galatasaray = new("GS", "Galatasaray", ["Galatasaray", "Galatasaray SK", "Galatasaray AS"]);
-    public static readonly TrackedTeam Fenerbahce = new("FB", "Fenerbahçe", ["Fenerbahce", "Fenerbahçe", "Fenerbahce SK", "Fenerbahçe SK"]);
-    public static readonly TrackedTeam Besiktas = new("BJK", "Beşiktaş", ["Besiktas", "Beşiktaş", "Besiktas JK", "Beşiktaş JK"]);
+    public static readonly TrackedTeam Galatasaray = new("GS", "Galatasaray", TeamScope.Club, ["Galatasaray", "Galatasaray SK", "Galatasaray AS"]);
+    public static readonly TrackedTeam Fenerbahce = new("FB", "Fenerbahçe", TeamScope.Club, ["Fenerbahce", "Fenerbahçe", "Fenerbahce SK", "Fenerbahçe SK"]);
+    public static readonly TrackedTeam Besiktas = new("BJK", "Beşiktaş", TeamScope.Club, ["Besiktas", "Beşiktaş", "Besiktas JK", "Beşiktaş JK"]);
+    public static readonly TrackedTeam Turkiye = new("TR", "Türkiye", TeamScope.National, ["Turkey", "Türkiye", "Turkiye"]);
 
-    public static readonly IReadOnlyList<TrackedTeam> All = [Galatasaray, Fenerbahce, Besiktas];
+    public static readonly IReadOnlyList<TrackedTeam> All = [Galatasaray, Fenerbahce, Besiktas, Turkiye];
 
-    private static readonly Dictionary<string, TrackedTeam> ByAlias =
-        All.SelectMany(t => t.Aliases.Select(a => (Key: Fold(a), Team: t))).DistinctBy(x => x.Key).ToDictionary(x => x.Key, x => x.Team, StringComparer.Ordinal);
+    private static readonly Dictionary<(TeamScope, string), TrackedTeam> ByAlias =
+        All.SelectMany(t => t.Aliases.Select(a => (Key: (t.Scope, Fold(a)), Team: t))).DistinctBy(x => x.Key).ToDictionary(x => x.Key, x => x.Team);
 
-    public static TrackedTeam? Match(string? providerName) =>
-        providerName is not null && ByAlias.TryGetValue(Fold(providerName), out var team) ? team : null;
+    public static TrackedTeam? Match(string? providerName, TeamScope scope) =>
+        providerName is not null && ByAlias.TryGetValue((scope, Fold(providerName)), out var team) ? team : null;
 
     /// <summary>Trim, collapse white space, fold Turkish letters to ASCII and lower-case (culture-invariant).</summary>
     public static string Fold(string text)
@@ -249,6 +269,13 @@ public sealed record ProviderBookmaker(string Key, string Title, IReadOnlyList<P
 /// <summary>One match of the odds response.</summary>
 public sealed record ProviderOddsEvent(string Id, string SportKey, DateTimeOffset CommenceTime, string HomeTeam, string AwayTeam, IReadOnlyList<ProviderBookmaker> Bookmakers);
 
+/// <summary>
+/// What the selection found: the set Live may use (from an APPROVED bookmaker — its full-time rule verified), or the reason
+/// there is none; <see cref="Unapproved"/> is the first complete set of a bookmaker that is not approved (shown by Observe
+/// and the read-only check, never published).
+/// </summary>
+public sealed record OddsChoice(SelectedOdds? Odds, AutoBlockReason Reason, SelectedOdds? Unapproved);
+
 /// <summary>A complete 1-X-2 set from ONE bookmaker's ONE h2h market, converted to the fixed odds model (raw prices kept).</summary>
 public sealed record SelectedOdds(
     string BookmakerKey,
@@ -278,9 +305,23 @@ public static class OddsSelector
     /// <summary>A provider clock slightly ahead of ours is tolerated; more is a broken timestamp.</summary>
     public static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(2);
 
+    /// <summary>Selection where every bookmaker of the priority counts as approved.</summary>
     public static (SelectedOdds? Odds, AutoBlockReason Reason) Select(ProviderOddsEvent match, IReadOnlyList<string> priority, DateTimeOffset now, TimeSpan maxAge)
     {
+        var choice = Choose(match, priority, priority, now, maxAge);
+        return (choice.Odds, choice.Reason);
+    }
+
+    /// <summary>
+    /// Walks the priority: the first complete, valid, fresh set of an APPROVED bookmaker wins. A complete set of a bookmaker
+    /// that is not approved is remembered (the first one) but never chosen: without an approved set the reason is
+    /// <see cref="AutoBlockReason.MarketRuleUnverified"/> (no approved bookmaker at all) or
+    /// <see cref="AutoBlockReason.BookmakerNotApproved"/> — valid data rejected by OUR rule, not "the provider has no odds".
+    /// </summary>
+    public static OddsChoice Choose(ProviderOddsEvent match, IReadOnlyList<string> priority, IReadOnlyCollection<string> approved, DateTimeOffset now, TimeSpan maxAge)
+    {
         var worst = AutoBlockReason.NoOdds;
+        SelectedOdds? unapproved = null;
         foreach (var key in priority)
         {
             var bookmaker = match.Bookmakers.FirstOrDefault(b => string.Equals(b.Key, key, StringComparison.Ordinal));
@@ -294,12 +335,21 @@ public static class OddsSelector
             }
 
             var (odds, reason) = FromMarket(match, bookmaker, markets[0], now, maxAge);
-            if (odds is not null)
-                return (odds, AutoBlockReason.None);
-            worst = Worse(worst, reason);
+            if (odds is null)
+            {
+                worst = Worse(worst, reason);
+                continue;
+            }
+
+            if (approved.Contains(key, StringComparer.Ordinal))
+                return new OddsChoice(odds, AutoBlockReason.None, unapproved);
+            unapproved ??= odds;
         }
 
-        return (null, worst);
+        return unapproved is null
+            ? new OddsChoice(null, worst, null)
+            : new OddsChoice(null, priority.Any(k => approved.Contains(k, StringComparer.Ordinal)) ? AutoBlockReason.BookmakerNotApproved : AutoBlockReason.MarketRuleUnverified,
+                unapproved);
     }
 
     private static (SelectedOdds? Odds, AutoBlockReason Reason) FromMarket(ProviderOddsEvent match, ProviderBookmaker bookmaker, ProviderMarket market, DateTimeOffset now,

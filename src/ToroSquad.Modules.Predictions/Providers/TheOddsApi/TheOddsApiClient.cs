@@ -12,7 +12,7 @@ namespace ToroSquad.Modules.Predictions.Providers.TheOddsApi;
 /// <summary>
 /// The Odds API v4 (https://the-odds-api.com/liveapi/guides/v4/), read-only, through one named <see cref="IHttpClientFactory"/>
 /// client whose base address is the configured OFFICIAL host (validated; no redirects are followed, no URL from a response
-/// is ever requested). Three GETs: /v4/sports and /v4/sports/{sport}/events (free) and /v4/sports/{sport}/odds with
+/// is ever requested). Three GETs: /v4/sports (all=true for the whole catalog) and /v4/sports/{sport}/events (free) and /v4/sports/{sport}/odds with
 /// regions=eu, markets=h2h, oddsFormat=decimal, dateFormat=iso and an eventIds filter (1 credit when it returns anything).
 /// <para>
 /// The provider takes its key only as the query parameter apiKey. The request URI therefore holds the secret, so: the URI is
@@ -42,8 +42,8 @@ public sealed class TheOddsApiClient(
 
     public bool IsConfigured => key.IsSet;
 
-    public Task<ProviderCall<IReadOnlyList<ProviderSport>>> GetSportsAsync(CancellationToken cancellationToken) =>
-        GetAsync("sports", "v4/sports", [], ParseSports, costly: false, cancellationToken);
+    public Task<ProviderCall<IReadOnlyList<ProviderSport>>> GetSportsAsync(bool includeInactive, CancellationToken cancellationToken) =>
+        GetAsync("sports", "v4/sports", includeInactive ? [("all", "true")] : [], ParseSports, costly: false, cancellationToken);
 
     public Task<ProviderCall<IReadOnlyList<ProviderEvent>>> GetEventsAsync(string sportKey, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
         GetAsync("events", "v4/sports/" + SafeSegment(sportKey) + "/events",
@@ -61,8 +61,8 @@ public sealed class TheOddsApiClient(
             ParseOdds, costly: true, cancellationToken);
     }
 
-    private async Task<ProviderCall<T>> GetAsync<T>(string endpoint, string path, IReadOnlyList<(string Name, string Value)> query, Func<JsonElement, T?> parse, bool costly,
-        CancellationToken cancellationToken) where T : class
+    private async Task<ProviderCall<T>> GetAsync<T>(string endpoint, string path, IReadOnlyList<(string Name, string Value)> query, Func<JsonElement, (T? Value, int Dropped)> parse,
+        bool costly, CancellationToken cancellationToken) where T : class
     {
         if (!key.IsSet)
             return new ProviderCall<T>(ProviderCallOutcome.NotConfigured, null, ProviderQuota.None);
@@ -93,20 +93,20 @@ public sealed class TheOddsApiClient(
             }
 
             var body = await response.Content.ReadAsByteArrayAsync(linked.Token);
-            T? value;
+            (T? Value, int Dropped) parsed;
             try
             {
                 using var document = JsonDocument.Parse(body, new JsonDocumentOptions { MaxDepth = 16 });
-                value = parse(document.RootElement);
+                parsed = parse(document.RootElement);
             }
             catch (JsonException)
             {
-                value = null;
+                parsed = (null, 0);
             }
 
-            return value is null
+            return parsed.Value is null
                 ? new ProviderCall<T>(ProviderCallOutcome.BadResponse, null, quota, status, MayHaveCost: costly && !quota.Known)
-                : new ProviderCall<T>(ProviderCallOutcome.Ok, value, quota, status);
+                : new ProviderCall<T>(ProviderCallOutcome.Ok, parsed.Value, quota, status, Dropped: parsed.Dropped);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -139,44 +139,55 @@ public sealed class TheOddsApiClient(
 
     // ---- parsing (strict; a malformed item is dropped, a malformed body is a BadResponse) ----
 
-    private static IReadOnlyList<ProviderSport>? ParseSports(JsonElement root)
+    private static (IReadOnlyList<ProviderSport>? Value, int Dropped) ParseSports(JsonElement root)
     {
         if (root.ValueKind != JsonValueKind.Array)
-            return null;
+            return (null, 0);
         var sports = new List<ProviderSport>();
+        var dropped = 0;
         foreach (var item in root.EnumerateArray())
         {
             if (Text(item, "key") is { } k && Text(item, "title") is { } title && item.TryGetProperty("active", out var active) &&
                 active.ValueKind is JsonValueKind.True or JsonValueKind.False)
-                sports.Add(new ProviderSport(k, title, active.GetBoolean()));
+                sports.Add(new ProviderSport(k, title, active.GetBoolean(),
+                    item.TryGetProperty("has_outrights", out var outrights) && outrights.ValueKind == JsonValueKind.True));
+            else
+                dropped++;
         }
 
-        return sports;
+        return (sports, dropped);
     }
 
-    private static IReadOnlyList<ProviderEvent>? ParseEvents(JsonElement root)
+    private static (IReadOnlyList<ProviderEvent>? Value, int Dropped) ParseEvents(JsonElement root)
     {
         if (root.ValueKind != JsonValueKind.Array)
-            return null;
+            return (null, 0);
         var events = new List<ProviderEvent>();
+        var dropped = 0;
         foreach (var item in root.EnumerateArray())
         {
             if (Event(item) is { } e)
                 events.Add(new ProviderEvent(e.Id, e.Sport, e.Kickoff, e.Home, e.Away));
+            else
+                dropped++;
         }
 
-        return events;
+        return (events, dropped);
     }
 
-    private static IReadOnlyList<ProviderOddsEvent>? ParseOdds(JsonElement root)
+    private static (IReadOnlyList<ProviderOddsEvent>? Value, int Dropped) ParseOdds(JsonElement root)
     {
         if (root.ValueKind != JsonValueKind.Array)
-            return null;
+            return (null, 0);
         var events = new List<ProviderOddsEvent>();
+        var dropped = 0;
         foreach (var item in root.EnumerateArray())
         {
             if (Event(item) is not { } e)
+            {
+                dropped++;
                 continue;
+            }
             var bookmakers = new List<ProviderBookmaker>();
             if (item.TryGetProperty("bookmakers", out var list) && list.ValueKind == JsonValueKind.Array)
             {
@@ -214,7 +225,7 @@ public sealed class TheOddsApiClient(
             events.Add(new ProviderOddsEvent(e.Id, e.Sport, e.Kickoff, e.Home, e.Away, bookmakers));
         }
 
-        return events;
+        return (events, dropped);
     }
 
     private static (string Id, string Sport, DateTimeOffset Kickoff, string Home, string Away)? Event(JsonElement item) =>

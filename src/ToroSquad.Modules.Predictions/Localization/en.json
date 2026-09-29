@@ -287,5 +287,7 @@
   "predictions.health.auto_error": "Automatic football last error",
   "predictions.health.auto_error_value": "{0} ({1})",
   "predictions.health.auto_review": "Automatic football review",
-  "predictions.health.auto_review_value": "{0} match(es) waiting for an administrator"
+  "predictions.health.auto_review_value": "{0} match(es) waiting for an administrator",
+  "predictions.health.auto_rule": "Automatic football market rule",
+  "predictions.health.auto_rule_unverified": "No bookmaker with a verified regular-time rule — Live opens no card (MARKET_RULE_UNVERIFIED)"
 }

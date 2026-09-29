@@ -32,14 +32,16 @@ public sealed record ProviderQuota(int? Remaining, int? Used, int? LastCost)
 }
 
 /// <param name="MayHaveCost">A credit-consuming call whose cost is not known (timeout, dropped connection): count it as spent.</param>
-public sealed record ProviderCall<T>(ProviderCallOutcome Outcome, T? Value, ProviderQuota Quota, int? HttpStatus = null, TimeSpan? RetryAfter = null, bool MayHaveCost = false)
+/// <param name="Dropped">Items of an OK body that did not match the documented shape and were left out: the list is partial.</param>
+public sealed record ProviderCall<T>(ProviderCallOutcome Outcome, T? Value, ProviderQuota Quota, int? HttpStatus = null, TimeSpan? RetryAfter = null, bool MayHaveCost = false,
+    int Dropped = 0)
     where T : class
 {
     public bool Ok => Outcome == ProviderCallOutcome.Ok && Value is not null;
 }
 
-/// <summary>One competition of the provider's catalog.</summary>
-public sealed record ProviderSport(string Key, string Title, bool Active);
+/// <summary>One competition of the provider's catalog (<see cref="HasOutrights"/>: a "who wins it" market, not matches).</summary>
+public sealed record ProviderSport(string Key, string Title, bool Active, bool HasOutrights = false);
 
 /// <summary>One scheduled match of the free events list (planned kickoff only; the provider sends no live status).</summary>
 public sealed record ProviderEvent(string Id, string SportKey, DateTimeOffset CommenceTime, string HomeTeam, string AwayTeam);
@@ -54,8 +56,8 @@ public interface IFootballOddsProvider
 
     bool IsConfigured { get; }
 
-    /// <summary>The in-season competitions (free).</summary>
-    Task<ProviderCall<IReadOnlyList<ProviderSport>>> GetSportsAsync(CancellationToken cancellationToken);
+    /// <summary>The catalog (free): the in-season competitions, or with <paramref name="includeInactive"/> every one the provider knows.</summary>
+    Task<ProviderCall<IReadOnlyList<ProviderSport>>> GetSportsAsync(bool includeInactive, CancellationToken cancellationToken);
 
     /// <summary>Scheduled matches of one competition with a kickoff in [from, to] (free).</summary>
     Task<ProviderCall<IReadOnlyList<ProviderEvent>>> GetEventsAsync(string sportKey, DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken);

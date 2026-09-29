@@ -18,8 +18,8 @@ public sealed class AutoFootballOptions
     public const string ApiKeySetting = "Predictions:Automation:TheOddsApi:ApiKey";
     public const string ProviderName = "TheOddsApi";
 
-    /// <summary>The competitions the opener may ever read (explicit allow-list; the provider's other sports are never watched).</summary>
-    public static readonly IReadOnlyList<string> KnownCompetitions =
+    /// <summary>Club competitions (the three clubs are looked for here).</summary>
+    public static readonly IReadOnlyList<string> ClubCompetitions =
     [
         "soccer_turkey_super_league",
         "soccer_uefa_champs_league",
@@ -27,6 +27,36 @@ public sealed class AutoFootballOptions
         "soccer_uefa_europa_league",
         "soccer_uefa_europa_conference_league",
     ];
+
+    /// <summary>
+    /// National-team competitions (the Türkiye men's senior team is looked for here). Match keys only: an outright ("who wins
+    /// the tournament", e.g. soccer_fifa_world_cup_winner) is never listed, and a catalog entry flagged has_outrights is not
+    /// read. The provider has no key for friendlies: they are not covered.
+    /// </summary>
+    public static readonly IReadOnlyList<string> NationalCompetitions =
+    [
+        "soccer_uefa_nations_league",
+        "soccer_uefa_euro_qualification",
+        "soccer_uefa_european_championship",
+        "soccer_fifa_world_cup_qualifiers_europe",
+        "soccer_fifa_world_cup",
+    ];
+
+    /// <summary>The competitions the opener may ever read (explicit allow-list; the provider's other sports are never watched).</summary>
+    public static readonly IReadOnlyList<string> KnownCompetitions = [.. ClubCompetitions, .. NationalCompetitions];
+
+    /// <summary>
+    /// Bookmakers whose OWN rules are verified to settle the football match result on regular time (90 minutes plus the
+    /// time the referee adds; extra time and penalty shoot-outs excluded). Only these may be used by Live; any other one is
+    /// visible in Observe and in the read-only check but never published. Evidence per entry: docs/predictions/
+    /// PROVIDER_VERIFICATION.md. Empty today: the official rule pages of Pinnacle and 1xBet could not be read (MARKET_RULE_UNVERIFIED).
+    /// </summary>
+    public static readonly IReadOnlyList<string> RuleVerifiedBookmakers = [];
+
+    public static TeamScope? ScopeOf(string competition) =>
+        ClubCompetitions.Contains(competition, StringComparer.Ordinal) ? TeamScope.Club
+        : NationalCompetitions.Contains(competition, StringComparer.Ordinal) ? TeamScope.National
+        : null;
 
     /// <summary>Standard sportsbooks of the provider's "eu" region, in the default order. Exchanges are never allowed.</summary>
     public static readonly IReadOnlyList<string> DefaultBookmakerPriority =

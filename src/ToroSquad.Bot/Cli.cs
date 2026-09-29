@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ToroSquad.Core;
+using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Discord;
 using ToroSquad.Discord.Commands.Manifest;
@@ -98,7 +99,7 @@ public static partial class Cli
               simulate                                offline end-to-end demo (fixture data, fake Discord, temp DB)
               esports demo-cards --guild ID [--kind K] [--apply]  TEST/DEMO match cards (all, or one kind) for an authorized test guild
               esports provider-check [--team NAME]    READ-ONLY live fetch summary / team key lookup (sends nothing)
-              predictions football-check [--odds] [--budget N] [--days D]  READ-ONLY The Odds API check for the automatic football opener (N credits max, default 5; D days ahead, default 7, max 30)
+              predictions football-check [--odds] [--budget N] [--days D] [--focus CODE] [--preview]  READ-ONLY The Odds API check (N credits max total, default 5; D days, default 7, max 30; CODE = GS|FB|BJK|TR first; local card preview)
             """);
         return Usage;
     }
@@ -321,7 +322,7 @@ public static partial class Cli
     }
 
     /// <summary>
-    /// predictions football-check [--odds] [--budget N] [--days D]: a READ-ONLY look at what The Odds API returns for the automatic
+    /// predictions football-check [--odds] [--budget N] [--days D] [--focus CODE] [--preview]: a READ-ONLY look at what The Odds API returns for the automatic
     /// football opener (catalog, tracked matches, and — only with --odds, at most N credits, default 5, max 25 — the odds and
     /// the set the priority would pick). Temporary data directory, fake Discord transport, dry-run delivery: nothing is
     /// written to the bot database and nothing is sent anywhere but to the provider. The key is never printed.
@@ -335,6 +336,9 @@ public static partial class Cli
         var budget = budgetIndex >= 0 && budgetIndex + 1 < args.Length && int.TryParse(args[budgetIndex + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var b) ? b : 5;
         var daysIndex = Array.FindIndex(args, a => string.Equals(a, "--days", StringComparison.OrdinalIgnoreCase));
         var days = daysIndex >= 0 && daysIndex + 1 < args.Length && int.TryParse(args[daysIndex + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var d) ? d : 7;
+        var focusIndex = Array.FindIndex(args, a => string.Equals(a, "--focus", StringComparison.OrdinalIgnoreCase));
+        var focus = focusIndex >= 0 && focusIndex + 1 < args.Length ? args[focusIndex + 1] : null;
+        var preview = args.Contains("--preview", StringComparer.OrdinalIgnoreCase);
 
         var temp = Path.Combine(Path.GetTempPath(), "tsq-football-check-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(temp);
@@ -358,14 +362,17 @@ public static partial class Cli
             }
 
             Console.WriteLine($"{ProductInfo.ProductName} — READ-ONLY football odds check ({provider.Name}; no bot database, no Discord, key hidden)");
+            Console.WriteLine($"environment: {builder.Environment.EnvironmentName}; client: {provider.GetType().Name}; key: {(provider.IsConfigured ? "set (value hidden)" : "NOT SET")}");
             foreach (var problem in options.Problems())
                 Console.WriteLine("CONFIG: " + problem);
             if (options.Problems().Count > 0)
                 return Failed;
-            var check = new AutoFootballVerification(provider, options, TimeProvider.System);
-            var ok = await check.RunAsync(withOdds, budget, CancellationToken.None, days);
+            var check = new AutoFootballVerification(provider, options, TimeProvider.System, host.Services.GetRequiredService<FootballMarketRules>());
+            var ok = await check.RunAsync(withOdds, budget, CancellationToken.None, days, focus);
             foreach (var line in check.Lines)
                 Console.WriteLine(line);
+            if (preview)
+                PrintCardPreview(host.Services, check, options);
             return provider.IsConfigured ? ok ? Ok : Failed : Blocked;
         }
         finally
@@ -378,6 +385,40 @@ public static partial class Cli
             {
             }
         }
+    }
+
+    /// <summary>
+    /// A LOCAL text rendering of the card the first checked match would get (the real renderer; nothing stored or sent; no
+    /// prediction, wallet or tournament). A set of a bookmaker that is not approved is shown as a candidate only.
+    /// </summary>
+    private static void PrintCardPreview(IServiceProvider services, AutoFootballVerification check, AutoFootballOptions options)
+    {
+        var found = check.Matches.FirstOrDefault(m => m.Choice?.Odds is not null) ?? check.Matches.FirstOrDefault(m => m.Choice?.Unapproved is not null);
+        if (found?.Choice is not { } choice || (choice.Odds ?? choice.Unapproved) is not { } odds || options.Timing() is not { } timing)
+        {
+            Console.WriteLine("preview: no match with a complete set in this check");
+            return;
+        }
+
+        var localizer = services.GetRequiredService<ILocalizer>();
+        var cards = services.GetRequiredService<ToroSquad.Modules.Predictions.Application.PredictionCards>();
+        var (title, rules, outcomes) = AutoFootballTexts.Build(localizer, "tr", found.Event.HomeTeam, found.Event.AwayTeam, found.Scope, options.LockBeforeKickoffMinutes, odds);
+        var kickoff = found.Event.CommenceTime;
+        var view = new ToroSquad.Modules.Predictions.Application.PredictionView(0, new GuildId(0), 0, 0,
+            new ChannelId(services.GetRequiredService<IOptions<PredictionsOptions>>().Value.ChannelId), null, new UserId(0), "", title, rules,
+            AutoSchedule.LockAt(kickoff, timing), PredictionStatus.Open, null, null,
+            outcomes.Select((o, i) => new ToroSquad.Modules.Predictions.Application.OutcomeView(i + 1, i + 1, o.Label, o.OddsX100)).ToList(), 0, 0, null, null, null, null,
+            null, null, null, false, 0, PredictionOrigin.AutoFootball, new ToroSquad.Modules.Predictions.Application.AutoCardInfo(kickoff, odds.BookmakerTitle, odds.LastUpdate));
+        var card = cards.Render(view, "tr");
+        var local = TimeZoneInfo.ConvertTime(AutoSchedule.PublishAt(kickoff, timing), timing.Zone);
+        Console.WriteLine($"preview (LOCAL ONLY, not sent{(choice.Odds is null ? "; candidate — Live would not publish: " + AutoBlockCodes.Code(choice.Reason) : "")}):");
+        Console.WriteLine($"  publish at: {local:dd.MM.yyyy HH:mm} TR; lock at: {TimeZoneInfo.ConvertTime(AutoSchedule.LockAt(kickoff, timing), timing.Zone):dd.MM.yyyy HH:mm} TR");
+        Console.WriteLine("  " + card.Embed!.Title);
+        Console.WriteLine("  " + card.Embed.Description?.Replace("\n", "\n  ", StringComparison.Ordinal));
+        foreach (var field in card.Embed.Fields)
+            Console.WriteLine($"  [{field.Name}] {field.Value.Replace("\n", " | ", StringComparison.Ordinal)}");
+        Console.WriteLine("  footer: " + card.Embed.Footer);
+        Console.WriteLine("  buttons: " + string.Join("  ", card.Buttons?.Select(b => b.Label) ?? []));
     }
 
     /// <summary>

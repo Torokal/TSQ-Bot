@@ -287,5 +287,7 @@
   "predictions.health.auto_error": "Otomatik futbol son hata",
   "predictions.health.auto_error_value": "{0} ({1})",
   "predictions.health.auto_review": "Otomatik futbol inceleme",
-  "predictions.health.auto_review_value": "{0} maç yönetici incelemesi bekliyor"
+  "predictions.health.auto_review_value": "{0} maç yönetici incelemesi bekliyor",
+  "predictions.health.auto_rule": "Otomatik futbol pazar kuralı",
+  "predictions.health.auto_rule_unverified": "Normal süre kuralı doğrulanmış bookmaker yok — Live hiçbir kart açmaz (MARKET_RULE_UNVERIFIED)"
 }
