@@ -136,8 +136,11 @@ public sealed partial class SummaryFlowTests
             return Task.FromResult(new SummaryHistoryPage(SummaryFetchStatus.Ok, page, page.Count < 100));
         }
 
+        /// <summary>Server display names by author id, as the real source resolves them after the scan.</summary>
+        public SummaryNames Names { get; set; } = SummaryNames.Empty;
+
         public Task<SummaryNames> ResolveNamesAsync(GuildId guild, IReadOnlyList<SummarySourceMessage> messages, CancellationToken cancellationToken) =>
-            Task.FromResult(SummaryNames.Empty);
+            Task.FromResult(Names);
 
         public Task<bool?> HasMessageContentAccessAsync() => Task.FromResult(ContentAccess);
     }

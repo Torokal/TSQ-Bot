@@ -336,4 +336,28 @@ public sealed partial class SummaryFlowTests
         (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Posted);
         world.Ai.Calls.Should().Be(2, "one per run; never a retry");
     }
+
+    // ---------------------------------------------------------------- display names reach the model
+
+    [Fact]
+    public async Task The_model_sees_server_display_names_as_plain_text_never_ids_or_mentions()
+    {
+        var world = new World();
+        const ulong toro = 500000000000000031, hasom = 500000000000000032;
+        world.Discord.Channels[Here.Value] =
+        [
+            .. Humans(1, 5),
+            Human(10, "Ben Nitro'yu iptal ettim.") with { AuthorId = toro, AuthorName = "toro_global" },
+            Human(11, "Kodlama için Claude daha iyi bence, <@500000000000000031> ne diyorsun?") with { AuthorId = hasom, AuthorName = "hasom123" },
+        ];
+        world.Discord.Names = new SummaryNames(new Dictionary<ulong, string> { [toro] = "Toro", [hasom] = "Hasom" },
+            new SummaryMentionNames(new Dictionary<ulong, string> { [toro] = "Toro" }, new Dictionary<ulong, string>(), new Dictionary<ulong, string>()));
+
+        (await world.RunAsync(new FakeResponder())).Should().Be(SummaryOutcome.Posted);
+
+        var user = world.Ai.Prompts.Single().User;
+        user.Should().Contain("\nToro: Ben Nitro'yu iptal ettim.\n");
+        user.Should().Contain("\nHasom: Kodlama için Claude daha iyi bence, @Toro ne diyorsun?\n");
+        user.Should().NotContain("toro_global").And.NotContain("hasom123").And.NotContain("500000000000000031").And.NotContain("<@");
+    }
 }
