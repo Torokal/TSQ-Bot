@@ -262,6 +262,25 @@ invite link and no global command registration. The source code is public under 
 - **NOT VERIFIED_LIVE**: the 2000-character split, thread handling, the role gate, the 100-message gate and the 120 s
   channel cooldown.
 
+## TSQ Öngörü (new, 2026-09-29, branch `feat/predictions`)
+
+- Module `predictions`, command group `/ongoru` (no default member permissions; every subcommand authorizes itself):
+  `yarat`, `kilitle`, `sonuclandir`, `iptal` (predictions channel), `cuzdan`, `gunluk`, `tahminlerim`, `liderlik`,
+  `turnuva durum|bitir` (commands channel). Tables `prediction_tournament`, `prediction_wallet`, `prediction`,
+  `prediction_outcome`, `prediction_entry`, `prediction_ledger`, `prediction_daily_claim`, `prediction_standing` (additive
+  migration `PredictionsModule`), worker `PredictionWorker` (~10 s). Off by default (`/modules enable predictions`).
+  Shared change: `OutgoingMessage.Select` (optional single-choice string select, omitted from stored payloads when absent).
+- **IMPLEMENTED / TESTED_OFFLINE**: form parsing (every field and line, 2–25 outcomes, odds 1.01–1000.00, default odds,
+  Türkiye lock time), private preview, single card per draft (double/parallel publish, ambiguous send reconciliation,
+  abandoned uncertain posts), exact channel and role gates with no side effects, atomic entries (one per member and
+  prediction, no overspending under parallel confirmations, check inside the write lock), exact deadline, integer payout
+  math (rounding down, overflow), settle/cancel/no-winner, settle-vs-cancel race, daily reward (bounds, parallel claims,
+  Türkiye midnight, no second claim after a tournament reset), tournament close (blocking, two admins, stale and expired
+  confirmations, frozen podium, fresh 1000 wallets, announcement retry from the snapshot), leaderboards (tie order,
+  isolation), deleted/failing cards, restart, module disable/enable, privacy export/delete, health lines.
+- **NOT VERIFIED_LIVE**: everything in Discord (command registration, the modal, the select on the card, edits, the
+  announcement). Not merged, not deployed, not synced.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

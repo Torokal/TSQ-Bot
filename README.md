@@ -15,7 +15,8 @@ and gram gold buy/sell prices with `/dolar`, `/euro` and `/altın` ([docs/curren
 `/sec` and `/yazitura` ([docs/randomizer/TSQ_RANDOMIZER.md](docs/randomizer/TSQ_RANDOMIZER.md)). **TSQ Çekiliş** runs reaction
 giveaways: `/giveaway create` opens a form, members enter with 🎉, winners are drawn automatically
 ([docs/giveaway/TSQ_GIVEAWAY.md](docs/giveaway/TSQ_GIVEAWAY.md)). **TSQ Özet** summarizes the latest messages of a channel
-in Turkish with `/ozetle` ([docs/summary/TSQ_SUMMARY.md](docs/summary/TSQ_SUMMARY.md)).
+in Turkish with `/ozetle` ([docs/summary/TSQ_SUMMARY.md](docs/summary/TSQ_SUMMARY.md)). **TSQ Öngörü** runs fixed-odds
+community predictions with purely virtual TSQ Coin under `/ongoru` ([docs/predictions/TSQ_PREDICTIONS.md](docs/predictions/TSQ_PREDICTIONS.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
 **BOT Greg** and reuses adapted portions of the open-source
@@ -67,6 +68,13 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   when the time is up the bot reads every reaction page, draws unique non-bot members and turns the same card into the
   result with one short message that pings only the winners. `/giveaway end|cancel|reroll` for admins (reroll leaves
   earlier winners out). Restart-safe (stored giveaways, one worker loop) and race-safe (drawn at most once).
+- **TSQ Öngörü** (separate module, off by default): members of the creator role publish a question with 2–25 outcomes and
+  fixed odds (`/ongoru yarat`: form → private preview → one public card) in the predictions channel; members pick an outcome
+  on the card, type a stake and confirm (virtual TSQ Coin only — no real money, no transfers, no shop). The creator (while
+  holding the role) or an administrator locks, settles or cancels by hand; payouts (stake × fixed odds, rounded down) and
+  refunds are booked in one SQLite write transaction. Every tournament starts each member at 1000 TSQ Coin; a daily reward
+  of 10–100 per Türkiye calendar day; administrators end a tournament (frozen top 3, public announcement). Member commands
+  (`cuzdan`, `gunluk`, `tahminlerim`, `liderlik`, `turnuva`) only in the commands channel.
 - **TSQ Özet** (separate module, off by default): `/ozetle` reads the latest 100 member messages of the channel or thread
   when it runs (REST; no message events, no cache, nothing stored), sends them as a normalized transcript to one AI model
   (OpenCode Go, `deepseek-v4.1-flash`) in a single request, and posts a short Turkish summary publicly without pings. No
@@ -105,6 +113,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Randomizer | `/zarat zar:…`, `/randomsayi maksimum:… [minimum:…]`, `/sec seçenekler:…`, `/yazitura` (public answer) | everyone (module on) |
 | TSQ Çekiliş | `/giveaway create` (form → card → 🎉 → automatic draw), `/giveaway end\|cancel\|reroll giveaway:<#number \| message link \| id>` | Manage Server (module on); entering: everyone, with 🎉 |
 | TSQ Özet | `/ozetle` (no options; public summary of this channel's latest messages) | members with any one of the configured roles (module on) |
+| TSQ Öngörü | predictions channel: `/ongoru yarat\|kilitle\|sonuclandir\|iptal`; commands channel: `/ongoru cuzdan\|gunluk\|tahminlerim\|liderlik`, `/ongoru turnuva durum\|bitir` | create: the creator role; manage: its creator (with the role) or Administrator/owner; end tournament: Administrator/owner; the rest: everyone (module on) |
 | TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
@@ -210,6 +219,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Currency` | TSQ Döviz & Altın (`/dolar`, `/euro`, `/altın`: Altınkaynak / TCMB / Trunçgil parsers, dataset cache with single flight, last-known-good) |
 | `ToroSquad.Modules.Randomizer` | TSQ Randomizer (`/zarat`, `/randomsayi`, `/sec`, `/yazitura`: dice notation and option parsers, one secure random source) |
 | `ToroSquad.Modules.Giveaway` | TSQ Çekiliş (`/giveaway`: form and duration parser, restart-safe draw worker, paged 🎉 reaction reading, unbiased winner draw, card sync, winner announcement via the outbox) |
+| `ToroSquad.Modules.Predictions` | TSQ Öngörü (`/ongoru`: form parser, fixed-odds integer coin math, atomic entries/settlement/refunds, tournaments, daily reward, leaderboards, card sync, lock worker) |
 | `ToroSquad.Modules.Summary` | TSQ Özet (`/ozetle`: on-demand channel read, transcript normalization, one OpenCode Go request, deterministic clean-up and split, in-memory cooldowns) |
 | `ToroSquad.Modules.Birthday` | TSQ Doğum Günü (day + month registrations, restart-safe daily reconciliation: one announcement, temporary role) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
