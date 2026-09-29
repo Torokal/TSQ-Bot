@@ -75,6 +75,10 @@ public static partial class SummaryTranscript
     public const int MaxTranscriptChars = 40_000;
     public const int MaxNameChars = 32;
     public const string TruncatedMarker = "[uzun mesaj kısaltıldı]";
+
+    /// <summary>How a Discord spoiler (<c>||…||</c>) appears in the transcript; never shown to members.</summary>
+    public const string SpoilerOpen = "<spoiler>";
+    public const string SpoilerClose = "</spoiler>";
     public const string FallbackName = "Kullanıcı";
 
     public static SummaryTranscriptResult Build(
@@ -127,7 +131,10 @@ public static partial class SummaryTranscript
         if (text.Length > MaxMessageChars)
         {
             var cut = text.LastIndexOf(' ', MaxMessageChars);
-            text = text[..(cut > MaxMessageChars / 2 ? cut : MaxMessageChars)].TrimEnd() + " " + TruncatedMarker;
+            text = text[..(cut > MaxMessageChars / 2 ? cut : MaxMessageChars)].TrimEnd();
+            if (Count(text, SpoilerOpen) > Count(text, SpoilerClose))
+                text += SpoilerClose; // cut inside a spoiler: it stays marked as one
+            text += " " + TruncatedMarker;
             truncated = true;
         }
 
@@ -143,7 +150,11 @@ public static partial class SummaryTranscript
         return (string.Join(" ", parts), truncated);
     }
 
-    /// <summary>Discord markup → readable text on one line, with links reduced to their host.</summary>
+    /// <summary>
+    /// Discord markup → readable text on one line, with links reduced to their host. Discord spoilers (<c>||…||</c>, any number
+    /// per message) become <c>&lt;spoiler&gt;…&lt;/spoiler&gt;</c> so the model can tell them apart for certain; spoiler tags a
+    /// member typed literally are defused first, so only real spoilers are marked.
+    /// </summary>
     public static string ReadableText(string? content, SummaryMentionNames names, TimeZoneInfo zone)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -155,6 +166,8 @@ public static partial class SummaryTranscript
         text = SlashMention().Replace(text, m => "/" + m.Groups[1].Value);
         text = CustomEmoji().Replace(text, m => ":" + m.Groups[1].Value + ":");
         text = TimestampMarkup().Replace(text, m => LocalTime(m.Groups[1].Value, zone));
+        text = LiteralSpoilerTag().Replace(text, "‹$1spoiler");
+        text = DiscordSpoiler().Replace(text, m => SpoilerOpen + m.Groups[1].Value.Trim() + SpoilerClose);
         text = SuppressedLink().Replace(text, m => m.Groups[1].Value);
         text = Link().Replace(text, m => LinkPlaceholder(m.Value));
         // The transcript delimiters must not be closable from inside a message.
@@ -188,6 +201,14 @@ public static partial class SummaryTranscript
     {
         var plain = Plain(name, MaxNameChars, FallbackName).Replace(":", "", StringComparison.Ordinal).Replace("@", "", StringComparison.Ordinal).Trim();
         return plain.Length == 0 ? FallbackName : plain;
+    }
+
+    private static int Count(string text, string value)
+    {
+        var count = 0;
+        for (var at = text.IndexOf(value, StringComparison.Ordinal); at >= 0; at = text.IndexOf(value, at + value.Length, StringComparison.Ordinal))
+            count++;
+        return count;
     }
 
     private static string Plain(string? value, int max, string fallback)
@@ -282,4 +303,11 @@ public static partial class SummaryTranscript
 
     [GeneratedRegex(@"<(/?)\s*transcript", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex Delimiter();
+
+    /// <summary>A Discord spoiler span with visible content (<c>||…||</c>, shortest match, may span lines).</summary>
+    [GeneratedRegex(@"\|\|(?!\|)(\s*\S.*?)\|\|", RegexOptions.CultureInvariant | RegexOptions.Singleline)]
+    private static partial Regex DiscordSpoiler();
+
+    [GeneratedRegex(@"<(/?)\s*spoiler", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex LiteralSpoilerTag();
 }
