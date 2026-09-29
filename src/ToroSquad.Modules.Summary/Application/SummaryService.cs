@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ToroSquad.Core;
 using ToroSquad.Core.Localization;
+using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Roles;
 using ToroSquad.Core.Security;
 
@@ -20,11 +21,10 @@ public enum SummaryFetchStatus
     Failed = 2,
 }
 
-/// <summary>The latest messages of one channel (any order; bots and system events included — the transcript filters).</summary>
-public sealed record SummaryFetch(SummaryFetchStatus Status, IReadOnlyList<SummarySourceMessage> Messages, SummaryMentionNames Names)
+/// <summary>Server display names of the selected messages' authors (by user id) and names for the markup in them.</summary>
+public sealed record SummaryNames(IReadOnlyDictionary<ulong, string> Authors, SummaryMentionNames Mentions)
 {
-    public static SummaryFetch NoAccess { get; } = new(SummaryFetchStatus.NoAccess, [], SummaryMentionNames.Empty);
-    public static SummaryFetch Failed { get; } = new(SummaryFetchStatus.Failed, [], SummaryMentionNames.Empty);
+    public static SummaryNames Empty { get; } = new(new Dictionary<ulong, string>(), SummaryMentionNames.Empty);
 }
 
 /// <summary>The Discord reads /ozetle needs beyond <see cref="IGuildGateway"/>. Implemented over Discord.Net in Commands; faked in tests.</summary>
@@ -35,12 +35,17 @@ public interface ISummaryDiscord
     /// <summary>The invoking member's effective permissions in <paramref name="channel"/>; null when unknown.</summary>
     GuildPermission? InvokerPermissions(ChannelId channel);
 
+    /// <summary>A role's current name from the guild cache; null when the role does not exist (any more).</summary>
+    string? RoleName(GuildId guild, ulong role);
+
     /// <summary>
-    /// Reads the latest messages of <paramref name="channel"/> only (a thread without its parent), newest first, until
-    /// <paramref name="memberMessages"/> member messages are collected or a small page limit is reached. Never throws for
-    /// Discord problems.
+    /// One page of <paramref name="channel"/>'s history only (a thread without its parent), newest first, older than
+    /// <paramref name="before"/> when given. Never throws for Discord problems.
     /// </summary>
-    Task<SummaryFetch> FetchRecentAsync(GuildId guild, ChannelId channel, int memberMessages, CancellationToken cancellationToken);
+    Task<SummaryHistoryPage> ReadHistoryPageAsync(GuildId guild, ChannelId channel, ulong? before, CancellationToken cancellationToken);
+
+    /// <summary>Author and mention names for the messages that will be summarized (a few cache/REST reads, bounded).</summary>
+    Task<SummaryNames> ResolveNamesAsync(GuildId guild, IReadOnlyList<SummarySourceMessage> messages, CancellationToken cancellationToken);
 
     /// <summary>The application's Message Content flag (Developer Portal); null when it could not be read.</summary>
     Task<bool?> HasMessageContentAccessAsync();
@@ -59,8 +64,11 @@ public interface ISummaryResponder
     Task<bool> PostPublicAsync(IReadOnlyList<string> parts);
 }
 
-/// <summary>Who asked where, in which language, with which time zone (for &lt;t:…&gt; in messages).</summary>
-public sealed record SummaryRequest(GuildId Guild, ChannelId Channel, UserId Member, string Language, TimeZoneInfo Zone);
+/// <summary>
+/// Who asked where, in which language, with which time zone (for &lt;t:…&gt; in messages). <paramref name="MemberRoles"/>: the
+/// invoking member's role ids from the interaction payload (no REST read).
+/// </summary>
+public sealed record SummaryRequest(GuildId Guild, ChannelId Channel, UserId Member, string Language, TimeZoneInfo Zone, IReadOnlyCollection<ulong> MemberRoles);
 
 public enum SummaryOutcome
 {
@@ -75,18 +83,24 @@ public enum SummaryOutcome
     ContentUnavailable = 8,
     AiFailed = 9,
     PostFailed = 10,
+    RoleMissing = 11,
+    NotEnoughNewMessages = 12,
+    HistoryUnknown = 13,
 }
 
 /// <summary>The last run, for /bot status (no ids, no text).</summary>
 public sealed record SummaryLastRun(SummaryOutcome Outcome, SummaryAiFailure AiFailure, DateTimeOffset At);
 
 /// <summary>
-/// /ozetle from start to end, with every check on the server and at most ONE AI request: configuration, channel type, the
-/// member's and the bot's access (View Channel + Read Message History), admission (channel busy, cooldowns, bot-wide limit)
-/// — all answered privately and at once, before anything is read. Then a private acknowledgement, one bounded read of the
-/// channel, the transcript (too few member messages → no AI request), the AI request (a failure is never retried and no other
-/// model is tried), light deterministic clean-up, and the summary as public message(s) without pings. Logs carry ids, counts,
-/// token usage, latency and outcome — never message text, names, the prompt or the answer.
+/// /ozetle from start to end, with every check on the server and at most ONE AI request: the member's roles (any one of
+/// <see cref="SummaryOptions.EffectiveAllowedRoleIds"/>), configuration, channel type, the member's and the bot's access (View
+/// Channel + Read Message History), admission (channel busy, cooldowns, bot-wide limit) — all answered privately and at once,
+/// before anything is read. Then a private acknowledgement and a bounded scan of the channel's history
+/// (<see cref="SummaryHistory"/>): after an earlier TSQ summary at least <see cref="SummaryOptions.MaxMessages"/> new member
+/// messages are required, a first summary needs <see cref="SummaryOptions.MinMessages"/>, and an inconclusive scan fails
+/// closed. Then the transcript, the AI request (a failure is never retried and no other model is tried), light deterministic
+/// clean-up, and the summary as public message(s) without pings. Only a posted summary starts the full cooldowns. Logs carry
+/// ids, counts, token usage, latency and outcome — never message text, names, the prompt or the answer.
 /// </summary>
 public sealed partial class SummaryService(
     ISummaryAiClient ai,
@@ -100,8 +114,8 @@ public sealed partial class SummaryService(
     /// <summary>What the member and the bot both need in the channel (a thread: in its parent).</summary>
     public const GuildPermission RequiredToRead = GuildPermission.ViewChannel | GuildPermission.ReadMessageHistory;
 
-    /// <summary>The time allowed for reading the channel from Discord.</summary>
-    public static readonly TimeSpan FetchTimeout = TimeSpan.FromSeconds(15);
+    /// <summary>The time allowed for reading the channel's history from Discord (up to <see cref="SummaryHistory.MaxPages"/> pages).</summary>
+    public static readonly TimeSpan FetchTimeout = TimeSpan.FromSeconds(30);
 
     private SummaryLastRun? _last;
 
@@ -113,6 +127,15 @@ public sealed partial class SummaryService(
     {
         var trace = TraceCodes.New();
         string T(string key, params object?[] args) => localizer.Get(request.Language, key, args);
+
+        // Roles first: from the interaction payload, before anything is read or sent anywhere. Any ONE role is enough.
+        var allowedRoles = options.Value.EffectiveAllowedRoleIds;
+        if (!allowedRoles.Any(request.MemberRoles.Contains))
+        {
+            LogRefused(logger, trace, SummaryOutcome.RoleMissing, request.Guild.Value, request.Channel.Value, request.Member.Value);
+            await responder.ReplyPrivateAsync(T("summary.role_required", RoleList(request, discord, allowedRoles, trace)));
+            return SummaryOutcome.RoleMissing;
+        }
 
         if (!ai.IsConfigured)
         {
@@ -139,7 +162,7 @@ public sealed partial class SummaryService(
             {
                 SummaryAdmission.ChannelBusy => T("summary.channel_busy"),
                 SummaryAdmission.UserCooldown => T("summary.user_cooldown", Seconds(retryAt)),
-                SummaryAdmission.ChannelCooldown => T("summary.channel_cooldown", Seconds(retryAt)),
+                SummaryAdmission.ChannelCooldown => T("summary.channel_cooldown", Duration(request.Language, retryAt)),
                 _ => T("summary.at_capacity"),
             });
             return SummaryOutcome.Throttled; // not remembered: says nothing about the service
@@ -166,17 +189,35 @@ public sealed partial class SummaryService(
         var settings = options.Value;
         var ids = (Guild: request.Guild.Value, Channel: request.Channel.Value, Member: request.Member.Value);
 
-        SummaryFetch fetch;
+        SummaryHistoryScan scan;
+        SummaryNames names = SummaryNames.Empty;
         using (var deadline = new CancellationTokenSource(FetchTimeout, clock))
-            fetch = await discord.FetchRecentAsync(request.Guild, request.Channel, settings.MaxMessages, deadline.Token);
-        if (fetch.Status != SummaryFetchStatus.Ok)
         {
-            LogFetchFailed(logger, trace, fetch.Status, ids.Guild, ids.Channel, ids.Member);
-            await responder.ReplyPrivateAsync(T(fetch.Status == SummaryFetchStatus.NoAccess ? "summary.bot_no_access" : "summary.fetch_failed") + TraceLine(request, trace));
-            return Remember(SummaryOutcome.FetchFailed);
+            scan = await SummaryHistory.ScanAsync(discord, request.Guild, request.Channel, settings.MaxMessages, deadline.Token);
+            LogHistory(logger, trace, scan.Outcome, scan.PageCount, scan.EligibleCount, scan.MarkerFound, scan.Exhausted, scan.LimitHit,
+                ids.Guild, ids.Channel, ids.Member);
+            if (scan.Outcome is SummaryHistoryOutcome.Enough or SummaryHistoryOutcome.WholeHistory)
+                names = await discord.ResolveNamesAsync(request.Guild, scan.MemberMessages, deadline.Token);
         }
 
-        var transcript = SummaryTranscript.Build(fetch.Messages, fetch.Names, request.Zone, settings.MaxMessages);
+        switch (scan.Outcome)
+        {
+            case SummaryHistoryOutcome.NoAccess or SummaryHistoryOutcome.Failed:
+                await responder.ReplyPrivateAsync(T(scan.Outcome == SummaryHistoryOutcome.NoAccess ? "summary.bot_no_access" : "summary.fetch_failed") + TraceLine(request, trace));
+                return Remember(SummaryOutcome.FetchFailed);
+            case SummaryHistoryOutcome.LimitHit:
+                // Neither enough new messages, nor an earlier summary, nor the channel's start within the limit: never guess.
+                await responder.ReplyPrivateAsync(T("summary.history_unknown"));
+                return SummaryOutcome.HistoryUnknown;
+            case SummaryHistoryOutcome.AfterEarlierSummary:
+                await responder.ReplyPrivateAsync(T("summary.not_enough_new", scan.EligibleCount, settings.MaxMessages - scan.EligibleCount));
+                return SummaryOutcome.NotEnoughNewMessages;
+        }
+
+        var selected = scan.MemberMessages
+            .Select(m => names.Authors.TryGetValue(m.AuthorId, out var name) ? m with { AuthorName = name } : m)
+            .ToList();
+        var transcript = SummaryTranscript.Build(selected, names.Mentions, request.Zone, settings.MaxMessages);
         if (transcript.MessageCount < settings.MinMessages)
         {
             // Normal member messages that came back completely empty: Discord withholds content without Message Content access.
@@ -207,14 +248,16 @@ public sealed partial class SummaryService(
             return Remember(SummaryOutcome.AiFailed, failure);
         }
 
-        ticket.End(SummaryRunEnd.Completed); // the inference was spent: the cooldowns apply even if Discord refuses the post
         var parts = SummaryOutput.Split(summary);
         if (!await responder.PostPublicAsync(parts))
         {
+            // Not a successful summary (nothing is in the channel): only the short failure cooldown.
+            ticket.End(SummaryRunEnd.InferenceFailed);
             LogPostFailed(logger, trace, ids.Guild, ids.Channel);
             return Remember(SummaryOutcome.PostFailed);
         }
 
+        ticket.End(SummaryRunEnd.Completed); // a summary is in the channel: the full member and channel cooldowns
         LogPosted(logger, trace, parts.Count, ids.Guild, ids.Channel);
         return Remember(SummaryOutcome.Posted);
     }
@@ -227,10 +270,41 @@ public sealed partial class SummaryService(
 
     private string TraceLine(SummaryRequest request, string trace) => "\n" + localizer.Get(request.Language, "error.trace_code", trace);
 
-    private string Seconds(DateTimeOffset? until)
+    private string Seconds(DateTimeOffset? until) => SecondsLeft(until).ToString(CultureInfo.InvariantCulture);
+
+    private int SecondsLeft(DateTimeOffset? until) =>
+        until is { } at ? Math.Max(1, (int)Math.Ceiling((at - clock.GetUtcNow()).TotalSeconds)) : 1;
+
+    /// <summary>"1 dk 18 sn", "2 dk", "45 sn" (rounded up to whole seconds, on the injected clock).</summary>
+    private string Duration(string language, DateTimeOffset? until)
     {
-        var seconds = until is { } at ? Math.Max(1, (int)Math.Ceiling((at - clock.GetUtcNow()).TotalSeconds)) : 1;
-        return seconds.ToString(CultureInfo.InvariantCulture);
+        var total = SecondsLeft(until);
+        var (minutes, seconds) = (total / 60, total % 60);
+        return minutes == 0 ? localizer.Get(language, "summary.duration.seconds", seconds)
+            : seconds == 0 ? localizer.Get(language, "summary.duration.minutes", minutes)
+            : localizer.Get(language, "summary.duration.minutes_seconds", minutes, seconds);
+    }
+
+    /// <summary>
+    /// The allowed roles by their current names from the guild cache, bold, defused (no mention, no markdown break-out); a
+    /// role that no longer exists is shown by id and logged — the others are still listed.
+    /// </summary>
+    private string RoleList(SummaryRequest request, ISummaryDiscord discord, IReadOnlyList<ulong> roles, string trace)
+    {
+        var shown = new List<string>(roles.Count);
+        foreach (var role in roles)
+        {
+            if (discord.RoleName(request.Guild, role) is { Length: > 0 } name)
+            {
+                shown.Add("**" + DiscordText.Untrusted(name, 100) + "**");
+                continue;
+            }
+
+            LogMissingRole(logger, trace, role, request.Guild.Value);
+            shown.Add(localizer.Get(request.Language, "summary.role_fallback", role.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        return string.Join(", ", shown);
     }
 
     // Logs carry ids, counts, usage, latency and outcomes only — never message text, names, the prompt or the answer.
@@ -243,8 +317,13 @@ public sealed partial class SummaryService(
     [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] throttled: {Admission} guild={Guild} channel={Channel} invoker={Invoker}")]
     private static partial void LogThrottled(ILogger logger, string trace, SummaryAdmission admission, ulong guild, ulong channel, ulong invoker);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Summary [{Trace}] channel read failed: {Status} guild={Guild} channel={Channel} invoker={Invoker}")]
-    private static partial void LogFetchFailed(ILogger logger, string trace, SummaryFetchStatus status, ulong guild, ulong channel, ulong invoker);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] history {Outcome} history_page_count={Pages} eligible_message_count={Eligible} " +
+        "summary_marker_found={Marker} history_exhausted={Exhausted} history_limit_hit={LimitHit} guild={Guild} channel={Channel} invoker={Invoker}")]
+    private static partial void LogHistory(ILogger logger, string trace, SummaryHistoryOutcome outcome, int pages, int eligible, bool marker,
+        bool exhausted, bool limitHit, ulong guild, ulong channel, ulong invoker);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Summary [{Trace}] configured allowed role {Role} does not exist in guild {Guild}")]
+    private static partial void LogMissingRole(ILogger logger, string trace, ulong role, ulong guild);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] no AI request: message_count={Count} empty_message_count={Empty} " +
         "content_withheld={Withheld} guild={Guild} channel={Channel} invoker={Invoker}")]

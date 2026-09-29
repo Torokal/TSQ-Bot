@@ -8,7 +8,7 @@
   "summary.bot_no_access": "I cannot read this channel's messages. The bot needs **View Channel** and **Read Message History** here.",
   "summary.channel_busy": "A summary of this channel is already being prepared.",
   "summary.user_cooldown": "Wait {0} seconds before your next summary.",
-  "summary.channel_cooldown": "This channel was just summarized. Wait {0} seconds for a new one.",
+  "summary.channel_cooldown": "Wait **{0}** before summarizing this channel again.",
   "summary.at_capacity": "Other summaries are being prepared right now. Try again shortly.",
   "summary.fetch_failed": "The channel's messages could not be read right now. Try again shortly.",
   "summary.content_unavailable": "Discord did not deliver the message content to the bot. Make sure Message Content access is enabled.",
@@ -24,5 +24,12 @@
   "summary.health.idle": "Ready; no summary requested yet",
   "summary.health.ok": "Last summary request completed: {0}",
   "summary.health.ai_failed": "Last summary request failed ({0}): {1}",
-  "summary.health.discord_failed": "Last summary request hit a Discord read/post error: {0}"
+  "summary.health.discord_failed": "Last summary request hit a Discord read/post error: {0}",
+  "summary.role_required": "To use this command you need at least one of these roles: {0}. Any one of these roles is enough.",
+  "summary.role_fallback": "Role {0}",
+  "summary.not_enough_new": "There are **{0}** new messages since the last summary. **{1}** more are needed to summarize again.",
+  "summary.history_unknown": "The previous summary could not be checked. Please try again shortly.",
+  "summary.duration.seconds": "{0} s",
+  "summary.duration.minutes": "{0} min",
+  "summary.duration.minutes_seconds": "{0} min {1} s"
 }
