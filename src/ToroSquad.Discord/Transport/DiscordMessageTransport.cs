@@ -41,7 +41,7 @@ public sealed class DiscordMessageTransport(DiscordSocketClient client, ILogger<
                 text: message.Content,
                 embed: DiscordConversions.ToEmbed(message.Embed),
                 allowedMentions: DiscordConversions.ToAllowedMentions(message.Mentions),
-                components: DiscordConversions.ToComponents(message.Buttons),
+                components: DiscordConversions.ToComponents(message),
                 options: new RequestOptions { CancelToken = cancellationToken });
             return new SendOutcome.Sent(new MessageId(sent.Id));
         }
@@ -78,7 +78,7 @@ public sealed class DiscordMessageTransport(DiscordSocketClient client, ILogger<
                 p.Content = content.Content ?? string.Empty;
                 p.Embed = DiscordConversions.ToEmbed(content.Embed);
                 p.AllowedMentions = DiscordConversions.ToAllowedMentions(MentionPolicy.None); // edits never ping
-                p.Components = DiscordConversions.ToComponents(content.Buttons);
+                p.Components = DiscordConversions.ToComponents(content);
             }, new RequestOptions { CancelToken = cancellationToken });
             return new SendOutcome.Sent(message);
         }

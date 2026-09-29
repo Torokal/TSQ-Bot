@@ -39,6 +39,15 @@ sayılar, token kullanımı, süre ve sonuç bulunur ([summary/TSQ_SUMMARY.md](s
 | `giveaway` | TSQ Çekiliş: başlatanın kullanıcı ID'si ve o anki görünen adı, ödül ve açıklama metni, kanal/mesaj ID, süre, durum, **katılımcı sayısı** (katılımcı listesi saklanmaz: katılım karttaki 🎉 tepkisidir), bitiren/iptal eden yöneticinin ID'si | kullanıcı (başlatan; bitiren/iptal eden) | `/privacy delete` (ad ve ID'ler kaldırılır, çekiliş kalır), sunucu verisiyle birlikte |
 | `giveaway_winner` | Çekiliş ID + tur (0 = çekiliş, N = N. reroll) + sıra + kazananın kullanıcı ID'si | kullanıcı | `/privacy delete`, sunucu verisiyle birlikte |
 | `outbox` (Çekiliş kazanan duyurusu) | Duyuru metni: kazananların mention'ları (kullanıcı ID'leri) | kullanıcı | teslimden/bitişten 24 saat sonra |
+| `prediction_tournament` | TSQ Öngörü turnuvası: numara, durum, zamanlar, final katılımcı/öngörü sayıları, kapatan yöneticinin ID'si | sunucu (kapatan: kullanıcı) | `/privacy delete` (kapatan ID'si temizlenir), sunucu verisiyle birlikte |
+| `prediction_wallet` | Turnuva başına cüzdan: kullanıcı ID, o anki görünen ad, kullanılabilir ve bekleyen TSQ Coin (sanal), doğru/sonuçlanan sayısı | kullanıcı | `/privacy delete` yalnızca görünen adı temizler (oyun kaydı kalır); sunucu verisiyle birlikte silinir |
+| `prediction`, `prediction_outcome` | Öngörü: oluşturanın ID'si ve o anki görünen adı, başlık, seçenekler, oranlar, kural, kanal/mesaj ID, durum, zamanlar, sayılar; kilitleyen/sonuçlandıran/iptal eden yöneticinin ID'si ve iptal gerekçesi | kullanıcı (oluşturan; yöneten) | `/privacy delete` oluşturanın görünen adını temizler (kartta "—"), öngörü kalır; sunucu verisiyle birlikte silinir |
+| `prediction_entry` | Katılım: kullanıcı ID, öngörü, seçilen sonuç, yatırılan coin, oran ve olası ödeme snapshot'ı, durum, ödeme | kullanıcı | oyun kaydı: `/privacy delete` ile **silinmez**; sunucu verisiyle birlikte silinir |
+| `prediction_ledger` | Coin hareketleri (başlangıç, günlük, katılım, kazanç, iade): kullanıcı ID, tutar, sonrası bakiye | kullanıcı | oyun kaydı: `/privacy delete` ile **silinmez**; sunucu verisiyle birlikte silinir |
+| `prediction_daily_claim` | Günlük ödül: kullanıcı ID, Türkiye yerel günü, tutar | kullanıcı | oyun kaydı: `/privacy delete` ile **silinmez**; sunucu verisiyle birlikte silinir |
+| `prediction_standing` | Kapanmış turnuvanın ilk 3'ü (coin ve doğru tablosu): kullanıcı ID, o anki görünen ad, final değerler | kullanıcı | `/privacy delete` yalnızca görünen adı temizler; sunucu verisiyle birlikte silinir |
+| `outbox` (Öngörü turnuva duyurusu) | Duyuru: ilk 3'ün görünen adları (mention yok) ve final değerleri | kullanıcı | teslimden/bitişten 2 gün sonra |
+| *(bellek, tablo değil)* Öngörü taslak ve onayları | Form değerleri, seçilen sonuç ve tutar, gerekçe; kullanıcı ve sunucu ID'si | kullanıcı | **veritabanına hiç yazılmaz**; 5–30 dk sonra, kullanımda veya restart'ta silinir |
 
 TSQ Döviz & Altın kendi tablosunu kullanmaz ve kullanıcı verisi tutmaz: fiyatlar yalnızca bellekte kısa süre önbelleklenir,
 komut kullanımları ve sağlayıcı yanıtları kaydedilmez; sağlayıcılara kullanıcıya ait hiçbir bilgi gönderilmez. Günlük 09:00
@@ -46,6 +55,13 @@ kartı ortak `outbox` tablosuna yazılır (yalnızca fiyatlar, kullanıcı ID'si
 
 TSQ Randomizer tablo kullanmaz ve hiçbir şey saklamaz: zar, sayı, seçim ve yazı/tura sonuçları ile `/sec` seçenek metinleri
 kaydedilmez ve loglanmaz (yalnızca Debug düzeyinde komut/sunucu/kullanıcı ID'si/aralık gibi meta veri; üretimde yazılmaz).
+
+TSQ Öngörü silmesinin sonucu: `/privacy delete` Öngörü ekonomisini **silmez ve sıfırlamaz**. Bakiye, katılım, coin hareketi,
+günlük ödül ve derece kayıtları ortak bir yarışmanın oyun kayıtlarıdır (diğer üyelerin sıralaması onlara bağlıdır) ve
+silinmeleri "kaybet → sil → yeniden 1000 al" açığını açardı; bu yüzden korunur, önizlemede ve silme sonrası uyarıda "silinmedi"
+olarak bildirilir. Yalnızca kayıtlı görünen adlar (cüzdan, derece, oluşturulan öngörü) kaldırılır. Oyun dışı gerçek bir silme
+talebi operatör tarafından ayrıca ele alınır (sahip/hukuki karar). Bot sunucudan ayrılınca modülün o sunucudaki tüm verisi
+silinir. Ayrıntı: [predictions/TSQ_PREDICTIONS.md](predictions/TSQ_PREDICTIONS.md).
 
 TSQ Quote tablo kullanmaz; `/privacy export/delete` kapsamında kaydı yoktur (gönderilen alıntı görseli normal bir kanal
 mesajıdır; kanaldan Discord'da silinir).

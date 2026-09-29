@@ -22,7 +22,7 @@ public sealed class CommandManifestTests
         var (manifest, admin) = await BuildAsync();
         CommandManifestValidator.Validate(manifest, admin).Should().BeEmpty();
         manifest.LoadErrors.Should().BeEmpty();
-        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "esports-admin", "f1", "f1-admin", "volleyball", "volleyball-admin", "live-admin", "ekip", "lfg-admin", "quote", "birthday", "birthday-admin", "dolar", "euro", "altın", "zarat", "randomsayi", "sec", "yazitura", "saat", "giveaway", "ozetle");
+        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "esports-admin", "f1", "f1-admin", "volleyball", "volleyball-admin", "live-admin", "ekip", "lfg-admin", "quote", "birthday", "birthday-admin", "dolar", "euro", "altın", "zarat", "randomsayi", "sec", "yazitura", "saat", "giveaway", "ozetle", "ongoru");
 
         string[] Sub(string name) => manifest.Find(name)!.Options.Select(o => o.Name).ToArray();
         Sub("bot").Should().BeEquivalentTo("status", "about", "source");
@@ -39,6 +39,7 @@ public sealed class CommandManifestTests
         Sub("birthday").Should().BeEquivalentTo("set", "show", "remove");
         Sub("birthday-admin").Should().BeEquivalentTo("set", "show", "configure", "status", "doctor");
         Sub("giveaway").Should().BeEquivalentTo("create", "end", "cancel", "reroll");
+        Sub("ongoru").Should().BeEquivalentTo("yarat", "cuzdan", "gunluk", "tahminlerim", "liderlik", "turnuva");
     }
 
     [Fact]
@@ -48,7 +49,7 @@ public sealed class CommandManifestTests
         const string manageGuild = "32"; // 1 << 5
         foreach (var name in new[] { "setup", "modules", "esports-admin", "f1-admin", "volleyball-admin", "live-admin", "lfg-admin", "birthday-admin", "giveaway" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().Be(manageGuild, $"/{name} is admin-only");
-        foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "zarat", "randomsayi", "sec", "yazitura", "saat", "ozetle" })
+        foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "zarat", "randomsayi", "sec", "yazitura", "saat", "ozetle", "ongoru" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().BeNull($"/{name} is for everyone");
     }
 

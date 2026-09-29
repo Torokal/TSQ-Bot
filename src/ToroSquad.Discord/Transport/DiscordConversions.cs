@@ -54,12 +54,40 @@ public static class DiscordConversions
 
     public const int MaxRows = 5;
 
+    /// <summary>The message's select menu (its own first row, when present) and its buttons below it.</summary>
+    public static MessageComponent? ToComponents(OutgoingMessage message)
+    {
+        if (message.Select is not { } select)
+            return ToComponents(message.Buttons);
+        var builder = new ComponentBuilder();
+        var menu = new SelectMenuBuilder()
+            .WithCustomId(select.CustomId)
+            .WithMinValues(1)
+            .WithMaxValues(1)
+            .WithDisabled(select.Disabled);
+        if (!string.IsNullOrEmpty(select.Placeholder))
+            menu.WithPlaceholder(select.Placeholder);
+        foreach (var option in select.Options.Take(MessageSelectMenu.MaxOptions))
+            menu.AddOption(option.Label, option.Value, option.Description);
+        builder.WithSelectMenu(menu, 0);
+        AddButtons(builder, message.Buttons, firstRow: 1);
+        return builder.Build();
+    }
+
     public static MessageComponent? ToComponents(IReadOnlyList<MessageButton>? buttons)
     {
         if (buttons is null || buttons.Count == 0)
             return null;
         var builder = new ComponentBuilder();
-        var row = 0;
+        AddButtons(builder, buttons, firstRow: 0);
+        return builder.Build();
+    }
+
+    private static void AddButtons(ComponentBuilder builder, IReadOnlyList<MessageButton>? buttons, int firstRow)
+    {
+        if (buttons is null)
+            return;
+        var row = firstRow;
         var inRow = 0;
         foreach (var b in buttons)
         {
@@ -77,8 +105,6 @@ public static class DiscordConversions
             else
                 builder.WithButton(b.Label, b.CustomId, ToStyle(b.Style), disabled: b.Disabled, row: row);
         }
-
-        return builder.Build();
     }
 
     private static ButtonStyle ToStyle(MessageButtonStyle style) => style switch
