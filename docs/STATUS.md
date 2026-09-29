@@ -308,6 +308,10 @@ invite link and no global command registration. The source code is public under 
   Galatasaray / Fenerbahçe / Beşiktaş in Süper Lig, Champions League and Europa League; exact club names, correct
   home/away, complete fresh 1-X-2 sets. NOT_OBSERVED: h2h regular-time semantics, live/postponed data, error responses.
   Nothing deployed; no automatic card in Discord.
+- Türkiye men's senior national team added as the fourth target (national competitions: Nations League, Euro
+  qualification, Euro, World Cup qualifiers Europe, World Cup; outrights and friendlies excluded). **NATIONAL_TEAM_NOT_OBSERVED**
+  (the exposed key is not rotated yet: BLOCKED_KEY_ROTATION). **MARKET_RULE_UNVERIFIED**: no bookmaker's regular-time rule
+  verified from its official rules, so Live opens no card and makes no paid call; Observe shows candidates.
 
 ## What has been verified against real Discord / real APIs
 

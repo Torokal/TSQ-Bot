@@ -1,19 +1,21 @@
 # TSQ Öngörü · Otomatik futbol öngörüleri
 
-Galatasaray, Fenerbahçe ve Beşiktaş'ın (erkek A takımları) desteklenen organizasyonlardaki maçları için, maç günü
-otomatik olarak **sabit oranlı** bir TSQ Öngörü açan, mevcut Öngörü modülünün bir uzantısı. Yeni ekonomi, yeni cüzdan
+Dört takip hedefinin — **Galatasaray, Fenerbahçe, Beşiktaş** (erkek A futbol takımları) ve **Türkiye erkek A millî
+futbol takımı** — desteklenen organizasyonlardaki maçları için, maç günü otomatik olarak **sabit oranlı** bir TSQ Öngörü
+açan, mevcut Öngörü modülünün bir uzantısı (millî takım için ayrı worker, kart veya ekonomi yok). Yeni ekonomi, yeni cüzdan
 veya ayrı bot yoktur. Açılan kart normal bir öngörüdür: aynı katılım/değiştirme/geri çekme, aynı sonuçlandırma ve
 iptal/iade, aynı turnuva. **Sonuç otomatik girilmez**; ödemeyi her zaman yönetici karttan yapar.
 
 Varsayılan: **Disabled**. Sağlayıcı kapsamı ve gerçek veri doğrulaması: [PROVIDER_VERIFICATION.md](PROVIDER_VERIFICATION.md)
-(2026-09-30: gerçek ücretsiz anahtarla salt-okunur doğrulandı — Süper Lig, Şampiyonlar Ligi ve Avrupa Ligi maçları ve
-eksiksiz h2h setleri gözlendi).
+(2026-09-30: üç kulüp için gerçek ücretsiz anahtarla salt-okunur doğrulandı — Süper Lig, Şampiyonlar Ligi ve Avrupa
+Ligi maçları ve eksiksiz h2h setleri gözlendi; **Türkiye millî takımı henüz gözlenmedi**; bookmaker'ların normal süre
+kuralı doğrulanamadığı için **Live bugün hiçbir kart açmaz** — aşağıda "Pazar kuralı kapısı").
 
 ## Kapsam
 
 | Otomatik | Elle kalan |
 |---|---|
-| Desteklenen organizasyonlarda maç keşfi (üç kulübün iç saha + deplasman maçları) | Sonuç girme (✅ Sonuçlandır) |
+| Desteklenen organizasyonlarda maç keşfi (dört hedefin iç saha, deplasman ve tarafsız saha maçları) | Sonuç girme (✅ Sonuçlandır) |
 | Maçın Türkiye takvim gününde, 09:00'da (erken maçta başlangıçtan 2 saat önce) kart açma | İptal / iade (↩️) |
 | Gerçek sağlayıcı verisinden normal süre 1-X-2 oranı, yayında sabitlenir | Saat değişince/maç kaybolunca kilitlenen kartın incelenmesi |
 | Başlangıçtan 2 dakika önce otomatik kilit (mevcut kilit worker'ı ve işlem içi saat kontrolü) | Belirsiz teslimi incelemek (`DELIVERY_UNKNOWN`) |
@@ -21,17 +23,38 @@ eksiksiz h2h setleri gözlendi).
 Kapsam dışı: otomatik sonuçlandırma/ödeme, canlı/dinamik oran, handikap/alt-üst/golcü/kupon, AI ile oran veya sonuç,
 gerçek para, bahis sitesine yönlendirme, ücretli API, ikinci sağlayıcı, yeni admin paneli veya slash komutu.
 
-**Organizasyonlar (açık allow-list):** `soccer_turkey_super_league`, `soccer_uefa_champs_league`,
-`soccer_uefa_champs_league_qualification`, `soccer_uefa_europa_league`, `soccer_uefa_europa_conference_league`.
-Sağlayıcının kataloğu (`/v4/sports`) hangisinin şu an sezonda olduğunu söyler; yalnızca sezondakilerin maç listesi okunur.
-**Türkiye Kupası ve Türkiye Süper Kupası sağlayıcının belgelediği anahtarlar arasında yok** ve başka bir anahtara
-eşlenmez: bu maçlar otomatik açılmaz (elle açılabilir). Bir takımın hangi Avrupa organizasyonunda oynadığı tahmin
-edilmez; desteklenen organizasyonlarda gerçekten dönen maçlar takım filtresinden geçer.
+**Takip listesi (tek yerde: `TrackedTeams`):**
 
-**Takımlar:** sağlayıcı adlarının kontrollü bir listesiyle **birebir** eşleşme (boşluk/harf büyüklüğü/Türkçe harf
-katlanır: "Beşiktaş JK" = "besiktas jk"). "Fenerbahçe U19", "Galatasaray W", "Beşiktaş Women" veya "Fener" gibi adlar asla
-eşleşmez. Yeni bir yazım gerçek veride görülünce listeye eklenir (`predictions football-check` benzer ama eşleşmeyen adları
-`REVIEW:` satırıyla gösterir). İki takip edilen kulübün derbisi **tek maç, tek öngörü**dür (takım kodları "GS,FB").
+| Kod | Gösterim | Kapsam | Eşleşen sağlayıcı adları | Dayanak |
+|---|---|---|---|---|
+| GS | Galatasaray | kulüp | Galatasaray, Galatasaray SK, Galatasaray AS | "Galatasaray" gerçek veride gözlendi (2026-09-30) |
+| FB | Fenerbahçe | kulüp | Fenerbahce, Fenerbahçe, Fenerbahce SK, Fenerbahçe SK | "Fenerbahce" gözlendi |
+| BJK | Beşiktaş | kulüp | Besiktas, Beşiktaş, Besiktas JK, Beşiktaş JK | "Besiktas JK" gözlendi |
+| TR | Türkiye | millî | Turkey, Türkiye, Turkiye | **gözlenmedi**; "Turkey" sağlayıcının diğer İngilizce takım adları düzenine, "Türkiye" resmî ada, "Turkiye" ASCII biçimine dayanır |
+
+**Organizasyonlar (açık allow-list, kapsamıyla):**
+- Kulüp: `soccer_turkey_super_league`, `soccer_uefa_champs_league`, `soccer_uefa_champs_league_qualification`,
+  `soccer_uefa_europa_league`, `soccer_uefa_europa_conference_league`.
+- Millî: `soccer_uefa_nations_league`, `soccer_uefa_euro_qualification`, `soccer_uefa_european_championship`,
+  `soccer_fifa_world_cup_qualifiers_europe`, `soccer_fifa_world_cup` (anahtarlar belgedeki katalogda var).
+
+Eşleşme **birebir** ad (boşluk/harf büyüklüğü/Türkçe harf katlanır: "Beşiktaş JK" = "besiktas jk") **ve aynı kapsam**:
+kulüp adları yalnızca kulüp organizasyonlarında, "Turkey" yalnızca millî organizasyonlarda. "Turkey" hiçbir zaman kulüp
+değildir (Türk kulüplerini ülke filtresiyle takip yok), kulüp adı hiçbir zaman millî takım değildir. "Fenerbahçe U19",
+"Galatasaray W", "Turkey U21", "Turkey U19", "Turkey Women", "Turkey W", futsal/plaj futbolu adları veya "Fener" asla
+eşleşmez. Sağlayıcı takım ID'si vermez (yalnızca ad); böyle bir alan uydurulmadı. Yeni bir yazım gerçek veride görülünce
+listeye eklenir (`football-check` benzer ama eşleşmeyen adları `REVIEW:` satırıyla gösterir). İki takip edilen kulübün
+derbisi **tek maç, tek öngörü**dür ("GS,FB"); millî takımın tarafsız saha maçında sağlayıcının ev/deplasman sırası korunur.
+
+Katalog (`/v4/sports?all=true`) her allow-list anahtarı için ayırır: **sezonda** (maç listesi okunur), **destekleniyor ama
+sezonda değil** (okunmaz; sonraki katalog yenilemesinde aktifleşince kendiliğinden girer), **katalogda yok** (destek dışı).
+`has_outrights` işaretli girişler (ör. `soccer_fifa_world_cup_winner`, "turnuvayı kim kazanır") hiçbir zaman okunmaz;
+yalnızca belirli bir maçın 1-X-2'si kullanılır, "turu geçen" veya "kupayı kazanan" pazarı değil. Katalogdaki sezon
+başlığı ("UEFA Euro 2024" gibi) koda yazılmaz, yıl tahmin edilmez. **Hazırlık maçları**: sağlayıcının belgelenmiş
+kataloğunda hazırlık/dostluk maçı anahtarı yok → kapsam dışı (başka bir anahtara eşlenmez, gizli endpoint aranmaz).
+**Türkiye Kupası ve Türkiye Süper Kupası** belgelenmiş anahtarlar arasında yok → kapsam dışı (elle açılabilir). Bir
+takımın hangi organizasyonda oynadığı tahmin edilmez; desteklenen organizasyonlarda gerçekten dönen maçlar takım
+filtresinden geçer.
 
 ## Çalışma modları
 
@@ -164,7 +187,24 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
 - The Odds API'nin maç listesinde erteleme/iptal durumu alanı **yoktur** (yalnızca planlanan `commence_time`); böyle bir
   alan uydurulmaz. Listeden kaybolan maç "iptal" sayılmaz; gelecekteki bir maç art arda iki keşifte görünmezse açık kart
   güvenlik için kilitlenir (`EVENT_MISSING`), otomatik ödeme/iade yapılmaz.
+- Yokluk sayacı yalnızca **başarılı, eksiksiz** (hiç düşürülen/bozuk öğe olmayan) ve **kendi organizasyonuna ait** bir
+  listede, maç sorgunun zaman aralığındaysa ilerler. Zaman aşımı, 429, 401/403, 5xx, bozuk JSON, yarım liste veya
+  katalog/organizasyon hatası yokluk sayılmaz; bir organizasyonun listesi başka organizasyondaki kayıtlar için
+  kullanılmaz. Maç yeniden görünürse sayaç sıfırlanır; kilitlenmiş kart yeniden açılmaz.
 - Yetkilinin manuel kilidi geri açılmaz; sonuçlanmış/iptal kart yeniden otomatikleşmez.
+
+## Pazar kuralı kapısı (Live için)
+
+`h2h` ve üç sonuç görülmesi, pazarın **normal süre** (90 dakika + hakemin eklediği süre; uzatma devreleri ve penaltılar
+hariç) olduğunun kanıtı değildir. Bu yüzden Live yalnızca **kendi resmî kuralı normal süre olarak doğrulanmış**
+bookmaker'ların setini kullanır (`AutoFootballOptions.RuleVerifiedBookmakers`; her giriş için kanıt
+PROVIDER_VERIFICATION.md'de). Liste **bugün boş**: Pinnacle ve 1xBet'in resmî kural sayfaları bu ortamdan okunamadı
+(bağlantı sıfırlandı; erişim engeli aşılmadı). Sonuç:
+- **Live:** hiçbir kart açılmaz, bu yüzden hiçbir ücretli oran çağrısı da yapılmaz; maç `MARKET_RULE_UNVERIFIED`
+  nedeniyle bekler/atlanır; `/bot status` bunu gösterir.
+- **Observe ve `football-check`:** veri görülebilir — onaysız kaynağın seti "aday" olarak, neden
+  (`MARKET_RULE_UNVERIFIED` / `BOOKMAKER_NOT_APPROVED`) ile kaydedilir; hiçbir zaman yayımlanmaz.
+- Bir kaynağın kuralı doğrulanınca listeye kodla (kanıt bağlantısıyla, test ve inceleme ile) eklenir; ayarla açılamaz.
 
 ## Kota ve maliyet
 
@@ -179,10 +219,19 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
   sonra ölçüm gelene kadar kör ücretli çağrı yapılmaz (en fazla bir tane).
 - 429: `Retry-After` (1 dk – 1 saat sınırlı) kadar duraklama. 401/403: 6 saat tüm çağrılar durur (döngüde yeniden deneme
   yok). 5xx/zaman aşımı/bozuk yanıt: 1, 2, 4 … en fazla 30 dakika geri çekilme. HTTP katmanında gizli yeniden deneme yok.
-- **Tahmini aylık tüketim** (varsayımlar: sezonda üç kulüp için ayda ~12 lig + ~6 Avrupa maçı ≈ 18 maç; aynı gün aynı
-  organizasyondaki maçlar tek çağrıda; çoğu maç ilk denemede oranlı): ~15–25 kredi/ay; en kötü durumda (her maç 4 deneme,
-  hepsi ayrı gün) ~70 kredi/ay. 500 kredilik ücretsiz planın ve 50 kredilik rezervin altında kalır. Doğrulama komutu
-  ayrıca en fazla 25 kredi harcar.
+- **Tahmini aylık tüketim** — varsayımlar: sezonda üç kulüp için ayda ~12 lig + ~6 Avrupa maçı ≈ 18 kulüp maçı; Türkiye
+  için uluslararası arada ayda 0–2 (yıllık ~10–12, turnuva yazında birkaç ek) → ortalama ~1–2 millî maç/ay; aynı gün aynı
+  organizasyondaki maçlar tek çağrıda (derbi tek maç); çoğu maç ilk denemede oranlı; Türkiye'nin oynamadığı millî maçlar
+  için **hiç** oran çağrısı yapılmaz (keşif ücretsiz). Tipik: ~16–28 kredi/ay; en kötü durumda (her maç 4 deneme, hepsi ayrı
+  gün, ~22 maç) ~90 kredi/ay; 500 kredilik ücretsiz planın ve 50 kredilik rezervin altında. Doğrulama komutu toplamda en
+  fazla 25 kredi (bu turda sınır 5) harcar. Keşif organizasyon başına ücretsiz bir liste çağrısıdır; sezonda olmayan
+  organizasyonun listesi okunmaz.
+- Kota yenilemesi: resmî SSS "Usage credits are automatically reset on the first of every month" der; uygulama bunu
+  varsaymaz, kalan krediyi her zaman sağlayıcının başlıklarından okur. Rezerv engeli yalnızca yeni ölçüm (ör. ücretsiz
+  keşif yanıtındaki yenilenmiş `x-requests-remaining`) ile kalkar ve **yalnızca** kota engelini kaldırır: Disabled, kapalı
+  modül veya doğrulanmamış pazar kuralı gibi engeller aynen kalır. Anahtar değişimi yeni kredi varsayımı üretmez.
+  Otomasyon ve `football-check` aynı anahtarı kullanır; kontrol komutu kalıcı kota durumuna yazmaz, bu yüzden kendi
+  bütçesi ve rezerv kontrolüyle sınırlıdır.
 
 ## Teşhis
 
@@ -191,10 +240,13 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
   son hata sınıfı, incelemedeki maç sayısı. Anahtarın değeri asla. Kanala uyarı gönderilmez (repo'da admin bildirim kanalı
   yok; yeni kanal uydurulmadı).
 - `doctor`: mod, anahtar "set (value hidden)" / "NOT SET", ayar sorunları.
-- `predictions football-check [--odds] [--budget N] [--days D]`: salt-okunur sağlayıcı kontrolü (geçici veri dizini,
-  sahte Discord, bot veritabanına yazmaz). Katalog, önümüzdeki D gündeki (varsayılan 7, en fazla 30) takip edilen maçlar
-  (ev/deplasman, Türkiye saati), eşleşmeyen benzer adlar ve `--odds` ile en fazla N (varsayılan 5, en fazla 25) kredilik
-  oran okuması: bookmaker'lar, h2h varlığı, seçilecek set veya neden.
+- `predictions football-check [--odds] [--budget N] [--days D] [--focus GS|FB|BJK|TR] [--preview]`: salt-okunur
+  sağlayıcı kontrolü (geçici veri dizini, sahte Discord, bot veritabanına yazmaz). Ortam, istemci türü, host ve "canlı HTTP"
+  bilgisi; tam katalog (sezonda / sezon dışı / katalogda yok / outright), önümüzdeki D gündeki (varsayılan 7, en fazla 30)
+  takip edilen maçlar (tam event ID, ev/deplasman, UTC ve Türkiye saati), eşleşmeyen benzer adlar; `--odds` ile toplamda
+  en fazla N (varsayılan 5, en fazla 25) kredi — `--focus` takımının organizasyonu önce: dönen bookmaker'lar, üç sonuç,
+  seçilen/aday kaynak, ham ve sabit oranlar, pazar zamanı ve yaşı, KABUL/RET nedeni; `--preview` ile ilk maçın kartının
+  yerel metin önizlemesi (hiçbir şey gönderilmez veya saklanmaz).
 - Loglar: `the_odds_api endpoint=… status=… remaining=…`, `auto_football_observed`, `auto_football_published`,
   `auto_football_skipped … code=…`, `auto_football_review` — URL ve anahtar asla.
 
@@ -202,18 +254,29 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
 
 - Sağlayıcı yalnızca **planlanan** başlangıç zamanı verir; "maç gerçekten başladı" bilgisi yoktur. Kilit planlanan
   zamandan 2 dakika öncedir; maç geç başlarsa katılım yine planlanan zamana göre kapanır.
-- `h2h` pazarının normal süre (90 dk + uzatma dakikaları) olduğunu belgeler açıkça yazmaz; belgede "includes the draw for
-  soccer" yazar ve standart futbol 1X2 pazarı böyledir. Kart kuralı normal süreyi açıkça belirtir; gerçek veride doğrulama
-  bekliyor (PROVIDER_VERIFICATION.md).
-- Türkiye Kupası ve Süper Kupa kapsam dışı. Hazırlık maçları desteklenen organizasyon anahtarlarında olmadığı için gelmez.
+- `h2h` pazarının normal süre olduğunu sağlayıcı belgesi yazmaz ve bookmaker kuralları doğrulanamadı: Live bugün kart
+  açmaz (yukarıdaki "Pazar kuralı kapısı"). Kart kural metni sağlayıcı semantiğinin kanıtı değildir.
+- Türkiye millî takımı gerçek veride henüz gözlenmedi; adı ("Turkey"?) ve maçları bir sonraki gerçek kontrolde doğrulanacak.
+- Türkiye Kupası, Süper Kupa ve hazırlık/dostluk maçları kapsam dışı (belgelenmiş anahtar yok).
 - Aynı maç için elle serbest metinle açılmış bir kart dış maç kimliği taşımadığından kesin tespit edilemez; başlık
   benzerliğinden hareketle hiçbir kullanıcı kartı silinmez veya iptal edilmez.
 - Yalnızca tek izinli sunucu desteklenir.
 
 ## Üretim kontrol listesi
 
-1. Ücretsiz The Odds API anahtarını al (hesap/abonelik sahibin işi; ücretli plan yok) ve secret olarak tanımla.
-2. Yerelde `predictions football-check --days 16`, ardından `--odds --budget 5` (2026-09-30'da yapıldı: 3 kredi); maç
-   günlerine yakın tekrar edip PROVIDER_VERIFICATION.md'yi güncel tut.
-3. Ayrı onayla deploy; `Mode = Observe` ile birkaç maç günü gözle (`/bot status`, loglar, `prediction_auto_event`).
-4. Ayrı onayla `Mode = Live`; ilk otomatik kartı canlıda kontrol et (başlık, ev/deplasman, oranlar, kilit, kural).
+1. Ekran görüntüsünde görünen anahtarı sağlayıcı panelinden iptal et, yenisini al ve yerelde değeri shell geçmişine
+   yazmadan tanımla (PowerShell):
+   ```
+   $k = Read-Host "Yeni The Odds API anahtarı" -AsSecureString
+   dotnet user-secrets set "Predictions:Automation:TheOddsApi:ApiKey" ([System.Net.NetworkCredential]::new('', $k).Password) --project src/ToroSquad.Bot
+   Remove-Variable k
+   ```
+   User-secrets yalnızca **Development** ortamında yüklenir; bu yalnızca yerel kontrol içindir. Production'da (Railway)
+   anahtar ortam değişkeniyle verilir: `TOROSQUAD_Predictions__Automation__TheOddsApi__ApiKey`; production için
+   `DOTNET_ENVIRONMENT=Development` kullanılmaz.
+2. Yerelde (Development) `predictions football-check --days 30`, ardından `--odds --budget 5 --focus TR --preview`;
+   PROVIDER_VERIFICATION.md'yi gözlenen sonuçlarla güncelle.
+3. Bir bookmaker'ın normal süre kuralını resmî kaynağından doğrula (kanıtla birlikte) ve `RuleVerifiedBookmakers`'a ekle;
+   o zamana kadar Live kart açmaz.
+4. Ayrı onayla deploy ve `Mode = Observe` (Railway anahtarı ortam değişkeniyle).
+5. Ayrı onayla `Mode = Live`; ilk otomatik kartı canlıda kontrol et (başlık, ev/deplasman, oranlar, kilit, kural).
