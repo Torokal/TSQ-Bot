@@ -46,12 +46,15 @@ public sealed class AutoFootballOptions
     public static readonly IReadOnlyList<string> KnownCompetitions = [.. ClubCompetitions, .. NationalCompetitions];
 
     /// <summary>
-    /// Bookmakers whose OWN rules are verified to settle the football match result on regular time (90 minutes plus the
-    /// time the referee adds; extra time and penalty shoot-outs excluded). Only these may be used by Live; any other one is
-    /// visible in Observe and in the read-only check but never published. Evidence per entry: docs/predictions/
-    /// PROVIDER_VERIFICATION.md. Empty today: the official rule pages of Pinnacle and 1xBet could not be read (MARKET_RULE_UNVERIFIED).
+    /// Bookmakers whose OWN rules settle the football match result on regular time (90 minutes plus the time the referee
+    /// adds; extra time and penalty shoot-outs excluded). Only these may be used by Live; any other one is visible in Observe
+    /// and in the read-only check but never published. Evidence per entry: docs/predictions/PROVIDER_VERIFICATION.md.
+    /// The approval is narrow: this provider only (<see cref="Provider"/> accepts nothing else), the standard pre-match
+    /// <c>h2h</c> market with exactly home / Draw / away (<see cref="OddsSelector"/>), men's senior teams
+    /// (<see cref="TrackedTeams"/>) in the allow-listed competitions above. Pinnacle: its betting rules, section Soccer, rule 1.
+    /// 1xBet is not listed (its official rule was not read).
     /// </summary>
-    public static readonly IReadOnlyList<string> RuleVerifiedBookmakers = [];
+    public static readonly IReadOnlyList<string> RuleVerifiedBookmakers = ["pinnacle"];
 
     public static TeamScope? ScopeOf(string competition) =>
         ClubCompetitions.Contains(competition, StringComparer.Ordinal) ? TeamScope.Club

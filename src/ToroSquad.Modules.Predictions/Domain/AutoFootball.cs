@@ -80,6 +80,9 @@ public enum AutoBlockReason
 
     /// <summary>No bookmaker of the priority has a verified full-time (90 minutes + stoppage time) rule: Live opens nothing.</summary>
     MarketRuleUnverified = 19,
+
+    /// <summary>A match to judge again under a changed approval, but its odds attempts are used up (never reset).</summary>
+    AttemptsExhausted = 20,
 }
 
 public static class AutoBlockCodes
@@ -106,6 +109,7 @@ public static class AutoBlockCodes
         AutoBlockReason.AutomationStopped => "AUTOMATION_STOPPED",
         AutoBlockReason.BookmakerNotApproved => "BOOKMAKER_NOT_APPROVED",
         AutoBlockReason.MarketRuleUnverified => "MARKET_RULE_UNVERIFIED",
+        AutoBlockReason.AttemptsExhausted => "ATTEMPTS_EXHAUSTED",
         _ => "UNKNOWN",
     };
 }

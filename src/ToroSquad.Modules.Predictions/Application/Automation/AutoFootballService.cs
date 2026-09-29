@@ -129,6 +129,7 @@ public sealed class AutoFootballService(
                 return new AutoRunSummary(settings.Mode, true, 0, 0, 0, 0, 0);
             if (state.LastDiscoveryAt is not { } last || pass.Now - last >= settings.Options.DiscoveryInterval || state.ActiveCompetitions is null)
                 await DiscoverAsync(pass, ct);
+            await ReopenForApprovalAsync(pass, ct);
             await ProcessDueAsync(pass, ct);
             return new AutoRunSummary(settings.Mode, true, pass.Discovered, pass.OddsCalls, pass.Observed, pass.Published, pass.Skipped);
         }
@@ -381,6 +382,42 @@ public sealed class AutoFootballService(
         row.DrawOddsX100 = null;
         row.AwayOddsX100 = null;
         row.RawPrices = null;
+    }
+
+    /// <summary>
+    /// Observations judged while no bookmaker was approved (MARKET_RULE_UNVERIFIED) are judged again once one is: back to
+    /// waiting with their used attempts kept. The old snapshot stays for the record but is never reused (it was not fetched
+    /// for this decision; its last_update is untouched). Used-up attempts are reported, never reset.
+    /// </summary>
+    private async Task ReopenForApprovalAsync(Pass pass, CancellationToken ct)
+    {
+        if (rules.Usable(pass.Settings.Options.Bookmakers).Count == 0)
+            return;
+        var changed = await PredictionWrites.RunAsync(store.Db, async () =>
+        {
+            var rows = await store.AutoEvents.Where(a => a.GuildId == pass.Guild.Value && a.Provider == provider.Name && a.Mode == pass.Mode &&
+                                                         a.State == AutoEventState.Observed && a.Reason == AutoBlockReason.MarketRuleUnverified).ToListAsync(ct);
+            var reopened = new List<(long Id, bool Exhausted)>();
+            foreach (var row in rows.Where(r => AutoSchedule.Deadline(r.KickoffAt, pass.Timing) > pass.Now))
+            {
+                var exhausted = row.OddsAttempts >= pass.Settings.Options.MaxOddsAttemptsPerEvent;
+                row.State = exhausted ? AutoEventState.Skipped : AutoEventState.WaitingForOdds;
+                row.Reason = exhausted ? AutoBlockReason.AttemptsExhausted : AutoBlockReason.None;
+                row.NextAttemptAt = exhausted ? null : pass.Now;
+                row.OddsFetchedAt = null;
+                row.UpdatedAt = pass.Now;
+                reopened.Add((row.Id, exhausted));
+            }
+
+            await store.Db.SaveChangesAsync(ct);
+            return reopened;
+        }, ct);
+        foreach (var (id, exhausted) in changed)
+        {
+            if (exhausted)
+                pass.Skipped++;
+            logger.LogInformation("auto_football_recheck event={Event} code={Code}", id, exhausted ? AutoBlockCodes.Code(AutoBlockReason.AttemptsExhausted) : "REOPENED");
+        }
     }
 
     // ---- due matches ----
