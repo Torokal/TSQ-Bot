@@ -26,6 +26,9 @@ public enum PredictionLockReason
 
     /// <summary>Its public card is gone (deleted message or channel); stakes are kept, it can still be settled or cancelled by id.</summary>
     CardMissing = 2,
+
+    /// <summary>An automatic prediction whose match changed or vanished at the provider after publishing: stopped for an administrator.</summary>
+    NeedsReview = 3,
 }
 
 /// <summary>

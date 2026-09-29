@@ -15,7 +15,8 @@ namespace ToroSquad.Modules.Predictions.Application;
 /// /bot status lines for TSQ Öngörü — cheap reads only (no Discord call beyond the gateway cache): for every guild with the
 /// module enabled, the bot's permissions in both channels and whether the creator role exists; then cards whose post is
 /// still uncertain, cards that are gone or could not be updated, closing announcements not delivered, and a consistency
-/// check (every wallet's pending coins equal its pending stakes). Counts only — never names or amounts of members. A
+/// check (every wallet's pending coins equal its pending stakes), and the automatic football opener's state (mode, last
+/// discovery, today's matches, last reported credits, last error, reviews). Counts only — never names or amounts of members. A
 /// singleton like every health check (it may be resolved outside a request); the database is read in its own scope.
 /// </summary>
 public sealed class PredictionHealthCheck(IServiceScopeFactory scopes, IGuildGateway guilds, ILogger<PredictionHealthCheck> logger) : IModuleHealthCheck
@@ -79,6 +80,7 @@ public sealed class PredictionHealthCheck(IServiceScopeFactory scopes, IGuildGat
             entries.Add(new HealthEntry("predictions.health.consistency", HealthState.Unavailable, "predictions.health.inconsistent", [inconsistent]));
         }
 
+        entries.AddRange(await scope.ServiceProvider.GetRequiredService<Automation.AutoFootballService>().HealthAsync(cancellationToken));
         return new ModuleHealthReport(Module, entries);
     }
 }

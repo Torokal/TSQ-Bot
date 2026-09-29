@@ -54,6 +54,7 @@ herkese açık mesaj göndermez. Kanal ve rol bağlantıları tıklanabilir ama 
 |---|---|
 | Öngörü **yaratma** | Yalnızca yaratıcı rolü. Administrator yetkisi bu rol olmadan yaratma hakkı vermez |
 | Kart butonlarıyla **yönetme** (🔒 ✅ ↩️) | Kendi öngörüsünü: yaratıcı, rolü **hâlâ** varsa. Tüm öngörüleri: Administrator veya sunucu sahibi. Başka yaratıcının öngörüsü: hayır. Sunucuyu Yönet yetmez |
+| **Otomatik futbol** öngörülerini yönetme | Yalnızca Administrator veya sunucu sahibi (insan yaratıcısı yok; yaratıcı rolü yetmez) — [AUTO_FOOTBALL.md](AUTO_FOOTBALL.md) |
 | **Turnuva bitirme** (`/ongoru turnuva bitir`) | Yalnızca Administrator veya sunucu sahibi (yaratıcı rolü de, Sunucuyu Yönet de yetmez) |
 | 🎯 Tahmin Yap, cüzdan, günlük ödül, tahminlerim, liderlik, turnuva durumu | Herkes (botlar hariç) |
 
@@ -325,10 +326,19 @@ Loglar yalnızca ID, sayı ve tutar içerir: `prediction_published`, `prediction
 `prediction_entry_withdrawn`, `prediction_locked`,
 `prediction_settled` (kim, hangi öngörü, hangi sonuç, kazanan sayısı, ödeme), `prediction_cancelled`, `prediction_daily`,
 `tournament_closed` (kim, hangi turnuva). `/bot status`: iki kanalın bot izinleri, yaratıcı rolü, doğrulanmayı bekleyen /
-silinmiş / güncellenemeyen kart sayıları, bekleyen/gönderilemeyen duyurular, bekleyen coin tutarlılık denetimi.
+silinmiş / güncellenemeyen kart sayıları, bekleyen/gönderilemeyen duyurular, bekleyen coin tutarlılık denetimi ve otomatik
+futbol durumu (mod, keşif, bugünkü maçlar, kredi, son hata, inceleme).
+
+## Otomatik futbol öngörüleri
+
+Galatasaray, Fenerbahçe, Beşiktaş ve Türkiye erkek A millî takımının desteklenen organizasyonlardaki maçları için maç günü otomatik açılan sabit
+oranlı öngörüler (The Odds API; varsayılan **Disabled**, Observe ve Live modları; sonuç yine elle girilir):
+[AUTO_FOOTBALL.md](AUTO_FOOTBALL.md), sağlayıcı doğrulaması: [PROVIDER_VERIFICATION.md](PROVIDER_VERIFICATION.md).
+Otomatik kartın altbilgisi "TSQ Öngörü #42 · Otomatik · Sabit oran"; ayrıca planlanan başlama ve oran kaynağı gösterilir.
+Otomatik öngörü kimseye cüzdan veya liderlik uygunluğu vermez.
 
 ## Kapsam dışı (V1)
 
-Gerçek para, coin satışı/çekme, transfer, gerçek ödül, mağaza, kupon/parlay, cash-out, dinamik oran, otomatik sonuç/öngörü, web
+Gerçek para, coin satışı/çekme, transfer, gerçek ödül, mağaza, kupon/parlay, cash-out, dinamik oran, otomatik sonuç, web
 paneli, kilitlendikten sonra katılım değiştirme/geri çekme, yeniden açma, yeniden sonuçlandırma, zorla turnuva bitirme, toplu otomatik iptal,
 seri/saatlik/haftalık ödül, kullanıcı tarafından coin sıfırlama.

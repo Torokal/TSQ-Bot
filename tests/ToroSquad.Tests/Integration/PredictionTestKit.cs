@@ -75,7 +75,7 @@ public sealed class PredictionTestKit : IAsyncDisposable
         new(Guild, new UserId(user), GuildPermission.ViewChannel | GuildPermission.SendMessages, [], false, 1);
 
     public static async Task<PredictionTestKit> CreateAsync(DateTimeOffset? start = null, Dictionary<string, string?>? settings = null, string? directory = null,
-        FakeMessageTransport? transport = null)
+        FakeMessageTransport? transport = null, Action<IServiceCollection>? replace = null)
     {
         var random = new ScriptedPredictionRandom();
         var overrides = new Dictionary<string, string?>(settings ?? []);
@@ -89,6 +89,8 @@ public sealed class PredictionTestKit : IAsyncDisposable
                 services.AddSingleton(transport);
                 services.AddSingleton<IMessageTransport>(transport);
             }
+
+            replace?.Invoke(services);
         });
         var kit = new PredictionTestKit(host, random);
         foreach (var guild in new[] { Guild, OtherGuild })

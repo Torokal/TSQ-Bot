@@ -292,6 +292,33 @@ invite link and no global command registration. The source code is public under 
   `/ongoru`. **NOT VERIFIED_LIVE**: every member interaction in Discord (both modals, the select, the card buttons, edits,
   the announcement).
 
+## TSQ Öngörü automatic football (2026-09-29, local branch `feat/predictions-auto-football`, not pushed)
+
+- Opens fixed-odds predictions for Galatasaray / Fenerbahçe / Beşiktaş matches of five allow-listed competitions on the
+  match day (09:00 Türkiye time, or 2 h before an early kickoff), locks 2 min before the planned kickoff; results stay
+  manual. The Odds API (h2h, eu, decimal; one call per competition per due batch), modes Disabled (default) / Observe /
+  Live; tables `prediction_auto_event`, `prediction_auto_provider`, column `prediction.Origin` (migration
+  `PredictionsAutoFootball`, additive). CLI `predictions football-check` (read-only). Docs: docs/predictions/AUTO_FOOTBALL.md.
+- **IMPLEMENTED / TESTED_OFFLINE** (synthetic provider data, real SQLite): schedule and late start, club matching, derby,
+  odds selection/conversion/freshness, bounded attempts across restarts, quota reserve/unknown usage/429/401/5xx, one
+  match = one prediction (two processes, restart, new tournament, cancelled card), tournament race, uncertain delivery,
+  late/stopped post, schedule change and vanished match after publishing, admin-only management, no wallet/eligibility,
+  key redaction.
+- **PROVIDER_VERIFIED_READ_ONLY** (2026-09-30, local read-only check, 3 credits): catalog, events and h2h odds for
+  Galatasaray / Fenerbahçe / Beşiktaş in Süper Lig, Champions League and Europa League; exact club names, correct
+  home/away, complete fresh 1-X-2 sets. NOT_OBSERVED: h2h regular-time semantics, live/postponed data, error responses.
+  Nothing deployed; no automatic card in Discord.
+- Türkiye men's senior national team added as the fourth target (national competitions: Nations League, Euro
+  qualification, Euro, World Cup qualifiers Europe, World Cup; outrights and friendlies excluded). Observed read-only with
+  the rotated key (2026-09-30, 1 credit): Nations League in season, provider name "Turkey", Belgium – Turkey on
+  02.10.2026 21:45 TR with a complete fresh h2h set.
+- Narrow market-rule approval: only `pinnacle` (Pinnacle betting rules, Soccer rule 1: regular 90 minutes plus added
+  time), only The Odds API's pre-match h2h 1-X-2 of men's senior teams in the allow-listed competitions; 1xBet and others
+  stay unapproved and are never a fallback. Read-only re-check (2026-09-30, 1 credit): Belgium – Turkey Pinnacle set
+  ACCEPTED, card preview "Belçika - Türkiye". Italy – Türkiye (05.10, official fixture) is not yet listed by the provider
+  (COVERAGE_INCOMPLETE). Observations refused only for the missing rule are judged again (attempts kept, old odds not
+  reused). Nothing deployed; no automatic card in Discord.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

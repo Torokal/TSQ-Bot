@@ -25,6 +25,8 @@ public sealed class PredictionStore(ToroDbContext db, IOptions<PredictionsOption
     public DbSet<PredictionLedgerEntity> Ledger => db.Set<PredictionLedgerEntity>();
     public DbSet<PredictionDailyClaimEntity> DailyClaims => db.Set<PredictionDailyClaimEntity>();
     public DbSet<PredictionStandingEntity> Standings => db.Set<PredictionStandingEntity>();
+    public DbSet<PredictionAutoEventEntity> AutoEvents => db.Set<PredictionAutoEventEntity>();
+    public DbSet<PredictionAutoProviderEntity> AutoProviders => db.Set<PredictionAutoProviderEntity>();
 
     public ToroDbContext Db => db;
 
@@ -101,7 +103,7 @@ public sealed class PredictionStore(ToroDbContext db, IOptions<PredictionsOption
     public IQueryable<PredictionWalletEntity> EligibleWallets(long tournamentId) =>
         Wallets.Where(w => w.TournamentId == tournamentId &&
                            (Entries.Any(e => e.WalletId == w.Id) ||
-                            Predictions.Any(p => p.TournamentId == tournamentId && p.CreatorUserId == w.UserId &&
+                            Predictions.Any(p => p.TournamentId == tournamentId && p.Origin == PredictionOrigin.Manual && p.CreatorUserId == w.UserId &&
                                                  (p.Status == PredictionStatus.Open || p.Status == PredictionStatus.Locked ||
                                                   p.Status == PredictionStatus.Settled || p.Status == PredictionStatus.Cancelled))));
 
@@ -132,13 +134,20 @@ public sealed class PredictionStore(ToroDbContext db, IOptions<PredictionsOption
         var outcomes = await Outcomes.AsNoTracking().Where(o => o.PredictionId == p.Id).OrderBy(o => o.Position)
             .Select(o => new OutcomeView(o.Id, o.Position, o.Label, o.OddsX100)).ToListAsync(ct);
         var number = await Tournaments.AsNoTracking().Where(t => t.Id == p.TournamentId).Select(t => t.Number).FirstOrDefaultAsync(ct);
-        return ToView(p, outcomes, number);
+        AutoCardInfo? auto = null;
+        if (p.Origin == PredictionOrigin.AutoFootball)
+        {
+            auto = await AutoEvents.AsNoTracking().Where(a => a.PredictionId == p.Id && a.OddsUpdatedAt != null)
+                .Select(a => new AutoCardInfo(a.KickoffAt, a.BookmakerTitle ?? "", a.OddsUpdatedAt!.Value)).FirstOrDefaultAsync(ct);
+        }
+
+        return ToView(p, outcomes, number) with { Auto = auto };
     }
 
     public static PredictionView ToView(PredictionEntity p, IReadOnlyList<OutcomeView> outcomes, int tournamentNumber) => new(
         p.Id, new GuildId(p.GuildId), p.TournamentId, tournamentNumber, new ChannelId(p.ChannelId), p.MessageId is { } m ? new MessageId(m) : null,
         new UserId(p.CreatorUserId), p.CreatorName, p.Title, p.Rules, p.LockAt, p.Status, p.LockReason, p.LockedAt, outcomes, p.EntryCount, p.StakeTotalMinor,
-        p.WinningOutcomeId, p.WinnerCount, p.PayoutTotalMinor, p.CancelReason, p.RefundTotalMinor, p.SettledAt, p.CancelledAt, p.CardMissing, p.Version);
+        p.WinningOutcomeId, p.WinnerCount, p.PayoutTotalMinor, p.CancelReason, p.RefundTotalMinor, p.SettledAt, p.CancelledAt, p.CardMissing, p.Version, p.Origin);
 
     /// <summary>Marks a state change the card must show (and bumps the concurrency token).</summary>
     public static void Touch(PredictionEntity prediction)

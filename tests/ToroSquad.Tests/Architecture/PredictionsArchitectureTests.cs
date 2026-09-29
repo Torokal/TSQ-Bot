@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using ArchUnitNET.Fluent;
 using ArchUnitNET.Loader;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core;
 using ToroSquad.Core.Localization;
@@ -59,7 +60,7 @@ public sealed partial class PredictionsArchitectureTests
         string.Join("\n", code.Split('\n').Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal) && !l.TrimStart().StartsWith("///", StringComparison.Ordinal)));
 
     [Fact]
-    public void Predictions_is_isolated_and_has_no_packages_of_its_own()
+    public void Predictions_is_isolated_and_its_only_package_is_the_http_client_factory()
     {
         References(Predictions).Should().NotContain(r => r.StartsWith("ToroSquad.Modules.", StringComparison.Ordinal) && r != "ToroSquad.Modules.Predictions");
         foreach (var other in new[]
@@ -73,8 +74,33 @@ public sealed partial class PredictionsArchitectureTests
             References(other.Assembly).Should().NotContain("ToroSquad.Modules.Predictions");
         References(Core).Should().NotContain("ToroSquad.Modules.Predictions");
         References(DiscordLayer).Should().NotContain("ToroSquad.Modules.Predictions");
-        Source("ToroSquad.Modules.Predictions.csproj").Should().NotContain("<PackageReference");
+        Regex.Matches(Source("ToroSquad.Modules.Predictions.csproj"), "<PackageReference Include=\"([^\"]+)\"").Select(m => m.Groups[1].Value)
+            .Should().Equal(["Microsoft.Extensions.Http"], "only the HTTP client factory, for the optional odds provider");
         new PredictionsModule().ValidateConfiguration(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build()).Should().BeEmpty();
+
+        // A broken automation section never stops the bot: it only keeps the automation disabled (reported by status/doctor).
+        var broken = new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Predictions:Automation:Mode"] = "Sometimes",
+            ["Predictions:Automation:MaxOddsAgeMinutes"] = "half an hour",
+            ["Predictions:Automation:BookmakerPriority:0"] = "betfair_ex_eu",
+        }).Build();
+        new PredictionsModule().ValidateConfiguration(broken).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Http_lives_only_in_the_provider_and_nothing_a_member_can_click_reaches_the_automation()
+    {
+        AssertNoViolations(Types().That().ResideInNamespaceMatching(@"^ToroSquad\.Modules\.Predictions\.(Domain|Application|Application\.Automation|Persistence|Commands)$")
+            .Should().NotDependOnAny(Types().That().ResideInNamespaceMatching(@"^System\.Net\.Http(\..*)?$")));
+        AssertNoViolations(Types().That().ResideInNamespaceMatching(@"^ToroSquad\.Modules\.Predictions\.Commands$")
+            .Should().NotDependOnAny(Types().That().ResideInNamespaceMatching(@"^ToroSquad\.Modules\.Predictions\.(Application\.Automation|Providers)(\..*)?$")));
+        Code("Commands").Should().NotContain("PublishAutomatic").And.NotContain("AutoPublishPlan");
+        var client = WithoutComments(Source("Providers", "TheOddsApi", "TheOddsApiClient.cs"));
+        Regex.Matches(client, @"\.SendAsync\(").Should().ContainSingle("one request path, one attempt, no hidden retry");
+        client.Should().NotMatchRegex(@"Log\w*\([^;]*(RequestUri|request\.|ex\.Message|ex\)|path|parameters)", "the request URI holds the key: never logged");
+        Source("PredictionsModule.cs").Should().Contain("RemoveAllLoggers()").And.Contain("AllowAutoRedirect = false");
+        Code().Should().NotMatchRegex(@"(?i)api\.odds-api\.io|scrap|proxy", "only the official The Odds API host");
     }
 
     [Fact]

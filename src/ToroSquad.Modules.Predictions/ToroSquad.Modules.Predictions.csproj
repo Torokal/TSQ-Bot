@@ -2,13 +2,19 @@
 
   <!-- TSQ Öngörü (Predictions): community predictions with fixed odds and purely virtual TSQ Coin. Creators publish a
        question with outcomes and odds in the predictions channel; members pick an outcome on the public card and stake
-       coins; an authorized member settles it by hand and payouts/refunds are applied atomically. No real money, no
-       providers, no AI. Depends on the shared TSQ layers only (never on another feature module). Domain/Application/
+       coins; an authorized member settles it by hand and payouts/refunds are applied atomically. No real money, no AI;
+       one optional odds provider for the automatic football opener (off by default). Depends on the shared TSQ
+       layers only (never on another feature module). Domain/Application/
        Persistence namespaces must not use the Discord SDK (architecture tests); only Commands talks to Discord.Net. -->
   <ItemGroup>
     <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
     <ProjectReference Include="..\ToroSquad.Infrastructure\ToroSquad.Infrastructure.csproj" />
     <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+  </ItemGroup>
+
+  <!-- The automatic football opener reads one odds provider over HTTP (Providers namespace only; off by default). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
   </ItemGroup>
 
   <ItemGroup>

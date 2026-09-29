@@ -61,8 +61,11 @@ public sealed class PredictionEntity
 
     public ulong CreatorUserId { get; set; }
 
-    /// <summary>The creator's display name when publishing (the card shows plain text, not a mention).</summary>
+    /// <summary>The creator's display name when publishing (the card shows plain text, not a mention). Empty for an automatic one.</summary>
     public string CreatorName { get; set; } = "";
+
+    /// <summary>Manual (a member's form) or AutoFootball (no human creator: <see cref="CreatorUserId"/> is 0).</summary>
+    public PredictionOrigin Origin { get; set; }
 
     public string Title { get; set; } = "";
     public string? Rules { get; set; }
@@ -185,6 +188,91 @@ public sealed class PredictionDailyClaimEntity
     public DateTimeOffset ClaimedAt { get; set; }
 }
 
+/// <summary>
+/// One real match followed by the automatic opener, per guild, provider, provider match id, market and mode (Observe rows
+/// are their own partition: they never link a prediction and never make Live think a match was published). The unique key
+/// has no tournament: a match is opened at most once, whatever tournament is active. It keeps what the decision was based
+/// on (competition, teams, planned kickoff — first and latest —, the chosen bookmaker's fixed odds with the raw prices and
+/// their market time) and the job's progress (state, attempts, next attempt, the reason it was skipped or needs review).
+/// </summary>
+public sealed class PredictionAutoEventEntity
+{
+    public long Id { get; set; }
+    public ulong GuildId { get; set; }
+    public AutomationMode Mode { get; set; }
+    public string Provider { get; set; } = "";
+    public string ExternalEventId { get; set; } = "";
+    public string MarketKind { get; set; } = "";
+    public string CompetitionKey { get; set; } = "";
+    public string HomeTeam { get; set; } = "";
+    public string AwayTeam { get; set; } = "";
+
+    /// <summary>The followed clubs in it ("GS", "FB", "BJK"; a derby has two) — one row, one prediction.</summary>
+    public string TrackedTeams { get; set; } = "";
+
+    /// <summary>The planned kickoff the prediction was built on (the latest one before publishing).</summary>
+    public DateTimeOffset KickoffAt { get; set; }
+
+    /// <summary>The provider's latest planned kickoff (differs from <see cref="KickoffAt"/> when it changed after publishing).</summary>
+    public DateTimeOffset LatestKickoffAt { get; set; }
+
+    public DateTimeOffset PublishAt { get; set; }
+    public AutoEventState State { get; set; }
+    public AutoBlockReason Reason { get; set; }
+    public int OddsAttempts { get; set; }
+    public DateTimeOffset? LastAttemptAt { get; set; }
+    public DateTimeOffset? NextAttemptAt { get; set; }
+    public int DeliveryFailures { get; set; }
+    public string? BookmakerKey { get; set; }
+    public string? BookmakerTitle { get; set; }
+    public DateTimeOffset? OddsUpdatedAt { get; set; }
+    public DateTimeOffset? OddsFetchedAt { get; set; }
+    public int? HomeOddsX100 { get; set; }
+    public int? DrawOddsX100 { get; set; }
+    public int? AwayOddsX100 { get; set; }
+
+    /// <summary>The provider's decimal prices as received, "home|draw|away" (the card uses the ×100 values).</summary>
+    public string? RawPrices { get; set; }
+
+    public long? PredictionId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset LastSeenAt { get; set; }
+
+    /// <summary>Discovery passes in a row that did not return this match (it is never taken as "cancelled").</summary>
+    public int MissingCount { get; set; }
+}
+
+/// <summary>
+/// The provider's usage as last reported by its own headers, plus the job's pause and error state — persisted, so a restart,
+/// a deploy, a new tournament or midnight never resets what was used. Credits are never assumed to come back on a date.
+/// </summary>
+public sealed class PredictionAutoProviderEntity
+{
+    public string Provider { get; set; } = "";
+    public int? RemainingCredits { get; set; }
+    public int? UsedCredits { get; set; }
+    public int? LastCost { get; set; }
+    public DateTimeOffset? MeasuredAt { get; set; }
+
+    /// <summary>Credit-consuming calls since the last measurement whose cost is unknown (timeouts): counted as spent.</summary>
+    public int UnmeasuredCalls { get; set; }
+
+    public int CostlyCalls { get; set; }
+    public DateTimeOffset? PausedUntil { get; set; }
+    public string? PauseReason { get; set; }
+    public string? LastError { get; set; }
+    public DateTimeOffset? LastErrorAt { get; set; }
+    public int ConsecutiveFailures { get; set; }
+    public DateTimeOffset? LastCatalogAt { get; set; }
+
+    /// <summary>The allow-listed competitions the catalog reported as in season (comma separated).</summary>
+    public string? ActiveCompetitions { get; set; }
+
+    public DateTimeOffset? LastDiscoveryAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>The two boards of a tournament podium.</summary>
 public enum PredictionBoard
 {
@@ -263,6 +351,7 @@ public sealed class PredictionsModelContributor : IModelContributor
             e.Property(x => x.PublishKey).HasMaxLength(64);
             e.Property(x => x.Status).HasConversion<int>();
             e.Property(x => x.LockReason).HasConversion<int?>();
+            e.Property(x => x.Origin).HasConversion<int>();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => x.PublishKey).IsUnique();
             e.HasIndex(x => new { x.GuildId, x.Status }); // autocomplete, unresolved check
@@ -336,6 +425,46 @@ public sealed class PredictionsModelContributor : IModelContributor
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).ValueGeneratedOnAdd();
             e.HasIndex(x => new { x.GuildId, x.UserId, x.LocalDay }).IsUnique();
+        });
+
+        modelBuilder.Entity<PredictionAutoEventEntity>(e =>
+        {
+            e.ToTable("prediction_auto_event", t =>
+            {
+                // Observe rows never point at a prediction; only a Live row can.
+                t.HasCheckConstraint("CK_prediction_auto_event_observe", "\"Mode\" = 2 OR \"PredictionId\" IS NULL");
+                t.HasCheckConstraint("CK_prediction_auto_event_counts", "\"OddsAttempts\" >= 0 AND \"DeliveryFailures\" >= 0 AND \"MissingCount\" >= 0");
+            });
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedOnAdd();
+            e.Property(x => x.Mode).HasConversion<int>();
+            e.Property(x => x.State).HasConversion<int>();
+            e.Property(x => x.Reason).HasConversion<int>();
+            e.Property(x => x.Provider).HasMaxLength(32);
+            e.Property(x => x.ExternalEventId).HasMaxLength(64);
+            e.Property(x => x.MarketKind).HasMaxLength(16);
+            e.Property(x => x.CompetitionKey).HasMaxLength(64);
+            e.Property(x => x.HomeTeam).HasMaxLength(200);
+            e.Property(x => x.AwayTeam).HasMaxLength(200);
+            e.Property(x => x.TrackedTeams).HasMaxLength(16);
+            e.Property(x => x.BookmakerKey).HasMaxLength(64);
+            e.Property(x => x.BookmakerTitle).HasMaxLength(200);
+            e.Property(x => x.RawPrices).HasMaxLength(100);
+            // A real match is opened at most once per guild, provider, market and mode — whatever the TSQ tournament.
+            e.HasIndex(x => new { x.GuildId, x.Provider, x.ExternalEventId, x.MarketKind, x.Mode }).IsUnique();
+            e.HasIndex(x => x.PredictionId).IsUnique().HasFilter("\"PredictionId\" IS NOT NULL");
+            e.HasIndex(x => new { x.Mode, x.State, x.NextAttemptAt });
+            e.HasOne<PredictionEntity>().WithMany().HasForeignKey(x => x.PredictionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PredictionAutoProviderEntity>(e =>
+        {
+            e.ToTable("prediction_auto_provider");
+            e.HasKey(x => x.Provider);
+            e.Property(x => x.Provider).HasMaxLength(32);
+            e.Property(x => x.PauseReason).HasMaxLength(64);
+            e.Property(x => x.LastError).HasMaxLength(64);
+            e.Property(x => x.ActiveCompetitions).HasMaxLength(512);
         });
 
         modelBuilder.Entity<PredictionStandingEntity>(e =>

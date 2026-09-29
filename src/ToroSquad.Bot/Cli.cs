@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ToroSquad.Core;
+using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Discord;
 using ToroSquad.Discord.Commands.Manifest;
@@ -19,6 +20,9 @@ using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Esports.Providers;
 using ToroSquad.Modules.Esports.Providers.Fixtures;
 using ToroSquad.Modules.Esports.Providers.Liquipedia;
+using ToroSquad.Modules.Predictions;
+using ToroSquad.Modules.Predictions.Application.Automation;
+using ToroSquad.Modules.Predictions.Domain;
 
 namespace ToroSquad.Bot;
 
@@ -42,6 +46,7 @@ public static partial class Cli
                 "esports" => await EsportsAsync(rest),
                 "doctor" => await DoctorAsync(rest),
                 "db" => await DbAsync(rest),
+                "predictions" => await PredictionsAsync(rest),
                 "simulate" => await Simulation.RunAsync(rest),
                 "help" or "--help" or "-h" => PrintUsage(),
                 _ => PrintUsage(),
@@ -55,7 +60,7 @@ public static partial class Cli
         catch (Exception ex)
         {
             // Last line of defence: never print secrets.
-            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Username"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Password"), Environment.GetEnvironmentVariable("TOROSQUAD_Volleyball__Fivb__AppId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Twitch__ClientId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Twitch__ClientSecret"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Kick__ClientId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Kick__ClientSecret"), Environment.GetEnvironmentVariable("OPENCODE_GO_API_KEY")]);
+            var redactor = new SecretRedactor([Environment.GetEnvironmentVariable("TOROSQUAD_Discord__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Esports__Liquipedia__ApiKey"), Environment.GetEnvironmentVariable("TOROSQUAD_PandaScore__Token"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Username"), Environment.GetEnvironmentVariable("TOROSQUAD_Formula1__OpenF1__Password"), Environment.GetEnvironmentVariable("TOROSQUAD_Volleyball__Fivb__AppId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Twitch__ClientId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Twitch__ClientSecret"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Kick__ClientId"), Environment.GetEnvironmentVariable("TOROSQUAD_Live__Kick__ClientSecret"), Environment.GetEnvironmentVariable("OPENCODE_GO_API_KEY"), Environment.GetEnvironmentVariable("TOROSQUAD_Predictions__Automation__TheOddsApi__ApiKey")]);
             await Console.Error.WriteLineAsync("FATAL: " + redactor.Redact(ex.ToString()));
             return Failed;
         }
@@ -94,6 +99,7 @@ public static partial class Cli
               simulate                                offline end-to-end demo (fixture data, fake Discord, temp DB)
               esports demo-cards --guild ID [--kind K] [--apply]  TEST/DEMO match cards (all, or one kind) for an authorized test guild
               esports provider-check [--team NAME]    READ-ONLY live fetch summary / team key lookup (sends nothing)
+              predictions football-check [--odds] [--budget N] [--days D] [--focus CODE] [--preview]  READ-ONLY The Odds API check (N credits max total, default 5; D days, default 7, max 30; CODE = GS|FB|BJK|TR first; local card preview)
             """);
         return Usage;
     }
@@ -316,6 +322,106 @@ public static partial class Cli
     }
 
     /// <summary>
+    /// predictions football-check [--odds] [--budget N] [--days D] [--focus CODE] [--preview]: a READ-ONLY look at what The Odds API returns for the automatic
+    /// football opener (catalog, tracked matches, and — only with --odds, at most N credits, default 5, max 25 — the odds and
+    /// the set the priority would pick). Temporary data directory, fake Discord transport, dry-run delivery: nothing is
+    /// written to the bot database and nothing is sent anywhere but to the provider. The key is never printed.
+    /// </summary>
+    private static async Task<int> PredictionsAsync(string[] args)
+    {
+        if (args.Length == 0 || !string.Equals(args[0], "football-check", StringComparison.OrdinalIgnoreCase))
+            return PrintUsage();
+        var withOdds = args.Contains("--odds", StringComparer.OrdinalIgnoreCase);
+        var budgetIndex = Array.FindIndex(args, a => string.Equals(a, "--budget", StringComparison.OrdinalIgnoreCase));
+        var budget = budgetIndex >= 0 && budgetIndex + 1 < args.Length && int.TryParse(args[budgetIndex + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var b) ? b : 5;
+        var daysIndex = Array.FindIndex(args, a => string.Equals(a, "--days", StringComparison.OrdinalIgnoreCase));
+        var days = daysIndex >= 0 && daysIndex + 1 < args.Length && int.TryParse(args[daysIndex + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var d) ? d : 7;
+        var focusIndex = Array.FindIndex(args, a => string.Equals(a, "--focus", StringComparison.OrdinalIgnoreCase));
+        var focus = focusIndex >= 0 && focusIndex + 1 < args.Length ? args[focusIndex + 1] : null;
+        var preview = args.Contains("--preview", StringComparer.OrdinalIgnoreCase);
+
+        var temp = Path.Combine(Path.GetTempPath(), "tsq-football-check-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(temp);
+        Environment.SetEnvironmentVariable("TOROSQUAD_Bot__DataDirectory", temp);
+        Environment.SetEnvironmentVariable("TOROSQUAD_Discord__Transport", "Fake");
+        Environment.SetEnvironmentVariable("TOROSQUAD_Delivery__Mode", "DryRun");
+        try
+        {
+            var builder = ToroHost.CreateBuilder([], longRunning: false);
+            using var host = builder.Build();
+            var provider = host.Services.GetRequiredService<IFootballOddsProvider>();
+            AutoFootballOptions options;
+            try
+            {
+                options = host.Services.GetRequiredService<IOptions<AutoFootballOptions>>().Value;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or FormatException)
+            {
+                Console.WriteLine("CONFIG: " + AutoFootballOptions.Section + " could not be read (a value has the wrong type)");
+                return Failed;
+            }
+
+            Console.WriteLine($"{ProductInfo.ProductName} — READ-ONLY football odds check ({provider.Name}; no bot database, no Discord, key hidden)");
+            Console.WriteLine($"environment: {builder.Environment.EnvironmentName}; client: {provider.GetType().Name}; key: {(provider.IsConfigured ? "set (value hidden)" : "NOT SET")}");
+            foreach (var problem in options.Problems())
+                Console.WriteLine("CONFIG: " + problem);
+            if (options.Problems().Count > 0)
+                return Failed;
+            var check = new AutoFootballVerification(provider, options, TimeProvider.System, host.Services.GetRequiredService<FootballMarketRules>());
+            var ok = await check.RunAsync(withOdds, budget, CancellationToken.None, days, focus);
+            foreach (var line in check.Lines)
+                Console.WriteLine(line);
+            if (preview)
+                PrintCardPreview(host.Services, check, options);
+            return provider.IsConfigured ? ok ? Ok : Failed : Blocked;
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    /// <summary>
+    /// A LOCAL text rendering of the card the first checked match would get (the real renderer; nothing stored or sent; no
+    /// prediction, wallet or tournament). A set of a bookmaker that is not approved is shown as a candidate only.
+    /// </summary>
+    private static void PrintCardPreview(IServiceProvider services, AutoFootballVerification check, AutoFootballOptions options)
+    {
+        var found = check.Matches.FirstOrDefault(m => m.Choice?.Odds is not null) ?? check.Matches.FirstOrDefault(m => m.Choice?.Unapproved is not null);
+        if (found?.Choice is not { } choice || (choice.Odds ?? choice.Unapproved) is not { } odds || options.Timing() is not { } timing)
+        {
+            Console.WriteLine("preview: no match with a complete set in this check");
+            return;
+        }
+
+        var localizer = services.GetRequiredService<ILocalizer>();
+        var cards = services.GetRequiredService<ToroSquad.Modules.Predictions.Application.PredictionCards>();
+        var (title, rules, outcomes) = AutoFootballTexts.Build(localizer, "tr", found.Event.HomeTeam, found.Event.AwayTeam, found.Scope, options.LockBeforeKickoffMinutes, odds);
+        var kickoff = found.Event.CommenceTime;
+        var view = new ToroSquad.Modules.Predictions.Application.PredictionView(0, new GuildId(0), 0, 0,
+            new ChannelId(services.GetRequiredService<IOptions<PredictionsOptions>>().Value.ChannelId), null, new UserId(0), "", title, rules,
+            AutoSchedule.LockAt(kickoff, timing), PredictionStatus.Open, null, null,
+            outcomes.Select((o, i) => new ToroSquad.Modules.Predictions.Application.OutcomeView(i + 1, i + 1, o.Label, o.OddsX100)).ToList(), 0, 0, null, null, null, null,
+            null, null, null, false, 0, PredictionOrigin.AutoFootball, new ToroSquad.Modules.Predictions.Application.AutoCardInfo(kickoff, odds.BookmakerTitle, odds.LastUpdate));
+        var card = cards.Render(view, "tr");
+        var local = TimeZoneInfo.ConvertTime(AutoSchedule.PublishAt(kickoff, timing), timing.Zone);
+        Console.WriteLine($"preview (LOCAL ONLY, not sent{(choice.Odds is null ? "; candidate — Live would not publish: " + AutoBlockCodes.Code(choice.Reason) : "")}):");
+        Console.WriteLine($"  publish at: {local:dd.MM.yyyy HH:mm} TR; lock at: {TimeZoneInfo.ConvertTime(AutoSchedule.LockAt(kickoff, timing), timing.Zone):dd.MM.yyyy HH:mm} TR");
+        Console.WriteLine("  " + card.Embed!.Title);
+        Console.WriteLine("  " + card.Embed.Description?.Replace("\n", "\n  ", StringComparison.Ordinal));
+        foreach (var field in card.Embed.Fields)
+            Console.WriteLine($"  [{field.Name}] {field.Value.Replace("\n", " | ", StringComparison.Ordinal)}");
+        Console.WriteLine("  footer: " + card.Embed.Footer);
+        Console.WriteLine("  buttons: " + string.Join("  ", card.Buttons?.Select(b => b.Label) ?? []));
+    }
+
+    /// <summary>
     /// READ-ONLY PandaScore team search (to pick the exact team key for a filter): candidates with id/name/acronym/location
     /// and each candidate's scheduled matches in the next 30 days. Nothing is written or sent.
     /// </summary>
@@ -517,6 +623,32 @@ public static partial class Cli
         Add(string.Equals(vbProvider, "None", StringComparison.OrdinalIgnoreCase) ? "INFO" : "OK", "Volleyball (Türkiye women's senior team only): " + (vbLive
             ? "LIVE (" + vbProvider + ", public data; FIVB application id " + (string.IsNullOrWhiteSpace(config["Volleyball:Fivb:AppId"]) ? "not set — anonymous" : "set (value hidden)") + ")"
             : "FIXTURE (TEST/DEMO synthetic match)"));
+        AutoFootballOptions? automation;
+        try
+        {
+            automation = config.GetSection(AutoFootballOptions.Section).Get<AutoFootballOptions>() ?? new AutoFootballOptions();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException)
+        {
+            automation = null;
+        }
+
+        var oddsKeySet = !string.IsNullOrWhiteSpace(config[AutoFootballOptions.ApiKeySetting]);
+        if (automation is null)
+        {
+            Add("WARN", "Predictions automatic football: " + AutoFootballOptions.Section + " could not be read (a value has the wrong type) — runs as Disabled");
+        }
+        else
+        {
+            var problems = automation.Problems();
+            var automationMode = automation.ParsedMode ?? AutomationMode.Disabled;
+            Add(problems.Count > 0 ? "WARN" : automationMode == AutomationMode.Disabled ? "INFO" : oddsKeySet ? "OK" : "BLOCKED",
+                $"Predictions automatic football: mode {automation.Mode}{(problems.Count > 0 ? " — " + problems.Count + " configuration problem(s), runs as Disabled" : "")}; " +
+                "The Odds API key: " + (oddsKeySet ? "set (value hidden)" : "NOT SET (" + AutoFootballOptions.ApiKeySetting + ")"));
+            foreach (var problem in problems)
+                Add("WARN", "  " + problem);
+        }
+
         var liveEnabled = config.GetValue("Live:Enabled", false);
         var twitchSet = !string.IsNullOrWhiteSpace(config["Live:Twitch:ClientId"]) && !string.IsNullOrWhiteSpace(config["Live:Twitch:ClientSecret"]);
         var kickSet = !string.IsNullOrWhiteSpace(config["Live:Kick:ClientId"]) && !string.IsNullOrWhiteSpace(config["Live:Kick:ClientSecret"]);
