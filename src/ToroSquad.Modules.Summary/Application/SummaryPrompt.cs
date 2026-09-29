@@ -45,6 +45,14 @@ public static class SummaryPrompt
         - Kurumsal toplantı tutanağı gibi yazma; sohbetin tonunu koruyan, doğal ve Discord'a uygun bir dil kullan.
         - Toplam uzunluk yaklaşık 150–250 kelime olsun.
 
+        SPOILER
+        - Transcript'te <spoiler>...</spoiler> içindeki bilgiler, kullanıcının Discord'da spoiler olarak gizlediği içeriktir; özette de spoiler olarak koru.
+        - Spoiler içeriğini özette yalnızca Discord spoiler biçiminde yaz: ||...||. Önüne içeriği ele vermeyen kısa bir konu etiketi koy (etiket spoiler dışında kalır): **Spoiler (konu):** ||özetlenen içerik||. Örnek: **Spoiler (One Piece yeni bölüm):** ||...||
+        - Konuyu (oyun, dizi, film, anime/manga, bölüm, sezon, act, maç) yalnızca transcript'teki bağlamdan çıkar, uydurma; bağlam yoksa **Spoiler (konu belirtilmemiş):** yaz. Etiketin kendisi spoiler içermesin: "X karakterinin öldüğü bölüm" değil, "dizinin sezon finali".
+        - Spoiler içeriğini spoiler dışında hiçbir şekilde açığa çıkarma veya paraphrase etme: açıklama, Ana konu, madde başlığı, Planlar / Kararlar ve Genel atmosfer bölümlerinde yalnızca "spoilerlı gelişmeler konuşuldu" gibi genel ifade kullan.
+        - Farklı yapımların veya konuların spoiler'larını aynı ||...|| içinde birleştirme; aynı konunun küçük spoiler'ları tek ||...|| içinde toplanabilir.
+        - Kaynakta spoiler olarak işaretlenmemiş bilgiyi kendi başına spoiler yapma. ||...|| işaretlerini kod bloğuna koyma, escape etme; <spoiler> etiketini çıktıda kullanma.
+
         ÇIKTI BİÇİMİ (yalnızca Türkçe, tam olarak bu Markdown yapısı):
 
         # Son Mesajların Özeti

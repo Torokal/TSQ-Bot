@@ -7,8 +7,9 @@ namespace ToroSquad.Modules.Summary.Application;
 /// Light, deterministic clean-up of the model's answer before it is posted — never a second AI call, never a rewrite of the
 /// content: code fences are removed, anything before the title goes, the title becomes exactly
 /// <see cref="SummaryPrompt.Title"/>, deeper headings become <c>##</c>, and <c>@everyone</c>/<c>@here</c> are defused (the
-/// message is also sent without allowed mentions, so nothing in it can ping). Then <see cref="Split"/> keeps every part
-/// within Discord's 2000 characters.
+/// message is also sent without allowed mentions, so nothing in it can ping), and spoilers use Discord's native <c>||…||</c>
+/// (<see cref="NativeSpoilers"/>). Then <see cref="Split"/> keeps every part within Discord's 2000 characters without
+/// breaking a spoiler.
 /// </summary>
 public static partial class SummaryOutput
 {
@@ -44,13 +45,27 @@ public static partial class SummaryOutput
 
         var body = string.Join("\n", lines).Trim();
         body = ExtraBlankLines().Replace(body, "\n\n");
+        body = NativeSpoilers(body);
         body = MassMention().Replace(body, "@\u200B$1");
         return body.Length == 0 ? null : SummaryPrompt.Title + "\n\n" + body;
     }
 
     /// <summary>
+    /// Discord's native spoiler syntax only: the transcript's <c>&lt;spoiler&gt;</c> tags and escaped <c>\|\|</c> the model may
+    /// echo become <c>||</c>, and an unclosed spoiler is closed at the end — hidden text is never shown by mistake.
+    /// </summary>
+    public static string NativeSpoilers(string body)
+    {
+        body = SpoilerTag().Replace(body, SpoilerMark);
+        body = body.Replace(@"\|\|", SpoilerMark, StringComparison.Ordinal);
+        return SpoilerMarks(body) % 2 == 1 ? body + SpoilerMark : body;
+    }
+
+    /// <summary>
     /// Parts of at most <paramref name="limit"/> characters, cut at a section (<c>##</c>), then a bullet, then a line, then a
-    /// space — never inside a word unless one word alone is longer than the limit. The first part starts with the title.
+    /// space — never inside a word unless one word alone is longer than the limit, and never inside a spoiler span
+    /// (<c>||…||</c>). A single spoiler longer than a part is closed at the end of one part and reopened at the start of the
+    /// next, so its content always stays hidden. The first part starts with the title.
     /// </summary>
     public static IReadOnlyList<string> Split(string text, int limit = DiscordLimits.ContentMax)
     {
@@ -59,10 +74,28 @@ public static partial class SummaryOutput
         var rest = text.Trim();
         while (rest.Length > limit)
         {
-            var cut = LastBoundary(rest, limit, "\n## ") ?? LastBoundary(rest, limit, "\n- ") ?? LastBoundary(rest, limit, "\n")
-                ?? LastBoundary(rest, limit, " ") ?? limit;
-            parts.Add(rest[..cut].TrimEnd());
-            rest = rest[cut..].TrimStart();
+            if ((LastBoundary(rest, limit, "\n## ") ?? LastBoundary(rest, limit, "\n- ") ?? LastBoundary(rest, limit, "\n")
+                    ?? LastBoundary(rest, limit, " ")) is { } cut)
+            {
+                parts.Add(rest[..cut].TrimEnd());
+                rest = rest[cut..].TrimStart();
+                continue;
+            }
+
+            // No boundary outside a spoiler: cut at a space (room for the closing mark) and carry the spoiler over.
+            var room = limit - SpoilerMark.Length;
+            var space = rest.LastIndexOf(' ', room - 1, room);
+            var at = space > room / 4 ? space : room;
+            var part = rest[..at].TrimEnd();
+            var next = rest[at..].TrimStart();
+            if (SpoilerMarks(part) % 2 == 1)
+            {
+                part += SpoilerMark;
+                next = SpoilerMark + next;
+            }
+
+            parts.Add(part);
+            rest = next;
         }
 
         if (rest.Length > 0)
@@ -70,12 +103,40 @@ public static partial class SummaryOutput
         return parts;
     }
 
-    /// <summary>The start of the last <paramref name="separator"/> that leaves a non-trivial first part within the limit.</summary>
+    /// <summary>
+    /// The start of the last <paramref name="separator"/> that leaves a non-trivial first part within the limit and is not
+    /// inside a spoiler span.
+    /// </summary>
     private static int? LastBoundary(string text, int limit, string separator)
     {
-        var at = text.LastIndexOf(separator, limit - 1, limit, StringComparison.Ordinal);
-        return at > limit / 4 ? at : null;
+        for (var at = text.LastIndexOf(separator, limit - 1, limit, StringComparison.Ordinal);
+             at > limit / 4;
+             at = text.LastIndexOf(separator, at - 1, at, StringComparison.Ordinal))
+        {
+            if (SpoilerMarks(text.AsSpan(0, at)) % 2 == 0)
+                return at;
+        }
+
+        return null;
     }
+
+    private const string SpoilerMark = "||";
+
+    private static int SpoilerMarks(ReadOnlySpan<char> text)
+    {
+        var count = 0;
+        for (var at = text.IndexOf(SpoilerMark, StringComparison.Ordinal); at >= 0;)
+        {
+            count++;
+            var next = text[(at + SpoilerMark.Length)..].IndexOf(SpoilerMark, StringComparison.Ordinal);
+            at = next < 0 ? -1 : at + SpoilerMark.Length + next;
+        }
+
+        return count;
+    }
+
+    [GeneratedRegex(@"<\s*/?\s*spoiler\s*>", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex SpoilerTag();
 
     [GeneratedRegex(@"^\s*(```|~~~)")]
     private static partial Regex CodeFence();
