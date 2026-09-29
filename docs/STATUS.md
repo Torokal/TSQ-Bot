@@ -203,8 +203,10 @@ invite link and no global command registration. The source code is public under 
   end/cancel/reroll (earlier winners excluded, fallbacks), restart catch-up, draw-once under worker/end/cancel races,
   backoff when Discord cannot be read, orphaning of deleted cards, privacy export/delete.
 - **NOT VERIFIED_LIVE**: everything in Discord (command registration, modal, 🎉 on the card, reading real reactions,
-  edits, the winner ping). The bot role needs **Add Reactions** (not in the 84992 invite integer). In the manifest but not
-  synced; not merged, not deployed.
+  edits, the winner ping). Add Reactions is a hard requirement (no giveaway, row or card without it); invite integer
+  84992 → 85056 (117760 → 117824 with Attach Files) — the live bot role still needs Add Reactions granted. Disabling the
+  module stops new giveaways only; started ones finish with their announcement. In the manifest but not synced; not
+  merged, not deployed.
 
 ## What has been verified against real Discord / real APIs
 

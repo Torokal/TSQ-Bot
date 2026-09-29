@@ -49,13 +49,17 @@ aktif çekiliş olabilir.
 - Discord okunamazsa (erişim, 429, 5xx, üye sorgusu cevapsız) çekiliş aktif kalır ve artan beklemeyle (1, 2, 4 … en fazla
   30 dk) yeniden denenir. Kart veya kanal silinmişse çekiliş çekilmeden `Orphaned` olur.
 - Kart düzenlemesi başarısız olursa sonuç kaybolmaz; worker kartı en fazla 8 kez yeniden düzenlemeyi dener.
-- Modül bir sunucuda kapatılırsa başlamış çekilişler yine sonuçlanır ve kart güncellenir; kazanan duyurusu ise (outbox
-  modül kapısı) gönderilmez. Komutlar modül açılana kadar çalışmaz.
+- `/modules disable giveaway` yalnızca yeni çekilişleri ve komutları kapatır; aktif çekilişleri iptal etmez. Başlamış bir
+  çekiliş süresi dolunca normal sonuçlanır: tepkiler okunur, kazanan seçilir, kart güncellenir ve kazanan duyurusu gönderilir
+  (`GiveawayDeliveryPolicy.DeliversWhileModuleDisabled`: outbox'ın modül kapısı yalnızca bu tür için açılır; tekil teslim,
+  geç göndermeme ve izin listesi aynen geçerli).
 
 ## İzinler ve veri
 
-- Kanalda bot için: View Channel, Send Messages, Embed Links, **Add Reactions**, Read Message History. Form açılmadan önce
-  denetlenir. Add Reactions yoksa çekiliş yine başlar (üyeler 🎉'yi kendileri ekleyebilir) ve yönetici uyarılır.
+- Kanalda bot için: View Channel, Send Messages, Embed Links, **Add Reactions**, Read Message History — hepsi zorunlu; form
+  açılmadan önce ve gönderimde yeniden denetlenir. Add Reactions yoksa çekiliş oluşturulmaz, kayıt yazılmaz, kart gönderilmez
+  (`❌ Botun bu kanalda Tepki Ekle (Add Reactions) iznine ihtiyacı var.`). İzin denetimden sonra kaybolur ve Discord botun
+  🎉'sini reddederse kart gönderilmiş olsa bile çekiliş hemen iptal edilir. 🎉 Unicode olduğundan Use External Emojis gerekmez.
 - Saklanan: başlatanın ID'si ve o anki görünen adı, ödül, açıklama, süre, kazanan ID'leri, katılımcı **sayısı**. Katılımcı
   listesi saklanmaz ve loglanmaz. Loglar: `giveaway_created`, `giveaway_finished`, `giveaway_cancelled`,
   `giveaway_rerolled` (yalnızca ID'ler ve sayılar). `/privacy delete`: kazanma kayıtları silinir, başlatılan / bitirilen / iptal edilen
