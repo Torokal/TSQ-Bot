@@ -213,8 +213,9 @@ invite link and no global command registration. The source code is public under 
 - Module `summary`, command `/ozetle` (everyone, no options). Stateless: no table, no migration, no background job, no
   message listener or cache (gateway Identify stays Guilds). Off by default (`/modules enable summary`).
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
-  verified from the live `/models` list), `reasoning_effort: low`, temperature 0.3, top_p 0.9, `max_tokens` 2500
-  (hidden reasoning counts against it), no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random `x-opencode-session` per summary; honest
+  verified from the live `/models` list), `thinking: disabled`, `reasoning_effort: low`, temperature 0.3, top_p 0.9,
+  `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
+  `x-opencode-session` per summary; honest
   User-Agent `TSQBot/<version> SummaryModule`. Key only from `OPENCODE_GO_API_KEY` (redacted); without it `/ozetle`
   says "not configured" and nothing else is affected.
 - **IMPLEMENTED / TESTED_OFFLINE**: member-only transcript (bots incl. earlier summaries, webhooks, system events out),
@@ -229,7 +230,10 @@ invite link and no global command registration. The source code is public under 
 - **Observed live (2026-09-29, #29 deployed, `/ozetle` synced)**: the command runs; 100 real member messages were read
   through Message Content; OpenCode Go accepted the bot's request (HTTP 200, honest User-Agent). That first run returned no
   text — all 900 `max_tokens` went to hidden reasoning (`finish_reason: length`) — and was answered privately with nothing
-  posted, as designed. Hence `max_tokens` 2500.
+  posted, as designed. With `max_tokens` 2500 (#30) the second live run spent all 2500 on reasoning too. Two diagnostic
+  requests with the synthetic A/B transcript: the production request reasoned 2427 tokens and was cut off; the same
+  request with `thinking: disabled` used 0 reasoning, ~640 answer tokens, ~7 s, correct format. Hence thinking disabled
+  and `max_tokens` 1200.
 - **NOT VERIFIED_LIVE**: a produced summary posted in the channel, the split, thread handling.
 
 ## What has been verified against real Discord / real APIs

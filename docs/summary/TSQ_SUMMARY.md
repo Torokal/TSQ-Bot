@@ -60,18 +60,21 @@ arasına konur. Kurallar:
 |---|---|
 | Uç nokta | OpenCode Go, OpenAI uyumlu `POST https://opencode.ai/zen/go/v1/chat/completions` |
 | Model | `Summary:Model` = `deepseek-v4.1-flash` (API model ID'si; CLI'daki `opencode-go/` öneki yok, `/models` listesinden doğrulandı) |
-| Ayarlar | `reasoning_effort: low`, `temperature: 0.3`, `top_p: 0.9`, `max_tokens: 2500`, `stream: false`; tool yok, web araması yok |
+| Ayarlar | `thinking: {"type": "disabled"}`, `reasoning_effort: low`, `temperature: 0.3`, `top_p: 0.9`, `max_tokens: 1200`, `stream: false`; tool yok, web araması yok |
 | Oturum | Her özet için yeni rastgele `x-opencode-session` (GUID); içinde sunucu, kanal, isim veya metin yok |
 | User-Agent | `TSQBot/<sürüm> SummaryModule (+https://github.com/Torokal/TSQ-Bot)` (dürüst tanıtım; kodlama ajanı taklidi yok) |
 | Zaman aşımı | 25 sn; aşılırsa istek iptal edilir ve kanala hiçbir şey gönderilmez |
 | Retry | **Yok.** 400/401/403/404, 429, 5xx, ağ hatası ve zaman aşımı olduğu gibi döner. Tekrar denemek isteyen üye `/ozetle`'yi yeniden çalıştırır. |
 
-`max_tokens` 2500'dür, spesifikasyondaki yaklaşık 700 değil. Sebep: DeepSeek "low" ayarında da gizli reasoning token'ı
-üretiyor, bunlar `max_tokens` içinden sayılıyor ve OpenCode Go reasoning'i kapatma seçeneği sunmuyor. A/B testinde yaklaşık 230
-reasoning token görülmüştü; ilk canlı `/ozetle` ise (100 gerçek mesaj, 2026-09-29) 900'lük sınırın tamamını reasoning'e
-harcadı ve metin üretemedi (`finish_reason: length`, özet gönderilmedi). Görünen özetin uzunluğunu prompt belirler (150–250
-kelime, ~600 token); 2500 reasoning için pay bırakır. Model yine de sınıra takılırsa yarım kalan son satır atılır, hiç metin
-yoksa kullanıcıya özel "Özet oluşturulamadı" mesajı gider.
+**Thinking kapalı.** `reasoning_effort: low` tek başına yetmedi. Bu prompt'la DeepSeek gizli reasoning'e bütün bütçeyi
+harcadı ve metin üretemedi: canlıda 900 ve 2500 token'da, sentetik A/B transcript'iyle de 2500 token'da (`finish_reason: length`,
+özet gönderilmedi). Aynı isteğe DeepSeek'in `thinking: {"type": "disabled"}` alanı eklendiğinde (OpenCode Go iletiyor,
+2026-09-29'da doğrulandı) sonuç 0 reasoning token, ~640 cevap token'ı ve ~7 sn oldu; biçim ve atıf kuralları doğruydu.
+Kapatmak için: `Summary:DisableThinking=false`.
+
+`max_tokens` 1200'dür, spesifikasyondaki yaklaşık 700 değil. Reasoning olmadan yalnızca cevabı taşıması gerekiyor (150–250
+kelime, ölçümde ~640 token); 1200 uzun sohbetler için pay bırakır. Model yine de sınıra takılırsa yarım kalan son satır atılır.
+Hiç metin yoksa kullanıcıya özel "Özet oluşturulamadı" mesajı gider.
 
 ## Kötüye kullanım koruması
 
@@ -95,8 +98,9 @@ yoksa kullanıcıya özel "Özet oluşturulamadı" mesajı gider.
 | `ChannelCooldownSeconds` | `60` |
 | `MaxConcurrentRequests` | `2` |
 | `RequestTimeoutSeconds` | `25` |
-| `MaxOutputTokens` | `2500` |
+| `MaxOutputTokens` | `1200` |
 | `ReasoningEffort` | `low` |
+| `DisableThinking` | `true` |
 | `Temperature` | `0.3` |
 | `TopP` | `0.9` |
 
