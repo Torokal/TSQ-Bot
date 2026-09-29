@@ -684,6 +684,47 @@ public sealed class GiveawayLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_layout_refresh_migration_redraws_existing_cards_once_by_edit_without_pings()
+    {
+        var active = await OpenAsync(duration: "1d");
+        var drawn = await OpenAsync();
+        var cancelled = await OpenAsync(duration: "1d");
+        var orphaned = await OpenAsync(duration: "1d");
+        Enter(drawn, Range(2));
+        await TickAsync(TimeSpan.FromMinutes(30));
+        (await Giveaways(s => s.CancelAsync(Admin, Ref(cancelled), Ct))).Result.Succeeded.Should().BeTrue();
+        Reactions().Delete(orphaned.Message!.Value);
+        (await Giveaways(s => s.EndAsync(Admin, Ref(orphaned), Ct))).Result.MessageKey.Should().Be("giveaway.end.message_missing");
+        await TickAsync();
+        var editsBefore = _host.Transport.Messages.ToDictionary(m => m.Id, m => m.Edits.Count);
+        var messagesBefore = _host.Transport.Messages.Count;
+
+        (await _host.InScopeAsync(async sp =>
+            (await sp.GetRequiredService<ToroDbContext>().Database.GetAppliedMigrationsAsync()).ToList()))
+            .Should().Contain(m => m.EndsWith("_GiveawayCardLayoutRefresh", StringComparison.Ordinal));
+        await _host.InScopeAsync(async sp =>
+            await sp.GetRequiredService<ToroDbContext>().Database.ExecuteSqlRawAsync(ToroSquad.Bot.Migrations.GiveawayCardLayoutRefresh.RedrawExistingCards));
+        await TickAsync();
+        await TickAsync(TimeSpan.FromSeconds(30));
+
+        _host.Transport.Messages.Should().HaveCount(messagesBefore, "a redraw edits; it never posts");
+        foreach (var g in new[] { active, drawn, cancelled })
+        {
+            Card(g).Edits.Should().HaveCount(editsBefore[g.Message!.Value] + 1, "exactly one redraw");
+            Card(g).Edits[^1].Mentions.PingsAnything.Should().BeFalse();
+            Shown(Card(g)).Description.Should().StartWith("🎁 **ÖDÜL**\n## ");
+            (await RowAsync(g.Id)).CardStale.Should().BeFalse();
+        }
+
+        Shown(Card(active)).Title.Should().Be("🎉 ÇEKİLİŞ");
+        Shown(Card(drawn)).Title.Should().Be("🎉 ÇEKİLİŞ SONUÇLANDI");
+        Shown(Card(cancelled)).Title.Should().Be("⚠️ ÇEKİLİŞ İPTAL EDİLDİ");
+        (await RowAsync(active.Id)).Status.Should().Be(GiveawayStatus.Active, "a redraw changes nothing but the card");
+        (await RowAsync(orphaned.Id)).CardStale.Should().BeFalse("an orphaned card no longer exists");
+        Announcements().Should().ContainSingle("no second winner ping");
+    }
+
+    [Fact]
     public async Task A_row_whose_card_was_never_confirmed_is_orphaned_after_the_grace_period()
     {
         var id = await _host.InScopeAsync(async sp =>
