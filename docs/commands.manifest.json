@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "ef28e51fa5b4d64b19aeae008abbdaaaef50dcafd3f968b37e8a2d624fdac934",
+  "hash": "8a6a3eb2b0c1ee04e598c8ee2700f499f4ce671d452f4a422aa4ca912cf01d37",
   "commands": [
     {
       "module": "currency",
@@ -1721,6 +1721,26 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "module": "summary",
+      "payload": {
+        "type": 1,
+        "name": "ozetle",
+        "description": "Summarize the latest messages in this channel",
+        "description_localizations": {
+          "tr": "Bu kanaldaki son mesajları özetler."
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": []
       }
     },
     {
