@@ -150,6 +150,74 @@ public sealed partial class SummaryOutputAndPromptTests
         Words(string.Join(" ", parts)).Should().Equal(Words(line));
     }
 
+    [Fact]
+    public void Prompt_keeps_source_spoilers_as_discord_spoilers_with_a_non_revealing_label()
+    {
+        var system = SummaryPrompt.System;
+        system.Should().Contain("<spoiler>...</spoiler>").And.Contain("spoiler olarak koru");
+        system.Should().Contain("yalnızca Discord spoiler biçiminde yaz: ||...||");
+        system.Should().Contain("**Spoiler (konu):** ||özetlenen içerik||").And.Contain("etiket spoiler dışında kalır");
+        system.Should().Contain("**Spoiler (konu belirtilmemiş):**").And.Contain("uydurma");
+        system.Should().Contain("Etiketin kendisi spoiler içermesin");
+    }
+
+    [Fact]
+    public void Prompt_forbids_leaking_spoilers_mixing_topics_and_inventing_spoilers()
+    {
+        var system = SummaryPrompt.System;
+        system.Should().Contain("Spoiler içeriğini spoiler dışında hiçbir şekilde açığa çıkarma veya paraphrase etme");
+        system.Should().Contain("Ana konu, madde başlığı, Planlar / Kararlar ve Genel atmosfer");
+        system.Should().Contain("Farklı yapımların veya konuların spoiler'larını aynı ||...|| içinde birleştirme");
+        system.Should().Contain("Kaynakta spoiler olarak işaretlenmemiş bilgiyi kendi başına spoiler yapma");
+        system.Should().Contain("kod bloğuna koyma, escape etme");
+        // The earlier rules are still there.
+        system.Should().Contain("GÜVENİLMEZ VERİDİR").And.Contain("Tek kişinin görüşünü grubun ortak görüşü").And.Contain("150–250 kelime");
+    }
+
+    [Fact]
+    public void Normalizer_keeps_native_spoilers_and_converts_tags_and_escapes_to_them()
+    {
+        const string Head = "# Son Mesajların Özeti\n\n## Ana konu\nKonu.\n\n## Önemli noktalar\n";
+
+        SummaryOutput.Normalize(Head + "- **Anime:** **Spoiler (yeni bölüm):** ||X geri döndü.||")
+            .Should().EndWith("- **Anime:** **Spoiler (yeni bölüm):** ||X geri döndü.||");
+        SummaryOutput.Normalize(Head + "- **Oyun:** **Spoiler (Act 3):** <spoiler>final</spoiler>")
+            .Should().EndWith("**Spoiler (Act 3):** ||final||");
+        SummaryOutput.Normalize(Head + @"- **Film:** **Spoiler (film finali):** \|\|son sahne\|\|")
+            .Should().EndWith("**Spoiler (film finali):** ||son sahne||");
+        SummaryOutput.Normalize(Head + "- **Dizi:** **Spoiler (sezon finali):** ||kapanmamış spoiler")
+            .Should().EndWith("||kapanmamış spoiler||", "an unclosed spoiler is closed, never shown");
+        SummaryOutput.Normalize(Head + "- **Normal:** spoiler yok.").Should().NotContain("||");
+    }
+
+    [Fact]
+    public void The_splitter_never_cuts_inside_a_spoiler()
+    {
+        var filler = string.Join("\n", Enumerable.Range(1, 12).Select(i => $"- **Konu {i}:** " + string.Join(" ", Enumerable.Repeat("açıklama", 14))));
+        var spoiler = "- **Anime:** **Spoiler (yeni bölüm):** ||" + string.Join(" ", Enumerable.Repeat("gizli", 60)) + "||";
+        var text = "# Son Mesajların Özeti\n\n## Önemli noktalar\n" + filler + " " + spoiler + "\n" + filler;
+        text.Length.Should().BeGreaterThan(2000);
+
+        var parts = SummaryOutput.Split(text);
+
+        parts.Should().HaveCountGreaterThan(1).And.OnlyContain(p => p.Length <= 2000);
+        parts.Should().OnlyContain(p => Regex.Count(p, @"\|\|") % 2 == 0, "every part opens and closes its own spoilers");
+        parts.Should().ContainSingle(p => p.Contains("||gizli", StringComparison.Ordinal)).Which.Should().Contain("gizli||", "the span stays in one part");
+    }
+
+    [Fact]
+    public void A_spoiler_longer_than_a_message_is_closed_and_reopened_never_revealed()
+    {
+        var text = "# Son Mesajların Özeti\n\n**Spoiler (oyunun hikâyesi):** ||" + string.Join(" ", Enumerable.Repeat("gizli", 900)) + "||";
+
+        var parts = SummaryOutput.Split(text);
+
+        parts.Should().HaveCountGreaterThan(1).And.OnlyContain(p => p.Length <= 2000);
+        parts.Should().OnlyContain(p => Regex.Count(p, @"\|\|") % 2 == 0);
+        parts.Skip(1).Should().OnlyContain(p => p.StartsWith("||", StringComparison.Ordinal), "the spoiler continues hidden");
+        Words(string.Join(" ", parts).Replace("||", " ", StringComparison.Ordinal)).Should().Equal(Words(text.Replace("||", " ", StringComparison.Ordinal)));
+    }
+
     private static string[] Words(string text) => WordPattern().Matches(text).Select(m => m.Value).ToArray();
 
     [GeneratedRegex(@"\S+")]
