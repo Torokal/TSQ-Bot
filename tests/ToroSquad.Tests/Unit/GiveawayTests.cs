@@ -252,64 +252,87 @@ public sealed class GiveawayTests
         12, new GuildId(777), new ChannelId(7001), new MessageId(4242), new UserId(10), "Kaan", prize, description, winnerCount, status,
         TestHost.T0, TestHost.T0.AddHours(2), status == GiveawayStatus.Active ? null : TestHost.T0.AddHours(2), entrants, rerolls, winners ?? []);
 
+    private static string Prize(string label, string prize) => label + "\n## " + prize;
+
     [Fact]
-    public void The_active_card_shows_prize_winners_end_and_how_to_enter_and_never_pings()
+    public void The_active_card_leads_with_the_prize_then_winners_end_and_how_to_enter_and_never_pings()
     {
         var card = new GiveawayCards(Localizer()).Render(View(GiveawayStatus.Active, description: "Kazanana Steam üzerinden gönderilecektir."), "tr");
         card.Mentions.Should().Be(MentionPolicy.None);
         card.Buttons.Should().BeNull("entry is Discord's own 🎉 reaction, not a button");
         var embed = card.Embed!;
         embed.Title.Should().Be("🎉 ÇEKİLİŞ");
-        embed.Description.Should().Be("Kazanana Steam üzerinden gönderilecektir.\n\n🎉 Katılmak için aşağıdaki 🎉 reaksiyonuna bas.");
-        embed.Fields.Select(f => (f.Name, f.Value)).Should().Equal(
-            ("🎁 Ödül", "Discord Nitro"),
-            ("🏆 Kazanan Sayısı", "1"),
-            ("⏰ Bitiş", DiscordText.Timestamp(TestHost.T0.AddHours(2), 'F') + "\n" + DiscordText.Timestamp(TestHost.T0.AddHours(2), 'R')));
-        embed.Footer.Should().Be("Çekilişi başlatan: Kaan · #12");
+        embed.Description.Should().Be(Prize("🎁 **ÖDÜL**", "Discord Nitro"), "the prize is the heading right under the title — nothing above it");
+        var end = TestHost.T0.AddHours(2);
+        embed.Fields.Select(f => (f.Name, f.Value, f.Inline)).Should().Equal(
+        [
+            ("🏆 Kazanan Sayısı", "**1**", true),
+            ("⏰ Bitiş", DiscordText.Timestamp(end, 'R') + "\n" + DiscordText.Timestamp(end, 'F'), true),
+            ("🎟️ Katılım", "Aşağıdaki 🎉 reaksiyonuna bas.", false),
+            ("📝 Açıklama", "Kazanana Steam üzerinden gönderilecektir.", false),
+        ]);
+        embed.Footer.Should().Be("Başlatan: Kaan · Çekiliş #12");
         embed.Color.Should().Be(GiveawayCards.ActiveColor);
         DiscordLimits.Validate(card).Should().BeEmpty();
+
+        var plain = new GiveawayCards(Localizer()).Render(View(GiveawayStatus.Active), "en").Embed!;
+        plain.Description.Should().Be(Prize("🎁 **PRIZE**", "Discord Nitro"));
+        plain.Fields.Select(f => f.Name).Should().Equal(["🏆 Winners", "⏰ Ends", "🎟️ How to enter"], "no description: no description field");
+        plain.Footer.Should().Be("Started by Kaan · Giveaway #12");
     }
 
     [Fact]
-    public void The_result_card_lists_the_winners_with_medals_and_the_entrant_count()
+    public void The_result_card_keeps_the_prize_on_top_and_lists_the_winners_with_medals()
     {
         var winners = Users(5);
-        var card = new GiveawayCards(Localizer()).Render(View(GiveawayStatus.Finished, winners, winnerCount: 5, entrants: 37, rerolls: 1), "tr");
+        var card = new GiveawayCards(Localizer()).Render(View(GiveawayStatus.Finished, winners, description: "Steam", winnerCount: 5, entrants: 37, rerolls: 1), "tr");
         var embed = card.Embed!;
         embed.Title.Should().Be("🎉 ÇEKİLİŞ SONUÇLANDI");
-        embed.Fields.Select(f => f.Name).Should().Equal("🎁 Ödül", "🏆 Kazananlar", "👥 Katılımcı", "⏰ Bitiş");
-        embed.Fields[1].Value.Should().Be("🥇 <@100>\n🥈 <@101>\n🥉 <@102>\n4. <@103>\n5. <@104>");
-        embed.Fields[2].Value.Should().Be("37");
-        embed.Description.Should().Be("🔁 Kazananlar yeniden çekildi (1. kez).");
+        embed.Description.Should().Be(Prize("🎁 **ÖDÜL**", "Discord Nitro"));
+        embed.Fields.Select(f => (f.Name, f.Inline)).Should().Equal([("🏆 Kazananlar", false), ("👥 Katılımcı", true), ("⏰ Bitti", true), ("📝 Açıklama", false)]);
+        embed.Fields[0].Value.Should().Be("🥇 <@100>\n🥈 <@101>\n🥉 <@102>\n4. <@103>\n5. <@104>");
+        embed.Fields[1].Value.Should().Be("37");
+        embed.Fields[2].Value.Should().Be(DiscordText.Timestamp(TestHost.T0.AddHours(2), 'f'));
+        embed.Footer.Should().Be("Başlatan: Kaan · Çekiliş #12 · 1. kez yeniden çekildi", "a reroll is secondary information");
+        embed.Color.Should().Be(GiveawayCards.FinishedColor);
         card.Mentions.Should().Be(MentionPolicy.None, "the card edit never pings; the announcement does");
+        DiscordLimits.Validate(card).Should().BeEmpty();
 
         var single = new GiveawayCards(Localizer()).Render(View(GiveawayStatus.Finished, Users(1), entrants: 1), "en").Embed!;
-        single.Fields.Select(f => (f.Name, f.Value)).Should().Contain(("🏆 Winner", "🥇 <@100>"));
+        single.Fields[0].Should().Be(new EmbedField("🏆 Winner", "🥇 <@100>"));
         single.Title.Should().Be("🎉 GIVEAWAY ENDED");
+        single.Footer.Should().Be("Started by Kaan · Giveaway #12");
     }
 
     [Fact]
-    public void No_entrants_and_cancelled_cards_say_so()
+    public void No_entrants_and_cancelled_cards_say_so_under_the_same_prize_heading()
     {
         var empty = new GiveawayCards(Localizer()).Render(View(GiveawayStatus.Finished, [], entrants: 0), "tr").Embed!;
-        empty.Description.Should().Be("Çekiliş sona erdi ancak geçerli katılımcı bulunamadı.");
-        empty.Fields.Select(f => f.Name).Should().NotContain(n => n.Contains("Kazanan", StringComparison.Ordinal));
+        empty.Description.Should().Be(Prize("🎁 **ÖDÜL**", "Discord Nitro"));
+        empty.Fields[0].Should().Be(new EmbedField("🏆 Kazanan", "Çekiliş sona erdi ancak geçerli katılımcı bulunamadı."));
+        empty.Fields.Select(f => f.Value).Should().NotContain(v => v.Contains("<@", StringComparison.Ordinal));
 
-        var cancelled = new GiveawayCards(Localizer()).Render(View(GiveawayStatus.Cancelled), "tr").Embed!;
-        cancelled.Title.Should().Be("🚫 ÇEKİLİŞ İPTAL EDİLDİ");
-        cancelled.Description.Should().Be("Bu çekiliş iptal edildi.");
+        var cancelled = new GiveawayCards(Localizer()).Render(View(GiveawayStatus.Cancelled, description: "Steam"), "tr").Embed!;
+        cancelled.Title.Should().Be("⚠️ ÇEKİLİŞ İPTAL EDİLDİ");
+        cancelled.Description.Should().Be(Prize("🎁 **ÖDÜL**", "Discord Nitro"), "the prize stays visible");
+        cancelled.Fields.Select(f => (f.Name, f.Value)).Should().Equal([("📌 Durum", "Bu çekiliş iptal edildi."), ("📝 Açıklama", "Steam")]);
         cancelled.Color.Should().Be(GiveawayCards.EndedColor);
+        new GiveawayCards(Localizer()).Render(View(GiveawayStatus.Cancelled), "en").Embed!.Title.Should().Be("⚠️ GIVEAWAY CANCELLED");
     }
 
     [Fact]
-    public void Untrusted_prize_description_and_name_are_defused_and_catalog_keys_are_not_expanded()
+    public void Untrusted_prize_description_and_name_are_defused_and_only_the_bot_makes_the_heading()
     {
-        var view = View(GiveawayStatus.Active, prize: "@everyone <@&1> **x**", description: "help.title https://evil.example") with { CreatorName = "@here" };
+        var view = View(GiveawayStatus.Active, prize: "## @everyone <@&1> **x**", description: "help.title https://evil.example\n# big") with { CreatorName = "@here" };
         var embed = new GiveawayCards(Localizer()).Render(view, "tr").Embed!;
-        embed.Fields[0].Value.Should().NotContain("@everyone").And.NotContain("<@&1>").And.Contain("\\*\\*x\\*\\*");
-        embed.Description.Should().StartWith("help.title https:​//evil.example", "a prize or description that looks like a key stays text; links are defused");
+        var heading = embed.Description!.Split('\n')[1];
+        heading.Should().StartWith("## \\#\\# ", "the admin's own # stays text");
+        heading.Should().NotContain("@everyone").And.NotContain("<@&1>").And.Contain("\\*\\*x\\*\\*");
+        var description = embed.Fields.Single(f => f.Name == "📝 Açıklama").Value;
+        description.Should().StartWith("help.title https:​//evil.example", "a description that looks like a key stays text; links are defused");
+        description.Should().Contain("\\# big").And.NotContain("\n", "control characters are dropped: no heading from a description line");
         embed.Footer.Should().NotContain("@here");
-        (DiscordText.RawMentionPattern().IsMatch(embed.Fields[0].Value) || DiscordText.RawMentionPattern().IsMatch(embed.Footer!)).Should().BeFalse();
+        (DiscordText.RawMentionPattern().IsMatch(embed.Description) || DiscordText.RawMentionPattern().IsMatch(embed.Footer!)).Should().BeFalse();
     }
 
     [Fact]
