@@ -98,7 +98,7 @@ public static partial class Cli
               simulate                                offline end-to-end demo (fixture data, fake Discord, temp DB)
               esports demo-cards --guild ID [--kind K] [--apply]  TEST/DEMO match cards (all, or one kind) for an authorized test guild
               esports provider-check [--team NAME]    READ-ONLY live fetch summary / team key lookup (sends nothing)
-              predictions football-check [--odds] [--budget N]  READ-ONLY The Odds API check for the automatic football opener (N credits max, default 5)
+              predictions football-check [--odds] [--budget N] [--days D]  READ-ONLY The Odds API check for the automatic football opener (N credits max, default 5; D days ahead, default 7, max 30)
             """);
         return Usage;
     }
@@ -321,7 +321,7 @@ public static partial class Cli
     }
 
     /// <summary>
-    /// predictions football-check [--odds] [--budget N]: a READ-ONLY look at what The Odds API returns for the automatic
+    /// predictions football-check [--odds] [--budget N] [--days D]: a READ-ONLY look at what The Odds API returns for the automatic
     /// football opener (catalog, tracked matches, and — only with --odds, at most N credits, default 5, max 25 — the odds and
     /// the set the priority would pick). Temporary data directory, fake Discord transport, dry-run delivery: nothing is
     /// written to the bot database and nothing is sent anywhere but to the provider. The key is never printed.
@@ -333,6 +333,8 @@ public static partial class Cli
         var withOdds = args.Contains("--odds", StringComparer.OrdinalIgnoreCase);
         var budgetIndex = Array.FindIndex(args, a => string.Equals(a, "--budget", StringComparison.OrdinalIgnoreCase));
         var budget = budgetIndex >= 0 && budgetIndex + 1 < args.Length && int.TryParse(args[budgetIndex + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var b) ? b : 5;
+        var daysIndex = Array.FindIndex(args, a => string.Equals(a, "--days", StringComparison.OrdinalIgnoreCase));
+        var days = daysIndex >= 0 && daysIndex + 1 < args.Length && int.TryParse(args[daysIndex + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var d) ? d : 7;
 
         var temp = Path.Combine(Path.GetTempPath(), "tsq-football-check-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(temp);
@@ -361,7 +363,7 @@ public static partial class Cli
             if (options.Problems().Count > 0)
                 return Failed;
             var check = new AutoFootballVerification(provider, options, TimeProvider.System);
-            var ok = await check.RunAsync(withOdds, budget, CancellationToken.None);
+            var ok = await check.RunAsync(withOdds, budget, CancellationToken.None, days);
             foreach (var line in check.Lines)
                 Console.WriteLine(line);
             return provider.IsConfigured ? ok ? Ok : Failed : Blocked;

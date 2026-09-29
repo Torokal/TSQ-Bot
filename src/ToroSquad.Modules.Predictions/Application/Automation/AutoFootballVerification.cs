@@ -13,6 +13,7 @@ namespace ToroSquad.Modules.Predictions.Application.Automation;
 public sealed class AutoFootballVerification(IFootballOddsProvider provider, AutoFootballOptions options, TimeProvider clock)
 {
     public const int MaxBudget = 25;
+    public const int MaxDays = 30;
 
     public List<string> Lines { get; } = [];
 
@@ -23,9 +24,10 @@ public sealed class AutoFootballVerification(IFootballOddsProvider provider, Aut
 
     public int TrackedMatches { get; private set; }
 
-    public async Task<bool> RunAsync(bool withOdds, int budget, CancellationToken ct)
+    public async Task<bool> RunAsync(bool withOdds, int budget, CancellationToken ct, int days = 7)
     {
         budget = Math.Clamp(budget, 0, MaxBudget);
+        days = Math.Clamp(days, 1, MaxDays);
         if (!provider.IsConfigured)
         {
             Lines.Add("BLOCKED: no API key (" + AutoFootballOptions.ApiKeySetting + "); nothing was requested");
@@ -46,13 +48,13 @@ public sealed class AutoFootballVerification(IFootballOddsProvider provider, Aut
         var tracked = new List<(string Sport, ProviderEvent Event)>();
         foreach (var sport in options.Competitions.Where(active.Contains))
         {
-            var events = await provider.GetEventsAsync(sport, now - TimeSpan.FromHours(3), now + TimeSpan.FromDays(7), ct);
+            var events = await provider.GetEventsAsync(sport, now - TimeSpan.FromHours(3), now + TimeSpan.FromDays(days), ct);
             Note("events " + sport, events.Outcome, events.Quota, events.HttpStatus);
             if (!events.Ok)
                 continue;
             var list = events.Value!;
             var mine = list.Where(e => TrackedTeams.Match(e.HomeTeam) is not null || TrackedTeams.Match(e.AwayTeam) is not null).ToList();
-            Lines.Add($"  {list.Count} event(s) in the next 7 days, {mine.Count} with a followed club");
+            Lines.Add($"  {list.Count} event(s) in the next {days} days, {mine.Count} with a followed club");
             foreach (var e in mine.OrderBy(e => e.CommenceTime))
             {
                 var local = zone is null ? "" : " (" + TimeZoneInfo.ConvertTime(e.CommenceTime, zone).ToString("dd.MM HH:mm", CultureInfo.InvariantCulture) + " TR)";
