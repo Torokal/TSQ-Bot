@@ -38,15 +38,21 @@ public sealed class SummaryOptions
     public int RequestTimeoutSeconds { get; set; } = 25;
 
     /// <summary>
-    /// <c>max_tokens</c>. Covers the model's hidden reasoning tokens too, and OpenCode Go offers no way to switch reasoning
-    /// off (low is the minimum): the first live /ozetle (100 real messages) spent all 900 tokens on reasoning and returned no
-    /// text, while the A/B test had used ~230. The visible answer stays short through the prompt (150–250 words, ~600
-    /// tokens); this is the room for reasoning plus that answer.
+    /// <c>max_tokens</c>. With thinking disabled it only has to hold the answer: the prompt asks for 150–250 words, which
+    /// measured ~640 tokens for 100 messages.
     /// </summary>
-    public int MaxOutputTokens { get; set; } = 2500;
+    public int MaxOutputTokens { get; set; } = 1200;
 
     /// <summary><c>reasoning_effort</c>: the models on OpenCode Go accept low, high or max.</summary>
     public string ReasoningEffort { get; set; } = "low";
+
+    /// <summary>
+    /// Sends DeepSeek's <c>thinking: {"type": "disabled"}</c>. With the summary prompt, "low" reasoning alone still spent the
+    /// whole budget on hidden reasoning (900 and then 2500 tokens, finish_reason "length", no text — live and with the
+    /// synthetic A/B transcript); with thinking disabled the same request used 0 reasoning tokens, ~640 answer tokens and
+    /// ~7 s. OpenCode Go forwards the field (verified 2026-09-29).
+    /// </summary>
+    public bool DisableThinking { get; set; } = true;
 
     public double Temperature { get; set; } = 0.3;
 

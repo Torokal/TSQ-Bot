@@ -78,17 +78,27 @@ public sealed class SummaryAiClientTests
         using var json = JsonDocument.Parse(body);
         var root = json.RootElement;
         root.GetProperty("model").GetString().Should().Be("deepseek-v4.1-flash", "the API model id, without the CLI's provider prefix");
-        root.GetProperty("max_tokens").GetInt32().Should().Be(2500, "room for hidden reasoning plus the short answer");
+        root.GetProperty("max_tokens").GetInt32().Should().Be(1200);
         root.GetProperty("temperature").GetDouble().Should().Be(0.3);
         root.GetProperty("top_p").GetDouble().Should().Be(0.9);
         root.GetProperty("reasoning_effort").GetString().Should().Be("low");
+        root.GetProperty("thinking").GetProperty("type").GetString().Should().Be("disabled", "low reasoning alone spent the whole budget live");
         root.GetProperty("stream").GetBoolean().Should().BeFalse();
-        root.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("model", "messages", "max_tokens", "temperature", "top_p", "reasoning_effort", "stream");
+        root.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("model", "messages", "max_tokens", "temperature", "top_p", "reasoning_effort", "thinking", "stream");
         var messages = root.GetProperty("messages").EnumerateArray().ToList();
         messages.Select(m => m.GetProperty("role").GetString()).Should().Equal("system", "user");
         messages[0].GetProperty("content").GetString().Should().Be(SummaryPrompt.System);
         messages[1].GetProperty("content").GetString().Should().Be(Prompt.User);
         body.Should().NotContain(Key, "the key travels only in the Authorization header");
+    }
+
+    [Fact]
+    public void Thinking_is_only_sent_when_disabled_by_configuration()
+    {
+        using var off = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(Prompt, new SummaryOptions { DisableThinking = false }));
+
+        off.RootElement.TryGetProperty("thinking", out _).Should().BeFalse();
+        off.RootElement.GetProperty("reasoning_effort").GetString().Should().Be("low");
     }
 
     [Fact]
