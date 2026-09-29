@@ -18,9 +18,9 @@ public sealed class SummaryApiKey(string? value)
 
 /// <summary>
 /// <see cref="ISummaryAiClient"/> over OpenCode Go's OpenAI-compatible <c>POST chat/completions</c>: one request per summary,
-/// <c>stream: false</c>, no tools, no web access, the configured model, <c>reasoning_effort</c>, <c>thinking</c> disabled (see
-/// <see cref="SummaryOptions.DisableThinking"/>), temperature, top_p and <c>max_tokens</c>. Every request carries a new random <c>x-opencode-session</c> (a GUID — nothing about the guild, channel,
-/// members or text) and an honest User-Agent (TSQ Bot's summary module). No retry of any kind here: a 4xx, a 429, a 5xx, a
+/// <c>stream: false</c>, no tools, no web access, the configured model, <c>thinking</c> disabled without
+/// <c>reasoning_effort</c> (see <see cref="SummaryOptions.DisableThinking"/>), temperature, top_p and <c>max_tokens</c>. Every
+/// request carries a new random <c>x-opencode-session</c> (a GUID — nothing about the guild, channel, members or text) and an honest User-Agent (TSQ Bot's summary module). No retry of any kind here: a 4xx, a 429, a 5xx, a
 /// network error or a timeout is returned as a failure and the member may simply run /ozetle again later. (The only resend
 /// .NET itself does is a request that never left on a pooled connection the server had already closed — not a second
 /// inference.) The answer's text is returned to the caller and never logged; only status, error code, token counts and
@@ -106,13 +106,13 @@ public sealed class OpenCodeSummaryAiClient(
             json.WriteNumber("max_tokens", settings.MaxOutputTokens);
             json.WriteNumber("temperature", settings.Temperature);
             json.WriteNumber("top_p", settings.TopP);
-            json.WriteString("reasoning_effort", settings.ReasoningEffort);
-            if (settings.DisableThinking)
-            {
-                json.WriteStartObject("thinking");
-                json.WriteString("type", "disabled");
-                json.WriteEndObject();
-            }
+            // Thinking off is thinking.type=disabled ALONE: reasoning_effort is a thinking-mode setting, and sending both was a
+            // contradictory request that some upstream backends answered with unbounded hidden reasoning.
+            json.WriteStartObject("thinking");
+            json.WriteString("type", settings.DisableThinking ? "disabled" : "enabled");
+            json.WriteEndObject();
+            if (!settings.DisableThinking)
+                json.WriteString("reasoning_effort", settings.ReasoningEffort);
 
             json.WriteBoolean("stream", false);
             json.WriteEndObject();

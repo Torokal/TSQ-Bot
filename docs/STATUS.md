@@ -213,10 +213,9 @@ invite link and no global command registration. The source code is public under 
 - Module `summary`, command `/ozetle` (everyone, no options). Stateless: no table, no migration, no background job, no
   message listener or cache (gateway Identify stays Guilds). Off by default (`/modules enable summary`).
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
-  verified from the live `/models` list), `thinking: disabled`, `reasoning_effort: low`, temperature 0.3, top_p 0.9,
+  verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
   `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
-  `x-opencode-session` per summary; honest
-  User-Agent `TSQBot/<version> SummaryModule`. Key only from `OPENCODE_GO_API_KEY` (redacted); without it `/ozetle`
+  `x-opencode-session` per summary; honest User-Agent `TSQBot/<version> SummaryModule`. Key only from `OPENCODE_GO_API_KEY` (redacted); without it `/ozetle`
   says "not configured" and nothing else is affected.
 - **IMPLEMENTED / TESTED_OFFLINE**: member-only transcript (bots incl. earlier summaries, webhooks, system events out),
   oldest → newest, newest 100, mention/role/channel/emoji/timestamp normalization, links → `[link: host]`, attachment and
@@ -233,8 +232,16 @@ invite link and no global command registration. The source code is public under 
   posted, as designed. With `max_tokens` 2500 (#30) the second live run spent all 2500 on reasoning too. Two diagnostic
   requests with the synthetic A/B transcript: the production request reasoned 2427 tokens and was cut off; the same
   request with `thinking: disabled` used 0 reasoning, ~640 answer tokens, ~7 s, correct format. Hence thinking disabled
-  and `max_tokens` 1200.
-- **NOT VERIFIED_LIVE**: a produced summary posted in the channel, the split, thread handling.
+  and `max_tokens` 1200 (#31).
+- **VERIFIED_LIVE (2026-09-29, #31)**: a produced summary posted publicly in the channel (owner screenshot + log
+  `inference ok … finish_reason=stop latency_ms=3588`, `posted parts=1`): exact title, `##` sections incl. the optional
+  plans section, attribution wording.
+- **Intermittent with #31**: the next run in another channel spent all 1200 tokens on reasoning (thinking disabled +
+  `reasoning_effort: low` together); a diagnostic with a compact prompt did the same at 2000. DeepSeek documents
+  `reasoning_effort` as a thinking-mode setting, so the pair is contradictory. Last diagnostic (synthetic transcript, same
+  production prompt/settings, `thinking: disabled` alone): 0 reasoning, 757 tokens, 8.4 s, `stop`, complete format. Hence
+  `reasoning_effort` is no longer sent with thinking disabled. Stability to be observed live.
+- **NOT VERIFIED_LIVE**: the 2000-character split, thread handling.
 
 ## What has been verified against real Discord / real APIs
 
