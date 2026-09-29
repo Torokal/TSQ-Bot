@@ -1,5 +1,6 @@
 using ToroSquad.Core.Guilds;
 using ToroSquad.Modules.Predictions;
+using ToroSquad.Modules.Predictions.Application.Automation;
 using ToroSquad.Modules.Predictions.Domain;
 
 namespace ToroSquad.Tests.Unit;
@@ -229,6 +230,62 @@ public sealed class AutoFootballDomainTests
         OddsSelector.Choose(match, Priority, ["onexbet"], Now, TimeSpan.FromMinutes(30)).Odds!.BookmakerKey.Should().Be("onexbet", "the first APPROVED bookmaker");
         AutoBlockCodes.Code(AutoBlockReason.MarketRuleUnverified).Should().Be("MARKET_RULE_UNVERIFIED");
         AutoBlockCodes.Code(AutoBlockReason.BookmakerNotApproved).Should().Be("BOOKMAKER_NOT_APPROVED");
+    }
+
+    // ---- the production approval: Pinnacle only ----
+
+    private static OddsChoice Production(ProviderOddsEvent match, DateTimeOffset? now = null) =>
+        OddsSelector.Choose(match, AutoFootballOptions.DefaultBookmakerPriority, FootballMarketRules.Production.ApprovedBookmakers, now ?? Now, TimeSpan.FromMinutes(30));
+
+    [Fact]
+    public void Production_approves_pinnacle_only()
+    {
+        FootballMarketRules.Production.ApprovedBookmakers.Should().Equal(["pinnacle"]);
+        FootballMarketRules.Production.Usable(AutoFootballOptions.DefaultBookmakerPriority).Should().Equal(["pinnacle"]);
+        FootballMarketRules.None.Usable(AutoFootballOptions.DefaultBookmakerPriority).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_complete_fresh_pinnacle_h2h_set_passes_the_production_rule()
+    {
+        var choice = Production(Match(Book("onexbet", 1.9m, 3.5m, 4.0m), Book("pinnacle", 1.8m, 3.3m, 4.0m)));
+        (choice.Odds!.BookmakerKey, choice.Odds.HomeX100, choice.Odds.DrawX100, choice.Odds.AwayX100, choice.Reason)
+            .Should().Be(("pinnacle", 180, 330, 400, AutoBlockReason.None));
+    }
+
+    [Fact]
+    public void The_same_set_from_onexbet_alone_is_refused_and_only_reported()
+    {
+        var choice = Production(Match(Book("onexbet", 1.8m, 3.3m, 4.0m)));
+        (choice.Odds, choice.Reason, choice.Unapproved!.BookmakerKey).Should().Be(((SelectedOdds?)null, AutoBlockReason.BookmakerNotApproved, "onexbet"));
+    }
+
+    [Theory]
+    [InlineData("h2h_lay")]
+    [InlineData("draw_no_bet")]
+    [InlineData("h2h_h1")]
+    [InlineData("outrights")]
+    public void A_pinnacle_set_of_another_market_is_refused_and_never_replaced_by_an_unapproved_bookmaker(string market)
+    {
+        var choice = Production(Match(Book("pinnacle", 1.8m, 3.3m, 4.0m, market: market), Book("onexbet", 1.85m, 3.4m, 4.2m)));
+        (choice.Odds, choice.Reason).Should().Be(((SelectedOdds?)null, AutoBlockReason.BookmakerNotApproved), "no fallback to a bookmaker whose rule is not verified");
+    }
+
+    [Fact]
+    public void A_pinnacle_draw_no_bet_shaped_h2h_with_two_outcomes_is_incomplete()
+    {
+        var two = new ProviderBookmaker("pinnacle", "Pinnacle", [new ProviderMarket("h2h", Now - TimeSpan.FromMinutes(5),
+            [new ProviderPrice("Galatasaray", 1.5m), new ProviderPrice("Fenerbahce", 2.5m)])]);
+        Production(Match(two)).Should().Be(new OddsChoice(null, AutoBlockReason.IncompleteMarket, null));
+    }
+
+    [Fact]
+    public void A_stale_incomplete_or_invalid_pinnacle_set_is_refused()
+    {
+        Production(Match(Book("pinnacle", 1.8m, 3.3m, 4.0m, Now - TimeSpan.FromMinutes(31)))).Reason.Should().Be(AutoBlockReason.StaleOdds);
+        Production(Match(Book("pinnacle", 1.8m, 3.3m, 4.0m, drawName: "Galatasaray"))).Reason.Should().Be(AutoBlockReason.IncompleteMarket);
+        Production(Match(Book("pinnacle", 1.0m, 3.3m, 4.0m))).Reason.Should().Be(AutoBlockReason.InvalidOdds);
+        Production(Match(Book("pinnacle", 1.8m, 3.3m, 4.0m, homeName: "Besiktas"))).Reason.Should().Be(AutoBlockReason.IncompleteMarket, "another match's outcomes");
     }
 
     [Fact]

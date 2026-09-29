@@ -324,11 +324,11 @@ public sealed class AutoFootballTests : IAsyncLifetime
     // ---- market rule gate ----
 
     [Fact]
-    public async Task With_the_production_rules_live_makes_no_paid_call_and_observe_shows_the_candidate_with_the_reason()
+    public async Task Without_any_approved_bookmaker_live_makes_no_paid_call_and_observe_shows_the_candidate_with_the_reason()
     {
         var odds = new FakeFootballOdds();
         odds.Price(odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff));
-        await using (var live = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production))
+        await using (var live = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.None))
         {
             await live.PassAsync();
             odds.OddsCalls.Should().Be(0, "no bookmaker's full-time rule is verified: nothing could be published");
@@ -338,10 +338,162 @@ public sealed class AutoFootballTests : IAsyncLifetime
             health.Should().Contain(h => h.Component == "predictions.health.auto_rule" && h.State == HealthState.Degraded);
         }
 
-        await using var observe = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, rules: FootballMarketRules.Production);
+        await using var observe = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, rules: FootballMarketRules.None);
         await observe.PassAsync();
         var row = (await observe.AutoRowsAsync()).Single();
         (row.State, row.Reason, row.BookmakerKey, row.HomeOddsX100).Should().Be((AutoEventState.Observed, AutoBlockReason.MarketRuleUnverified, "pinnacle", 185));
+    }
+
+    // ---- the production approval (Pinnacle only) ----
+
+    /// <summary>Belgium – Turkey, 20:00 in Türkiye (SYNTHETIC prices; not the real provider's).</summary>
+    private static ProviderEvent BelgiumTurkey(FakeFootballOdds odds) => odds.Add(20, "Belgium", "Turkey", Kickoff, FakeFootballOdds.NationsLeague);
+
+    [Fact]
+    public async Task With_the_production_rules_live_opens_a_pinnacle_set_with_turkish_country_names_and_the_providers_side_order()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(BelgiumTurkey(odds), home: 1.62m, draw: 4.10m, away: 5.25m);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production);
+        await kit.PassAsync();
+
+        var prediction = (await kit.AutoPredictionsAsync()).Should().ContainSingle().Subject;
+        prediction.Title.Should().Be("Belçika - Türkiye maç sonucu ne olur?");
+        var view = (await kit.Service(s => s.GetAsync(prediction.Id, Ct)))!;
+        view.Outcomes.Select(o => (o.Label, o.OddsX100)).Should().Equal([("Belçika kazanır", 162), ("Beraberlik", 410), ("Türkiye kazanır", 525)]);
+        (await kit.AutoRowsAsync()).Single().Should().Match<PredictionAutoEventEntity>(r => r.HomeTeam == "Belgium" && r.AwayTeam == "Turkey" && r.BookmakerKey == "pinnacle",
+            "the raw names stay for matching the odds");
+        var card = Shown(kit.Transport.Messages.Should().ContainSingle().Subject);
+        string.Join("\n", card.Embed!.Fields.Select(f => f.Name + f.Value)).Should().NotContain("Turnuva").And.NotContain("Belgium");
+    }
+
+    [Fact]
+    public async Task With_the_production_rules_an_onexbet_only_set_opens_nothing_and_never_falls_back()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(BelgiumTurkey(odds), bookmaker: "onexbet");
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production);
+        await kit.PassAsync();
+
+        odds.OddsCalls.Should().Be(1, "pinnacle is approved, so its set is looked for");
+        var row = (await kit.AutoRowsAsync()).Single();
+        (row.State, row.Reason, row.PredictionId, row.HomeOddsX100).Should().Be((AutoEventState.WaitingForOdds, AutoBlockReason.BookmakerNotApproved, (long?)null, (int?)null));
+        (await kit.AutoPredictionsAsync()).Should().BeEmpty();
+        kit.Transport.Messages.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task The_same_team_on_two_days_gives_two_candidates_each_opened_on_its_own_day()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(BelgiumTurkey(odds));
+        odds.Price(odds.Add(21, "Italy", "Turkey", Kickoff + TimeSpan.FromHours(24.75), FakeFootballOdds.NationsLeague)); // next day 20:45 TR
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", Morning, rules: FootballMarketRules.Production);
+        await kit.PassAsync();
+        (await kit.AutoRowsAsync()).Select(r => (r.ExternalEventId, r.State)).Should().Equal(
+            [(FakeFootballOdds.Id(20), AutoEventState.Planned), (FakeFootballOdds.Id(21), AutoEventState.Planned)], "one row per provider match, not per team");
+
+        kit.Host.Clock.SetUtcNow(NineTr);
+        await kit.PassAsync();
+        (await kit.AutoPredictionsAsync()).Select(p => p.Title).Should().Equal(["Belçika - Türkiye maç sonucu ne olur?"]);
+
+        kit.Host.Clock.SetUtcNow(NineTr + TimeSpan.FromDays(1));
+        await kit.PassAsync();
+        (await kit.AutoPredictionsAsync()).Select(p => p.Title).Should().Equal(["Belçika - Türkiye maç sonucu ne olur?", "İtalya - Türkiye maç sonucu ne olur?"]);
+    }
+
+    [Fact]
+    public async Task A_match_after_midnight_in_turkiye_but_on_the_previous_utc_day_is_discovered_and_published_from_local_midnight()
+    {
+        var odds = new FakeFootballOdds();
+        var late = odds.Add(22, "Turkey", "Italy", new DateTimeOffset(2026, 10, 5, 21, 30, 0, TimeSpan.Zero), FakeFootballOdds.NationsLeague); // 6 Oct 00:30 TR
+        odds.Price(late);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production);
+        await kit.PassAsync();
+        var row = (await kit.AutoRowsAsync()).Single();
+        (row.ExternalEventId, row.PublishAt).Should().Be((late.Id, new DateTimeOffset(2026, 10, 5, 21, 0, 0, TimeSpan.Zero)), "00:00 of its Türkiye day");
+        odds.OddsCalls.Should().Be(0);
+
+        kit.Host.Clock.SetUtcNow(row.PublishAt);
+        await kit.PassAsync();
+        (await kit.AutoPredictionsAsync()).Single().Title.Should().Be("Türkiye - İtalya maç sonucu ne olur?");
+    }
+
+    [Fact]
+    public async Task A_match_the_provider_does_not_list_gets_no_row_no_odds_and_no_card()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Add(23, "France", "Italy", Kickoff, FakeFootballOdds.NationsLeague); // a listed match without a followed team
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production);
+        await kit.PassAsync();
+        (await kit.AutoRowsAsync()).Should().BeEmpty();
+        odds.OddsCalls.Should().Be(0);
+        (await kit.AutoPredictionsAsync()).Should().BeEmpty();
+        kit.Transport.Messages.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Observe_with_the_production_rules_records_the_pinnacle_set_without_any_discord_or_economic_effect()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(BelgiumTurkey(odds));
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, rules: FootballMarketRules.Production);
+        (await kit.PassAsync()).Observed.Should().Be(1);
+        var row = (await kit.AutoRowsAsync()).Single();
+        (row.State, row.Reason, row.BookmakerKey, row.PredictionId).Should().Be((AutoEventState.Observed, AutoBlockReason.None, "pinnacle", (long?)null));
+        kit.Transport.Messages.Should().BeEmpty();
+        (await kit.CountAsync<PredictionEntity>()).Should().Be(0);
+        (await kit.CountAsync<PredictionWalletEntity>()).Should().Be(0);
+        (await kit.CountAsync<PredictionTournamentEntity>()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task An_observation_refused_for_the_market_rule_is_judged_again_under_the_approval_without_reusing_its_old_odds()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(BelgiumTurkey(odds));
+        await using var before = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, rules: FootballMarketRules.None);
+        await before.PassAsync();
+        var old = (await before.AutoRowsAsync()).Single();
+        (old.State, old.Reason, old.OddsAttempts).Should().Be((AutoEventState.Observed, AutoBlockReason.MarketRuleUnverified, 1));
+
+        // Ten minutes later the approval exists; the old snapshot would still be "fresh", but it was not fetched for this rule.
+        odds.FailOdds = ProviderCallOutcome.Unavailable;
+        await using var after = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr + TimeSpan.FromMinutes(10), directory: before.Host.Directory,
+            transport: before.Transport, rules: FootballMarketRules.Production);
+        await after.PassAsync();
+        var waiting = (await after.AutoRowsAsync()).Single();
+        (waiting.State, waiting.Reason, waiting.OddsAttempts, waiting.OddsFetchedAt, waiting.OddsUpdatedAt)
+            .Should().Be((AutoEventState.WaitingForOdds, AutoBlockReason.ProviderUnavailable, 2, (DateTimeOffset?)null, old.OddsUpdatedAt),
+                "a new attempt was used, the old odds were not taken as fresh and their last update was not rewritten");
+        odds.OddsCalls.Should().Be(2);
+
+        odds.FailOdds = null;
+        after.Host.Clock.SetUtcNow(waiting.NextAttemptAt!.Value);
+        await after.PassAsync();
+        var judged = (await after.AutoRowsAsync()).Single();
+        (judged.State, judged.Reason, judged.BookmakerKey, judged.OddsFetchedAt).Should().Be((AutoEventState.Observed, AutoBlockReason.None, "pinnacle", waiting.NextAttemptAt));
+        judged.OddsUpdatedAt.Should().BeAfter(old.OddsUpdatedAt!.Value);
+        (await after.AutoPredictionsAsync()).Should().BeEmpty("an observation is never a published card");
+        after.Transport.Messages.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task An_observation_refused_for_the_market_rule_whose_attempts_are_used_up_is_reported_not_reset()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(BelgiumTurkey(odds));
+        var oneAttempt = new Dictionary<string, string?> { ["Predictions:Automation:MaxOddsAttemptsPerEvent"] = "1" };
+        await using var before = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, oneAttempt, rules: FootballMarketRules.None);
+        await before.PassAsync();
+
+        await using var after = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr + TimeSpan.FromMinutes(10), oneAttempt, before.Host.Directory, before.Transport,
+            FootballMarketRules.Production);
+        await after.PassAsync();
+        var row = (await after.AutoRowsAsync()).Single();
+        (row.State, row.Reason, row.OddsAttempts, row.NextAttemptAt).Should().Be((AutoEventState.Skipped, AutoBlockReason.AttemptsExhausted, 1, (DateTimeOffset?)null));
+        odds.OddsCalls.Should().Be(1, "no call beyond the limit");
+        AutoBlockCodes.Code(AutoBlockReason.AttemptsExhausted).Should().Be("ATTEMPTS_EXHAUSTED");
     }
 
     // ---- missing matches ----
@@ -654,12 +806,20 @@ public sealed class AutoFootballTests : IAsyncLifetime
         check.Lines.Should().Contain(l => l.Contains("skipped (total budget 1 reached)", StringComparison.Ordinal));
         check.Lines.Should().Contain(l => l.Contains("excluded outright (tournament winner, not a match): soccer_fifa_world_cup_winner", StringComparison.Ordinal));
 
-        // Production approval (no bookmaker's full-time rule verified yet): the data is shown, never accepted.
+        // No approved bookmaker: the data is shown, never accepted.
+        var unapproved = new AutoFootballVerification(odds, options, _kit.Host.Clock, FootballMarketRules.None);
+        (await unapproved.RunAsync(withOdds: true, budget: 1, Ct)).Should().BeTrue();
+        unapproved.Lines.Should().Contain(l => l.Contains("NONE — MARKET_RULE_UNVERIFIED", StringComparison.Ordinal));
+        unapproved.Lines.Should().Contain(l => l.Contains("candidate pinnacle", StringComparison.Ordinal));
+        unapproved.Lines.Should().Contain("    REJECTED: MARKET_RULE_UNVERIFIED");
+
+        // Production approval (Pinnacle only): an onexbet set is shown with its reason, never accepted.
+        odds.Price(odds.Events[FakeFootballOdds.SuperLig].Single(e => e.Id == FakeFootballOdds.Id(1)), bookmaker: "onexbet");
         var production = new AutoFootballVerification(odds, options, _kit.Host.Clock);
         (await production.RunAsync(withOdds: true, budget: 1, Ct)).Should().BeTrue();
-        production.Lines.Should().Contain(l => l.Contains("NONE — MARKET_RULE_UNVERIFIED", StringComparison.Ordinal));
-        production.Lines.Should().Contain(l => l.Contains("candidate pinnacle", StringComparison.Ordinal));
-        production.Lines.Should().Contain("    REJECTED: MARKET_RULE_UNVERIFIED");
+        production.Lines.Should().Contain(l => l.EndsWith("(full-time rule verified): pinnacle", StringComparison.Ordinal));
+        production.Lines.Should().Contain(l => l.Contains("candidate onexbet", StringComparison.Ordinal));
+        production.Lines.Should().Contain("    REJECTED: BOOKMAKER_NOT_APPROVED");
         (await _kit.AutoRowsAsync()).Should().BeEmpty("the check writes nothing");
         _kit.Transport.Messages.Should().BeEmpty();
 

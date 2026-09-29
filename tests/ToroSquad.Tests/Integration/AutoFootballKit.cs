@@ -134,7 +134,7 @@ public static class AutoFootballKit
         return settings;
     }
 
-    /// <summary>SYNTHETIC approval for the tests (production approves only bookmakers whose rule is verified — none today).</summary>
+    /// <summary>SYNTHETIC approval for the tests (production approves only bookmakers whose rule is verified — pinnacle).</summary>
     public static readonly FootballMarketRules TestRules = new(["pinnacle", "onexbet"]);
 
     public static async Task<PredictionTestKit> CreateAsync(FakeFootballOdds odds, string mode, DateTimeOffset start, Dictionary<string, string?>? extra = null,
