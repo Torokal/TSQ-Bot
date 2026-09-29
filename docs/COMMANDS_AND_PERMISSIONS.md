@@ -170,7 +170,8 @@ View Channel, Read Message History. Ayrıntı: [summary/TSQ_SUMMARY.md](summary/
 | `/ongoru cuzdan`, `/ongoru gunluk`, `/ongoru tahminlerim` | komut kanalı | herkes | özel |
 | `/ongoru liderlik`, `/ongoru turnuva durum` | komut kanalı | herkes | herkese açık, ping'siz |
 | `/ongoru turnuva bitir` | komut kanalı | Administrator veya sunucu sahibi (yaratıcı rolü yetmez) | özel önizleme + [🏁 Turnuvayı Bitir]; kapanış duyurusu herkese açık, ping'siz |
-| Kart: 🎯 Tahmin Yap → form (sonuç + tutar) → Onayla | öngörü kanalı | herkes (botlar hariç) | özel önizleme ve makbuz |
+| Kart: 🎯 Tahmin Yap → form (sonuç + tutar) → Submit = tahmin | öngörü kanalı | herkes (botlar hariç) | özel makbuz (ikinci onay yok) |
+| ✏️ Tahminimi Değiştir / ↩️ Tahminimi Geri Çek (özel mesajda; öngörü açıkken) | öngörü kanalı | yalnızca kendi aktif tahmini | özel |
 | Kart: 🔒 Kilitle | öngörü kanalı | öngörünün yaratıcısı (rolü hâlâ varken), Administrator veya sunucu sahibi | özel onay |
 | Kart: ✅ Sonuçlandır | öngörü kanalı | aynı | özel sonuç seçimi + önizleme + onay |
 | Kart: ↩️ İptal / İade | öngörü kanalı | aynı | gerekçe formu + özel önizleme + onay |

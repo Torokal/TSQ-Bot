@@ -9,7 +9,7 @@ namespace ToroSquad.Modules.Predictions.Application;
 
 /// <summary>
 /// Every message of TSQ Öngörü except the card (<see cref="PredictionCards"/>): the private form preview and errors, the
-/// entry preview and receipt, the private lock/settle/cancel/end confirmations, the wallet, the entry list, and the public
+/// entry receipt, the member's active entry and withdrawal (with ✏️ / ↩️), the private lock/settle/cancel/end confirmations, the wallet, the entry list, and the public
 /// leaderboard, tournament status and closing announcement. All go out with <see cref="MentionPolicy.None"/>. Leaderboards
 /// name members by embed mentions (Discord shows the current name and never pings; nobody is called a "former member"
 /// because a cache missed them); the closing announcement uses the display names frozen with the podium and no mention at
@@ -23,11 +23,17 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
     public const string EditPrefix = "tsq:pred:edit:";
     public const string DiscardPrefix = "tsq:pred:discard:";
 
-    /// <summary>The entry form: "{prediction}" from the card, "{prediction}.{token}" when reopened with Düzenle.</summary>
+    /// <summary>The entry form of a new entry: "{prediction}".</summary>
     public const string StakeModalPrefix = "tsq:pred:stake:";
 
-    public const string EntryConfirmPrefix = "tsq:pred:entry-ok:";
-    public const string EntryEditPrefix = "tsq:pred:entry-edit:";
+    /// <summary>The change form of the member's active entry: "{prediction}".</summary>
+    public const string ChangeModalPrefix = "tsq:pred:change-form:";
+
+    /// <summary>✏️ Tahminimi Değiştir / ↩️ Tahminimi Geri Çek / 🎯 Tekrar Tahmin Yap on a private answer: "{prediction}" (the member is the clicker).</summary>
+    public const string ChangePrefix = "tsq:pred:change:";
+
+    public const string WithdrawPrefix = "tsq:pred:withdraw:";
+    public const string AgainPrefix = "tsq:pred:again:";
     public const string LockConfirmPrefix = "tsq:pred:lock-ok:";
     public const string SettlePickPrefix = "tsq:pred:settle-pick:";
 
@@ -88,38 +94,42 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
 
     // ---- enter ----
 
-    public OutgoingMessage EntryPreview(string title, string outcome, int oddsX100, long stake, long payout, long balanceAfter, string token, string language)
-    {
-        var embed = new MessageEmbed(L(language, "predictions.entry.preview_title"), Question(title), null,
-        [
-            new(L(language, "predictions.entry.choice"), DiscordText.Untrusted(outcome, 400), true),
-            new(L(language, "predictions.entry.odds"), Odds.Format(oddsX100), true),
-            new(L(language, "predictions.entry.stake"), Coin(stake, language), true),
-            new(L(language, "predictions.entry.return"), Coin(payout, language), true),
-            new(L(language, "predictions.entry.gain"), Coin(Coins.Subtract(payout, stake), language), true),
-            new(L(language, "predictions.entry.balance_after"), Coin(balanceAfter, language), true),
-            new(L(language, "predictions.entry.final_title"), L(language, "predictions.entry.final")),
-        ], null, null, BrandColor);
-        return new OutgoingMessage(null, embed, MentionPolicy.None,
-        [
-            new MessageButton(L(language, "predictions.entry.confirm"), EntryConfirmPrefix + token, null, Style: MessageButtonStyle.Success),
-            new MessageButton(L(language, "predictions.entry.edit"), EntryEditPrefix + token, null),
-            new MessageButton(L(language, "predictions.dismiss"), DismissPrefix + token, null),
-        ]);
-    }
+    /// <summary>After a submit or a change (private): what is now staked, with ✏️ Tahminimi Değiştir / ↩️ Tahminimi Geri Çek.</summary>
+    public OutgoingMessage EntryReceipt(long predictionId, string title, string outcome, int oddsX100, long stake, long payout, long balance, bool changed,
+        string language) =>
+        new(null, new MessageEmbed(L(language, changed ? "predictions.change.receipt_title" : "predictions.entry.receipt_title"),
+                EntryLines(title, outcome, oddsX100, stake, payout, balance, language), null, [], null, null, SuccessColor),
+            MentionPolicy.None, EntryButtons(predictionId, language));
 
-    public OutgoingMessage EntryReceipt(string title, string outcome, int oddsX100, long stake, long payout, long balance, string language)
-    {
-        var embed = new MessageEmbed(L(language, "predictions.entry.receipt_title"), Question(title), null,
+    /// <summary>🎯 Tahmin Yap with an active entry (read from the database): that entry, with ✏️ / ↩️.</summary>
+    public OutgoingMessage CurrentEntry(long predictionId, string title, string outcome, int oddsX100, long stake, long payout, long balance, string? noteKey,
+        string language) =>
+        new(noteKey is null ? null : L(language, noteKey), new MessageEmbed(L(language, "predictions.entry.current_title"),
+                EntryLines(title, outcome, oddsX100, stake, payout, balance, language), null, [], null, null, BrandColor),
+            MentionPolicy.None, EntryButtons(predictionId, language));
+
+    /// <summary>After ↩️ Tahminimi Geri Çek: the stake that came back, with a shortcut to enter again.</summary>
+    public OutgoingMessage Withdrawn(long predictionId, long refunded, long balance, string language) =>
+        new(L(language, "predictions.withdraw.text", Coin(refunded, language), Coin(balance, language)), null, MentionPolicy.None,
         [
-            new(L(language, "predictions.entry.choice"), DiscordText.Untrusted(outcome, 400), true),
-            new(L(language, "predictions.entry.odds"), Odds.Format(oddsX100), true),
-            new(L(language, "predictions.entry.stake"), Coin(stake, language), true),
-            new(L(language, "predictions.entry.return"), Coin(payout, language), true),
-            new(L(language, "predictions.entry.balance_now"), Coin(balance, language), true),
-        ], L(language, "predictions.entry.receipt_footer"), null, SuccessColor);
-        return new OutgoingMessage(null, embed, MentionPolicy.None);
-    }
+            new MessageButton(L(language, "predictions.withdraw.again"), AgainPrefix + Number(predictionId), null, Style: MessageButtonStyle.Primary),
+        ]);
+
+    private string EntryLines(string title, string outcome, int oddsX100, long stake, long payout, long balance, string language) => string.Join("\n",
+        Question(title),
+        "🎯 **" + DiscordText.Untrusted(outcome, 400) + "**",
+        L(language, "predictions.entry.line_odds", Odds.Format(oddsX100)),
+        L(language, "predictions.entry.line_stake", Coin(stake, language)),
+        L(language, "predictions.entry.line_return", Coin(payout, language)),
+        L(language, "predictions.entry.line_balance", Coin(balance, language)),
+        "",
+        L(language, "predictions.entry.can_change"));
+
+    private IReadOnlyList<MessageButton> EntryButtons(long predictionId, string language) =>
+    [
+        new MessageButton(L(language, "predictions.entry.change"), ChangePrefix + Number(predictionId), null, Style: MessageButtonStyle.Primary),
+        new MessageButton(L(language, "predictions.entry.withdraw"), WithdrawPrefix + Number(predictionId), null, Style: MessageButtonStyle.Danger),
+    ];
 
     // ---- manage: lock / settle / cancel ----
 
@@ -224,6 +234,7 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         PredictionEntryStatus.Won => L(language, "predictions.mine.won", Coin(row.PayoutMinor ?? 0, language)),
         PredictionEntryStatus.Lost => L(language, "predictions.mine.lost"),
         PredictionEntryStatus.Refunded => L(language, "predictions.mine.refunded"),
+        PredictionEntryStatus.Withdrawn => L(language, "predictions.mine.withdrawn"),
         _ => L(language, row.PredictionStatus == PredictionStatus.Locked ? "predictions.mine.pending_locked" : "predictions.mine.pending", Coin(row.PotentialPayoutMinor, language)),
     };
 

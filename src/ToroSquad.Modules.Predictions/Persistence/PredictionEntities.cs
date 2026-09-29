@@ -119,8 +119,9 @@ public sealed class PredictionOutcomeEntity
 }
 
 /// <summary>
-/// One member's single entry in one prediction. The odds and the possible payout are snapshots taken when it was confirmed:
-/// the settlement pays exactly <see cref="PotentialPayoutMinor"/>, whatever the configuration says later.
+/// One member's single entry in one prediction (one row per member and prediction, reused after a withdrawal). The odds and
+/// the possible payout are snapshots taken when it was submitted or last changed, from the stored outcome: the settlement
+/// pays exactly <see cref="PotentialPayoutMinor"/>, whatever the configuration says later.
 /// </summary>
 public sealed class PredictionEntryEntity
 {
@@ -135,14 +136,23 @@ public sealed class PredictionEntryEntity
     public int OddsX100 { get; set; }
     public long PotentialPayoutMinor { get; set; }
     public PredictionEntryStatus Status { get; set; }
+
+    /// <summary>
+    /// 0 when created, +1 at every change, withdrawal or new entry after a withdrawal: part of those operations' ledger keys,
+    /// so each is booked exactly once.
+    /// </summary>
+    public int Revision { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
     public DateTimeOffset? SettledAt { get; set; }
     public long? PayoutMinor { get; set; }
 }
 
 /// <summary>
 /// The coin journal: every change of a wallet's spendable balance, with a unique <see cref="OperationKey"/> per economic
-/// operation (initial:w1, daily:c7, stake:e3, payout:e3, refund:e3) so the same operation can never be booked twice.
+/// operation (initial:w1, daily:c7, stake:e3, payout:e3, refund:e3; an entry's later operations carry its revision:
+/// stake-up:e3:r1, stake-down:e3:r2, withdraw:e3:r3, stake:e3:r4) so the same operation can never be booked twice.
 /// </summary>
 public sealed class PredictionLedgerEntity
 {
@@ -288,7 +298,7 @@ public sealed class PredictionsModelContributor : IModelContributor
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).ValueGeneratedOnAdd();
             e.Property(x => x.Status).HasConversion<int>();
-            e.HasIndex(x => new { x.PredictionId, x.UserId }).IsUnique(); // one entry per member and prediction
+            e.HasIndex(x => new { x.PredictionId, x.UserId }).IsUnique(); // one entry (at most one active bet) per member and prediction
             e.HasIndex(x => new { x.TournamentId, x.UserId });
             e.HasIndex(x => new { x.GuildId, x.UserId }); // privacy export/delete
             e.HasIndex(x => new { x.PredictionId, x.Status });

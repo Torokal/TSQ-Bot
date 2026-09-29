@@ -79,8 +79,12 @@ Oran: 3.10
 📜 Sonuçlandırma kuralı (varsa)
 [🎯 Tahmin Yap]
 [🔒 Kilitle] [✅ Sonuçlandır] [↩️ İptal / İade]
-TSQ Öngörü #12 · Turnuva 3 · Oluşturan: Toro
+TSQ Öngörü #12 · Oluşturan: Toro · Sabit oran
 ```
+
+- Public kartta **turnuva gösterilmez** (adı, numarası, ID'si yok). Öngörü veride turnuvasına bağlı kalır: ödeme o turnuvanın
+  cüzdanına yazılır, liderlik ve turnuva kapanışı onu kullanır; `/ongoru turnuva durum|bitir`, kapanış duyurusu,
+  `/ongoru cuzdan` ve `/ongoru tahminlerim` turnuvayı göstermeye devam eder.
 
 - Kartın en büyük metni öngörünün **başlığıdır**; seçenekler 1️⃣…🔟, sonra **11.** … ile numaralanır. Uzun/çok biçimli
   metinde düzen kod bloğuna, o da sığmazsa alanlara geçer — hiçbir şey kesilmez; hiçbir durumda sığmayacak bir öngörü formda
@@ -95,27 +99,46 @@ TSQ Öngörü #12 · Turnuva 3 · Oluşturan: Toro
   `…:cancel:12`); restart sonrası da çalışır. Her tıklamada öngörü veritabanından yeniden okunur ve **sunucu + kanal + kartın
   kendi mesajı** doğrulanır: başka sunucudan, başka kanaldan, başka bir mesaja kopyalanmış butondan veya elle yazılmış bir
   numarayla gelen tıklama "bulunamadı" görünür.
-- Katılımlar kartta birleştirilerek güncellenir (son 10 sn içinde düzenlendiyse bir sonraki worker turuna, ~10 sn, kalır); her
-  katılımda yeni mesaj veya DM yok. Yönetim butonlarına basmak herkese açık mesaj üretmez; onaylar ve hatalar özeldir.
+- Kartın 👥 katılımcı ve 🪙 toplam sayıları yalnızca **aktif** tahminleri sayar (geri çekilen düşer; tutar değişikliği farkı
+  kadar, sonuç değişikliği hiç değiştirmez). Katılım, değişiklik ve geri çekme kartta birleştirilerek güncellenir (son 10 sn
+  içinde düzenlendiyse bir sonraki worker turuna, ~10 sn, kalır); hiçbirinde yeni mesaj veya DM yok. Yönetim butonlarına basmak herkese açık mesaj üretmez; onaylar ve hatalar özeldir.
 
-## 🎯 Tahmin Yap (katılım)
+## 🎯 Tahmin Yap (katılım), değiştirme ve geri çekme
 
 ```
-🎯 Tahmin Yap → form (Sonuç: seçim menüsü · Yatırılacak TSQ Coin: metin)
-  → özel önizleme [✅ Onayla] [✏️ Düzenle] [Vazgeç] → atomik katılım → özel makbuz
+🎯 Tahmin Yap → form (Sonuç: seçim menüsü · Yatırılacak TSQ Coin: metin) → Submit
+  → tahmin DOĞRUDAN kaydedilir (atomik) → özel makbuz [✏️ Tahminimi Değiştir] [↩️ Tahminimi Geri Çek]
 ```
 
-- Form, sabitlenmiş Discord.Net 3.20.1'in modal içi String Select desteğini (TSQ LFG formuyla aynı "label" bileşeni) kullanır:
-  2–25 sonuç, her biri "Galatasaray Kazanır — 1.10". Kartta paylaşılan bir seçim menüsü yoktur; formu kapatan üye 🎯 Tahmin Yap'a
-  tekrar basıp **aynı sonucu doğrudan** seçebilir.
-- **Düzenle** formu önceki seçim ve tutarla yeniden açar; gönderilince önceki önizleme geçersiz olur.
-- Önizleme: sonuç, sabit oran, yatırılacak coin, kazanırsa toplam dönüş, net kazanç, işlem sonrası kullanılabilir bakiye,
-  V1'de değiştirme/geri çekme olmadığı.
-- Tahmin Yap, sonuç seçimi, formu açma/kapama, Düzenle, Vazgeç ve önizleme **hiçbir coin hareketi yapmaz**; coin yalnızca
-  son **Onayla**'da düşülür. Onay tek yazma işleminde yeniden denetler: sunucu, kanal, modül, aktif turnuva, öngörü durumu,
-  kilit zamanı (`şimdi ≥ kilit` ise ret — worker kartı güncellememiş olsa bile), sonucun bu öngörüye ait olması, bakiye, mevcut
-  katılım ve onayın bu üyeye ait olması. İki önizleme açılmışsa yalnızca ilk başarılı onay katılım oluşturur (veritabanında
-  öngörü/üye başına tek katılım).
+- **İkinci bir onay yoktur:** formun Submit'i son karardır. Formu açmak, sonuç seçmek veya formu kapatmak coin hareketi
+  yapmaz; coin yalnızca geçerli bir Submit'in yazma işleminde düşer. Submit tek yazma işleminde denetler: sunucu, kanal, modül,
+  aktif turnuva, öngörü durumu, kilit zamanı (`şimdi ≥ kilit` ise ret — worker kartı güncellememiş olsa bile), sonucun bu
+  öngörüye ait olması (oran istemciden değil, kayıtlı sonuçtan alınır), mevcut aktif tahmin ve bakiye; sonra katılımı, coin
+  düşümünü, hareket kaydını ve kart sayılarını birlikte yazar. Geçersiz Submit hiçbir şeyi değiştirmez.
+- Özel makbuz: "✅ Tahminin kaydedildi!", 🎯 sonuç, 📈 oran, 🪙 yatırılan, 💰 olası toplam dönüş, 👛 kullanılabilir bakiye ve
+  "Öngörü kilitlenene kadar tahminini değiştirebilir veya geri çekebilirsin." Kanala kimin ne yatırdığını söyleyen mesaj gitmez.
+- Özel mesaj kaybolsa da çıkmaz yok: karttaki **🎯 Tahmin Yap** her zaman giriş noktasıdır; aktif tahmini olan üye yeni form
+  yerine veritabanından okunan **🎯 Mevcut Tahminin**'i (sonuç, oran, yatırılan) ✏️ / ↩️ butonlarıyla görür. Aynı form iki kez
+  gelirse (veya ikinci bir form açıldıysa) ikinci Submit hiçbir şeyi değiştirmez ve mevcut tahmini gösterir.
+- **✏️ Tahminimi Değiştir** (yalnızca öngörü açıkken): form mevcut sonuç ve tutarla dolu açılır; Submit değişikliğin kendisidir.
+  Sonuç ve tutar değişebilir. Yalnızca **fark** hareket eder: 100 → 150 yalnız 50 düşer, 150 → 100 50 iade eder, aynı tutarla
+  başka sonuç bakiyeyi değiştirmez. Sonuç değişirse oran snapshot'ı yeni sonucun kayıtlı oranı olur. Fark bakiyeyi aşarsa
+  ("Bu değişiklik için 50 TSQ Coin daha gerekiyor, ancak kullanılabilir bakiyen 20 TSQ Coin.") **hiçbir şey** değişmez (sonuç
+  bile).
+- **↩️ Tahminimi Geri Çek** (yalnızca öngörü açıkken): ek "emin misin?" sorusu yok; yatırılan **ana para** (olası kazanç değil)
+  tamamen iade edilir ("↩️ Tahminin geri çekildi. 🪙 100 TSQ Coin bakiyene iade edildi. 👛 Yeni bakiyen: …",
+  `[🎯 Tekrar Tahmin Yap]`). Geri çekilen tahmin geçmişte kalır (`Withdrawn`): kart sayılarına, ödemeye, iptal iadesine, doğru/
+  yanlış sayısına ve bekleyen coin'e girmez, ama üyenin bu turnuvada tahmin yaptığını gösterir (liderlik uygunluğu kalır).
+  Öngörü açıksa üye yeniden tahmin yapabilir (aynı satır `Withdrawn → Pending`); öngörü/üye başına **en fazla bir aktif tahmin**
+  (veritabanında öngörü/üye başına tek satır).
+- Öngörü **kilitlendiğinde, sonuçlandığında, iptal edildiğinde** veya kilit zamanı geldiğinde (worker çalışmamış olsa bile)
+  değiştirme ve geri çekme reddedilir: "Bu öngörü artık kilitlendiği için tahminini değiştiremez veya geri çekemezsin."
+- Kilitleme, sonuçlandırma ve iptal ile yarışan değiştirme/geri çekme aynı `BEGIN IMMEDIATE` yazma kilidinde sıralanır: önce
+  commit olan geçerlidir (değişiklik/geri çekme önce ise tamamlanır, sonra kilit/sonuç/iptal onu görür; aksi hâlde reddedilir).
+  Aynı tutar hem ödeme hem geri çekme iadesi, hem iptal iadesi hem geri çekme iadesi alamaz.
+- Hareket kayıtları ayrı türlerdedir ve her işlem bir kez yazılır: `stake:e3` (ilk katılım), `stake-up:e3:r1` (artış),
+  `stake-down:e3:r2` (azalış iadesi), `withdraw:e3:r3` (geri çekme iadesi), `stake:e3:r4` (geri çekmeden sonra yeniden
+  katılım), `payout:e3`, `refund:e3`.
 - En az 1 TSQ Coin, en fazla iki ondalık (`100`, `12.5`, `12,50`); bakiye üstü ve negatif bakiye yok; botlar katılamaz.
 
 ## Kart yönetimi
@@ -246,8 +269,9 @@ oluşturulan cüzdan uygunluk sağlamaz; önceki turnuvadaki aktivite yeni turnu
 - **🎯 En Çok Doğru Tahmin** = doğru sonuçlanan benzersiz öngörü sayısı (yaratmak puan vermez). Gösterim "12 doğru / 15
   sonuçlanan (%80)"; hiç sonuçlanmış tahmini olmayan (ör. yalnızca öngörü yaratan) "0 doğru · Henüz sonuçlanmış tahmini yok"
   (yanıltıcı %0 yok). Eşitlik: doğru sayısı → başarı yüzdesi (sonuçlanmışı olmayan en sonda) → toplam coin → kullanıcı ID.
-- İlk 10; az kişi varsa olanlar, kimse yoksa boş durum. Sıralama SQLite'ta `ORDER BY … LIMIT` ile yapılır; okumak cüzdan
-  oluşturmaz. Liderlikte üyeler embed mention'ı olarak gösterilir (ping yok); kapanış duyurusu mention kullanmaz.
+- Her sıralamada **en fazla ilk 10** (sayfa yok); az kişi varsa yalnızca olanlar, kimse yoksa boş durum. Sıralama SQLite'ta
+  `ORDER BY … LIMIT 10` ile yapılır; okumak cüzdan oluşturmaz. Geri çekilen tahmin uygunluğu korur ama coin'e (yalnız aktif
+  ana para bekleyen sayılır) ve doğru/sonuçlanan sayısına girmez. Turnuva kapanışındaki ilk 3 değişmedi. Liderlikte üyeler embed mention'ı olarak gösterilir (ping yok); kapanış duyurusu mention kullanmaz.
 
 ## Kalıcılık ve eşzamanlılık
 
@@ -297,7 +321,8 @@ token'ları yalnızca bellektedir.
 
 ## Operasyon ve denetim izi
 
-Loglar yalnızca ID, sayı ve tutar içerir: `prediction_published`, `prediction_entry`, `prediction_locked`,
+Loglar yalnızca ID, sayı ve tutar içerir: `prediction_published`, `prediction_entry`, `prediction_entry_changed`,
+`prediction_entry_withdrawn`, `prediction_locked`,
 `prediction_settled` (kim, hangi öngörü, hangi sonuç, kazanan sayısı, ödeme), `prediction_cancelled`, `prediction_daily`,
 `tournament_closed` (kim, hangi turnuva). `/bot status`: iki kanalın bot izinleri, yaratıcı rolü, doğrulanmayı bekleyen /
 silinmiş / güncellenemeyen kart sayıları, bekleyen/gönderilemeyen duyurular, bekleyen coin tutarlılık denetimi.
@@ -305,5 +330,5 @@ silinmiş / güncellenemeyen kart sayıları, bekleyen/gönderilemeyen duyurular
 ## Kapsam dışı (V1)
 
 Gerçek para, coin satışı/çekme, transfer, gerçek ödül, mağaza, kupon/parlay, cash-out, dinamik oran, otomatik sonuç/öngörü, web
-paneli, katılım değiştirme/geri çekme, yeniden açma, yeniden sonuçlandırma, zorla turnuva bitirme, toplu otomatik iptal,
+paneli, kilitlendikten sonra katılım değiştirme/geri çekme, yeniden açma, yeniden sonuçlandırma, zorla turnuva bitirme, toplu otomatik iptal,
 seri/saatlik/haftalık ödül, kullanıcı tarafından coin sıfırlama.

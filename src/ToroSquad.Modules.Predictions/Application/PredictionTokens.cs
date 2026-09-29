@@ -12,9 +12,6 @@ public abstract record PendingStep;
 /// <summary>The creation form between modal, preview and publish; bound to the channel and the tournament it was opened in.</summary>
 public sealed record FormDraftStep(ChannelId Channel, long TournamentId, PredictionFormValues Values) : PendingStep;
 
-/// <summary>An entry waiting for its Onayla click; everything is checked again on the click.</summary>
-public sealed record EntryStep(long PredictionId, long OutcomeId, long AmountMinor, long TournamentId) : PendingStep;
-
 public sealed record CancelStep(long PredictionId, string Reason) : PendingStep;
 
 /// <summary>Ending exactly this tournament (never whichever one is active when the button is clicked).</summary>
@@ -23,8 +20,8 @@ public sealed record TournamentEndStep(long TournamentId) : PendingStep;
 public sealed record PendingToken(string Id, GuildId Guild, UserId User, PendingStep Step, DateTimeOffset TouchedAt, TimeSpan Lifetime);
 
 /// <summary>
-/// Short-lived, in-memory state between the steps of a flow (form → preview → publish, entry → confirm, cancel reason/end
-/// → confirm). A token id is 128 random bits and is honoured only for the member and guild that created it — a guessed or
+/// Short-lived, in-memory state between the steps of a flow (form → preview → publish, cancel reason/end → confirm; entries
+/// need none: their form submit is the decision). A token id is 128 random bits and is honoured only for the member and guild that created it — a guessed or
 /// copied id is simply unknown. Tokens expire (<see cref="DraftLifetime"/> after the last use for forms,
 /// <see cref="ConfirmLifetime"/> for confirmations), are capped per member and in total, and are lost on restart (the
 /// member just starts the step again; nothing economic depends on them). <see cref="Take"/> removes a token atomically, so

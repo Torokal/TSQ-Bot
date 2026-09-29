@@ -140,33 +140,52 @@ public sealed class PredictionTestKit : IAsyncDisposable
         return (await Service(s => s.GetAsync(id, Ct)))!;
     }
 
-    // ---- enter (🎯 Tahmin Yap → form → preview → Onayla) ----
+    // ---- enter (🎯 Tahmin Yap → form → Submit), change, withdraw ----
 
     public static string Name(ActorContext actor) => "Üye " + actor.UserId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>🎯 Tahmin Yap on the card, then the submitted form; returns the confirmation token, or the refusal.</summary>
-    public async Task<(string? Token, PredictionReply Reply)> PreviewEntryAsync(ActorContext actor, PredictionView prediction, int outcomePosition, string amount,
-        ChannelId? channel = null, MessageId? card = null)
+    /// <summary>🎯 Tahmin Yap on the card: the entry form (checked), or the private answer instead (a refusal or the active entry).</summary>
+    public Task<EntryStart> OpenEntryAsync(ActorContext actor, PredictionView prediction, ChannelId? channel = null, MessageId? card = null) =>
+        Service(s => s.StartEntryAsync(actor, channel ?? Predictions, prediction.Id, card ?? prediction.Message, Ct));
+
+    /// <summary>The entry form submitted, exactly as Discord delivers it (also a second time, or after the prediction changed): the submit IS the entry.</summary>
+    public Task<PredictionReply> SubmitEntryAsync(ActorContext actor, PredictionView prediction, int outcomePosition, string amount, ChannelId? channel = null) =>
+        Service(s => s.SubmitEntryAsync(actor, channel ?? Predictions, prediction.Id, OutcomeValue(prediction, outcomePosition), amount, Name(actor), Ct));
+
+    /// <summary>🎯 Tahmin Yap, then the form submitted. Without a form (refused, or an active entry shown) that answer is returned.</summary>
+    public async Task<PredictionReply> EnterAsync(ActorContext actor, PredictionView prediction, int outcomePosition, string amount, ChannelId? channel = null)
     {
-        var outcome = prediction.Outcomes.Single(o => o.Position == outcomePosition);
-        var (refusal, info) = await Service(s => s.StartEntryAsync(actor, channel ?? Predictions, prediction.Id, card ?? prediction.Message, Ct));
-        if (refusal is not null)
-            return (null, refusal);
-        info!.Outcomes.Select(o => o.Id).Should().Equal(prediction.Outcomes.Select(o => o.Id), "the form offers every outcome");
-        var reply = await Service(s => s.PreviewEntryAsync(actor, channel ?? Predictions, prediction.Id, Id(outcome.Id), amount, null, Ct));
-        return (Token(reply, PredictionMessages.EntryConfirmPrefix), reply);
+        var start = await OpenEntryAsync(actor, prediction, channel);
+        if (start.Form is not { } form)
+            return start.Reply!;
+        form.Outcomes.Select(o => o.Id).Should().Equal(prediction.Outcomes.Select(o => o.Id), "the form offers every outcome");
+        form.IsChange.Should().BeFalse();
+        return await SubmitEntryAsync(actor, prediction, outcomePosition, amount, channel);
     }
 
-    public Task<PredictionReply> ConfirmEntryAsync(ActorContext actor, string token, ChannelId? channel = null) =>
-        Service(s => s.ConfirmEntryAsync(actor, channel ?? Predictions, token, Name(actor), Ct));
+    /// <summary>✏️ Tahminimi Değiştir: the prefilled form (or the refusal instead).</summary>
+    public Task<EntryStart> OpenChangeAsync(ActorContext actor, PredictionView prediction, ChannelId? channel = null) =>
+        Service(s => s.StartChangeAsync(actor, channel ?? Predictions, prediction.Id, Ct));
 
-    public async Task<PredictionReply> EnterAsync(ActorContext actor, PredictionView prediction, int outcomePosition, string amount)
+    /// <summary>The change form submitted: the submit IS the change.</summary>
+    public Task<PredictionReply> SubmitChangeAsync(ActorContext actor, PredictionView prediction, int outcomePosition, string amount, ChannelId? channel = null) =>
+        Service(s => s.ChangeEntryAsync(actor, channel ?? Predictions, prediction.Id, OutcomeValue(prediction, outcomePosition), amount, Ct));
+
+    /// <summary>✏️ Tahminimi Değiştir, then the form submitted.</summary>
+    public async Task<PredictionReply> ChangeAsync(ActorContext actor, PredictionView prediction, int outcomePosition, string amount)
     {
-        var (token, preview) = await PreviewEntryAsync(actor, prediction, outcomePosition, amount);
-        if (token is null)
-            return preview;
-        return await ConfirmEntryAsync(actor, token);
+        var start = await OpenChangeAsync(actor, prediction);
+        if (start.Form is not { } form)
+            return start.Reply!;
+        form.IsChange.Should().BeTrue();
+        return await SubmitChangeAsync(actor, prediction, outcomePosition, amount);
     }
+
+    /// <summary>↩️ Tahminimi Geri Çek (the click is the decision).</summary>
+    public Task<PredictionReply> WithdrawAsync(ActorContext actor, PredictionView prediction, ChannelId? channel = null) =>
+        Service(s => s.WithdrawEntryAsync(actor, channel ?? Predictions, prediction.Id, Ct));
+
+    private static string OutcomeValue(PredictionView prediction, int position) => Id(prediction.Outcomes.Single(o => o.Position == position).Id);
 
     public static string? Token(PredictionReply reply, string prefix) =>
         reply.View?.Buttons?.FirstOrDefault(b => b.CustomId!.StartsWith(prefix, StringComparison.Ordinal))?.CustomId?[prefix.Length..];

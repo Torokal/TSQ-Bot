@@ -267,8 +267,11 @@ invite link and no global command registration. The source code is public under 
 - Module `predictions`, command group `/ongoru` (no default member permissions; every subcommand authorizes itself):
   `yarat` (predictions channel), `cuzdan`, `gunluk`, `tahminlerim`, `liderlik`, `turnuva durum|bitir` (commands channel;
   `bitir` Administrator/owner only). Management lives on the card: 🎯 Tahmin Yap, 🔒 Kilitle, ✅ Sonuçlandır,
-  ↩️ İptal / İade (creator with the role, Administrator or owner; checked server-side on every click). No coin reset
-  command; `/privacy delete` keeps the game records. Tables `prediction_tournament`, `prediction_wallet`, `prediction`,
+  ↩️ İptal / İade (creator with the role, Administrator or owner; checked server-side on every click). Entries: the form
+  submit IS the entry (no second confirmation); while the prediction is open the member may ✏️ change outcome and stake
+  (only the difference moves) or ↩️ withdraw (stake back; entry kept as `Withdrawn`, still eligible). The public card no
+  longer shows the tournament; each leaderboard shows at most 10. No coin reset command; `/privacy delete` keeps the game
+  records. Migration `PredictionEntryLifecycle` (additive: `Revision`, `UpdatedAt` on `prediction_entry`). Tables `prediction_tournament`, `prediction_wallet`, `prediction`,
   `prediction_outcome`, `prediction_entry`, `prediction_ledger`, `prediction_daily_claim`, `prediction_standing` (additive
   migration `PredictionsModule`), worker `PredictionWorker` (~10 s). Off by default (`/modules enable predictions`).
   Shared change: `OutgoingMessage.Select` (optional single-choice string select, omitted from stored payloads when absent).

@@ -70,7 +70,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   earlier winners out). Restart-safe (stored giveaways, one worker loop) and race-safe (drawn at most once).
 - **TSQ Öngörü** (separate module, off by default): members of the creator role publish a question with 2–25 outcomes and
   fixed odds (`/ongoru yarat`: form → private preview → one public card) in the predictions channel; members press
-  🎯 Tahmin Yap on the card, pick an outcome and a stake in one form and confirm a private preview (virtual TSQ Coin only —
+  🎯 Tahmin Yap on the card, pick an outcome and a stake in one form and submit it — that is the entry, no second
+  confirmation; until the prediction locks they can change the outcome and stake or withdraw it (virtual TSQ Coin only —
   no real money, no transfers, no shop). The card itself carries 🔒 Kilitle / ✅ Sonuçlandır / ↩️ İptal / İade for its creator
   (while holding the role) or an administrator, each with a private confirmation; payouts (stake × fixed odds, rounded
   down) and refunds are booked in one SQLite write transaction. Every tournament starts each member at 1000 TSQ Coin

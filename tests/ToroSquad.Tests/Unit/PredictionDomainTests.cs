@@ -403,7 +403,7 @@ public sealed class PredictionDomainTests
         if (outcomes == 25)
             card.Embed.Description.Should().Contain("🔟 Sonuç 10\nOran: **1.70**").And.Contain("**11.** Sonuç 11\nOran: **1.77**").And.Contain("**25.** Sonuç 25\nOran: **2.75**");
         card.Embed.Title.Should().Be("🟢 Katılım Açık");
-        card.Embed.Footer.Should().Be("TSQ Öngörü #12 · Turnuva 1 · Oluşturan: Kaan");
+        card.Embed.Footer.Should().Be("TSQ Öngörü #12 · Oluşturan: Kaan · Sabit oran");
         card.Select.Should().BeNull("no shared select state on the public card");
         card.Buttons!.Select(b => (b.Label, b.CustomId, b.Style, b.NewRow)).Should().Equal(
             ("🎯 Tahmin Yap", "tsq:pred:enter:12", MessageButtonStyle.Primary, false), ("🔒 Kilitle", "tsq:pred:lock:12", MessageButtonStyle.Secondary, true),
@@ -434,6 +434,22 @@ public sealed class PredictionDomainTests
         cancelled.Buttons.Should().BeNull();
         cancelled.Embed!.Title.Should().Be("⚠️ Öngörü İptal Edildi");
         cancelled.Embed.Fields.Single(f => f.Name == "Durum").Value.Should().Be("İptal nedeni: Maç ertelendi\nYatırılan **300 TSQ Coin** oyunculara tam olarak iade edildi.");
+    }
+
+    [Theory]
+    [InlineData("tr")]
+    [InlineData("en")]
+    public void The_public_card_never_shows_the_tournament_in_any_state(string language)
+    {
+        foreach (var status in new[] { PredictionStatus.Open, PredictionStatus.Locked, PredictionStatus.Settled, PredictionStatus.Cancelled })
+        {
+            var view = View(3, status) with { TournamentId = 987_654, TournamentNumber = 7 };
+            var card = Cards.Render(view, language);
+            var text = string.Join("\n", new[] { card.Content, card.Embed!.Title, card.Embed.Description, card.Embed.Footer }
+                .Concat(card.Embed.Fields.SelectMany(f => new[] { f.Name, f.Value })).Concat(card.Buttons?.Select(b => b.Label) ?? []));
+            text.Should().NotContainAny(["Turnuva", "Tournament", "987654"], status.ToString());
+            card.Embed.Footer.Should().Be(language == "tr" ? "TSQ Öngörü #12 · Oluşturan: Kaan · Sabit oran" : "TSQ Predictions #12 · Created by Kaan · Fixed odds");
+        }
     }
 
     [Fact]
@@ -478,19 +494,22 @@ public sealed class PredictionDomainTests
     // ---- messages ----
 
     [Fact]
-    public void The_entry_preview_shows_the_exact_payout_the_settlement_will_pay()
+    public void The_entry_receipt_shows_the_exact_payout_the_settlement_will_pay_and_only_change_and_withdraw()
     {
         var messages = new PredictionMessages(Localizer(), Options.Create(new PredictionsOptions()));
         var payout = Coins.Payout(10_000, 110);
-        var preview = messages.EntryPreview("Maç?", "Galatasaray Kazanır", 110, 10_000, payout, 90_000, "tok", "tr");
-        preview.Embed!.Fields.Select(f => (f.Name, f.Value)).Should().Contain(new[]
-        {
-            ("Sabit oran", "1.10"), ("Yatırılacak", "100 TSQ Coin"), ("Kazanırsan toplam dönüş", "110 TSQ Coin"), ("Net kazanç", "10 TSQ Coin"),
-            ("İşlem sonrası kullanılabilir", "900 TSQ Coin"),
-        });
-        preview.Buttons!.Select(b => (b.Label, b.CustomId)).Should().Equal(("✅ Onayla", "tsq:pred:entry-ok:tok"), ("✏️ Düzenle", "tsq:pred:entry-edit:tok"),
-            ("Vazgeç", "tsq:pred:dismiss:tok"));
-        preview.Mentions.Should().Be(MentionPolicy.None);
+        var receipt = messages.EntryReceipt(12, "Maç?", "Galatasaray Kazanır", 110, 10_000, payout, 90_000, false, "tr");
+        receipt.Embed!.Title.Should().Be("✅ Tahminin kaydedildi!");
+        receipt.Embed.Description.Should().Be("### Maç?\n🎯 **Galatasaray Kazanır**\n📈 Oran: 1.10\n🪙 Yatırdığın: 100 TSQ Coin\n💰 Olası toplam dönüş: 110 TSQ Coin\n" +
+                                              "👛 Kullanılabilir bakiyen: 900 TSQ Coin\n\nÖngörü kilitlenene kadar tahminini değiştirebilir veya geri çekebilirsin.");
+        receipt.Buttons!.Select(b => (b.Label, b.CustomId)).Should().Equal(("✏️ Tahminimi Değiştir", "tsq:pred:change:12"), ("↩️ Tahminimi Geri Çek", "tsq:pred:withdraw:12"));
+        receipt.Mentions.Should().Be(MentionPolicy.None);
+        messages.EntryReceipt(12, "Maç?", "Berabere", 230, 15_000, 34_500, 85_000, true, "tr").Embed!.Title.Should().Be("✏️ Tahminin güncellendi!");
+
+        var withdrawn = messages.Withdrawn(12, 10_000, 100_000, "tr");
+        withdrawn.Content.Should().Be("↩️ **Tahminin geri çekildi.**\n\n🪙 100 TSQ Coin bakiyene iade edildi.\n👛 Yeni bakiyen: 1000 TSQ Coin");
+        withdrawn.Buttons!.Select(b => (b.Label, b.CustomId)).Should().Equal(("🎯 Tekrar Tahmin Yap", "tsq:pred:again:12"));
+        withdrawn.Mentions.Should().Be(MentionPolicy.None);
     }
 
     [Fact]
