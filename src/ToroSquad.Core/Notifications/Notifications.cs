@@ -81,4 +81,11 @@ public interface IDeliveryPolicy
 
     /// <summary>Called when Discord reports the channel unusable (403/404) so the module can surface it in doctor.</summary>
     Task ReportChannelProblemAsync(GuildId guild, ChannelId channel, PermanentFailureKind kind, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Kinds that complete something members were already promised and are therefore delivered even while the module is
+    /// disabled in the guild (disabling stops new activity, not a lifecycle that already started). Default: none — every
+    /// other notification is cancelled by the module gate as before.
+    /// </summary>
+    bool DeliversWhileModuleDisabled(string kind) => false;
 }

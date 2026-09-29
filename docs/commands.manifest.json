@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "7b07a504ca32762fba1d4ea6ccce4cdf590ee9fdcbf33431675f6937a20b91f3",
+  "hash": "ef28e51fa5b4d64b19aeae008abbdaaaef50dcafd3f968b37e8a2d624fdac934",
   "commands": [
     {
       "module": "currency",
@@ -1455,6 +1455,98 @@
                     "required": true
                   }
                 ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "module": "giveaway",
+      "payload": {
+        "type": 1,
+        "name": "giveaway",
+        "description": "Start and manage giveaways (admins)",
+        "description_localizations": {
+          "tr": "Çekiliş başlat ve yönet (yöneticiler)"
+        },
+        "default_member_permissions": "32",
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "create",
+            "description": "Start a giveaway in this channel (opens a form)",
+            "description_localizations": {
+              "tr": "Bu kanalda yeni bir çekiliş başlat (form açılır)"
+            }
+          },
+          {
+            "type": 1,
+            "name": "end",
+            "description": "End an active giveaway now and draw the winners",
+            "description_localizations": {
+              "tr": "Aktif bir çekilişi hemen sonuçlandır ve kazananları çek"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "giveaway",
+                "description": "Giveaway number (#12), message link or message ID",
+                "description_localizations": {
+                  "tr": "Çekiliş numarası (#12), mesaj bağlantısı veya mesaj ID'si"
+                },
+                "required": true,
+                "autocomplete": true,
+                "max_length": 120
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "cancel",
+            "description": "Cancel an active giveaway without drawing",
+            "description_localizations": {
+              "tr": "Aktif bir çekilişi kazanan çekmeden iptal et"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "giveaway",
+                "description": "Giveaway number (#12), message link or message ID",
+                "description_localizations": {
+                  "tr": "Çekiliş numarası (#12), mesaj bağlantısı veya mesaj ID'si"
+                },
+                "required": true,
+                "autocomplete": true,
+                "max_length": 120
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "reroll",
+            "description": "Draw new winners for a finished giveaway",
+            "description_localizations": {
+              "tr": "Sonuçlanmış bir çekiliş için yeni kazanan çek"
+            },
+            "options": [
+              {
+                "type": 3,
+                "name": "giveaway",
+                "description": "Giveaway number (#12), message link or message ID",
+                "description_localizations": {
+                  "tr": "Çekiliş numarası (#12), mesaj bağlantısı veya mesaj ID'si"
+                },
+                "required": true,
+                "autocomplete": true,
+                "max_length": 120
               }
             ]
           }

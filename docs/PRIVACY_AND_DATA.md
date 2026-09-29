@@ -29,6 +29,9 @@ kimlikler ve sonuç) ([quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md)).
 | `birthday_celebration` | Kutlama kaydı: kullanıcı ID, yıl ve kutlanan yerel tarih, duyuruda adı geçti mi, botun verdiği rolün durumu (botun vermediği rol hiç kaldırılmaz) | kullanıcı | ertesi yıl sonunda; `/privacy delete` (botun verdiği rol de geri alınır), sunucu verisiyle birlikte |
 | `birthday_announcement`, `birthday_guild_config` | Günlük duyurunun durumu (kişi sayısı, kullanıcı ID'si yok); duyuru kanalı ve değiştiren yöneticinin kullanıcı ID'si | sunucu | 30 gün sonra / bot sunucudan çıkarıldıktan 30 gün sonra |
 | `outbox` (Doğum Günü duyurusu) | Duyuru metni: kutlananların mention'ları (kullanıcı ID'leri) | kullanıcı | teslimden/bitişten 2 gün sonra |
+| `giveaway` | TSQ Çekiliş: başlatanın kullanıcı ID'si ve o anki görünen adı, ödül ve açıklama metni, kanal/mesaj ID, süre, durum, **katılımcı sayısı** (katılımcı listesi saklanmaz: katılım karttaki 🎉 tepkisidir), bitiren/iptal eden yöneticinin ID'si | kullanıcı (başlatan; bitiren/iptal eden) | `/privacy delete` (ad ve ID'ler kaldırılır, çekiliş kalır), sunucu verisiyle birlikte |
+| `giveaway_winner` | Çekiliş ID + tur (0 = çekiliş, N = N. reroll) + sıra + kazananın kullanıcı ID'si | kullanıcı | `/privacy delete`, sunucu verisiyle birlikte |
+| `outbox` (Çekiliş kazanan duyurusu) | Duyuru metni: kazananların mention'ları (kullanıcı ID'leri) | kullanıcı | teslimden/bitişten 24 saat sonra |
 
 TSQ Döviz & Altın kendi tablosunu kullanmaz ve kullanıcı verisi tutmaz: fiyatlar yalnızca bellekte kısa süre önbelleklenir,
 komut kullanımları ve sağlayıcı yanıtları kaydedilmez; sağlayıcılara kullanıcıya ait hiçbir bilgi gönderilmez. Günlük 09:00

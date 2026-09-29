@@ -134,6 +134,20 @@ kısaltmalar yalnızca bölgeyi seçer, o tarihteki offset'i `TimeZoneInfo` beli
 hiç yaşanmayan veya iki kez yaşanan saatler tahmin edilmez, kısa bir uyarıyla reddedilir. Geçersiz saat uyarısı
 yalnızca kullanana görünür (ephemeral); cevap ping atmaz. Bot izni gerekmez (yalnızca etkileşim cevabı). Veri saklanmaz.
 
+## TSQ Çekiliş (modül açıkken; `/giveaway`, ManageGuild + sunucu tarafı `Authorize.Require`)
+
+| Komut | Ne yapar |
+|---|---|
+| `/giveaway create` | Formu açar (Ödül, Süre, Kazanan Sayısı, Açıklama); bot kartı bu kanala gönderir ve 🎉 ekler. Üyeler 🎉 tepkisiyle katılır; süre dolunca otomatik çekiliş |
+| `/giveaway end giveaway:<hedef>` | Aktif çekilişi hemen sonuçlandırır |
+| `/giveaway cancel giveaway:<hedef>` | Kazanan çekmeden iptal eder |
+| `/giveaway reroll giveaway:<hedef>` | Sonuçlanmış çekilişte önceki kazananlar hariç yeniden çeker |
+
+Hedef: `#12` (autocomplete), mesaj bağlantısı veya mesaj ID'si. Yanıtlar ephemeral; kart ve düzenlemeleri ping atmaz,
+yalnızca kazanan duyurusu o çekilişin kazananlarını etiketler. Kanalda bot izni (hepsi zorunlu): View Channel, Send Messages,
+Embed Links, **Add Reactions**, Read Message History (form açılmadan ve gönderimde denetlenir). `/modules disable giveaway`
+yalnızca yeni çekilişleri kapatır; başlamış çekilişler duyurusuyla birlikte normal sonuçlanır. Ayrıntı: [giveaway/TSQ_GIVEAWAY.md](giveaway/TSQ_GIVEAWAY.md).
+
 ## TSQ Doğum Günü (modül açıkken)
 
 | Komut | Ne yapar |
@@ -192,15 +206,17 @@ panel, autocomplete ve bildirimler modül kapalıyken çalışmaz.
 | View Channel | 1024 | bildirim kanalını görmek | evet |
 | Send Messages | 2048 | bildirim göndermek | evet |
 | Embed Links | 16384 | embed'ler | evet |
+| Add Reactions | 64 | TSQ Çekiliş kartına botun 🎉 tepkisini eklemek (katılım bu tepkiyle olur; Unicode emoji, External Emojis gerekmez) | evet (TSQ Çekiliş için zorunlu; yoksa çekiliş oluşturulmaz) |
 | Read Message History | 65536 | belirsiz teslimat uzlaştırması (yalnızca kendi mesajlarını arar); TSQ Quote kaynak kanalı | önerilir; TSQ Quote için kaynak kanalda gerekli |
 | Attach Files | 32768 | TSQ Quote kartı (`quote.png`), komutun çalıştığı kanalda | TSQ Quote kullanılıyorsa |
 | Manage Roles | 268435456 | self-service bildirim rolleri; TSQ Doğum Günü geçici rolü | self-service veya Doğum Günü rolü kullanılırsa |
 | Mention Everyone | 131072 | bahsedilemez rolleri pinglemek; TSQ Live duyurusunun `@everyone` bildirimi | rollerde **önerilmez** (rolü "bahsedilebilir" yapın); TSQ Live kullanılıyorsa **yalnızca duyuru kanalında** kanal izniyle verin |
 
-  Asgari izin tamsayısı (tüm modüller, TSQ Quote dahil): **117760** (View Channel + Send Messages + Embed Links + Attach
-  Files + Read Message History); self-service rollerle: **268553216**. TSQ Quote kullanılmıyorsa **84992** yeterlidir.
+  Asgari izin tamsayısı (tüm modüller, TSQ Quote ve TSQ Çekiliş dahil): **117824** (View Channel + Send Messages + Embed
+  Links + Attach Files + Read Message History + Add Reactions); self-service rollerle: **268553280**. TSQ Quote kullanılmıyorsa
+  **85056** yeterlidir (84992 + Add Reactions 64).
   Bot zaten sunucudaysa yeniden davet gerekmez: bot rolüne (ya da yalnızca ilgili kanallarda) **Attach Files** verilmesi
-  yeterlidir.
+  yeterlidir. Bot zaten sunucudaysa TSQ Çekiliş için bot rolüne (ya da çekiliş kanallarına) **Add Reactions** verilmesi yeterlidir.
   Bot rolü, dağıtacağı self-service rollerin **üstünde** olmalıdır.
 - Rate limit: Discord.Net yerleşik yönetimi (`RetryRatelimit`, Retry-After'a uyar). Ek agresif retry katmanı yok;
   outbox kendi sınırlı geri çekilmesini uygular.

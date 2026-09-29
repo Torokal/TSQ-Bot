@@ -13,6 +13,7 @@ using ToroSquad.Modules.Currency;
 using ToroSquad.Modules.Esports;
 using ToroSquad.Modules.Example;
 using ToroSquad.Modules.Formula1;
+using ToroSquad.Modules.Giveaway;
 using ToroSquad.Modules.Lfg;
 using ToroSquad.Modules.Live;
 using ToroSquad.Modules.Quote;
@@ -32,7 +33,7 @@ public static class ToroHost
 
     public static IReadOnlyList<IToroModule> Modules(IConfiguration configuration)
     {
-        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module(), new VolleyballModule(), new LiveModule(), new LfgModule(), new QuoteModule(), new BirthdayModule(), new CurrencyModule(), new RandomizerModule(), new TimezoneModule() };
+        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module(), new VolleyballModule(), new LiveModule(), new LfgModule(), new QuoteModule(), new BirthdayModule(), new CurrencyModule(), new RandomizerModule(), new TimezoneModule(), new GiveawayModule() };
         // Example module: development/tests only. Off unless explicitly enabled.
         if (configuration.GetValue("Modules:Example:Enabled", false))
             modules.Add(new ExampleModule());
@@ -95,6 +96,7 @@ public static class ToroHost
             LfgModule.AddBackgroundJobs(services);
             BirthdayModule.AddBackgroundJobs(services);
             CurrencyModule.AddBackgroundJobs(services);
+            GiveawayModule.AddBackgroundJobs(services);
         }
     }
 

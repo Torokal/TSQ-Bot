@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TSQ Çekiliş (Giveaway): /giveaway create opens a form, the bot posts the card and adds 🎉; members enter with Discord's
+       own 🎉 reaction and the draw happens when the time is up (restart-safe: the giveaway is a row, one worker loop draws
+       every due one). Depends on the shared TSQ layers only (never on another feature module). Domain/Application/
+       Persistence namespaces must not use the Discord SDK (architecture tests); only Commands talks to Discord.Net. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Infrastructure\ToroSquad.Infrastructure.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Giveaway.Localization.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
