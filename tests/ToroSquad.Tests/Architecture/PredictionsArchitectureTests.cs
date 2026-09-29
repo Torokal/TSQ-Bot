@@ -170,7 +170,7 @@ public sealed partial class PredictionsArchitectureTests
 
         // Bots never create, enter or claim; every handler that could spend or create checks it first.
         var components = Source("Commands", "PredictionComponents.cs");
-        foreach (var handler in new[] { "SubmitFormAsync", "PublishAsync", "EnterAsync", "EditEntryAsync", "SubmitEntryAsync", "ConfirmEntryAsync" })
+        foreach (var handler in new[] { "SubmitFormAsync", "PublishAsync", "EnterAsync", "EnterAgainAsync", "SubmitEntryAsync", "ChangeEntryAsync", "SubmitChangeAsync", "WithdrawEntryAsync" })
             Regex.IsMatch(components, handler + @"\([^)]*\)\s*\{\s*if \(await RefuseBotAsync\(\)\)").Should().BeTrue(handler);
     }
 
@@ -227,11 +227,15 @@ public sealed partial class PredictionsArchitectureTests
             var create = PredictionFormUi.CreateModal("draft", new PredictionFormValues("t", "o", "d", "s", "r"), "2.00", L);
             create.Title.Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxTitleLength);
             create.CustomId.Should().Be(PredictionMessages.FormModalPrefix + "draft");
-            PredictionFormUi.StakeModal(new EntryFormInfo(12, 1, "Başlık", outcomes, 100_000), "1000", L).CustomId.Should().Be("tsq:pred:stake:12");
-            PredictionFormUi.StakeModal(new EntryFormInfo(12, 1, "Başlık", outcomes, 100_000, 101, "12.50", "tok"), "1000", L).CustomId.Should().Be("tsq:pred:stake:12.tok");
+            PredictionFormUi.StakeModal(new EntryFormInfo(12, 1, "Başlık", outcomes, 100_000), "1000", null, L).CustomId.Should().Be("tsq:pred:stake:12");
+            var change = PredictionFormUi.StakeModal(new EntryFormInfo(12, 1, "Başlık", outcomes, 100_000, 101, "12.50", 1_250), "1.000.000.000,00", "1.000.000.000,00", L);
+            change.CustomId.Should().Be("tsq:pred:change-form:12");
+            change.Title.Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxTitleLength);
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, L("predictions.change.hint"), "1.000.000.000,00", "1.000.000.000,00").Length
+                .Should().BeLessThanOrEqualTo(PredictionFormUi.MaxHintLength);
             PredictionFormUi.CancelModal(12, L).CustomId.Should().Be("tsq:pred:cancel-reason:12");
             foreach (var key in new[] { "predictions.form.question", "predictions.form.outcomes", "predictions.form.lock_date", "predictions.form.lock_time", "predictions.form.rules", "predictions.stake.amount",
-                         "predictions.stake.outcome", "predictions.stake.title", "predictions.form.title", "predictions.cancel.form_title", "predictions.cancel.reason" })
+                         "predictions.stake.outcome", "predictions.stake.title", "predictions.change.title", "predictions.form.title", "predictions.cancel.form_title", "predictions.cancel.reason" })
                 L(key).Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxTitleLength, key);
             foreach (var key in new[] { "predictions.form.question_hint", "predictions.form.lock_date_hint", "predictions.form.lock_time_hint", "predictions.form.rules_hint",
                          "predictions.form.question_placeholder", "predictions.form.outcomes_placeholder", "predictions.form.lock_date_placeholder", "predictions.form.lock_time_placeholder", "predictions.form.rules_placeholder",
@@ -249,17 +253,17 @@ public sealed partial class PredictionsArchitectureTests
         foreach (var prefix in new[]
                  {
                      PredictionMessages.FormModalPrefix, PredictionMessages.PublishPrefix, PredictionMessages.EditPrefix, PredictionMessages.DiscardPrefix,
-                     PredictionMessages.EntryConfirmPrefix, PredictionMessages.EntryEditPrefix, PredictionMessages.CancelConfirmPrefix, PredictionMessages.EndConfirmPrefix,
+                     PredictionMessages.CancelConfirmPrefix, PredictionMessages.EndConfirmPrefix,
                      PredictionMessages.DismissPrefix,
                  })
             (prefix + token).Length.Should().BeLessThanOrEqualTo(100);
         foreach (var prefix in new[]
                  {
                      PredictionCards.EnterPrefix, PredictionCards.LockPrefix, PredictionCards.SettlePrefix, PredictionCards.CancelPrefix, PredictionMessages.LockConfirmPrefix,
-                     PredictionMessages.SettlePickPrefix, PredictionMessages.CancelReasonModalPrefix,
+                     PredictionMessages.SettlePickPrefix, PredictionMessages.CancelReasonModalPrefix, PredictionMessages.StakeModalPrefix,
+                     PredictionMessages.ChangeModalPrefix, PredictionMessages.ChangePrefix, PredictionMessages.WithdrawPrefix, PredictionMessages.AgainPrefix,
                  })
             (prefix + long.MaxValue).Length.Should().BeLessThanOrEqualTo(100);
-        (PredictionMessages.StakeModalPrefix + long.MaxValue + "." + token).Length.Should().BeLessThanOrEqualTo(100);
         (PredictionMessages.SettleConfirmPrefix + long.MaxValue + "." + long.MaxValue).Length.Should().BeLessThanOrEqualTo(100);
 
         // Distinct prefixes (Discord.Net matches "prefix*"): no prefix is the start of another.

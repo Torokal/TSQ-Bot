@@ -325,14 +325,14 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_confirmation_prepared_in_the_old_tournament_cannot_spend_in_the_new_one()
+    public async Task An_entry_form_opened_in_the_old_tournament_cannot_spend_in_the_new_one()
     {
         var prediction = await _kit.CreatePredictionAsync();
-        var (token, _) = await _kit.PreviewEntryAsync(Member(1), prediction, 1, "100");
+        (await _kit.OpenEntryAsync(Member(1), prediction)).Form.Should().NotBeNull();
         (await _kit.CancelAsync(Creator(), prediction)).Result.Succeeded.Should().BeTrue();
         (await _kit.ConfirmEndAsync(Admin(), (await _kit.EndTokenAsync(Admin()))!)).Result.Succeeded.Should().BeTrue();
 
-        (await _kit.ConfirmEntryAsync(Member(1), token!)).Result.MessageKey.Should().Be("predictions.entry.tournament_changed");
+        (await _kit.SubmitEntryAsync(Member(1), prediction, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.closed");
         (await _kit.CountAsync<PredictionEntryEntity>()).Should().Be(0);
         (await _kit.WalletAsync(1)).Should().BeNull();
     }
@@ -471,6 +471,33 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         var prediction = await _kit.CreatePredictionAsync(title: "İkinci turnuvanın öngörüsü");
         (await _kit.EnterAsync(Member(5), prediction, 1, "10")).Result.Succeeded.Should().BeTrue();
         Order((await BoardsAsync())[0].Fields[0].Value).Should().Contain("<@5>");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(25)]
+    public async Task Each_board_lists_at_most_the_top_10_eligible_members_and_never_invents_a_row(int eligible)
+    {
+        await _kit.OpenFormAsync(); // tournament 1
+        var active = await ActiveTournamentAsync();
+        await SeedAsync(active, Enumerable.Range(1, eligible).Select(i => ((ulong)(1000 + i), 1000L, 0L, 0, 0, true)).ToArray()); // all tied: the user id decides
+        await SeedAsync(active, (5, 9000, 0, 9, 9, false)); // the best numbers without prediction activity: never listed
+
+        var fields = (await _kit.Economy(e => e.LeaderboardAsync(Member(50), Commands, Ct))).View!.Embed!.Fields;
+        if (eligible == 0)
+        {
+            fields.Select(f => f.Value).Should().Equal("Henüz bu turnuvada tahmin yapan veya öngörü oluşturan yok.", "Henüz bu turnuvada tahmin yapan veya öngörü oluşturan yok.");
+            return;
+        }
+
+        var top = Enumerable.Range(1, Math.Min(eligible, PredictionRules.LeaderboardSize)).Select(i => "<@" + (1000 + i) + ">").ToList();
+        Order(fields[0].Value).Should().Equal(top, "💰 En Çok TSQ Coin: the first ten by the documented order");
+        Order(fields[1].Value).Should().Equal(top, "🎯 En Çok Doğru Tahmin: the same limit");
+        (await _kit.Economy(e => e.CoinBoardAsync(active, PredictionRules.LeaderboardSize, Ct))).Should().HaveCount(Math.Min(eligible, 10), "the limit is in the query");
     }
 
     [Fact]

@@ -169,12 +169,12 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
         var foreignAdmin = new ActorContext(OtherGuild, new UserId(20), GuildPermission.Administrator, [], false, 50);
         (await _kit.Service(s => s.PromptLockAsync(foreignAdmin, Predictions, prediction.Id, prediction.Message, Ct))).Result.MessageKey.Should().Be("predictions.not_found");
         (await _kit.Service(s => s.StartEntryAsync(Member(5) with { GuildId = OtherGuild }, Predictions, prediction.Id, prediction.Message, Ct)))
-            .Refusal!.MessageKey.Should().Be("predictions.not_found");
+            .Reply!.Result.MessageKey.Should().Be("predictions.not_found");
         (await _kit.Service(s => s.PromptLockAsync(Admin(), Elsewhere, prediction.Id, prediction.Message, Ct))).Result.MessageKey.Should().Be("predictions.wrong_channel");
         (await _kit.Service(s => s.PromptLockAsync(Admin(), Predictions, prediction.Id, other.Message, Ct))).Result.MessageKey.Should().Be("predictions.not_found",
             "a button copied onto another message does not act on this prediction");
         (await _kit.Service(s => s.StartSettleAsync(Admin(), Predictions, 987_654, prediction.Message, Ct))).Result.MessageKey.Should().Be("predictions.not_found");
-        (await _kit.Service(s => s.StartEntryAsync(Member(), Predictions, prediction.Id, other.Message, Ct))).Refusal!.MessageKey.Should().Be("predictions.not_found");
+        (await _kit.Service(s => s.StartEntryAsync(Member(), Predictions, prediction.Id, other.Message, Ct))).Reply!.Result.MessageKey.Should().Be("predictions.not_found");
         (await _kit.Service(s => s.PreviewSettleAsync(Admin(), Predictions, prediction.Id, Id(other.Outcomes[0].Id), Ct))).Result.MessageKey
             .Should().Be("predictions.not_found", "an outcome of another prediction");
         (await _kit.Service(s => s.ConfirmSettleAsync(Admin(), Predictions, prediction.Id, other.Outcomes[0].Id, Ct))).Result.MessageKey
@@ -299,7 +299,7 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
         (await _kit.SubmitAsync(draft)).Result.Succeeded.Should().BeTrue();
         (await _kit.PublishAsync(draft)).Result.MessageKey.Should().Be("predictions.publish.uncertain");
         var row = await _kit.Db(db => db.Set<PredictionEntity>().AsNoTracking().SingleAsync(p => p.Status == PredictionStatus.Publishing));
-        (await _kit.Service(s => s.StartEntryAsync(Member(), Predictions, row.Id, null, Ct))).Refusal!.MessageKey.Should().Be("predictions.entry.publishing");
+        (await _kit.Service(s => s.StartEntryAsync(Member(), Predictions, row.Id, null, Ct))).Reply!.Result.MessageKey.Should().Be("predictions.entry.publishing");
         var blocked = await _kit.Economy(e => e.PreviewTournamentEndAsync(Admin(), Commands, Ct));
         blocked.Result.MessageKey.Should().Be("predictions.tournament.unresolved");
         blocked.View!.Content.Should().Contain("#" + row.Id + "** · Galatasaray").And.Contain("Yayımlanıyor");
@@ -328,19 +328,24 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     // ---- 🎯 Tahmin Yap ----
 
     [Fact]
-    public async Task An_entry_debits_once_books_the_ledger_snapshots_the_odds_and_updates_the_card()
+    public async Task The_form_submit_is_the_entry_it_debits_once_books_the_ledger_snapshots_the_odds_and_updates_the_card()
     {
         var prediction = await _kit.CreatePredictionAsync();
-        var (token, preview) = await _kit.PreviewEntryAsync(Member(), prediction, 1, "100");
-        preview.View!.Embed!.Fields.Select(f => f.Value).Should().Contain("110 TSQ Coin").And.Contain("10 TSQ Coin").And.Contain("900 TSQ Coin");
-        preview.View.Buttons!.Select(b => b.CustomId).Should().Equal(PredictionMessages.EntryConfirmPrefix + token, PredictionMessages.EntryEditPrefix + token,
-            PredictionMessages.DismissPrefix + token);
-        (await _kit.WalletAsync(Member().UserId.Value)).Should().BeNull("nothing is debited or created before Onayla");
+        var start = await _kit.OpenEntryAsync(Member(), prediction);
+        start.Form.Should().NotBeNull();
+        start.Reply.Should().BeNull();
+        (await _kit.WalletAsync(Member().UserId.Value)).Should().BeNull("opening the form debits and creates nothing");
 
-        var receipt = await _kit.ConfirmEntryAsync(Member(), token!);
+        var receipt = await _kit.SubmitEntryAsync(Member(), prediction, 1, "100");
         receipt.Result.MessageKey.Should().Be("predictions.entry.done");
-        receipt.View!.Embed!.Fields.Single(f => f.Name == "Kullanılabilir bakiye").Value.Should().Be("900 TSQ Coin");
-        (await _kit.ConfirmEntryAsync(Member(), token!)).Result.MessageKey.Should().Be("predictions.entry.expired", "a token is single use");
+        receipt.Public.Should().BeFalse("the receipt is private; nobody is told who staked what");
+        receipt.View!.Embed!.Title.Should().Be("✅ Tahminin kaydedildi!");
+        receipt.View.Embed.Description.Should().Contain("🎯 **Galatasaray Kazanır**").And.Contain("📈 Oran: 1.10").And.Contain("🪙 Yatırdığın: 100 TSQ Coin")
+            .And.Contain("💰 Olası toplam dönüş: 110 TSQ Coin").And.Contain("👛 Kullanılabilir bakiyen: 900 TSQ Coin")
+            .And.Contain("Öngörü kilitlenene kadar tahminini değiştirebilir veya geri çekebilirsin.");
+        receipt.View.Buttons!.Select(b => (b.Label, b.CustomId)).Should().Equal(
+            ("✏️ Tahminimi Değiştir", PredictionMessages.ChangePrefix + Id(prediction.Id)), ("↩️ Tahminimi Geri Çek", PredictionMessages.WithdrawPrefix + Id(prediction.Id)));
+        receipt.View.Buttons.Should().NotContain(b => b.Label.Contains("Onayla"), "the submit was the confirmation; there is no second step");
 
         var wallet = (await _kit.WalletAsync(Member().UserId.Value))!;
         (wallet.BalanceMinor, wallet.PendingMinor, wallet.DisplayName).Should().Be((90_000L, 10_000L, "Üye 100"));
@@ -355,57 +360,60 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Pressing_tahmin_yap_again_starts_afresh_the_same_outcome_can_be_picked_and_edit_replaces_the_earlier_preview()
+    public async Task A_repeated_submit_or_a_second_tahmin_yap_shows_the_active_entry_from_the_database_and_changes_nothing()
     {
         var prediction = await _kit.CreatePredictionAsync();
         // The member opens the form and closes it without submitting: nothing happened, nothing is remembered on the card.
-        (await _kit.Service(s => s.StartEntryAsync(Member(), Predictions, prediction.Id, prediction.Message, Ct))).Info.Should().NotBeNull();
+        (await _kit.OpenEntryAsync(Member(), prediction)).Form.Should().NotBeNull();
         (await _kit.WalletAsync(Member().UserId.Value)).Should().BeNull();
+        (await _kit.SubmitEntryAsync(Member(), prediction, 2, "50")).Result.MessageKey.Should().Be("predictions.entry.done");
 
-        // Tahmin Yap again, the same outcome again: two independent previews.
-        var (first, _) = await _kit.PreviewEntryAsync(Member(), prediction, 2, "50");
-        var (second, _) = await _kit.PreviewEntryAsync(Member(), prediction, 2, "60");
-        first.Should().NotBeNull();
-        second.Should().NotBeNull();
+        // The same modal delivered twice, or a second form opened meanwhile: one entry, one debit, and the entry is shown.
+        var repeat = await _kit.SubmitEntryAsync(Member(), prediction, 3, "60");
+        repeat.Result.MessageKey.Should().Be("predictions.entry.already");
+        repeat.View!.Content.Should().Be("Bu öngörüde zaten aktif bir tahminin var; aşağıdan değiştirebilir veya geri çekebilirsin.");
+        repeat.View.Embed!.Description.Should().Contain("🎯 **Beraberlik**").And.Contain("🪙 Yatırdığın: 50 TSQ Coin");
 
-        // Düzenle on the second: the form comes back with its choice and amount; submitting replaces that preview.
-        var (refusal, info) = await _kit.Service(s => s.EditEntryAsync(Member(), Predictions, second!, Ct));
-        refusal.Should().BeNull();
-        (info!.SelectedOutcomeId, info.Amount, info.ReplacesToken).Should().Be((prediction.Outcomes[1].Id, "60", second));
-        var edited = await _kit.Service(s => s.PreviewEntryAsync(Member(), Predictions, prediction.Id, Id(prediction.Outcomes[2].Id), "75,5", second, Ct));
-        var third = Token(edited, PredictionMessages.EntryConfirmPrefix);
-        (await _kit.ConfirmEntryAsync(Member(), second!)).Result.MessageKey.Should().Be("predictions.entry.expired", "the edited preview was replaced");
-        (await _kit.WalletAsync(Member().UserId.Value)).Should().BeNull("Düzenle, previews and dismissals move no coin");
+        // The private answer is gone: 🎯 Tahmin Yap on the card is the way back, read from the database.
+        var again = await _kit.OpenEntryAsync(Member(), prediction);
+        again.Form.Should().BeNull("an active entry is shown instead of a new form");
+        again.Reply!.View!.Embed!.Title.Should().Be("🎯 Mevcut Tahminin");
+        again.Reply.View.Embed.Description.Should().Contain("🎯 **Beraberlik**").And.Contain("📈 Oran: 2.30").And.Contain("🪙 Yatırdığın: 50 TSQ Coin");
+        again.Reply.View.Buttons!.Select(b => b.Label).Should().Equal("✏️ Tahminimi Değiştir", "↩️ Tahminimi Geri Çek");
 
-        (await _kit.ConfirmEntryAsync(Member(), third!)).Result.Succeeded.Should().BeTrue();
-        (await _kit.ConfirmEntryAsync(Member(), first!)).Result.MessageKey.Should().Be("predictions.entry.already", "only the first commit enters");
         var entry = (await _kit.EntriesAsync(prediction.Id)).Should().ContainSingle().Subject;
-        (entry.OutcomeId, entry.StakeMinor).Should().Be((prediction.Outcomes[2].Id, 7_550L));
-        (await _kit.Service(s => s.PreviewEntryAsync(Member(2), Predictions, prediction.Id, null, "10", null, Ct))).Result.MessageKey.Should().Be("predictions.entry.outcome_required");
+        (entry.OutcomeId, entry.StakeMinor).Should().Be((prediction.Outcomes[1].Id, 5_000L));
+        (await _kit.WalletAsync(Member().UserId.Value))!.BalanceMinor.Should().Be(95_000);
+        (await _kit.LedgerAsync(Member().UserId.Value)).Count(l => l.Kind == PredictionLedgerKind.Stake).Should().Be(1);
+        (await _kit.Service(s => s.SubmitEntryAsync(Member(2), Predictions, prediction.Id, null, "10", "x", Ct))).Result.MessageKey.Should().Be("predictions.entry.outcome_required");
+        (await _kit.Service(s => s.SubmitEntryAsync(Member(2), Predictions, prediction.Id, Id(prediction.Outcomes[0].Id), "abc", "x", Ct))).Result.MessageKey
+            .Should().Be("predictions.entry.amount_format");
+        (await _kit.WalletAsync(2)).Should().BeNull("an invalid submit changes nothing");
     }
 
     [Fact]
     public async Task Stake_rules_are_enforced_before_anything_is_debited()
     {
         var prediction = await _kit.CreatePredictionAsync();
-        async Task<string> Key(string amount) => (await _kit.PreviewEntryAsync(Member(), prediction, 2, amount)).Reply.Result.MessageKey;
+        async Task<string> Key(string amount) => (await _kit.EnterAsync(Member(), prediction, 2, amount)).Result.MessageKey;
 
         (await Key("0,5")).Should().Be("predictions.entry.amount_minimum");
         (await Key("12,345")).Should().Be("predictions.entry.amount_decimals");
         (await Key("abc")).Should().Be("predictions.entry.amount_format");
         (await Key("-10")).Should().Be("predictions.entry.amount_format");
+        (await _kit.WalletAsync(Member().UserId.Value)).Should().BeNull("a refused amount creates nothing");
         (await Key("1000,01")).Should().Be("predictions.entry.insufficient");
-        (await Key("1000")).Should().Be("predictions.entry.preview");
-        (await _kit.WalletAsync(Member().UserId.Value)).Should().BeNull();
+        (await _kit.EntriesAsync(prediction.Id)).Should().BeEmpty();
+        (await _kit.WalletAsync(Member().UserId.Value))!.BalanceMinor.Should().Be(100_000, "nothing was debited");
+        (await Key("1000")).Should().Be("predictions.entry.done");
+        (await _kit.WalletAsync(Member().UserId.Value))!.BalanceMinor.Should().Be(0);
     }
 
     [Fact]
-    public async Task Two_simultaneous_confirmations_for_one_prediction_make_one_entry()
+    public async Task Two_simultaneous_submits_for_one_prediction_make_one_entry()
     {
         var prediction = await _kit.CreatePredictionAsync();
-        var (first, _) = await _kit.PreviewEntryAsync(Member(), prediction, 1, "100");
-        var (second, _) = await _kit.PreviewEntryAsync(Member(), prediction, 2, "200");
-        var results = await _kit.TogetherAsync(() => _kit.ConfirmEntryAsync(Member(), first!), () => _kit.ConfirmEntryAsync(Member(), second!));
+        var results = await _kit.TogetherAsync(() => _kit.SubmitEntryAsync(Member(), prediction, 1, "100"), () => _kit.SubmitEntryAsync(Member(), prediction, 2, "200"));
 
         results.Count(r => r.Result.Succeeded).Should().Be(1);
         results.Single(r => !r.Result.Succeeded).Result.MessageKey.Should().Be("predictions.entry.already");
@@ -415,7 +423,7 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
         wallet.PendingMinor.Should().Be(entry.StakeMinor);
         (await _kit.LedgerAsync(Member().UserId.Value)).Count(l => l.Kind == PredictionLedgerKind.Initial).Should().Be(1);
 
-        (await _kit.PreviewEntryAsync(Member(), prediction, 3, "10")).Reply.Result.MessageKey.Should().Be("predictions.entry.already_chosen");
+        (await _kit.EnterAsync(Member(), prediction, 3, "10")).Result.MessageKey.Should().Be("predictions.entry.current");
     }
 
     [Fact]
@@ -423,9 +431,7 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     {
         var p1 = await _kit.CreatePredictionAsync();
         var p2 = await _kit.CreatePredictionAsync(title: "İkinci öngörü başlığı");
-        var (t1, _) = await _kit.PreviewEntryAsync(Member(), p1, 1, "700");
-        var (t2, _) = await _kit.PreviewEntryAsync(Member(), p2, 1, "700");
-        var results = await _kit.TogetherAsync(() => _kit.ConfirmEntryAsync(Member(), t1!), () => _kit.ConfirmEntryAsync(Member(), t2!));
+        var results = await _kit.TogetherAsync(() => _kit.SubmitEntryAsync(Member(), p1, 1, "700"), () => _kit.SubmitEntryAsync(Member(), p2, 1, "700"));
 
         results.Count(r => r.Result.Succeeded).Should().Be(1);
         results.Single(r => !r.Result.Succeeded).Result.MessageKey.Should().Be("predictions.entry.insufficient");
@@ -490,7 +496,7 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     public async Task The_entry_is_checked_inside_the_write_lock_so_a_change_committed_meanwhile_wins()
     {
         var prediction = await _kit.CreatePredictionAsync();
-        var (token, _) = await _kit.PreviewEntryAsync(Member(), prediction, 1, "100");
+        (await _kit.OpenEntryAsync(Member(), prediction)).Form.Should().NotBeNull();
         var connectionString = await _kit.Db(db => Task.FromResult(db.Database.GetConnectionString()!));
 
         // Another writer holds the database write lock and closes the prediction; the confirmation starts meanwhile.
@@ -502,7 +508,7 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
             await begin.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
 
-        var confirm = Task.Run(() => _kit.ConfirmEntryAsync(Member(), token!));
+        var confirm = Task.Run(() => _kit.SubmitEntryAsync(Member(), prediction, 1, "100"));
         await using (var commit = blocker.CreateCommand())
         {
             commit.CommandText = "COMMIT;";
@@ -519,13 +525,12 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     {
         var prediction = await _kit.CreatePredictionAsync(lockAt: "24.09.2026 16:00"); // 13:00 UTC, one hour after T0
         _kit.Host.Clock.Advance(TimeSpan.FromMinutes(59));
-        var (token, _) = await _kit.PreviewEntryAsync(Member(), prediction, 1, "100");
-        token.Should().NotBeNull();
+        (await _kit.OpenEntryAsync(Member(), prediction)).Form.Should().NotBeNull();
 
         _kit.Host.Clock.Advance(TimeSpan.FromMinutes(1)); // exactly the lock time; no worker pass has run
         (await _kit.RowAsync(prediction.Id)).Status.Should().Be(PredictionStatus.Open);
-        (await _kit.ConfirmEntryAsync(Member(), token!)).Result.MessageKey.Should().Be("predictions.entry.closed");
-        (await _kit.PreviewEntryAsync(Member(), prediction, 1, "100")).Reply.Result.MessageKey.Should().Be("predictions.entry.closed");
+        (await _kit.SubmitEntryAsync(Member(), prediction, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.closed");
+        (await _kit.EnterAsync(Member(), prediction, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.closed");
         (await _kit.WalletAsync(Member().UserId.Value)).Should().BeNull();
 
         await _kit.TickAsync();
@@ -537,10 +542,10 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Lock_asks_first_changes_open_to_locked_once_and_a_form_opened_before_it_cannot_be_confirmed_after_it()
+    public async Task Lock_asks_first_changes_open_to_locked_once_and_a_form_opened_before_it_cannot_be_submitted_after_it()
     {
         var prediction = await _kit.CreatePredictionAsync();
-        var (token, _) = await _kit.PreviewEntryAsync(Member(), prediction, 1, "100");
+        (await _kit.OpenEntryAsync(Member(), prediction)).Form.Should().NotBeNull();
 
         var prompt = await _kit.Service(s => s.PromptLockAsync(Creator(), Predictions, prediction.Id, prediction.Message, Ct));
         prompt.View!.Content.Should().Contain("Bu öngörüyü kilitlemek istediğinize emin misiniz?").And.Contain("V1'de tekrar açılamayacak");
@@ -552,27 +557,29 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
             () => _kit.Service(s => s.LockAsync(Admin(), Predictions, prediction.Id, Ct)));
         results.Select(r => r.MessageKey).Should().BeEquivalentTo("predictions.lock.done", "predictions.state.already_locked");
 
-        (await _kit.ConfirmEntryAsync(Member(), token!)).Result.MessageKey.Should().Be("predictions.entry.closed");
+        (await _kit.SubmitEntryAsync(Member(), prediction, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.closed");
+        (await _kit.WalletAsync(Member().UserId.Value)).Should().BeNull();
         (await _kit.Service(s => s.PromptLockAsync(Creator(), Predictions, prediction.Id, prediction.Message, Ct))).Result.MessageKey.Should().Be("predictions.state.already_locked");
         var row = await _kit.RowAsync(prediction.Id);
         (row.Status, row.LockReason).Should().Be((PredictionStatus.Locked, PredictionLockReason.Manual));
     }
 
     [Fact]
-    public async Task After_a_restart_the_card_buttons_still_work_passed_deadlines_are_locked_and_old_confirmations_are_gone()
+    public async Task After_a_restart_the_card_buttons_still_work_passed_deadlines_are_locked_and_an_open_entry_form_still_submits()
     {
         var due = await _kit.CreatePredictionAsync(lockAt: "24.09.2026 16:00");
         var open = await _kit.CreatePredictionAsync(title: "Kilidi olmayan öngörü");
         var settled = await _kit.CreatePredictionAsync(title: "Sonuçlanmış öngörü başlığı");
         (await _kit.EnterAsync(Member(3), settled, 1, "100")).Result.Succeeded.Should().BeTrue();
         (await _kit.SettleAsync(Admin(), settled, 1)).Result.Succeeded.Should().BeTrue();
-        var (token, _) = await _kit.PreviewEntryAsync(Member(), open, 1, "100");
+        (await _kit.OpenEntryAsync(Member(), open)).Form.Should().NotBeNull();
 
         await using var second = await PredictionTestKit.CreateAsync(TestHost.T0.AddHours(2), directory: _kit.Host.Directory, transport: _kit.Transport);
         await second.TickAsync();
         (await second.RowAsync(due.Id)).Status.Should().Be(PredictionStatus.Locked);
-        (await second.ConfirmEntryAsync(Member(), token!)).Result.MessageKey.Should().Be("predictions.entry.expired", "drafts and confirmations are memory only");
-        (await second.EnterAsync(Member(), open, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.done", "Tahmin Yap works after a restart");
+        (await second.SubmitEntryAsync(Member(), open, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.done", "the submit carries everything; nothing was in memory");
+        (await second.EnterAsync(Member(), open, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.current", "Tahmin Yap shows the entry after a restart");
+        (await second.EnterAsync(Member(4), open, 2, "10")).Result.MessageKey.Should().Be("predictions.entry.done", "Tahmin Yap works after a restart");
         (await second.EnterAsync(Member(2), due, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.closed");
         (await second.LockAsync(Creator(), open)).MessageKey.Should().Be("predictions.lock.done", "management buttons carry only the number");
         (await second.SettleAsync(Admin(), settled, 2)).Result.MessageKey.Should().Be("predictions.state.already_settled");
@@ -649,9 +656,9 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     public async Task Settling_an_open_prediction_closes_entries_at_once()
     {
         var prediction = await _kit.CreatePredictionAsync();
-        var (late, _) = await _kit.PreviewEntryAsync(Member(), prediction, 1, "100");
+        (await _kit.OpenEntryAsync(Member(), prediction)).Form.Should().NotBeNull();
         (await _kit.SettleAsync(Admin(), prediction, 2)).Result.Succeeded.Should().BeTrue();
-        (await _kit.ConfirmEntryAsync(Member(), late!)).Result.MessageKey.Should().Be("predictions.entry.closed");
+        (await _kit.SubmitEntryAsync(Member(), prediction, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.closed");
     }
 
     [Fact]
@@ -749,7 +756,7 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
         replacement.Message.Embed!.Fields.Should().Contain(f => f.Value == "Önceki kart silindiği için katılım durduruldu; öngörü bu karttan yönetilir.");
         replacement.Message.Buttons!.Select(b => (b.Label, b.Disabled)).Should().Equal(("🔒 Katılım kapandı", true), ("✅ Sonuçlandır", false), ("↩️ İptal / İade", false));
         var current = prediction with { Message = new MessageId(row.MessageId!.Value) };
-        (await _kit.PreviewEntryAsync(Member(2), current, 1, "100")).Reply.Result.MessageKey.Should().Be("predictions.entry.closed");
+        (await _kit.EnterAsync(Member(2), current, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.closed");
         (await _kit.WalletAsync(1))!.PendingMinor.Should().Be(10_000, "stakes are kept");
 
         await _kit.TickAsync(TimeSpan.FromMinutes(30));
@@ -784,7 +791,10 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
         (await _kit.EnterAsync(Member(1), prediction, 1, "100")).Result.Succeeded.Should().BeTrue();
         await _kit.SetEnabledAsync(false);
 
-        (await _kit.PreviewEntryAsync(Member(2), prediction, 1, "100")).Reply.Result.MessageKey.Should().Be("error.module_disabled");
+        (await _kit.EnterAsync(Member(2), prediction, 1, "100")).Result.MessageKey.Should().Be("error.module_disabled");
+        (await _kit.SubmitEntryAsync(Member(2), prediction, 1, "100")).Result.MessageKey.Should().Be("error.module_disabled");
+        (await _kit.ChangeAsync(Member(1), prediction, 2, "100")).Result.MessageKey.Should().Be("error.module_disabled");
+        (await _kit.WithdrawAsync(Member(1), prediction)).Result.MessageKey.Should().Be("error.module_disabled");
         (await _kit.ClaimDailyAsync(Member(1))).Result.MessageKey.Should().Be("error.module_disabled");
         (await _kit.Service(s => s.OpenFormAsync(Creator(), Predictions, Ct))).Refusal!.MessageKey.Should().Be("error.module_disabled");
         (await _kit.Service(s => s.PromptLockAsync(Creator(), Predictions, prediction.Id, prediction.Message, Ct))).Result.MessageKey.Should().Be("error.module_disabled");
@@ -825,7 +835,7 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
         (await _kit.ClaimDailyAsync(Member(1))).Result.MessageKey.Should().Be("predictions.daily.already", "the day's claim is kept");
         (await _kit.RowAsync(prediction.Id)).CreatorName.Should().BeEmpty();
         await _kit.TickAsync(TimeSpan.FromSeconds(11));
-        Shown(_kit.Card(prediction)).Embed!.Footer.Should().EndWith("Oluşturan: —");
+        Shown(_kit.Card(prediction)).Embed!.Footer.Should().EndWith("Oluşturan: — · Sabit oran");
         (await _kit.LockAsync(Creator(10), prediction)).MessageKey.Should().Be("predictions.lock.done", "the creator still manages their card");
     }
 
