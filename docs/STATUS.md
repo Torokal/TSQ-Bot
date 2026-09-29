@@ -216,7 +216,14 @@ invite link and no global command registration. The source code is public under 
 - Gates (2026-09-29, branch `feat/summary-role-gate-and-new-messages`): role gate (any-of, names from the guild cache,
   defused, deleted role shown by id); after TSQ Bot's own earlier summary (its user id + exact title) at least 100 new
   member messages, found by a newest → oldest scan of at most 10 pages that fails closed when inconclusive (first summary:
-  MinMessages); channel/thread cooldown 120 s after a posted summary only (AI or post failure: 10 s). TESTED_OFFLINE.
+  MinMessages); channel/thread cooldown 120 s after a posted summary only (AI or post failure: 10 s). Deployed (#33),
+  NOT_VERIFIED live.
+- Spoilers (branch `feat/summary-spoilers`): `||…||` → `<spoiler>…</spoiler>` in the transcript (all spans, literal tags
+  defused, closed when a long message is cut); prompt rules (only inside `||…||` with a non-revealing
+  `**Spoiler (konu):**` label, `konu belirtilmemiş` fallback, no leak into Ana konu / headings / plans / atmosphere, no mixing
+  of topics, no invented spoilers); output converts `<spoiler>`/`\|\|` to native `||` and closes an unclosed one; the
+  2000-char split never cuts inside a spoiler (an oversized one is closed and reopened). TESTED_OFFLINE; model compliance
+  NOT_VERIFIED (no live inference).
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
   `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
