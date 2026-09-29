@@ -210,8 +210,13 @@ invite link and no global command registration. The source code is public under 
 
 ## TSQ Özet (new, 2026-09-29, branch `feat/summary-module`)
 
-- Module `summary`, command `/ozetle` (everyone, no options). Stateless: no table, no migration, no background job, no
+- Module `summary`, command `/ozetle` (no options; members with any one of `Summary:AllowedRoleIds` — six role ids by
+  default — checked at run time before anything is read). Stateless: no table, no migration, no background job, no
   message listener or cache (gateway Identify stays Guilds). Off by default (`/modules enable summary`).
+- Gates (2026-09-29, branch `feat/summary-role-gate-and-new-messages`): role gate (any-of, names from the guild cache,
+  defused, deleted role shown by id); after TSQ Bot's own earlier summary (its user id + exact title) at least 100 new
+  member messages, found by a newest → oldest scan of at most 10 pages that fails closed when inconclusive (first summary:
+  MinMessages); channel/thread cooldown 120 s after a posted summary only (AI or post failure: 10 s). TESTED_OFFLINE.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
   `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
@@ -240,8 +245,10 @@ invite link and no global command registration. The source code is public under 
   `reasoning_effort: low` together); a diagnostic with a compact prompt did the same at 2000. DeepSeek documents
   `reasoning_effort` as a thinking-mode setting, so the pair is contradictory. Last diagnostic (synthetic transcript, same
   production prompt/settings, `thinking: disabled` alone): 0 reasoning, 757 tokens, 8.4 s, `stop`, complete format. Hence
-  `reasoning_effort` is no longer sent with thinking disabled. Stability to be observed live.
-- **NOT VERIFIED_LIVE**: the 2000-character split, thread handling.
+  `reasoning_effort` is no longer sent with thinking disabled. VERIFIED_LIVE with #32 in the channel that had failed
+  before (reasoning_tokens=0, 444 tokens, 5.4 s, posted).
+- **NOT VERIFIED_LIVE**: the 2000-character split, thread handling, the role gate, the 100-message gate and the 120 s
+  channel cooldown.
 
 ## What has been verified against real Discord / real APIs
 

@@ -152,12 +152,15 @@ yalnızca yeni çekilişleri kapatır; başlamış çekilişler duyurusuyla birl
 
 | Komut | Ne yapar |
 |---|---|
-| `/ozetle` | Herkes: bu kanalın (thread'de yalnızca thread'in) son 100 üye mesajını o anda okur, tek AI isteğiyle kısa bir Türkçe özet çıkarır ve **herkese açık** normal mesaj olarak gönderir (ping yok) |
+| `/ozetle` | `Summary:AllowedRoleIds` rollerinden **en az birine** sahip üyeler: bu kanalın (thread'de yalnızca thread'in) son 100 üye mesajını o anda okur, tek AI isteğiyle kısa bir Türkçe özet çıkarır ve **herkese açık** normal mesaj olarak gönderir (ping yok) |
 
-Retler ve hatalar (yapılandırma yok, desteklenmeyen kanal, üyenin veya botun View Channel + Read Message History izni yok,
-cooldown 30 sn üye / 60 sn kanal, aynı kanalda süren özet, bot genelinde en fazla 2 eşzamanlı özet, 5'ten az mesaj, AI hatası,
-zaman aşımı) yalnızca kullanana görünür. Retry ve yedek model yoktur. Kanalda bot izni: View Channel, Read Message History.
-Ayrıntı: [summary/TSQ_SUMMARY.md](summary/TSQ_SUMMARY.md).
+Komut herkese görünür; rol kontrolü çalışma anında sunucu tarafında yapılır (Discord komut izinleriyle gizlenmez). Rolü
+olmayan üyeye, gerekli rollerin adlarıyla birlikte yalnızca kendisinin göreceği bir mesaj gider. Aynı kanal veya thread'de
+önceki başarılı özetten sonra en az 100 yeni üye mesajı gerekir ve başarılı özetler arasında 2 dakika bekleme vardır. Diğer
+retler ve hatalar (yapılandırma yok, desteklenmeyen kanal, üyenin veya botun View Channel + Read Message History izni yok,
+30 sn üye cooldown'u, aynı kanalda süren özet, bot genelinde en fazla 2 eşzamanlı özet, ilk özette 5'ten az mesaj, önceki
+özet kontrol edilemedi, AI hatası, zaman aşımı) de yalnızca kullanana görünür. Retry ve yedek model yoktur. Kanalda bot izni:
+View Channel, Read Message History. Ayrıntı: [summary/TSQ_SUMMARY.md](summary/TSQ_SUMMARY.md).
 
 ## TSQ Doğum Günü (modül açıkken)
 
