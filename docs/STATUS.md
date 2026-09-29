@@ -213,8 +213,8 @@ invite link and no global command registration. The source code is public under 
 - Module `summary`, command `/ozetle` (everyone, no options). Stateless: no table, no migration, no background job, no
   message listener or cache (gateway Identify stays Guilds). Off by default (`/modules enable summary`).
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
-  verified from the live `/models` list), `reasoning_effort: low`, temperature 0.3, top_p 0.9, `max_tokens` 900, no tools,
-  25 s timeout, **no retry, no fallback model, no second pass**. Fresh random `x-opencode-session` per summary; honest
+  verified from the live `/models` list), `reasoning_effort: low`, temperature 0.3, top_p 0.9, `max_tokens` 2500
+  (hidden reasoning counts against it), no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random `x-opencode-session` per summary; honest
   User-Agent `TSQBot/<version> SummaryModule`. Key only from `OPENCODE_GO_API_KEY` (redacted); without it `/ozetle`
   says "not configured" and nothing else is affected.
 - **IMPLEMENTED / TESTED_OFFLINE**: member-only transcript (bots incl. earlier summaries, webhooks, system events out),
@@ -226,8 +226,11 @@ invite link and no global command registration. The source code is public under 
   Discord read failure); cooldowns (30 s member / 60 s channel after a produced summary, 10 s after a failed request),
   one run per channel, at most two bot-wide without a queue; 400/401/403/429/5xx/network/timeout each after exactly one
   request; logs with ids, counts, tokens, latency and outcome only.
-- **NOT VERIFIED_LIVE**: everything in Discord (registration, reading a real channel through Message Content, the public
-  post, thread handling) and a real OpenCode Go summary from the bot.
+- **Observed live (2026-09-29, #29 deployed, `/ozetle` synced)**: the command runs; 100 real member messages were read
+  through Message Content; OpenCode Go accepted the bot's request (HTTP 200, honest User-Agent). That first run returned no
+  text — all 900 `max_tokens` went to hidden reasoning (`finish_reason: length`) — and was answered privately with nothing
+  posted, as designed. Hence `max_tokens` 2500.
+- **NOT VERIFIED_LIVE**: a produced summary posted in the channel, the split, thread handling.
 
 ## What has been verified against real Discord / real APIs
 

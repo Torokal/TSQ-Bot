@@ -38,10 +38,12 @@ public sealed class SummaryOptions
     public int RequestTimeoutSeconds { get; set; } = 25;
 
     /// <summary>
-    /// <c>max_tokens</c>. Covers the model's reasoning tokens too: in the A/B test the "low" setting still used ~230 reasoning
-    /// tokens next to ~600 answer tokens, so a lower cap would cut summaries off.
+    /// <c>max_tokens</c>. Covers the model's hidden reasoning tokens too, and OpenCode Go offers no way to switch reasoning
+    /// off (low is the minimum): the first live /ozetle (100 real messages) spent all 900 tokens on reasoning and returned no
+    /// text, while the A/B test had used ~230. The visible answer stays short through the prompt (150–250 words, ~600
+    /// tokens); this is the room for reasoning plus that answer.
     /// </summary>
-    public int MaxOutputTokens { get; set; } = 900;
+    public int MaxOutputTokens { get; set; } = 2500;
 
     /// <summary><c>reasoning_effort</c>: the models on OpenCode Go accept low, high or max.</summary>
     public string ReasoningEffort { get; set; } = "low";
