@@ -525,6 +525,7 @@
           "ToroSquad.Modules.Giveaway": "[0.1.0-dev, )",
           "ToroSquad.Modules.Lfg": "[0.1.0-dev, )",
           "ToroSquad.Modules.Live": "[0.1.0-dev, )",
+          "ToroSquad.Modules.Predictions": "[0.1.0-dev, )",
           "ToroSquad.Modules.Quote": "[0.1.0-dev, )",
           "ToroSquad.Modules.Randomizer": "[0.1.0-dev, )",
           "ToroSquad.Modules.Summary": "[0.1.0-dev, )",
@@ -623,6 +624,14 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Http": "[10.0.12, )",
+          "ToroSquad.Core": "[0.1.0-dev, )",
+          "ToroSquad.Discord": "[0.1.0-dev, )",
+          "ToroSquad.Infrastructure": "[0.1.0-dev, )"
+        }
+      },
+      "torosquad.modules.predictions": {
+        "type": "Project",
+        "dependencies": {
           "ToroSquad.Core": "[0.1.0-dev, )",
           "ToroSquad.Discord": "[0.1.0-dev, )",
           "ToroSquad.Infrastructure": "[0.1.0-dev, )"
