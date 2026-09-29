@@ -39,6 +39,9 @@ public sealed class PredictionWorker(IServiceScopeFactory scopes, TimeProvider c
             await predictions.CheckOpenCardsAsync(cancellationToken);
             await scope.ServiceProvider.GetRequiredService<PredictionEconomy>().PruneAnnouncementsAsync(cancellationToken);
         }
+
+        // A card that is definitely gone gets a replacement (management lives on the card).
+        await predictions.RepostMissingCardsAsync(cancellationToken);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

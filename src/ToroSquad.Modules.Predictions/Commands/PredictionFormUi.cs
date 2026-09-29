@@ -7,10 +7,12 @@ using ToroSquad.Modules.Predictions.Domain;
 namespace ToroSquad.Modules.Predictions.Commands;
 
 /// <summary>
-/// The two forms of TSQ Öngörü. Creation: title, outcomes (one "label | odds" per line), optional lock time and optional
-/// rules — prefilled with the draft's values when reopened (Düzenle), so a correction never loses the input. Entry: the
-/// stake. Custom ids carry only the draft id or the prediction and outcome ids; everything is validated again server-side.
-/// Discord: modal titles and labels at most 45 characters, label descriptions and placeholders at most 100.
+/// The forms of TSQ Öngörü. Creation: title, outcomes (one "label | odds" per line), optional lock time and optional
+/// rules — prefilled with the draft's values when reopened (Düzenle), so a correction never loses the input. Entry
+/// (🎯 Tahmin Yap): the outcome as a single-choice string select inside the modal (Discord.Net 3.20 label components, as
+/// TSQ LFG's form) plus the stake; reopened with Düzenle it is prefilled with the earlier choice and amount. Cancel: the
+/// reason. Custom ids carry only the draft id, the prediction number and a random token; everything is validated again
+/// server-side. Discord: modal titles and labels at most 45 characters, label descriptions and placeholders at most 100.
 /// </summary>
 public static class PredictionFormUi
 {
@@ -19,6 +21,8 @@ public static class PredictionFormUi
     public const string LockField = "lock";
     public const string RulesField = "rules";
     public const string AmountField = "amount";
+    public const string OutcomeField = "outcome";
+    public const string ReasonField = "reason";
 
     public const int MaxTitleLength = 45;
     public const int MaxHintLength = 100;
@@ -46,14 +50,46 @@ public static class PredictionFormUi
             Cut(L("predictions.form.rules_hint"), MaxHintLength))
         .Build();
 
-    public static Modal StakeModal(EntryFormInfo info, string balance, Func<string, string> L) => new ModalBuilder()
-        .WithTitle(Cut(L("predictions.stake.title"), MaxTitleLength))
-        .WithCustomId(PredictionMessages.StakeModalPrefix + info.PredictionId.ToString(CultureInfo.InvariantCulture) + ":" +
-                      info.OutcomeId.ToString(CultureInfo.InvariantCulture))
-        .AddLabel(Cut(L("predictions.stake.amount"), MaxTitleLength),
-            Input(AmountField, TextInputStyle.Short, L("predictions.stake.placeholder"), 1, PredictionRules.AmountInputMaxLength, true, null),
-            Cut(string.Format(CultureInfo.InvariantCulture, L("predictions.stake.hint"), Plain(info.OutcomeLabel, 40), Odds.Format(info.OddsX100), balance), MaxHintLength))
+    /// <summary>The custom id of the entry form: the prediction number, plus the preview it replaces when reopened with Düzenle.</summary>
+    public static string StakeModalId(EntryFormInfo info) => PredictionMessages.StakeModalPrefix + info.PredictionId.ToString(CultureInfo.InvariantCulture) +
+                                                              (info.ReplacesToken is { } token ? PredictionMessages.Separator + token : "");
+
+    public static Modal StakeModal(EntryFormInfo info, string balance, Func<string, string> L)
+    {
+        var outcomes = new SelectMenuBuilder()
+            .WithCustomId(OutcomeField)
+            .WithPlaceholder(Cut(L("predictions.stake.outcome_placeholder"), MaxHintLength))
+            .WithMinValues(1)
+            .WithMaxValues(1)
+            .WithRequired(true);
+        foreach (var outcome in info.Outcomes.Take(PredictionRules.HardMaxOutcomes))
+        {
+            outcomes.AddOption(Cut(Plain(outcome.Label, 400) + " — " + Odds.Format(outcome.OddsX100), 100), outcome.Id.ToString(CultureInfo.InvariantCulture),
+                isDefault: outcome.Id == info.SelectedOutcomeId);
+        }
+
+        return new ModalBuilder()
+            .WithTitle(Cut(L("predictions.stake.title"), MaxTitleLength))
+            .WithCustomId(StakeModalId(info))
+            .AddLabel(Cut(L("predictions.stake.outcome"), MaxTitleLength), outcomes, Cut(Plain(info.Title, MaxHintLength), MaxHintLength))
+            .AddLabel(Cut(L("predictions.stake.amount"), MaxTitleLength),
+                Input(AmountField, TextInputStyle.Short, L("predictions.stake.placeholder"), 1, PredictionRules.AmountInputMaxLength, true, info.Amount),
+                Cut(string.Format(CultureInfo.InvariantCulture, L("predictions.stake.hint"), balance), MaxHintLength))
+            .Build();
+    }
+
+    public static Modal CancelModal(long predictionId, Func<string, string> L) => new ModalBuilder()
+        .WithTitle(Cut(L("predictions.cancel.form_title"), MaxTitleLength))
+        .WithCustomId(PredictionMessages.CancelReasonModalPrefix + predictionId.ToString(CultureInfo.InvariantCulture))
+        .AddLabel(Cut(L("predictions.cancel.reason"), MaxTitleLength),
+            Input(ReasonField, TextInputStyle.Paragraph, L("predictions.cancel.reason_placeholder"), PredictionRules.CancelReasonMinLength,
+                PredictionRules.CancelReasonMaxLength, true, null),
+            Cut(L("predictions.cancel.reason_hint"), MaxHintLength))
         .Build();
+
+    /// <summary>The value chosen in a modal's select with this custom id (none when nothing is selected).</summary>
+    public static string? ReadValue(IEnumerable<IComponentInteractionData> components, string customId) =>
+        components.FirstOrDefault(c => c.CustomId == customId)?.Values?.FirstOrDefault();
 
     private static TextInputBuilder Input(string id, TextInputStyle style, string placeholder, int? minLength, int maxLength, bool required, string? value)
     {
@@ -97,10 +133,19 @@ public sealed class PredictionFormModal : IModal
     public PredictionFormValues ToValues() => new(Question, Outcomes, LockAt, Rules);
 }
 
+/// <summary>The entry form's text field (the outcome select is read from the submitted components).</summary>
 public sealed class PredictionStakeModal : IModal
 {
     public string Title => "TSQ Öngörü";
 
     [ModalTextInput(PredictionFormUi.AmountField)]
     public string? Amount { get; set; }
+}
+
+public sealed class PredictionCancelModal : IModal
+{
+    public string Title => "TSQ Öngörü";
+
+    [ModalTextInput(PredictionFormUi.ReasonField, TextInputStyle.Paragraph)]
+    public string? Reason { get; set; }
 }

@@ -40,6 +40,10 @@ public sealed class PredictionWalletEntity
     public long PendingMinor { get; set; }
     public int CorrectCount { get; set; }
     public int SettledCount { get; set; }
+
+    /// <summary>The member's display name at their latest entry, prediction or daily reward (for the name-only closing announcement).</summary>
+    public string? DisplayName { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
@@ -171,12 +175,24 @@ public sealed class PredictionDailyClaimEntity
     public DateTimeOffset ClaimedAt { get; set; }
 }
 
-/// <summary>The podium of a closed tournament, with its final values (the closing announcement is rendered from these).</summary>
+/// <summary>The two boards of a tournament podium.</summary>
+public enum PredictionBoard
+{
+    Coins = 0,
+    Correct = 1,
+}
+
+/// <summary>
+/// The podiums of a closed tournament (most coins and most correct predictions), with their final values and the members'
+/// display names at closing — the closing announcement is rendered from these, never from live wallets.
+/// </summary>
 public sealed class PredictionStandingEntity
 {
     public long TournamentId { get; set; }
+    public PredictionBoard Board { get; set; }
     public int Rank { get; set; }
     public ulong UserId { get; set; }
+    public string? DisplayName { get; set; }
     public long BalanceMinor { get; set; }
     public int CorrectCount { get; set; }
     public int SettledCount { get; set; }
@@ -215,6 +231,7 @@ public sealed class PredictionsModelContributor : IModelContributor
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).ValueGeneratedOnAdd();
             e.HasAlternateKey(x => new { x.Id, x.TournamentId });
+            e.Property(x => x.DisplayName).HasMaxLength(100);
             e.HasIndex(x => new { x.TournamentId, x.UserId }).IsUnique();
             e.HasIndex(x => new { x.GuildId, x.UserId }); // privacy export/delete
             e.HasOne<PredictionTournamentEntity>().WithMany().HasForeignKey(x => x.TournamentId).OnDelete(DeleteBehavior.Restrict);
@@ -314,8 +331,10 @@ public sealed class PredictionsModelContributor : IModelContributor
         modelBuilder.Entity<PredictionStandingEntity>(e =>
         {
             e.ToTable("prediction_standing");
-            e.HasKey(x => new { x.TournamentId, x.Rank });
-            e.HasIndex(x => new { x.TournamentId, x.UserId }).IsUnique();
+            e.HasKey(x => new { x.TournamentId, x.Board, x.Rank });
+            e.Property(x => x.Board).HasConversion<int>();
+            e.Property(x => x.DisplayName).HasMaxLength(100);
+            e.HasIndex(x => new { x.TournamentId, x.Board, x.UserId }).IsUnique();
             e.HasIndex(x => x.UserId); // privacy export/delete
             e.HasOne<PredictionTournamentEntity>().WithMany().HasForeignKey(x => x.TournamentId).OnDelete(DeleteBehavior.Restrict);
         });

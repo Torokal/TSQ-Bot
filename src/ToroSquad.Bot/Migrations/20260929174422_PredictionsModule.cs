@@ -107,15 +107,17 @@ namespace ToroSquad.Bot.Migrations
                 columns: table => new
                 {
                     TournamentId = table.Column<long>(type: "INTEGER", nullable: false),
+                    Board = table.Column<int>(type: "INTEGER", nullable: false),
                     Rank = table.Column<int>(type: "INTEGER", nullable: false),
                     UserId = table.Column<long>(type: "INTEGER", nullable: false),
+                    DisplayName = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
                     BalanceMinor = table.Column<long>(type: "INTEGER", nullable: false),
                     CorrectCount = table.Column<int>(type: "INTEGER", nullable: false),
                     SettledCount = table.Column<int>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_prediction_standing", x => new { x.TournamentId, x.Rank });
+                    table.PrimaryKey("PK_prediction_standing", x => new { x.TournamentId, x.Board, x.Rank });
                     table.ForeignKey(
                         name: "FK_prediction_standing_prediction_tournament_TournamentId",
                         column: x => x.TournamentId,
@@ -137,6 +139,7 @@ namespace ToroSquad.Bot.Migrations
                     PendingMinor = table.Column<long>(type: "INTEGER", nullable: false),
                     CorrectCount = table.Column<int>(type: "INTEGER", nullable: false),
                     SettledCount = table.Column<int>(type: "INTEGER", nullable: false),
+                    DisplayName = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
                     CreatedAt = table.Column<long>(type: "INTEGER", nullable: false),
                     UpdatedAt = table.Column<long>(type: "INTEGER", nullable: false)
                 },
@@ -352,9 +355,9 @@ namespace ToroSquad.Bot.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_prediction_standing_TournamentId_UserId",
+                name: "IX_prediction_standing_TournamentId_Board_UserId",
                 table: "prediction_standing",
-                columns: new[] { "TournamentId", "UserId" },
+                columns: new[] { "TournamentId", "Board", "UserId" },
                 unique: true);
 
             migrationBuilder.CreateIndex(

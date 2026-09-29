@@ -1,21 +1,19 @@
 using Discord;
 using Discord.Interactions;
-using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core;
-using ToroSquad.Core.Modules;
 using ToroSquad.Discord.Interactions;
 using ToroSquad.Discord.Transport;
 using ToroSquad.Modules.Predictions.Application;
-using ToroSquad.Modules.Predictions.Domain;
 
 namespace ToroSquad.Modules.Predictions.Commands;
 
 /// <summary>
 /// /ongoru — one group for members and managers alike, so it carries NO default_member_permissions (hiding it would hide the
 /// wallet, daily reward and leaderboards from members); every subcommand authorizes itself in the services instead
-/// (channel, creator role, manager, administrator). Predictions channel: yarat, kilitle, sonuclandir, iptal. Commands
-/// channel: cuzdan, gunluk, tahminlerim, liderlik, turnuva durum|bitir. Private answers except the leaderboard and the
-/// tournament status; nothing here ever pings.
+/// (channel, creator role, administrator). Predictions channel: yarat (the prediction is then managed from its card's
+/// buttons, see <see cref="PredictionComponents"/>). Commands channel: cuzdan, gunluk, tahminlerim, liderlik, turnuva
+/// durum|bitir (bitir: Administrator or server owner only). There is no command that resets a member's coins. Private
+/// answers except the leaderboard and the tournament status; nothing here ever pings.
 /// </summary>
 [ToroModule(PredictionsModule.ModuleIdValue)]
 [Group("ongoru", "TSQ Öngörü: fixed-odds community predictions with virtual TSQ Coin")]
@@ -24,8 +22,6 @@ namespace ToroSquad.Modules.Predictions.Commands;
 public sealed class PredictionCommands(InteractionServices services, PredictionService predictions, PredictionEconomy economy)
     : PredictionInteractionModule(services)
 {
-    public const string TargetDescription = "Prediction number (#12), card link or message ID";
-
     [SlashCommand("yarat", "Create a prediction in this channel (opens a form)")]
     public async Task CreateAsync()
     {
@@ -42,31 +38,6 @@ public sealed class PredictionCommands(InteractionServices services, PredictionS
         await RespondWithModalAsync(PredictionFormUi.CreateModal(draftId, values, key => Localizer.Get(language, key)));
     }
 
-    [SlashCommand("kilitle", "Stop new entries to a prediction now")]
-    public async Task LockAsync(
-        [Summary("ongoru", TargetDescription), MaxLength(PredictionTarget.MaxInputLength), Autocomplete(typeof(PredictionTargetAutocomplete))] string ongoru)
-    {
-        await DeferEphemeralAsync();
-        await ReplyResultAsync(await predictions.LockAsync(Actor, Here, ongoru, CancellationToken.None));
-    }
-
-    [SlashCommand("sonuclandir", "Choose the winning outcome and pay out")]
-    public async Task SettleAsync(
-        [Summary("ongoru", TargetDescription), MaxLength(PredictionTarget.MaxInputLength), Autocomplete(typeof(PredictionTargetAutocomplete))] string ongoru)
-    {
-        await DeferEphemeralAsync();
-        await ReplyViewAsync(await predictions.StartSettleAsync(Actor, Here, ongoru, CancellationToken.None));
-    }
-
-    [SlashCommand("iptal", "Cancel a prediction and refund every stake")]
-    public async Task CancelAsync(
-        [Summary("ongoru", TargetDescription), MaxLength(PredictionTarget.MaxInputLength), Autocomplete(typeof(PredictionTargetAutocomplete))] string ongoru,
-        [Summary("gerekce", "Why it is cancelled (shown on the card)"), MinLength(PredictionRules.CancelReasonMinLength), MaxLength(PredictionRules.CancelReasonMaxLength)] string gerekce)
-    {
-        await DeferEphemeralAsync();
-        await ReplyViewAsync(await predictions.PreviewCancelAsync(Actor, Here, ongoru, gerekce, CancellationToken.None));
-    }
-
     [SlashCommand("cuzdan", "Your TSQ Coin balance, pending coins and record")]
     public async Task WalletAsync()
     {
@@ -80,7 +51,7 @@ public sealed class PredictionCommands(InteractionServices services, PredictionS
         if (await RefuseBotAsync())
             return;
         await DeferEphemeralAsync();
-        await ReplyResultAsync((await economy.ClaimDailyAsync(Actor, Here, CancellationToken.None)).Result);
+        await ReplyResultAsync((await economy.ClaimDailyAsync(Actor, Here, DisplayName(), CancellationToken.None)).Result);
     }
 
     [SlashCommand("tahminlerim", "Your entries in the current tournament")]
@@ -102,7 +73,8 @@ public sealed class PredictionCommands(InteractionServices services, PredictionS
         public async Task StatusAsync() =>
             await ReplyViewAsync(await economy.TournamentStatusAsync(Actor, Here, CancellationToken.None));
 
-        [SlashCommand("bitir", "End the tournament and reset balances (administrators)")]
+        /// <summary>The only way to end a tournament (and start everyone again at the starting balance): Administrator or owner, preview first.</summary>
+        [SlashCommand("bitir", "End the tournament and start a new one at 1000 TSQ Coin (administrators)")]
         public async Task EndAsync()
         {
             await DeferEphemeralAsync();
@@ -139,24 +111,5 @@ public abstract class PredictionInteractionModule(InteractionServices services) 
         }
 
         await SendAsync(view.Content, DiscordConversions.ToEmbed(view.Embed), DiscordConversions.ToComponents(view), ephemeral: !reply.Public);
-    }
-}
-
-/// <summary>
-/// Suggestions for the ongoru option: this guild's open and locked predictions the caller may manage ("#12 · Açık · title"),
-/// newest first; the value is the number. Nothing while the module is disabled or for members who manage nothing.
-/// </summary>
-public sealed class PredictionTargetAutocomplete : AutocompleteHandler
-{
-    public override async Task<AutocompletionResult> GenerateSuggestionsAsync(IInteractionContext context, IAutocompleteInteraction autocompleteInteraction,
-        IParameterInfo parameter, IServiceProvider services)
-    {
-        if (ActorFactory.From(context) is not { } actor ||
-            !await services.GetRequiredService<IModuleGate>().IsEnabledAsync(actor.GuildId, PredictionsModule.ModuleIdTyped, CancellationToken.None))
-            return AutocompletionResult.FromSuccess();
-
-        var suggestions = await services.GetRequiredService<PredictionService>()
-            .SuggestAsync(actor, autocompleteInteraction.Data.Current.Value?.ToString(), CancellationToken.None);
-        return AutocompletionResult.FromSuccess(suggestions.Select(s => new AutocompleteResult(s.Label, s.Value)));
     }
 }

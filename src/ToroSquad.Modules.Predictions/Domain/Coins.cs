@@ -82,6 +82,14 @@ public static partial class Coins
         return negative ? "-" + text : text;
     }
 
+    /// <summary>An amount as the form accepts it back ("12500", "12.5" → "12.50"): no grouping, a dot, two decimals only when needed.</summary>
+    public static string FormatInput(long minor)
+    {
+        var whole = (minor / MinorPerCoin).ToString(CultureInfo.InvariantCulture);
+        var fraction = minor % MinorPerCoin;
+        return fraction == 0 ? whole : whole + "." + fraction.ToString("00", CultureInfo.InvariantCulture);
+    }
+
     private static string Group(string digits, string separator)
     {
         var parts = new List<string>();

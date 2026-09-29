@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using Microsoft.Extensions.Options;
 using ToroSquad.Core;
 using ToroSquad.Core.Localization;
@@ -10,11 +9,12 @@ namespace ToroSquad.Modules.Predictions.Application;
 
 /// <summary>
 /// Every message of TSQ Öngörü except the card (<see cref="PredictionCards"/>): the private form preview and errors, the
-/// entry preview and receipt, the settle/cancel/end confirmations, the wallet, the entry list, and the public leaderboard,
-/// tournament status and closing announcement. All go out with <see cref="MentionPolicy.None"/>: members are named by
-/// embed mentions (which Discord shows with the member's current name and never pings) — nobody is ever called a "former
-/// member" because a cache missed them. Custom ids carry only a random token, an id or a page number; what a click may do
-/// is decided server-side.
+/// entry preview and receipt, the private lock/settle/cancel/end confirmations, the wallet, the entry list, and the public
+/// leaderboard, tournament status and closing announcement. All go out with <see cref="MentionPolicy.None"/>. Leaderboards
+/// name members by embed mentions (Discord shows the current name and never pings; nobody is called a "former member"
+/// because a cache missed them); the closing announcement uses the display names frozen with the podium and no mention at
+/// all. Custom ids carry only a random token, a prediction/outcome number or a page; what a click may do is decided
+/// server-side.
 /// </summary>
 public sealed class PredictionMessages(ILocalizer localizer, IOptions<PredictionsOptions> options)
 {
@@ -22,14 +22,29 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
     public const string PublishPrefix = "tsq:pred:publish:";
     public const string EditPrefix = "tsq:pred:edit:";
     public const string DiscardPrefix = "tsq:pred:discard:";
+
+    /// <summary>The entry form: "{prediction}" from the card, "{prediction}.{token}" when reopened with Düzenle.</summary>
     public const string StakeModalPrefix = "tsq:pred:stake:";
+
     public const string EntryConfirmPrefix = "tsq:pred:entry-ok:";
+    public const string EntryEditPrefix = "tsq:pred:entry-edit:";
+    public const string LockConfirmPrefix = "tsq:pred:lock-ok:";
     public const string SettlePickPrefix = "tsq:pred:settle-pick:";
+
+    /// <summary>"{prediction}.{outcome}".</summary>
     public const string SettleConfirmPrefix = "tsq:pred:settle-ok:";
+
+    public const string CancelReasonModalPrefix = "tsq:pred:cancel-reason:";
     public const string CancelConfirmPrefix = "tsq:pred:cancel-ok:";
     public const string EndConfirmPrefix = "tsq:pred:end-ok:";
     public const string DismissPrefix = "tsq:pred:dismiss:";
     public const string MinePagePrefix = "tsq:pred:mine:";
+
+    /// <summary>Separates the parts of a custom id value (never part of a number or of a base64url token).</summary>
+    public const char Separator = '.';
+
+    /// <summary>The dismiss value of a step that holds no token.</summary>
+    public const string NoToken = "-";
 
     public const uint BrandColor = 0x9B59B6;
     public const uint SuccessColor = 0x57F287;
@@ -88,6 +103,7 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         return new OutgoingMessage(null, embed, MentionPolicy.None,
         [
             new MessageButton(L(language, "predictions.entry.confirm"), EntryConfirmPrefix + token, null, Style: MessageButtonStyle.Success),
+            new MessageButton(L(language, "predictions.entry.edit"), EntryEditPrefix + token, null),
             new MessageButton(L(language, "predictions.dismiss"), DismissPrefix + token, null),
         ]);
     }
@@ -105,18 +121,26 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         return new OutgoingMessage(null, embed, MentionPolicy.None);
     }
 
-    // ---- settle / cancel ----
+    // ---- manage: lock / settle / cancel ----
 
-    public OutgoingMessage SettlePicker(PredictionView view, string token, long? selected, string language) =>
+    public OutgoingMessage LockPrompt(long predictionId, string title, string language) =>
+        new(L(language, "predictions.lock.prompt_text", Question(title)), null, MentionPolicy.None,
+        [
+            new MessageButton(L(language, "predictions.lock.confirm"), LockConfirmPrefix + Number(predictionId), null, Style: MessageButtonStyle.Danger),
+            new MessageButton(L(language, "predictions.dismiss"), DismissPrefix + NoToken, null),
+        ]);
+
+    public OutgoingMessage SettlePicker(PredictionView view, long? selected, string language) =>
         new(L(language, "predictions.settle.pick_title", Question(view.Title)), null, MentionPolicy.None,
-            [new MessageButton(L(language, "predictions.dismiss"), DismissPrefix + token, null)], OutcomeSelect(view, token, selected, language));
+            [new MessageButton(L(language, "predictions.dismiss"), DismissPrefix + NoToken, null)], OutcomeSelect(view, selected, language));
 
-    public OutgoingMessage SettlePreview(PredictionView view, long outcomeId, int winners, int losers, long payout, string token, string language)
+    public OutgoingMessage SettlePreview(PredictionView view, long outcomeId, int winners, int losers, long payout, string language)
     {
         var outcome = view.Outcomes.First(o => o.Id == outcomeId);
-        var embed = new MessageEmbed(L(language, "predictions.settle.preview_title"), Question(view.Title), null,
+        var embed = new MessageEmbed(L(language, "predictions.settle.preview_title"), Question(view.Title) + "\n" +
+                                                                                      L(language, "predictions.settle.marked",
+                                                                                          DiscordText.Untrusted(outcome.Label, 400), Odds.Format(outcome.OddsX100)), null,
         [
-            new(L(language, "predictions.settle.winner"), DiscordText.Untrusted(outcome.Label, 400) + " — **" + Odds.Format(outcome.OddsX100) + "**"),
             new(L(language, "predictions.settle.winners"), Number(winners), true),
             new(L(language, "predictions.settle.losers"), Number(losers), true),
             new(L(language, "predictions.settle.payout"), Coin(payout, language), true),
@@ -124,14 +148,16 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         ], L(language, "predictions.card.footer_short", Number(view.Id)), null, WarningColor);
         return new OutgoingMessage(null, embed, MentionPolicy.None,
         [
-            new MessageButton(L(language, "predictions.settle.confirm"), SettleConfirmPrefix + token, null, Style: MessageButtonStyle.Success),
-            new MessageButton(L(language, "predictions.dismiss"), DismissPrefix + token, null),
-        ], OutcomeSelect(view, token, outcomeId, language));
+            new MessageButton(L(language, "predictions.settle.confirm"), SettleConfirmPrefix + Number(view.Id) + Separator + Number(outcomeId), null,
+                Style: MessageButtonStyle.Success),
+            new MessageButton(L(language, "predictions.dismiss"), DismissPrefix + NoToken, null),
+        ], OutcomeSelect(view, outcomeId, language));
     }
 
     public OutgoingMessage CancelPreview(PredictionView view, string reason, int entries, long total, string token, string language)
     {
-        var embed = new MessageEmbed(L(language, "predictions.cancel.preview_title"), Question(view.Title), null,
+        var embed = new MessageEmbed(L(language, "predictions.cancel.preview_title"), Question(view.Title) + "\n" +
+                                                                                      L(language, "predictions.cancel.preview_text", Coin(total, language)), null,
         [
             new(L(language, "predictions.cancel.reason"), DiscordText.Untrusted(reason, 800)),
             new(L(language, "predictions.cancel.entries"), Number(entries), true),
@@ -145,11 +171,11 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         ]);
     }
 
-    private MessageSelectMenu OutcomeSelect(PredictionView view, string token, long? selected, string language) =>
-        new(SettlePickPrefix + token, L(language, "predictions.settle.pick_placeholder"), view.Outcomes.Select(o => new MessageSelectOption(
-            Cut(Number(o.Position) + ". " + DiscordText.UntrustedPlain(o.Label, 400), MessageSelectMenu.MaxLabelLength),
+    private MessageSelectMenu OutcomeSelect(PredictionView view, long? selected, string language) =>
+        new(SettlePickPrefix + Number(view.Id), L(language, "predictions.settle.pick_placeholder"), view.Outcomes.Select(o => new MessageSelectOption(
+            Cut(DiscordText.UntrustedPlain(o.Label, 400) + " — " + Odds.Format(o.OddsX100), MessageSelectMenu.MaxLabelLength),
             o.Id.ToString(CultureInfo.InvariantCulture),
-            (o.Id == selected ? "✓ " : "") + L(language, "predictions.card.option_odds", Odds.Format(o.OddsX100)))).ToList());
+            o.Id == selected ? L(language, "predictions.settle.selected") : null)).ToList());
 
     // ---- member views ----
 
@@ -164,7 +190,7 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
             new(L(language, "predictions.wallet.record"), view.SettledCount == 0
                 ? L(language, "predictions.wallet.record_none", Number(view.PendingEntries))
                 : L(language, "predictions.wallet.record_value", Number(view.CorrectCount), Number(view.SettledCount), Percent(view.CorrectCount, view.SettledCount), Number(view.PendingEntries))),
-            new(L(language, "predictions.wallet.daily"), view.DailyClaimedMinorCoins is { } coins
+            new(L(language, "predictions.wallet.daily"), view.DailyClaimedCoins is { } coins
                 ? L(language, "predictions.wallet.daily_claimed", Number(coins), DiscordText.Timestamp(view.NextDaily, 'R'))
                 : L(language, "predictions.wallet.daily_ready")),
         };
@@ -203,17 +229,10 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
 
     public OutgoingMessage Leaderboard(int tournament, IReadOnlyList<StandingRow> coins, IReadOnlyList<StandingRow> correct, string language)
     {
-        var coinText = coins.Count == 0
-            ? L(language, "predictions.leaderboard.coins_empty")
-            : string.Join("\n", coins.Select(r => Place(r.Rank) + " " + Mention(r.User) + " — **" + Coin(r.TotalMinor, language) + "**"));
-        var correctText = correct.Count == 0
-            ? L(language, "predictions.leaderboard.correct_empty")
-            : string.Join("\n", correct.Select(r => Place(r.Rank) + " " + Mention(r.User) + " — " +
-                                                     L(language, "predictions.leaderboard.correct_value", Number(r.CorrectCount), Number(r.SettledCount), Percent(r.CorrectCount, r.SettledCount))));
         var embed = new MessageEmbed(L(language, "predictions.leaderboard.title", tournament), L(language, "predictions.leaderboard.note"), null,
         [
-            new(L(language, "predictions.leaderboard.coins"), coinText),
-            new(L(language, "predictions.leaderboard.correct"), correctText),
+            new(L(language, "predictions.leaderboard.coins"), CoinLines(coins, r => Mention(r.User), language)),
+            new(L(language, "predictions.leaderboard.correct"), CorrectLines(correct, r => Mention(r.User), language)),
         ], L(language, "predictions.leaderboard.footer"), null, BrandColor);
         return new OutgoingMessage(null, embed, MentionPolicy.None);
     }
@@ -237,7 +256,7 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         foreach (var p in open.Take(15))
         {
             var link = p.Message is { } m ? " — " + string.Create(CultureInfo.InvariantCulture, $"https://discord.com/channels/{p.Guild.Value}/{p.Channel.Value}/{m.Value}") : "";
-            lines.Add("• **#" + Number(p.Id) + "** " + DiscordText.Untrusted(Short(p.Title, 60), 200) + " · " + StatusName(p.Status, language) + link);
+            lines.Add("• **#" + Number(p.Id) + "** · " + DiscordText.Untrusted(Short(p.Title, 60), 200) + " · " + StatusName(p.Status, language) + link);
         }
 
         if (open.Count > 15)
@@ -245,13 +264,17 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         return new OutgoingMessage(Fit(string.Join("\n", lines)), null, MentionPolicy.None);
     }
 
-    public OutgoingMessage TournamentEndPreview(int number, IReadOnlyList<StandingRow> podium, int participants, string token, string language)
+    public OutgoingMessage TournamentEndPreview(TournamentEndSummary summary, string token, string language)
     {
-        var embed = new MessageEmbed(L(language, "predictions.tournament.end_title", number), L(language, "predictions.tournament.end_warning",
+        var embed = new MessageEmbed(L(language, "predictions.tournament.end_title", summary.Number), L(language, "predictions.tournament.end_warning",
                 Coins.Format(options.Value.InitialBalanceMinor, language)), null,
         [
-            new(L(language, "predictions.tournament.podium"), PodiumText(podium, language)),
-            new(L(language, "predictions.tournament.reset_count"), Number(participants), true),
+            new(L(language, "predictions.tournament.started"), DiscordText.Timestamp(summary.StartedAt, 'f'), true),
+            new(L(language, "predictions.tournament.participants"), Number(summary.Participants), true),
+            new(L(language, "predictions.tournament.predictions"), Number(summary.Predictions), true),
+            new(L(language, "predictions.tournament.settled_count"), Number(summary.Settled), true),
+            new(L(language, "predictions.leaderboard.coins"), CoinLines(summary.Coins, r => Mention(r.User), language)),
+            new(L(language, "predictions.leaderboard.correct"), CorrectLines(summary.Correct, r => Mention(r.User), language)),
         ], null, null, DangerColor);
         return new OutgoingMessage(null, embed, MentionPolicy.None,
         [
@@ -260,22 +283,35 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         ]);
     }
 
-    /// <summary>The public closing announcement, rendered once from the frozen podium (stored in the outbox; retries resend exactly this).</summary>
+    /// <summary>
+    /// The public closing announcement, rendered once from the frozen podiums with the display names frozen with them — no
+    /// mention, no live wallet (stored in the outbox; a retry resends exactly this).
+    /// </summary>
     public OutgoingMessage TournamentAnnouncement(TournamentClosing closing, string language)
     {
         var embed = new MessageEmbed(L(language, "predictions.announce.title", closing.Number), L(language, "predictions.announce.intro", Number(closing.Participants),
                 Number(closing.Predictions)), null,
         [
-            new(L(language, "predictions.tournament.podium"), PodiumText(closing.Podium, language)),
-            new(L(language, "predictions.announce.next_title", closing.NextNumber), L(language, "predictions.announce.next", Coins.Format(options.Value.InitialBalanceMinor, language))),
-        ], L(language, "predictions.announce.footer"), null, SuccessColor);
+            new(L(language, "predictions.leaderboard.coins"), CoinLines(closing.Coins, r => Name(r, language), language)),
+            new(L(language, "predictions.leaderboard.correct"), CorrectLines(closing.Correct, r => Name(r, language), language)),
+            new(L(language, "predictions.announce.next_title"), L(language, "predictions.announce.next", Coins.Format(options.Value.InitialBalanceMinor, language))),
+        ], L(language, "predictions.announce.footer", closing.NextNumber), null, SuccessColor);
         return new OutgoingMessage(null, embed, MentionPolicy.None);
     }
 
-    private string PodiumText(IReadOnlyList<StandingRow> podium, string language) => podium.Count == 0
-        ? L(language, "predictions.leaderboard.coins_empty")
-        : string.Join("\n", podium.Select(r => Place(r.Rank) + " " + Mention(r.User) + " — **" + Coin(r.TotalMinor, language) + "** · " +
-                                               L(language, "predictions.tournament.podium_correct", Number(r.CorrectCount))));
+    private string CoinLines(IReadOnlyList<StandingRow> rows, Func<StandingRow, string> who, string language) => rows.Count == 0
+        ? L(language, "predictions.leaderboard.empty")
+        : string.Join("\n", rows.Select(r => Place(r.Rank) + " " + who(r) + " — **" + Coin(r.TotalMinor, language) + "**"));
+
+    /// <summary>"12 doğru / 15 sonuçlanan (%80)"; with nothing settled yet "0 doğru · Henüz sonuçlanmış tahmini yok" — never a misleading %0.</summary>
+    private string CorrectLines(IReadOnlyList<StandingRow> rows, Func<StandingRow, string> who, string language) => rows.Count == 0
+        ? L(language, "predictions.leaderboard.empty")
+        : string.Join("\n", rows.Select(r => Place(r.Rank) + " " + who(r) + " — " + (r.SettledCount == 0
+            ? L(language, "predictions.leaderboard.correct_none", Number(r.CorrectCount))
+            : L(language, "predictions.leaderboard.correct_value", Number(r.CorrectCount), Number(r.SettledCount), Percent(r.CorrectCount, r.SettledCount)))));
+
+    private string Name(StandingRow row, string language) =>
+        string.IsNullOrWhiteSpace(row.DisplayName) ? L(language, "predictions.card.creator_unknown") : "**" + DiscordText.Untrusted(row.DisplayName, 200) + "**";
 
     public string StatusName(PredictionStatus status, string language) => L(language, "predictions.status." + status.ToString().ToLowerInvariant());
 

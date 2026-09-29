@@ -10,21 +10,17 @@ using ToroSquad.Modules.Predictions.Persistence;
 namespace ToroSquad.Modules.Predictions.Application;
 
 /// <summary>
-/// /privacy for TSQ Öngörü, one guild at a time. Export: the member's wallets per tournament, entries, coin journal, daily
-/// claims, podium places, and the predictions they created, settled, cancelled or locked, and tournaments they closed.
+/// /privacy for TSQ Öngörü, one guild at a time. Export: the member's wallets per tournament (with the display name
+/// snapshot), entries, coin journal, daily claims, podium places, and the predictions they created, settled, cancelled or
+/// locked, and tournaments they closed.
 /// <para>
-/// Deletion (one write transaction, so no settlement can run in between): the member's entries, journal, daily claims,
-/// wallets and podium rows are removed. A PENDING entry is removed together with its stake — it is never paid out or
-/// refunded later (the wallet it would go to no longer exists) — and the prediction's live entry count and staked total
-/// are reduced by it, so the card never shows coins of a deleted member (the card is redrawn). Settled and cancelled
-/// predictions keep their historical totals (aggregates, no member data). Predictions the member created keep existing
-/// with the creator's id and display name cleared; the member's id is cleared from settled/cancelled/locked-by and from
-/// closed-by of tournaments. The leaderboards then simply no longer list the member.
-/// </para>
-/// <para>
-/// Known consequence (reported, no new retention invented): with the wallet and the daily claim gone, the member starts again
-/// with the starting balance and may claim today's daily reward again. Keeping an anti-abuse list of deleted ids would be a
-/// new retention policy and needs an owner decision.
+/// Deletion does NOT reset the TSQ Öngörü economy: a member's balances, entries, coin journal, daily claims and podium
+/// places are game records of a shared competition (every other member's ranking depends on them), and deleting them would
+/// hand the member a fresh starting balance and a second daily reward — the "lose, reset, get 1000 again" exploit. They are
+/// kept and reported as kept (preview line and a warning after deletion); the stored display-name snapshots (wallets,
+/// podiums, predictions created) are removed, and cards show "—" as creator. A real erasure request is handled by the
+/// operator outside the game. When the bot leaves a guild the whole module data of that guild is purged with the other
+/// modules (<see cref="PurgeGuildAsync"/>).
 /// </para>
 /// </summary>
 public sealed class PredictionUserData(PredictionStore store) : IUserDataContributor
@@ -48,6 +44,7 @@ public sealed class PredictionUserData(PredictionStore store) : IUserDataContrib
                 ["pendingUnits"] = w.PendingMinor,
                 ["correct"] = w.CorrectCount,
                 ["settled"] = w.SettledCount,
+                ["displayName"] = w.DisplayName,
                 ["createdAtUtc"] = Time(w.CreatedAt),
             });
         }
@@ -120,52 +117,38 @@ public sealed class PredictionUserData(PredictionStore store) : IUserDataContrib
     {
         var (g, u) = (guild.Value, user.Value);
         var items = new List<DeletionPreviewItem>();
-        void Add(string key, int count)
-        {
-            if (count > 0)
-                items.Add(new DeletionPreviewItem(key, count));
-        }
-
-        Add("predictions.privacy.wallets", await store.Wallets.CountAsync(w => w.GuildId == g && w.UserId == u, cancellationToken));
-        Add("predictions.privacy.pending", await store.Entries.CountAsync(e => e.GuildId == g && e.UserId == u && e.Status == PredictionEntryStatus.Pending, cancellationToken));
-        Add("predictions.privacy.entries", await store.Entries.CountAsync(e => e.GuildId == g && e.UserId == u && e.Status != PredictionEntryStatus.Pending, cancellationToken));
-        Add("predictions.privacy.ledger", await store.Ledger.CountAsync(l => l.GuildId == g && l.UserId == u, cancellationToken));
-        Add("predictions.privacy.daily", await store.DailyClaims.CountAsync(c => c.GuildId == g && c.UserId == u, cancellationToken));
-        Add("predictions.privacy.created", await store.Predictions.CountAsync(p => p.GuildId == g && p.CreatorUserId == u, cancellationToken));
+        var names = await store.Wallets.CountAsync(w => w.GuildId == g && w.UserId == u && w.DisplayName != null, cancellationToken) +
+                    await store.Predictions.CountAsync(p => p.GuildId == g && p.CreatorUserId == u && p.CreatorName != "", cancellationToken) +
+                    await Podium(g, u).CountAsync(s => s.DisplayName != null, cancellationToken);
+        if (names > 0)
+            items.Add(new DeletionPreviewItem("predictions.privacy.names", names));
+        var kept = await store.Wallets.CountAsync(w => w.GuildId == g && w.UserId == u, cancellationToken) +
+                   await store.Entries.CountAsync(e => e.GuildId == g && e.UserId == u, cancellationToken) +
+                   await store.DailyClaims.CountAsync(c => c.GuildId == g && c.UserId == u, cancellationToken);
+        if (kept > 0)
+            items.Add(new DeletionPreviewItem("predictions.privacy.kept", kept));
         return items;
     }
+
+    public const string KeptWarning =
+        "TSQ Öngörü: bakiye, katılım, coin hareketi ve günlük ödül kayıtları oyun bütünlüğü için silinmedi (TSQ Coin sıfırlanamaz); yalnızca kayıtlı görünen adların kaldırıldı.";
 
     public async Task<DeletionReport> DeleteAsync(GuildId guild, UserId user, CancellationToken cancellationToken)
     {
         var (g, u) = (guild.Value, user.Value);
-        var deleted = await PredictionWrites.RunAsync(store.Db, async () =>
+        var changed = await PredictionWrites.RunAsync(store.Db, async () =>
         {
-            // Pending stakes leave the live totals of their predictions (and the card is redrawn).
-            var pending = await store.Entries.Where(e => e.GuildId == g && e.UserId == u && e.Status == PredictionEntryStatus.Pending).ToListAsync(cancellationToken);
-            foreach (var group in pending.GroupBy(e => e.PredictionId))
-            {
-                var prediction = await store.Predictions.FirstAsync(p => p.Id == group.Key, cancellationToken);
-                prediction.EntryCount -= group.Count();
-                prediction.StakeTotalMinor = Coins.Subtract(prediction.StakeTotalMinor, group.Aggregate(0L, (sum, e) => Coins.Add(sum, e.StakeMinor)));
-                PredictionStore.Touch(prediction);
-            }
-
-            await store.Db.SaveChangesAsync(cancellationToken);
-            var n = await store.Ledger.Where(l => l.GuildId == g && l.UserId == u).ExecuteDeleteAsync(cancellationToken);
-            n += await store.Entries.Where(e => e.GuildId == g && e.UserId == u).ExecuteDeleteAsync(cancellationToken);
-            n += await store.DailyClaims.Where(c => c.GuildId == g && c.UserId == u).ExecuteDeleteAsync(cancellationToken);
-            n += await Podium(g, u).ExecuteDeleteAsync(cancellationToken);
-            n += await store.Wallets.Where(w => w.GuildId == g && w.UserId == u).ExecuteDeleteAsync(cancellationToken);
-            n += await store.Predictions.Where(p => p.GuildId == g && p.CreatorUserId == u)
-                .ExecuteUpdateAsync(s => s.SetProperty(p => p.CreatorUserId, 0UL).SetProperty(p => p.CreatorName, "")
+            var n = await store.Wallets.Where(w => w.GuildId == g && w.UserId == u && w.DisplayName != null)
+                .ExecuteUpdateAsync(s => s.SetProperty(w => w.DisplayName, (string?)null), cancellationToken);
+            n += await Podium(g, u).Where(s => s.DisplayName != null).ExecuteUpdateAsync(s => s.SetProperty(x => x.DisplayName, (string?)null), cancellationToken);
+            n += await store.Predictions.Where(p => p.GuildId == g && p.CreatorUserId == u && p.CreatorName != "")
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.CreatorName, "")
                     .SetProperty(p => p.CardStale, p => p.MessageId != null && !p.CardMissing).SetProperty(p => p.Version, p => p.Version + 1), cancellationToken);
-            n += await store.Predictions.Where(p => p.GuildId == g && p.SettledByUserId == u).ExecuteUpdateAsync(s => s.SetProperty(p => p.SettledByUserId, (ulong?)null), cancellationToken);
-            n += await store.Predictions.Where(p => p.GuildId == g && p.CancelledByUserId == u).ExecuteUpdateAsync(s => s.SetProperty(p => p.CancelledByUserId, (ulong?)null), cancellationToken);
-            n += await store.Predictions.Where(p => p.GuildId == g && p.LockedByUserId == u).ExecuteUpdateAsync(s => s.SetProperty(p => p.LockedByUserId, (ulong?)null), cancellationToken);
-            n += await store.Tournaments.Where(t => t.GuildId == g && t.ClosedByUserId == u).ExecuteUpdateAsync(s => s.SetProperty(t => t.ClosedByUserId, (ulong?)null), cancellationToken);
             return n;
         }, cancellationToken);
-        return new DeletionReport(Module, deleted, []);
+        var kept = await store.Wallets.AnyAsync(w => w.GuildId == g && w.UserId == u, cancellationToken) ||
+                   await store.DailyClaims.AnyAsync(c => c.GuildId == g && c.UserId == u, cancellationToken);
+        return new DeletionReport(Module, changed, kept ? [KeptWarning] : []);
     }
 
     public async Task<int> PurgeGuildAsync(GuildId guild, CancellationToken cancellationToken)

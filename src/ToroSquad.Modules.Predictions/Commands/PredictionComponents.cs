@@ -13,10 +13,12 @@ using ToroSquad.Modules.Predictions.Domain;
 namespace ToroSquad.Modules.Predictions.Commands;
 
 /// <summary>
-/// Every click, select and form submit of TSQ Öngörü. Each one is re-checked by the services (channel, module, role or
-/// manager, token owner, stored state) — a custom id carries no authority and the button's own state is never trusted.
-/// Private steps are updated in place (the same private message moves from preview to receipt); the public card is only
-/// ever edited by the card sync, never from here. Every message and edit goes out with allowed_mentions = none.
+/// Every click, select and form submit of TSQ Öngörü: the creation form, and the card's buttons (🎯 Tahmin Yap, 🔒 Kilitle,
+/// ✅ Sonuçlandır, ↩️ İptal / İade) with their private follow-ups. The card's custom ids carry only the prediction number,
+/// so they keep working after a restart; each click reloads the prediction and is re-checked by the services (guild,
+/// channel, the card's own message, module, manager, stored state) — a custom id carries no authority and the button's own
+/// state is never trusted. Management answers and confirmations are private; the public card is only ever edited by the
+/// card sync, never from here. Every message and edit goes out with allowed_mentions = none.
 /// </summary>
 [ToroModule(PredictionsModule.ModuleIdValue)]
 [CommandContextType(InteractionContextType.Guild)]
@@ -81,49 +83,48 @@ public sealed class PredictionComponents(
         await ReplaceAsync(OperationResult.Ok("predictions.form.discarded"));
     }
 
-    // ---- entry ----
+    // ---- 🎯 Tahmin Yap ----
 
-    /// <summary>A pick on the public card: every check first, then the amount form (no coin moves here).</summary>
-    [ComponentInteraction(PredictionCards.PickPrefix + "*", ignoreGroupNames: true)]
-    public async Task PickAsync(string id, string[] values)
+    /// <summary>
+    /// 🎯 Tahmin Yap on the public card: every check first, then the entry form (outcome select + amount). No coin moves
+    /// here; closing the form changes nothing, and pressing the button again always starts afresh.
+    /// </summary>
+    [ComponentInteraction(PredictionCards.EnterPrefix + "*", ignoreGroupNames: true)]
+    public async Task EnterAsync(string id)
     {
         if (await RefuseBotAsync())
             return;
-        if (!long.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var predictionId))
-        {
-            await ReplyResultAsync(PredictionService.NotFound());
+        if (await CardPredictionAsync(id) is not { } predictionId)
             return;
-        }
-
-        // Only the bot's own card carries this select: a lost post confirmation is recovered from the click.
-        if (Context.Interaction is IComponentInteraction { Message: { } message } && message.Author.Id == Context.Client.CurrentUser.Id)
-            await predictions.AttachFromCardAsync(predictionId, Actor.GuildId, Here, new MessageId(message.Id), CancellationToken.None);
-
-        var (refusal, info) = await predictions.StartEntryAsync(Actor, Here, predictionId, values.FirstOrDefault(), CancellationToken.None);
-        if (refusal is not null || info is null)
-        {
-            await ReplyResultAsync(refusal ?? PredictionService.NotFound());
-            return;
-        }
-
-        var language = await LangAsync();
-        await RespondWithModalAsync(PredictionFormUi.StakeModal(info, Coins.Format(info.AvailableMinor, language), key => Localizer.Get(language, key)));
+        var (refusal, info) = await predictions.StartEntryAsync(Actor, Here, predictionId, CardMessage, CancellationToken.None);
+        await OpenEntryFormAsync(refusal, info);
     }
 
-    [ModalInteraction(PredictionMessages.StakeModalPrefix + "*:*", ignoreGroupNames: true)]
-    public async Task SubmitStakeAsync(string predictionId, string outcomeId, PredictionStakeModal modal)
+    /// <summary>✏️ Düzenle on the entry preview: the form again with the earlier choice and amount.</summary>
+    [ComponentInteraction(PredictionMessages.EntryEditPrefix + "*", ignoreGroupNames: true)]
+    public async Task EditEntryAsync(string token)
     {
         if (await RefuseBotAsync())
             return;
-        await DeferEphemeralAsync();
-        if (!long.TryParse(predictionId, NumberStyles.None, CultureInfo.InvariantCulture, out var prediction) ||
-            !long.TryParse(outcomeId, NumberStyles.None, CultureInfo.InvariantCulture, out var outcome))
+        var (refusal, info) = await predictions.EditEntryAsync(Actor, Here, token, CancellationToken.None);
+        await OpenEntryFormAsync(refusal, info);
+    }
+
+    [ModalInteraction(PredictionMessages.StakeModalPrefix + "*", ignoreGroupNames: true)]
+    public async Task SubmitEntryAsync(string value, PredictionStakeModal modal)
+    {
+        if (await RefuseBotAsync())
+            return;
+        var parts = value.Split(PredictionMessages.Separator, 2);
+        if (!long.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var predictionId))
         {
             await ReplyResultAsync(PredictionService.NotFound());
             return;
         }
 
-        await ReplyViewAsync(await predictions.PreviewEntryAsync(Actor, Here, prediction, outcome, modal.Amount, CancellationToken.None));
+        var outcome = PredictionFormUi.ReadValue(((IModalInteraction)Context.Interaction).Data.Components, PredictionFormUi.OutcomeField);
+        var reply = await predictions.PreviewEntryAsync(Actor, Here, predictionId, outcome, modal.Amount, parts.Length > 1 ? parts[1] : null, CancellationToken.None);
+        await ShowFromModalAsync(reply);
     }
 
     [ComponentInteraction(PredictionMessages.EntryConfirmPrefix + "*", ignoreGroupNames: true)]
@@ -132,23 +133,81 @@ public sealed class PredictionComponents(
         if (await RefuseBotAsync())
             return;
         await DeferEphemeralAsync();
-        await ReplaceAsync(await predictions.ConfirmEntryAsync(Actor, Here, token, CancellationToken.None));
+        await ReplaceAsync(await predictions.ConfirmEntryAsync(Actor, Here, token, DisplayName(), CancellationToken.None));
     }
 
-    // ---- settle / cancel / tournament end ----
+    // ---- 🔒 Kilitle ----
 
-    [ComponentInteraction(PredictionMessages.SettlePickPrefix + "*", ignoreGroupNames: true)]
-    public async Task PickWinnerAsync(string token, string[] values)
+    [ComponentInteraction(PredictionCards.LockPrefix + "*", ignoreGroupNames: true)]
+    public async Task LockAsync(string id)
     {
         await DeferEphemeralAsync();
-        await ReplaceAsync(await predictions.PreviewSettleAsync(Actor, Here, token, values.FirstOrDefault(), CancellationToken.None));
+        if (await CardPredictionAsync(id) is { } predictionId)
+            await ReplyViewAsync(await predictions.PromptLockAsync(Actor, Here, predictionId, CardMessage, CancellationToken.None));
+    }
+
+    [ComponentInteraction(PredictionMessages.LockConfirmPrefix + "*", ignoreGroupNames: true)]
+    public async Task ConfirmLockAsync(string id)
+    {
+        await DeferEphemeralAsync();
+        await ReplaceAsync(TryId(id, out var predictionId)
+            ? await predictions.LockAsync(Actor, Here, predictionId, CancellationToken.None)
+            : PredictionService.NotFound());
+    }
+
+    // ---- ✅ Sonuçlandır ----
+
+    [ComponentInteraction(PredictionCards.SettlePrefix + "*", ignoreGroupNames: true)]
+    public async Task SettleAsync(string id)
+    {
+        await DeferEphemeralAsync();
+        if (await CardPredictionAsync(id) is { } predictionId)
+            await ReplyViewAsync(await predictions.StartSettleAsync(Actor, Here, predictionId, CardMessage, CancellationToken.None));
+    }
+
+    [ComponentInteraction(PredictionMessages.SettlePickPrefix + "*", ignoreGroupNames: true)]
+    public async Task PickWinnerAsync(string id, string[] values)
+    {
+        await DeferEphemeralAsync();
+        await ReplaceAsync(TryId(id, out var predictionId)
+            ? await predictions.PreviewSettleAsync(Actor, Here, predictionId, values.FirstOrDefault(), CancellationToken.None)
+            : PredictionService.NotFound());
     }
 
     [ComponentInteraction(PredictionMessages.SettleConfirmPrefix + "*", ignoreGroupNames: true)]
-    public async Task ConfirmSettleAsync(string token)
+    public async Task ConfirmSettleAsync(string value)
     {
         await DeferEphemeralAsync();
-        await ReplaceAsync(await predictions.ConfirmSettleAsync(Actor, Here, token, CancellationToken.None));
+        var parts = value.Split(PredictionMessages.Separator);
+        await ReplaceAsync(parts.Length == 2 && TryId(parts[0], out var predictionId) && TryId(parts[1], out var outcomeId)
+            ? await predictions.ConfirmSettleAsync(Actor, Here, predictionId, outcomeId, CancellationToken.None)
+            : PredictionService.NotFound());
+    }
+
+    // ---- ↩️ İptal / İade ----
+
+    [ComponentInteraction(PredictionCards.CancelPrefix + "*", ignoreGroupNames: true)]
+    public async Task CancelAsync(string id)
+    {
+        if (await CardPredictionAsync(id) is not { } predictionId)
+            return;
+        if (await predictions.StartCancelAsync(Actor, Here, predictionId, CardMessage, CancellationToken.None) is { } refusal)
+        {
+            await ReplyResultAsync(refusal);
+            return;
+        }
+
+        var language = await LangAsync();
+        await RespondWithModalAsync(PredictionFormUi.CancelModal(predictionId, key => Localizer.Get(language, key)));
+    }
+
+    [ModalInteraction(PredictionMessages.CancelReasonModalPrefix + "*", ignoreGroupNames: true)]
+    public async Task SubmitCancelReasonAsync(string id, PredictionCancelModal modal)
+    {
+        var reply = TryId(id, out var predictionId)
+            ? await predictions.PreviewCancelAsync(Actor, Here, predictionId, modal.Reason, CancellationToken.None)
+            : PredictionService.NotFound();
+        await ShowFromModalAsync(reply);
     }
 
     [ComponentInteraction(PredictionMessages.CancelConfirmPrefix + "*", ignoreGroupNames: true)]
@@ -158,6 +217,8 @@ public sealed class PredictionComponents(
         await ReplaceAsync(await predictions.ConfirmCancelAsync(Actor, Here, token, CancellationToken.None));
     }
 
+    // ---- tournament end, dismiss, paging ----
+
     [ComponentInteraction(PredictionMessages.EndConfirmPrefix + "*", ignoreGroupNames: true)]
     public async Task ConfirmEndAsync(string token)
     {
@@ -165,7 +226,7 @@ public sealed class PredictionComponents(
         await ReplaceAsync(await economy.ConfirmTournamentEndAsync(Actor, Here, token, CancellationToken.None));
     }
 
-    /// <summary>Vazgeç on any confirmation: the pending step is dropped, nothing changes.</summary>
+    /// <summary>Vazgeç on any private step: its pending state (if any) is dropped, nothing changes.</summary>
     [ComponentInteraction(PredictionMessages.DismissPrefix + "*", ignoreGroupNames: true)]
     public async Task DismissAsync(string token)
     {
@@ -183,6 +244,40 @@ public sealed class PredictionComponents(
     }
 
     // ---- helpers ----
+
+    /// <summary>The message a card button was clicked on (the services check it is the prediction's own card).</summary>
+    private MessageId? CardMessage => Context.Interaction is IComponentInteraction { Message: { } message } ? new MessageId(message.Id) : null;
+
+    /// <summary>
+    /// The prediction number of a card button. A click on one of the bot's own cards whose post confirmation was lost records
+    /// the card first. An unreadable number is answered privately as "not found".
+    /// </summary>
+    private async Task<long?> CardPredictionAsync(string id)
+    {
+        if (!TryId(id, out var predictionId))
+        {
+            await ReplyResultAsync(PredictionService.NotFound());
+            return null;
+        }
+
+        if (Context.Interaction is IComponentInteraction { Message: { } message } && message.Author.Id == Context.Client.CurrentUser.Id)
+            await predictions.AttachFromCardAsync(predictionId, Actor.GuildId, Here, new MessageId(message.Id), CancellationToken.None);
+        return predictionId;
+    }
+
+    private static bool TryId(string text, out long id) => long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out id) && id > 0;
+
+    private async Task OpenEntryFormAsync(OperationResult? refusal, EntryFormInfo? info)
+    {
+        if (refusal is not null || info is null)
+        {
+            await ReplyResultAsync(refusal ?? PredictionService.NotFound());
+            return;
+        }
+
+        var language = await LangAsync();
+        await RespondWithModalAsync(PredictionFormUi.StakeModal(info, Coins.Format(info.AvailableMinor, language), key => Localizer.Get(language, key)));
+    }
 
     /// <summary>
     /// The answer to a form submit: in place when the form was reopened from a private message (Düzenle), otherwise a new

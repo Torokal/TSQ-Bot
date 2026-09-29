@@ -167,7 +167,7 @@ public sealed class PredictionCardSync(
 
     /// <summary>
     /// Discord says the card (or its channel) is gone: no more edits, and an open prediction stops taking entries at once.
-    /// Everything staked stays; it can be settled or cancelled by its number.
+    /// Everything staked stays; the worker posts a replacement card to settle or cancel it from.
     /// </summary>
     public async Task MarkMissingAsync(long id, string cause, CancellationToken ct)
     {
@@ -179,6 +179,7 @@ public sealed class PredictionCardSync(
                 return false;
             row.CardMissing = true;
             row.CardStale = false;
+            row.CardEditedAt = null; // the replacement card is due at once
             row.Version++;
             var wasOpen = row.Status == PredictionStatus.Open;
             if (wasOpen)

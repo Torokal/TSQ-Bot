@@ -45,10 +45,15 @@ public sealed record PredictionView(
 /// The one public card of a prediction, edited in place through its life. The QUESTION is the largest text (a "## " heading
 /// in the description, defused first so only the bot's own heading exists); the small title line says the state, and the
 /// "TSQ Öngörü" label lives in the footer with the tournament and prediction numbers and the creator's display name. Below
-/// the question: the numbered outcomes with their fixed odds; fields for participants and staked coins, the lock time
-/// (Discord timestamps — no per-second edits) or "locked manually", then the result (settled), the reason and refund
-/// (cancelled) and the creator's rules. Open: a single-choice select (one option per outcome, value = outcome id, never
-/// trusted); locked: the same select disabled; finished: none. Sent and edited with allowed_mentions = none.
+/// the question: the numbered outcomes (1️⃣ …) each with its fixed odds; then participants and staked coins, the lock time
+/// (Discord timestamps — no per-second edits) or "locked manually", the result (settled) or the reason and refund
+/// (cancelled), and the creator's rules.
+/// <para>
+/// Buttons carry only the prediction number; every click is authorized server-side on the stored prediction. Open:
+/// 🎯 Tahmin Yap, then 🔒 Kilitle · ✅ Sonuçlandır · ↩️ İptal / İade. Locked: entries shown closed (disabled), Sonuçlandır ·
+/// İptal / İade. Settled / cancelled: no components (nothing more can happen). Nothing on the card keeps per-member
+/// state, so pressing Tahmin Yap again always starts afresh. Sent and edited with allowed_mentions = none.
+/// </para>
 /// <para>
 /// No silent cuts: the layout falls back from markdown lines to a code block to fields when the text is long, and the form
 /// refuses a prediction whose card would not fit Discord's limits in any state (<see cref="Fits"/>).
@@ -56,7 +61,10 @@ public sealed record PredictionView(
 /// </summary>
 public sealed class PredictionCards(ILocalizer localizer)
 {
-    public const string PickPrefix = "tsq:pred:pick:";
+    public const string EnterPrefix = "tsq:pred:enter:";
+    public const string LockPrefix = "tsq:pred:lock:";
+    public const string SettlePrefix = "tsq:pred:settle:";
+    public const string CancelPrefix = "tsq:pred:cancel:";
 
     public const uint OpenColor = 0x9B59B6;
     public const uint LockedColor = 0xF59F00;
@@ -65,6 +73,8 @@ public sealed class PredictionCards(ILocalizer localizer)
 
     public const int CreatorNameMax = 64;
     private const int UntrustedMax = 8000; // never reached: the stored text is bounded; defusing only escapes
+
+    private static readonly string[] Keycaps = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
 
     public OutgoingMessage Render(PredictionView view, string language, bool preview = false)
     {
@@ -79,8 +89,6 @@ public sealed class PredictionCards(ILocalizer localizer)
             case PredictionStatus.Settled:
                 title = L("predictions.card.title_settled");
                 color = SettledColor;
-                fields.Add(new(L("predictions.card.participation"), Participation(view, language), true));
-                fields.Add(new(L("predictions.card.settled_at"), DiscordText.Timestamp(view.SettledAt ?? view.LockedAt ?? DateTimeOffset.UnixEpoch, 'f'), true));
                 fields.Add(new(L("predictions.card.result"), ResultText(view, language)));
                 break;
 
@@ -110,7 +118,6 @@ public sealed class PredictionCards(ILocalizer localizer)
                 fields.Add(new(L("predictions.card.lock"), view.LockAt is { } at
                     ? DiscordText.Timestamp(at, 'R') + "\n" + DiscordText.Timestamp(at, 'F')
                     : L("predictions.card.lock_manual"), true));
-                fields.Add(new(L("predictions.card.how_to"), L("predictions.card.how_to_text")));
                 break;
         }
 
@@ -123,21 +130,21 @@ public sealed class PredictionCards(ILocalizer localizer)
 
         var creator = string.IsNullOrWhiteSpace(view.CreatorName) ? L("predictions.card.creator_unknown") : DiscordText.UntrustedPlain(view.CreatorName, CreatorNameMax);
         var footer = L("predictions.card.footer", Number(view.Id), view.TournamentNumber, creator);
-        var select = Select(view, language, preview);
+        var buttons = Buttons(view, language, preview);
 
         // Markdown lines → code block → fields: the first layout Discord accepts. Nothing is cut.
         foreach (var layout in new[] { Layout.Lines, Layout.CodeBlock, Layout.Fields })
         {
             var (description, outcomeFields) = Outcomes(view, heading, layout, language);
             var embed = new MessageEmbed(title, description, null, [.. outcomeFields, .. fields], footer, null, color);
-            var message = new OutgoingMessage(null, embed, MentionPolicy.None, null, select);
+            var message = new OutgoingMessage(null, embed, MentionPolicy.None, buttons);
             if (DiscordLimits.Validate(message).Count == 0)
                 return message;
         }
 
         // Only reachable for a card the form would have refused (see Fits); the plainest layout, as is.
         var (d, f) = Outcomes(view, heading, Layout.Fields, language);
-        return new OutgoingMessage(null, new MessageEmbed(title, d, null, [.. f, .. fields], footer, null, color), MentionPolicy.None, null, select);
+        return new OutgoingMessage(null, new MessageEmbed(title, d, null, [.. f, .. fields], footer, null, color), MentionPolicy.None, buttons);
     }
 
     /// <summary>
@@ -180,18 +187,23 @@ public sealed class PredictionCards(ILocalizer localizer)
         Fields,
     }
 
+    /// <summary>"1️⃣" … "🔟", then "**11.**"; the winning outcome of a settled prediction is "🏆".</summary>
+    private static string Marker(OutcomeView outcome, long? winner) =>
+        outcome.Id == winner ? "🏆" : outcome.Position <= Keycaps.Length ? Keycaps[outcome.Position - 1] : "**" + Number(outcome.Position) + ".**";
+
     private (string Description, List<EmbedField> Fields) Outcomes(PredictionView view, string heading, Layout layout, string language)
     {
         var winner = view.Status == PredictionStatus.Settled ? view.WinningOutcomeId : null;
-        string Marker(OutcomeView o) => winner is null ? "" : o.Id == winner ? "🏆 " : "▫️ ";
+        var oddsLabel = Format(language, "predictions.card.odds_label", []);
 
         switch (layout)
         {
             case Layout.Lines:
                 {
-                    var lines = view.Outcomes.Select(o =>
-                        Marker(o) + "**" + Number(o.Position) + ".** " + DiscordText.Untrusted(o.Label, UntrustedMax) + " — **" + Odds.Format(o.OddsX100) + "**");
-                    return (heading + "\n" + string.Join("\n", lines), []);
+                    var blocks = view.Outcomes.Select(o =>
+                        Marker(o, winner) + " " + (o.Id == winner ? "**" + DiscordText.Untrusted(o.Label, UntrustedMax) + "**" : DiscordText.Untrusted(o.Label, UntrustedMax)) +
+                        "\n" + oddsLabel + " **" + Odds.Format(o.OddsX100) + "**");
+                    return (heading + "\n\n" + string.Join("\n\n", blocks), []);
                 }
 
             case Layout.CodeBlock:
@@ -205,7 +217,7 @@ public sealed class PredictionCards(ILocalizer localizer)
             default:
                 {
                     var lines = view.Outcomes.Select(o =>
-                        Marker(o) + Number(o.Position) + ". " + DiscordText.Untrusted(o.Label, UntrustedMax) + " — " + Odds.Format(o.OddsX100)).ToList();
+                        Marker(o, winner) + " " + DiscordText.Untrusted(o.Label, UntrustedMax) + " — " + Odds.Format(o.OddsX100)).ToList();
                     var fields = new List<EmbedField>();
                     var current = new StringBuilder();
                     foreach (var line in lines)
@@ -228,17 +240,25 @@ public sealed class PredictionCards(ILocalizer localizer)
         }
     }
 
-    private MessageSelectMenu? Select(PredictionView view, string language, bool preview)
+    /// <summary>The card's buttons for its state; custom ids carry only the prediction number.</summary>
+    private IReadOnlyList<MessageButton>? Buttons(PredictionView view, string language, bool preview)
     {
         if (preview || view.Status is not (PredictionStatus.Open or PredictionStatus.Locked))
             return null;
-        var options = view.Outcomes.Take(MessageSelectMenu.MaxOptions).Select(o => new MessageSelectOption(
-            Cut(Number(o.Position) + ". " + DiscordText.UntrustedPlain(o.Label, UntrustedMax), MessageSelectMenu.MaxLabelLength),
-            o.Id.ToString(CultureInfo.InvariantCulture),
-            Format(language, "predictions.card.option_odds", [Odds.Format(o.OddsX100)]))).ToList();
+        string L(string key) => Format(language, key, []);
+        var id = Number(view.Id);
         var open = view.Status == PredictionStatus.Open;
-        return new MessageSelectMenu(PickPrefix + Number(view.Id), Format(language, open ? "predictions.card.pick" : "predictions.card.pick_closed", []), options,
-            Disabled: !open);
+        var buttons = new List<MessageButton>
+        {
+            open
+                ? new MessageButton(L("predictions.card.enter"), EnterPrefix + id, null, Style: MessageButtonStyle.Primary)
+                : new MessageButton(L("predictions.card.entries_closed"), EnterPrefix + id, null, Disabled: true),
+        };
+        if (open)
+            buttons.Add(new MessageButton(L("predictions.card.lock_button"), LockPrefix + id, null, NewRow: true));
+        buttons.Add(new MessageButton(L("predictions.card.settle_button"), SettlePrefix + id, null, Style: MessageButtonStyle.Success, NewRow: !open));
+        buttons.Add(new MessageButton(L("predictions.card.cancel_button"), CancelPrefix + id, null, Style: MessageButtonStyle.Danger));
+        return buttons;
     }
 
     private string Participation(PredictionView view, string language) =>
@@ -246,13 +266,14 @@ public sealed class PredictionCards(ILocalizer localizer)
 
     private string ResultText(PredictionView view, string language)
     {
+        var participation = Format(language, "predictions.card.result_entries", [Number(view.EntryCount), Coins.Format(view.StakeTotalMinor, language)]);
         if (view.Winner is not { } winner)
-            return Format(language, "predictions.card.result_unknown", []);
+            return Format(language, "predictions.card.result_unknown", []) + "\n" + participation;
         var line = Format(language, "predictions.card.result_winner", [DiscordText.Untrusted(winner.Label, UntrustedMax), Odds.Format(winner.OddsX100)]);
         var summary = (view.WinnerCount ?? 0) == 0
             ? Format(language, "predictions.card.result_nobody", [])
             : Format(language, "predictions.card.result_paid", [Number(view.WinnerCount ?? 0), Coins.Format(view.PayoutTotalMinor ?? 0, language)]);
-        return line + "\n" + summary;
+        return line + "\n" + summary + "\n" + participation;
     }
 
     /// <summary>Inside a code block only a backtick could break out; it is replaced by a look-alike.</summary>
@@ -279,16 +300,6 @@ public sealed class PredictionCards(ILocalizer localizer)
         if (rest.Length > 0)
             chunks.Add(rest);
         return chunks;
-    }
-
-    private static string Cut(string text, int max)
-    {
-        if (text.Length <= max)
-            return text;
-        var cut = max - 1;
-        if (char.IsHighSurrogate(text[cut - 1]))
-            cut--;
-        return text[..cut] + "…";
     }
 
     internal static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);

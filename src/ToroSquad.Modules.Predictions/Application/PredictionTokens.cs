@@ -15,9 +15,6 @@ public sealed record FormDraftStep(ChannelId Channel, long TournamentId, Predict
 /// <summary>An entry waiting for its Onayla click; everything is checked again on the click.</summary>
 public sealed record EntryStep(long PredictionId, long OutcomeId, long AmountMinor, long TournamentId) : PendingStep;
 
-/// <summary>A settlement being prepared: the prediction, then (after the pick) the winning outcome.</summary>
-public sealed record SettleStep(long PredictionId, long? OutcomeId) : PendingStep;
-
 public sealed record CancelStep(long PredictionId, string Reason) : PendingStep;
 
 /// <summary>Ending exactly this tournament (never whichever one is active when the button is clicked).</summary>
@@ -26,7 +23,7 @@ public sealed record TournamentEndStep(long TournamentId) : PendingStep;
 public sealed record PendingToken(string Id, GuildId Guild, UserId User, PendingStep Step, DateTimeOffset TouchedAt, TimeSpan Lifetime);
 
 /// <summary>
-/// Short-lived, in-memory state between the steps of a flow (form → preview → publish, amount → confirm, settle/cancel/end
+/// Short-lived, in-memory state between the steps of a flow (form → preview → publish, entry → confirm, cancel reason/end
 /// → confirm). A token id is 128 random bits and is honoured only for the member and guild that created it — a guessed or
 /// copied id is simply unknown. Tokens expire (<see cref="DraftLifetime"/> after the last use for forms,
 /// <see cref="ConfirmLifetime"/> for confirmations), are capped per member and in total, and are lost on restart (the

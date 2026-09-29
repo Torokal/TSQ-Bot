@@ -22,18 +22,27 @@ public sealed record PredictionReply(OperationResult Result, OutgoingMessage? Vi
     public static implicit operator PredictionReply(OperationResult result) => new(result);
 }
 
-/// <summary>What the amount form needs to show (after every check passed).</summary>
-public sealed record EntryFormInfo(long PredictionId, long OutcomeId, string OutcomeLabel, int OddsX100, long AvailableMinor);
-
-/// <summary>An autocomplete suggestion: "#12 · Galatasaray - Fenerbahçe · Açık" → "12".</summary>
-public sealed record PredictionSuggestion(string Label, string Value);
+/// <summary>
+/// What the entry form needs (after every check passed): the outcomes to choose from and the available balance; when it is
+/// reopened with Düzenle, the earlier choice, amount and the preview it replaces.
+/// </summary>
+public sealed record EntryFormInfo(
+    long PredictionId,
+    long TournamentId,
+    string Title,
+    IReadOnlyList<OutcomeView> Outcomes,
+    long AvailableMinor,
+    long? SelectedOutcomeId = null,
+    string? Amount = null,
+    string? ReplacesToken = null);
 
 /// <summary>
 /// The prediction lifecycle. Create: form → private preview → publish (row in Publishing, card posted by the bot, row
-/// Open) — never a second card for one draft. Enter: card select → amount form → private preview → Onayla → ONE write
+/// Open) — never a second card for one draft. Enter: 🎯 Tahmin Yap → form (outcome + amount) → private preview → Onayla → ONE write
 /// transaction that re-checks everything (module, channel, tournament, status, deadline, outcome, existing entry,
-/// balance) and stores the entry, the debit, the ledger row and the card numbers together. Lock (command or deadline
-/// sweep), settle and cancel are single transactions too, each re-checking the stored status first, so a prediction pays
+/// balance) and stores the entry, the debit, the ledger row and the card numbers together. Lock (card button or deadline
+/// sweep), settle and cancel (card buttons with private confirmations) are single transactions too, each re-checking the
+/// manager and the stored status first, so a prediction pays
 /// out or refunds at most once. Discord is only called after a commit. Only ids, counts and amounts are logged.
 /// </summary>
 public sealed class PredictionService(
@@ -56,6 +65,9 @@ public sealed class PredictionService(
 
     /// <summary>Uncertain posts are searched for only after this (the message may appear a moment later).</summary>
     public static readonly TimeSpan PublishRecheckAfter = TimeSpan.FromMinutes(1);
+
+    /// <summary>A replacement for a deleted card is attempted at most this often.</summary>
+    public static readonly TimeSpan RepostBackoff = TimeSpan.FromMinutes(10);
 
     private const int RecentMessages = 50;
     private const int SweepBatch = 50;
@@ -151,6 +163,8 @@ public sealed class PredictionService(
             };
             store.Predictions.Add(prediction);
             await store.Db.SaveChangesAsync(ct);
+            // The creator plays in this tournament too (a published prediction makes them leaderboard-eligible): their wallet.
+            await store.EnsureWalletAsync(tournament, actor.UserId, now, ct, creatorName);
             for (var i = 0; i < input.Outcomes.Count; i++)
                 store.Outcomes.Add(new PredictionOutcomeEntity { PredictionId = prediction.Id, Position = i + 1, Label = input.Outcomes[i].Label, OddsX100 = input.Outcomes[i].OddsX100 });
             await store.Db.SaveChangesAsync(ct);
@@ -271,44 +285,54 @@ public sealed class PredictionService(
 
     // ---- enter ----
 
-    /// <summary>A pick on the card: every check before the amount form opens (nothing is debited here).</summary>
-    public async Task<(OperationResult? Refusal, EntryFormInfo? Info)> StartEntryAsync(ActorContext actor, ChannelId here, long predictionId, string? outcomeValue, CancellationToken ct)
+    /// <summary>🎯 Tahmin Yap on the card: every check before the form opens (nothing is debited or created here).</summary>
+    public async Task<(OperationResult? Refusal, EntryFormInfo? Info)> StartEntryAsync(ActorContext actor, ChannelId here, long predictionId, MessageId? card, CancellationToken ct) =>
+        await EntryCheckAsync(actor, here, predictionId, null, card, ct);
+
+    /// <summary>✏️ Düzenle on the entry preview: the same form again, filled with the chosen outcome and amount (nothing changes).</summary>
+    public async Task<(OperationResult? Refusal, EntryFormInfo? Info)> EditEntryAsync(ActorContext actor, ChannelId here, string token, CancellationToken ct)
     {
-        if (!long.TryParse(outcomeValue, NumberStyles.None, CultureInfo.InvariantCulture, out var outcomeId))
-            return (NotFound(), null);
-        var (refusal, info) = await EntryCheckAsync(actor, here, predictionId, outcomeId, ct);
-        return (refusal, info);
+        if (tokens.Get<EntryStep>(token, actor) is not { } step)
+            return (OperationResult.Fail(OperationError.Expired, "predictions.entry.expired"), null);
+        var (refusal, info) = await EntryCheckAsync(actor, here, step.PredictionId, null, null, ct);
+        return refusal is not null ? (refusal, null) : (null, info! with { SelectedOutcomeId = step.OutcomeId, Amount = Coins.FormatInput(step.AmountMinor), ReplacesToken = token });
     }
 
-    /// <summary>The amount form was submitted: parsed and checked, then the private preview with Onayla / Vazgeç.</summary>
-    public async Task<PredictionReply> PreviewEntryAsync(ActorContext actor, ChannelId here, long predictionId, long outcomeId, string? amountText, CancellationToken ct)
+    /// <summary>
+    /// The entry form was submitted (outcome + amount): parsed and checked, then the private preview with Onayla / Düzenle /
+    /// Vazgeç. A form reopened with Düzenle replaces its earlier preview (that confirmation is dropped).
+    /// </summary>
+    public async Task<PredictionReply> PreviewEntryAsync(ActorContext actor, ChannelId here, long predictionId, string? outcomeValue, string? amountText,
+        string? replacesToken, CancellationToken ct)
     {
-        var (refusal, info) = await EntryCheckAsync(actor, here, predictionId, outcomeId, ct);
+        if (replacesToken is not null)
+            tokens.Remove(replacesToken, actor);
+        if (!long.TryParse(outcomeValue, NumberStyles.None, CultureInfo.InvariantCulture, out var outcomeId))
+            return OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.outcome_required");
+        var (refusal, info) = await EntryCheckAsync(actor, here, predictionId, outcomeId, null, ct);
         if (refusal is not null)
             return refusal;
+        var outcome = info!.Outcomes.Single(o => o.Id == outcomeId);
         var language = await LanguageAsync(actor.GuildId, ct);
         var amount = Coins.ParseAmount(amountText);
         if (!amount.Ok)
             return OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.amount_" + AmountErrorKey(amount.Error), Coins.Format(Coins.MinStakeMinor, language));
-        if (amount.Minor > info!.AvailableMinor)
+        if (amount.Minor > info.AvailableMinor)
             return OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.insufficient", Coins.Format(info.AvailableMinor, language));
 
         long payout;
         try
         {
-            payout = Coins.Payout(amount.Minor, info.OddsX100);
+            payout = Coins.Payout(amount.Minor, outcome.OddsX100);
         }
         catch (OverflowException)
         {
             return OperationResult.Fail(OperationError.InvalidInput, "predictions.entry.too_large");
         }
 
-        var tournament = await store.Tournaments.AsNoTracking().Where(t => t.GuildId == actor.GuildId.Value && t.Status == PredictionTournamentStatus.Active)
-            .Select(t => t.Id).FirstOrDefaultAsync(ct);
-        var token = tokens.Create(actor, new EntryStep(predictionId, outcomeId, amount.Minor, tournament), PredictionTokens.ConfirmLifetime);
-        var title = await store.Predictions.AsNoTracking().Where(p => p.Id == predictionId).Select(p => p.Title).FirstAsync(ct);
+        var token = tokens.Create(actor, new EntryStep(predictionId, outcomeId, amount.Minor, info.TournamentId), PredictionTokens.ConfirmLifetime);
         return new PredictionReply(OperationResult.Ok("predictions.entry.preview"),
-            messages.EntryPreview(title, info.OutcomeLabel, info.OddsX100, amount.Minor, payout, info.AvailableMinor - amount.Minor, token, language));
+            messages.EntryPreview(info.Title, outcome.Label, outcome.OddsX100, amount.Minor, payout, info.AvailableMinor - amount.Minor, token, language));
     }
 
     /// <summary>
@@ -316,7 +340,7 @@ public sealed class PredictionService(
     /// again inside one write transaction; the unique (prediction, member) index makes a second entry impossible even
     /// across processes. The card is edited after the commit (coalesced).
     /// </summary>
-    public async Task<PredictionReply> ConfirmEntryAsync(ActorContext actor, ChannelId here, string token, CancellationToken ct)
+    public async Task<PredictionReply> ConfirmEntryAsync(ActorContext actor, ChannelId here, string token, string displayName, CancellationToken ct)
     {
         if (tokens.Take<EntryStep>(token, actor) is not { } step)
             return OperationResult.Fail(OperationError.Expired, "predictions.entry.expired");
@@ -344,7 +368,7 @@ public sealed class PredictionService(
                 if (await store.Entries.AnyAsync(e => e.PredictionId == prediction.Id && e.UserId == actor.UserId.Value, ct))
                     return Fail("predictions.entry.already");
 
-                var wallet = await store.EnsureWalletAsync(tournament, actor.UserId, now, ct);
+                var wallet = await store.EnsureWalletAsync(tournament, actor.UserId, now, ct, displayName);
                 if (step.AmountMinor > wallet.BalanceMinor)
                     return Fail("predictions.entry.insufficient", Coins.Format(wallet.BalanceMinor, language));
                 var payout = Coins.Payout(step.AmountMinor, outcome.OddsX100);
@@ -401,20 +425,20 @@ public sealed class PredictionService(
 
     private sealed record EntryCommit(string? Error, object[] Args, PredictionEntryEntity? Entry, long Balance);
 
-    /// <summary>Every entry check that can be made before the transaction (it repeats them all).</summary>
-    private async Task<(OperationResult? Refusal, EntryFormInfo? Info)> EntryCheckAsync(ActorContext actor, ChannelId here, long predictionId, long outcomeId, CancellationToken ct)
+    /// <summary>Every entry check that can be made before the transaction (it repeats them all). No outcome: the form is about to open.</summary>
+    private async Task<(OperationResult? Refusal, EntryFormInfo? Info)> EntryCheckAsync(ActorContext actor, ChannelId here, long predictionId, long? outcomeId,
+        MessageId? card, CancellationToken ct)
     {
-        if ((guards.InPredictionsChannel(here) ?? await guards.EnabledAsync(actor.GuildId, ct)) is { } refusal)
+        var (prediction, refusal) = await LoadInChannelAsync(actor, here, predictionId, card, ct);
+        if (prediction is null)
             return (refusal, null);
-        var prediction = await store.Predictions.AsNoTracking().FirstOrDefaultAsync(p => p.Id == predictionId && p.GuildId == actor.GuildId.Value, ct);
-        if (prediction is null || prediction.ChannelId != here.Value)
-            return (NotFound(), null);
         if (prediction.Status == PredictionStatus.Publishing)
             return (OperationResult.Fail(OperationError.Conflict, "predictions.entry.publishing"), null);
         if (prediction.Status != PredictionStatus.Open || prediction.LockAt is { } lockAt && clock.GetUtcNow() >= lockAt)
             return (OperationResult.Fail(OperationError.Conflict, "predictions.entry.closed"), null);
-        var outcome = await store.Outcomes.AsNoTracking().FirstOrDefaultAsync(o => o.Id == outcomeId && o.PredictionId == predictionId, ct);
-        if (outcome is null)
+        var outcomes = await store.Outcomes.AsNoTracking().Where(o => o.PredictionId == predictionId).OrderBy(o => o.Position)
+            .Select(o => new OutcomeView(o.Id, o.Position, o.Label, o.OddsX100)).ToListAsync(ct);
+        if (outcomeId is { } chosenOutcome && outcomes.All(o => o.Id != chosenOutcome))
             return (NotFound(), null);
         var tournament = await store.ActiveTournamentAsync(actor.GuildId, ct);
         if (tournament is null || tournament.Id != prediction.TournamentId)
@@ -424,7 +448,7 @@ public sealed class PredictionService(
             .Select(e => (long?)e.OutcomeId).FirstOrDefaultAsync(ct);
         if (existing is { } chosen)
         {
-            var label = await store.Outcomes.AsNoTracking().Where(o => o.Id == chosen).Select(o => o.Label).FirstOrDefaultAsync(ct) ?? "";
+            var label = outcomes.FirstOrDefault(o => o.Id == chosen)?.Label ?? "";
             return (OperationResult.Fail(OperationError.Conflict, "predictions.entry.already_chosen", DiscordText.Untrusted(label, 400)), null);
         }
 
@@ -432,14 +456,26 @@ public sealed class PredictionService(
             .Select(w => (long?)w.BalanceMinor).FirstOrDefaultAsync(ct) ?? Options.InitialBalanceMinor;
         if (available < Coins.MinStakeMinor)
             return (OperationResult.Fail(OperationError.Conflict, "predictions.entry.no_coins"), null);
-        return (null, new EntryFormInfo(predictionId, outcomeId, outcome.Label, outcome.OddsX100, available));
+        return (null, new EntryFormInfo(predictionId, tournament.Id, prediction.Title, outcomes, available));
     }
 
-    // ---- lock ----
+    // ---- manage from the card: lock ----
 
-    public async Task<OperationResult> LockAsync(ActorContext actor, ChannelId here, string? target, CancellationToken ct)
+    /// <summary>🔒 Kilitle on the card: the private "are you sure" (nothing changes yet).</summary>
+    public async Task<PredictionReply> PromptLockAsync(ActorContext actor, ChannelId here, long predictionId, MessageId? card, CancellationToken ct)
     {
-        var (prediction, refusal) = await ResolveManagedAsync(actor, here, target, ct);
+        var (prediction, refusal) = await ManagedAsync(actor, here, predictionId, card, ct);
+        if (prediction is null)
+            return refusal!;
+        if (prediction.Status != PredictionStatus.Open)
+            return StateRefusal(prediction.Status, ManageAction.Lock);
+        return new PredictionReply(OperationResult.Ok("predictions.lock.prompt"), messages.LockPrompt(prediction.Id, prediction.Title, await LanguageAsync(actor.GuildId, ct)));
+    }
+
+    /// <summary>The lock confirmation: re-checked, then Open → Locked once (a concurrent lock or result finds it changed).</summary>
+    public async Task<OperationResult> LockAsync(ActorContext actor, ChannelId here, long predictionId, CancellationToken ct)
+    {
+        var (prediction, refusal) = await ManagedAsync(actor, here, predictionId, null, ct);
         if (prediction is null)
             return refusal!;
         var now = clock.GetUtcNow();
@@ -448,6 +484,9 @@ public sealed class PredictionService(
             var row = await store.Predictions.FirstOrDefaultAsync(p => p.Id == prediction.Id, ct);
             if (row is not { Status: PredictionStatus.Open })
                 return row?.Status ?? PredictionStatus.Abandoned;
+            var tournament = await store.ActiveTournamentAsync(actor.GuildId, ct);
+            if (tournament is null || tournament.Id != row.TournamentId)
+                return PredictionStatus.Abandoned;
             row.Status = PredictionStatus.Locked;
             row.LockReason = PredictionLockReason.Manual;
             row.LockedAt = now;
@@ -457,7 +496,7 @@ public sealed class PredictionService(
             return PredictionStatus.Open;
         }, ct);
         if (status != PredictionStatus.Open)
-            return StateRefusal(status, "lock");
+            return StateRefusal(status, ManageAction.Lock);
 
         logger.LogInformation("prediction_locked {Prediction} guild={Guild} by={User}", prediction.Id, actor.GuildId, actor.UserId);
         await cardSync.SafeSyncAsync(prediction.Id, ct);
@@ -488,31 +527,28 @@ public sealed class PredictionService(
         return locked;
     }
 
-    // ---- settle ----
+    // ---- manage from the card: settle ----
 
-    /// <summary>/ongoru sonuclandir: the private outcome picker (nothing changes until the confirmation).</summary>
-    public async Task<PredictionReply> StartSettleAsync(ActorContext actor, ChannelId here, string? target, CancellationToken ct)
+    /// <summary>✅ Sonuçlandır on the card: the private outcome picker (nothing changes until the confirmation).</summary>
+    public async Task<PredictionReply> StartSettleAsync(ActorContext actor, ChannelId here, long predictionId, MessageId? card, CancellationToken ct)
     {
-        var (prediction, refusal) = await ResolveManagedAsync(actor, here, target, ct);
+        var (prediction, refusal) = await ManagedAsync(actor, here, predictionId, card, ct);
         if (prediction is null)
             return refusal!;
         if (prediction.Status is not (PredictionStatus.Open or PredictionStatus.Locked))
-            return StateRefusal(prediction.Status, "settle");
+            return StateRefusal(prediction.Status, ManageAction.Settle);
         var view = await store.ViewAsync(prediction, ct);
-        var token = tokens.Create(actor, new SettleStep(prediction.Id, null), PredictionTokens.ConfirmLifetime);
-        return new PredictionReply(OperationResult.Ok("predictions.settle.pick"), messages.SettlePicker(view, token, null, await LanguageAsync(actor.GuildId, ct)));
+        return new PredictionReply(OperationResult.Ok("predictions.settle.pick"), messages.SettlePicker(view, null, await LanguageAsync(actor.GuildId, ct)));
     }
 
     /// <summary>An outcome was picked: the preview (winner, winners/losers, total payout) with the confirmation button.</summary>
-    public async Task<PredictionReply> PreviewSettleAsync(ActorContext actor, ChannelId here, string token, string? outcomeValue, CancellationToken ct)
+    public async Task<PredictionReply> PreviewSettleAsync(ActorContext actor, ChannelId here, long predictionId, string? outcomeValue, CancellationToken ct)
     {
-        if (tokens.Get<SettleStep>(token, actor) is not { } step)
-            return OperationResult.Fail(OperationError.Expired, "predictions.confirm.expired");
-        var (prediction, refusal) = await ManagedByIdAsync(actor, here, step.PredictionId, ct);
+        var (prediction, refusal) = await ManagedAsync(actor, here, predictionId, null, ct);
         if (prediction is null)
             return refusal!;
         if (prediction.Status is not (PredictionStatus.Open or PredictionStatus.Locked))
-            return StateRefusal(prediction.Status, "settle");
+            return StateRefusal(prediction.Status, ManageAction.Settle);
         var view = await store.ViewAsync(prediction, ct);
         if (!long.TryParse(outcomeValue, NumberStyles.None, CultureInfo.InvariantCulture, out var outcomeId) || view.Outcomes.All(o => o.Id != outcomeId))
             return NotFound();
@@ -521,30 +557,27 @@ public sealed class PredictionService(
             .Select(e => new { e.OutcomeId, e.PotentialPayoutMinor }).ToListAsync(ct);
         var winners = entries.Where(e => e.OutcomeId == outcomeId).ToList();
         var payout = winners.Aggregate(0L, (sum, e) => Coins.Add(sum, e.PotentialPayoutMinor));
-        tokens.Update<SettleStep>(token, actor, s => s with { OutcomeId = outcomeId });
         return new PredictionReply(OperationResult.Ok("predictions.settle.preview"),
-            messages.SettlePreview(view, outcomeId, winners.Count, entries.Count - winners.Count, payout, token, await LanguageAsync(actor.GuildId, ct)));
+            messages.SettlePreview(view, outcomeId, winners.Count, entries.Count - winners.Count, payout, await LanguageAsync(actor.GuildId, ct)));
     }
 
     /// <summary>
     /// The settlement, in ONE transaction: re-checked (manager, status Open or Locked — an open prediction is closed by it —,
-    /// active tournament), then every pending entry is decided: a winner is credited exactly its stored possible payout
-    /// (stake × fixed odds, rounded down), a loser gets nothing more (its stake was debited when it entered); both count
-    /// towards the member's settled predictions, winners once as correct. Nobody on the winning outcome is a valid result
-    /// (no payout, no refund). The unique payout keys forbid a second payment of any entry.
+    /// the outcome belongs to it, active tournament), then every pending entry is decided: a winner is credited exactly its
+    /// stored possible payout (stake × fixed odds, rounded down), a loser gets nothing more (its stake was debited when it
+    /// entered); both count towards the member's settled predictions, winners once as correct. Nobody on the winning outcome
+    /// is a valid result (no payout, no refund). The unique payout keys forbid a second payment of any entry.
     /// </summary>
-    public async Task<PredictionReply> ConfirmSettleAsync(ActorContext actor, ChannelId here, string token, CancellationToken ct)
+    public async Task<PredictionReply> ConfirmSettleAsync(ActorContext actor, ChannelId here, long predictionId, long outcomeId, CancellationToken ct)
     {
-        if (tokens.Take<SettleStep>(token, actor) is not { OutcomeId: { } outcomeId } step)
-            return OperationResult.Fail(OperationError.Expired, "predictions.confirm.expired");
-        var (managed, refusal) = await ManagedByIdAsync(actor, here, step.PredictionId, ct);
+        var (managed, refusal) = await ManagedAsync(actor, here, predictionId, null, ct);
         if (managed is null)
             return refusal!;
 
         var now = clock.GetUtcNow();
         var result = await PredictionWrites.RunAsync<(PredictionStatus Status, int Winners, long Payout, int Entries)>(store.Db, async () =>
         {
-            var prediction = await store.Predictions.FirstOrDefaultAsync(p => p.Id == step.PredictionId, ct);
+            var prediction = await store.Predictions.FirstOrDefaultAsync(p => p.Id == predictionId, ct);
             if (prediction is null)
                 return (PredictionStatus.Abandoned, 0, 0L, 0);
             if (prediction.Status is not (PredictionStatus.Open or PredictionStatus.Locked))
@@ -596,26 +629,36 @@ public sealed class PredictionService(
             return (PredictionStatus.Open, winners, paid, entries.Count);
         }, ct);
         if (result.Status != PredictionStatus.Open)
-            return StateRefusal(result.Status, "settle");
+            return StateRefusal(result.Status, ManageAction.Settle);
 
         logger.LogInformation("prediction_settled {Prediction} guild={Guild} by={User} outcome={Outcome} entries={Entries} winners={Winners} payout={Payout}",
-            step.PredictionId, actor.GuildId, actor.UserId, outcomeId, result.Entries, result.Winners, result.Payout);
-        await cardSync.SafeSyncAsync(step.PredictionId, ct);
+            predictionId, actor.GuildId, actor.UserId, outcomeId, result.Entries, result.Winners, result.Payout);
+        await cardSync.SafeSyncAsync(predictionId, ct);
         var language = await LanguageAsync(actor.GuildId, ct);
         return result.Winners == 0
-            ? OperationResult.Ok("predictions.settle.done_nobody", PredictionCards.Number(step.PredictionId), result.Entries)
-            : OperationResult.Ok("predictions.settle.done", PredictionCards.Number(step.PredictionId), result.Winners, Coins.Format(result.Payout, language));
+            ? OperationResult.Ok("predictions.settle.done_nobody", PredictionCards.Number(predictionId), result.Entries)
+            : OperationResult.Ok("predictions.settle.done", PredictionCards.Number(predictionId), result.Winners, Coins.Format(result.Payout, language));
     }
 
-    // ---- cancel ----
+    // ---- manage from the card: cancel ----
 
-    public async Task<PredictionReply> PreviewCancelAsync(ActorContext actor, ChannelId here, string? target, string? reason, CancellationToken ct)
+    /// <summary>↩️ İptal / İade on the card: may this member cancel it now? (null: open the reason form).</summary>
+    public async Task<OperationResult?> StartCancelAsync(ActorContext actor, ChannelId here, long predictionId, MessageId? card, CancellationToken ct)
     {
-        var (prediction, refusal) = await ResolveManagedAsync(actor, here, target, ct);
+        var (prediction, refusal) = await ManagedAsync(actor, here, predictionId, card, ct);
+        if (prediction is null)
+            return refusal!;
+        return prediction.Status is PredictionStatus.Open or PredictionStatus.Locked ? null : StateRefusal(prediction.Status, ManageAction.Cancel);
+    }
+
+    /// <summary>The reason was submitted: the private preview (entries, total refund) with the confirmation button.</summary>
+    public async Task<PredictionReply> PreviewCancelAsync(ActorContext actor, ChannelId here, long predictionId, string? reason, CancellationToken ct)
+    {
+        var (prediction, refusal) = await ManagedAsync(actor, here, predictionId, null, ct);
         if (prediction is null)
             return refusal!;
         if (prediction.Status is not (PredictionStatus.Open or PredictionStatus.Locked))
-            return StateRefusal(prediction.Status, "cancel");
+            return StateRefusal(prediction.Status, ManageAction.Cancel);
         var text = PredictionForm.Collapse(reason);
         var length = PredictionForm.Length(text);
         if (length < PredictionRules.CancelReasonMinLength || length > PredictionRules.CancelReasonMaxLength)
@@ -628,12 +671,12 @@ public sealed class PredictionService(
             messages.CancelPreview(view, text, pending.Count, pending.Aggregate(0L, Coins.Add), token, await LanguageAsync(actor.GuildId, ct)));
     }
 
-    /// <summary>The cancellation, in ONE transaction: every pending stake is returned in full exactly once; no statistics change.</summary>
+    /// <summary>The cancellation, in ONE transaction: every pending STAKE is returned in full exactly once (never a possible payout); no statistics change.</summary>
     public async Task<PredictionReply> ConfirmCancelAsync(ActorContext actor, ChannelId here, string token, CancellationToken ct)
     {
         if (tokens.Take<CancelStep>(token, actor) is not { } step)
             return OperationResult.Fail(OperationError.Expired, "predictions.confirm.expired");
-        var (managed, refusal) = await ManagedByIdAsync(actor, here, step.PredictionId, ct);
+        var (managed, refusal) = await ManagedAsync(actor, here, step.PredictionId, null, ct);
         if (managed is null)
             return refusal!;
 
@@ -645,6 +688,9 @@ public sealed class PredictionService(
                 return (PredictionStatus.Abandoned, 0, 0L);
             if (prediction.Status is not (PredictionStatus.Open or PredictionStatus.Locked))
                 return (prediction.Status, 0, 0L);
+            var tournament = await store.ActiveTournamentAsync(actor.GuildId, ct);
+            if (tournament is null || tournament.Id != prediction.TournamentId)
+                return (PredictionStatus.Abandoned, 0, 0L);
             var entries = await store.Entries.Where(e => e.PredictionId == prediction.Id && e.Status == PredictionEntryStatus.Pending).ToListAsync(ct);
             var walletIds = entries.Select(e => e.WalletId).Distinct().ToList();
             var wallets = await store.Wallets.Where(w => walletIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id, ct);
@@ -672,7 +718,7 @@ public sealed class PredictionService(
             return (PredictionStatus.Open, entries.Count, total);
         }, ct);
         if (result.Status != PredictionStatus.Open)
-            return StateRefusal(result.Status, "cancel");
+            return StateRefusal(result.Status, ManageAction.Cancel);
 
         logger.LogInformation("prediction_cancelled {Prediction} guild={Guild} by={User} refunded={Refunded} total={Total}",
             step.PredictionId, actor.GuildId, actor.UserId, result.Refunded, result.Total);
@@ -748,54 +794,84 @@ public sealed class PredictionService(
         return missing;
     }
 
-    // ---- lookups ----
-
-    /// <summary>Autocomplete: unresolved predictions of this guild the caller may manage, newest first ("#12 · title · state").</summary>
-    public async Task<IReadOnlyList<PredictionSuggestion>> SuggestAsync(ActorContext actor, string? typed, CancellationToken ct)
+    /// <summary>
+    /// Management lives on the card, so a prediction whose card is definitely gone (deleted message) gets a replacement card in
+    /// its channel: locked (entries stopped when the card vanished), with ✅ Sonuçlandır and ↩️ İptal / İade — otherwise it
+    /// could never be settled or cancelled and would block the tournament forever. At most one attempt per
+    /// <see cref="RepostBackoff"/>; an uncertain post is looked for among the latest messages first — never a blind second card.
+    /// </summary>
+    public async Task<int> RepostMissingCardsAsync(CancellationToken ct)
     {
-        var admin = PredictionAccess.IsAdministrator(actor);
-        if (!admin && !PredictionAccess.HasCreatorRole(actor, guards.CreatorRole))
-            return [];
-        var language = await LanguageAsync(actor.GuildId, ct);
-        var query = store.Predictions.AsNoTracking().Where(p => p.GuildId == actor.GuildId.Value &&
-                                                                (p.Status == PredictionStatus.Open || p.Status == PredictionStatus.Locked));
-        if (!admin)
-            query = query.Where(p => p.CreatorUserId == actor.UserId.Value);
-        var rows = await query.OrderByDescending(p => p.Id).Take(100).Select(p => new { p.Id, p.Title, p.Status }).ToListAsync(ct);
-        var filter = typed?.Trim().TrimStart('#') ?? "";
-        return rows
-            .Where(x => filter.Length == 0 || PredictionCards.Number(x.Id).StartsWith(filter, StringComparison.Ordinal) ||
-                        x.Title.Contains(filter, StringComparison.OrdinalIgnoreCase))
-            .Take(DiscordLimits.AutocompleteChoicesMax)
-            .Select(x => new PredictionSuggestion(
-                Cut("#" + PredictionCards.Number(x.Id) + " · " + messages.StatusName(x.Status, language) + " · " + DiscordText.UntrustedPlain(x.Title, 80), 100),
-                PredictionCards.Number(x.Id)))
-            .ToList();
+        var now = clock.GetUtcNow();
+        var due = now - RepostBackoff;
+        var rows = await store.Predictions.AsNoTracking()
+            .Where(p => p.CardMissing && (p.Status == PredictionStatus.Open || p.Status == PredictionStatus.Locked) && (p.CardEditedAt == null || p.CardEditedAt < due))
+            .OrderBy(p => p.Id).Take(SweepBatch).ToListAsync(ct);
+        var reposted = 0;
+        foreach (var row in rows.Where(r => deployment.IsGuildAllowed(new GuildId(r.GuildId))))
+        {
+            await store.Predictions.Where(p => p.Id == row.Id).ExecuteUpdateAsync(s => s.SetProperty(p => p.CardEditedAt, now), ct); // the backoff, whatever happens
+            var view = await store.ViewAsync(row, ct);
+            var card = cards.Render(view with { Message = null }, await LanguageAsync(view.Guild, ct));
+            if (await PostCardAsync(view.Channel, card, Truncate(now), ct) is not (CardPost.Posted, var message))
+            {
+                logger.LogWarning("Prediction {Prediction}: its replacement card could not be posted; retrying in {Backoff}", row.Id, RepostBackoff);
+                continue;
+            }
+
+            var changed = await store.Predictions.Where(p => p.Id == row.Id && p.CardMissing)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.MessageId, (ulong?)message.Value).SetProperty(p => p.CardMissing, false)
+                    .SetProperty(p => p.CardStale, false).SetProperty(p => p.CardSyncAttempts, 0).SetProperty(p => p.CardEditedAt, now)
+                    .SetProperty(p => p.Version, p => p.Version + 1), ct);
+            if (changed > 0)
+            {
+                reposted++;
+                logger.LogWarning("Prediction {Prediction}: its card was gone; a replacement card {Message} was posted for managing it", row.Id, message);
+            }
+        }
+
+        return reposted;
     }
+
+    // ---- lookups ----
 
     public Task<PredictionView?> GetAsync(long id, CancellationToken ct) => store.ViewAsync(id, ct);
 
-    /// <summary>Channel, module, then the target in THIS guild only (another guild's prediction or a plain message is "not found"), then the manager check.</summary>
-    private async Task<(PredictionEntity? Prediction, OperationResult? Refusal)> ResolveManagedAsync(ActorContext actor, ChannelId here, string? target, CancellationToken ct)
+    private enum ManageAction
+    {
+        Lock,
+        Settle,
+        Cancel,
+    }
+
+    /// <summary>
+    /// A prediction reached from its card or from a private confirmation, loaded from the database every time: THIS guild, THIS
+    /// channel (the configured predictions channel and the prediction's own), the module enabled, and — for a click on the
+    /// card itself — the card's own message. Another guild, another channel, a copied or forged custom id: "not found".
+    /// </summary>
+    private async Task<(PredictionEntity? Prediction, OperationResult? Refusal)> LoadInChannelAsync(ActorContext actor, ChannelId here, long id, MessageId? card,
+        CancellationToken ct)
     {
         if ((guards.InPredictionsChannel(here) ?? await guards.EnabledAsync(actor.GuildId, ct)) is { } refusal)
             return (null, refusal);
-        if (!PredictionAccess.IsAdministrator(actor) && !PredictionAccess.HasCreatorRole(actor, guards.CreatorRole))
-            return (null, guards.MissingRole());
-        var parsed = PredictionTarget.Parse(target);
-        if (parsed is null || (parsed.LinkGuildId is { } linked && linked != actor.GuildId.Value))
+        var prediction = await store.Predictions.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id && p.GuildId == actor.GuildId.Value, ct);
+        if (prediction is null || prediction.ChannelId != here.Value || (card is { } message && prediction.MessageId is { } stored && stored != message.Value))
             return (null, NotFound());
-        var query = store.Predictions.AsNoTracking().Where(p => p.GuildId == actor.GuildId.Value);
-        var prediction = parsed.PredictionId is { } id
-            ? await query.FirstOrDefaultAsync(p => p.Id == id, ct)
-            : await query.FirstOrDefaultAsync(p => p.MessageId == parsed.MessageId, ct);
-        if (prediction is null)
-            return (null, NotFound());
-        return PredictionAccess.CanManage(actor, guards.CreatorRole, new UserId(prediction.CreatorUserId)) ? (prediction, null) : (null, PredictionGuards.NotManager());
+        return (prediction, null);
     }
 
-    private async Task<(PredictionEntity? Prediction, OperationResult? Refusal)> ManagedByIdAsync(ActorContext actor, ChannelId here, long id, CancellationToken ct) =>
-        await ResolveManagedAsync(actor, here, PredictionCards.Number(id), ct);
+    /// <summary>
+    /// <see cref="LoadInChannelAsync"/>, then the manager rule on the stored creator and THIS interaction's roles and permissions:
+    /// its creator while holding the creator role, or Administrator / the server owner. Anyone else changes nothing.
+    /// </summary>
+    private async Task<(PredictionEntity? Prediction, OperationResult? Refusal)> ManagedAsync(ActorContext actor, ChannelId here, long id, MessageId? card,
+        CancellationToken ct)
+    {
+        var (prediction, refusal) = await LoadInChannelAsync(actor, here, id, card, ct);
+        if (prediction is null)
+            return (null, refusal);
+        return PredictionAccess.CanManage(actor, guards.CreatorRole, new UserId(prediction.CreatorUserId)) ? (prediction, null) : (null, PredictionGuards.NotManager());
+    }
 
     private async Task<string> LanguageAsync(GuildId guild, CancellationToken ct) => (await settings.GetAsync(guild, ct)).Language;
 
@@ -810,10 +886,11 @@ public sealed class PredictionService(
     public static OperationResult NotFound() => OperationResult.Fail(OperationError.NotFound, "predictions.not_found");
 
     /// <summary>Why a prediction in <paramref name="status"/> cannot be locked/settled/cancelled (V1: a settled one is final).</summary>
-    private static OperationResult StateRefusal(PredictionStatus status, string action) => OperationResult.Fail(OperationError.Conflict, status switch
+    private static OperationResult StateRefusal(PredictionStatus status, ManageAction action) => OperationResult.Fail(OperationError.Conflict, status switch
     {
-        PredictionStatus.Locked when action == "lock" => "predictions.state.already_locked",
-        PredictionStatus.Settled => "predictions.state.settled",
+        PredictionStatus.Locked when action == ManageAction.Lock => "predictions.state.already_locked",
+        PredictionStatus.Settled when action == ManageAction.Cancel => "predictions.state.settled_no_cancel",
+        PredictionStatus.Settled => "predictions.state.already_settled",
         PredictionStatus.Cancelled => "predictions.state.cancelled",
         PredictionStatus.Publishing => "predictions.state.publishing",
         _ => "predictions.state.unavailable",

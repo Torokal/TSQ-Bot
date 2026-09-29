@@ -11,7 +11,7 @@ using ToroSquad.Infrastructure.Persistence;
 namespace ToroSquad.Bot.Migrations
 {
     [DbContext(typeof(ToroDbContext))]
-    [Migration("20260929165013_PredictionsModule")]
+    [Migration("20260929174422_PredictionsModule")]
     partial class PredictionsModule
     {
         /// <inheritdoc />
@@ -1890,6 +1890,9 @@ namespace ToroSquad.Bot.Migrations
                     b.Property<long>("TournamentId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Board")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Rank")
                         .HasColumnType("INTEGER");
 
@@ -1899,17 +1902,21 @@ namespace ToroSquad.Bot.Migrations
                     b.Property<int>("CorrectCount")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("SettledCount")
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("UserId")
                         .HasColumnType("INTEGER");
 
-                    b.HasKey("TournamentId", "Rank");
+                    b.HasKey("TournamentId", "Board", "Rank");
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("TournamentId", "UserId")
+                    b.HasIndex("TournamentId", "Board", "UserId")
                         .IsUnique();
 
                     b.ToTable("prediction_standing", (string)null);
@@ -1972,6 +1979,10 @@ namespace ToroSquad.Bot.Migrations
 
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("GuildId")
                         .HasColumnType("INTEGER");
