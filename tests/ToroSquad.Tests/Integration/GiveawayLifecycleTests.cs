@@ -137,8 +137,10 @@ public sealed class GiveawayLifecycleTests : IAsyncLifetime
         card.Id.Should().Be(giveaway.Message!.Value);
         card.Pinged.Should().BeFalse();
         card.Message.Embed!.Title.Should().Be("🎉 ÇEKİLİŞ");
-        card.Message.Embed.Footer.Should().Be($"Çekilişi başlatan: Kaan · #{giveaway.Id}", "the creator's own display name, never a fixed one");
-        card.Message.Embed.Description.Should().Contain("Kazanana Steam").And.Contain("🎉 Katılmak için");
+        card.Message.Embed.Footer.Should().Be($"Başlatan: Kaan · Çekiliş #{giveaway.Id}", "the creator's own display name, never a fixed one");
+        card.Message.Embed.Description.Should().Be("🎁 **ÖDÜL**\n## Discord Nitro");
+        card.Message.Embed.Fields.Select(f => f.Name).Should().Equal("🏆 Kazanan Sayısı", "⏰ Bitiş", "🎟️ Katılım", "📝 Açıklama");
+        card.Message.Embed.Fields[^1].Value.Should().Be("Kazanana Steam üzerinden gönderilecektir.");
         Reactions().BotReactions.Should().Equal(giveaway.Message.Value);
     }
 
@@ -260,7 +262,7 @@ public sealed class GiveawayLifecycleTests : IAsyncLifetime
         created.Result.MessageKey.Should().Be("giveaway.create.reaction_failed");
         var row = await RowAsync(created.GiveawayId!.Value);
         row.Status.Should().Be(GiveawayStatus.Cancelled, "a giveaway without the bot's 🎉 never runs");
-        Shown(_host.Transport.Messages.Single()).Title.Should().Be("🚫 ÇEKİLİŞ İPTAL EDİLDİ");
+        Shown(_host.Transport.Messages.Single()).Title.Should().Be("⚠️ ÇEKİLİŞ İPTAL EDİLDİ");
         await TickAsync(TimeSpan.FromHours(1));
         Reactions().Reads.Should().Be(0);
         Announcements().Should().BeEmpty();
@@ -396,7 +398,7 @@ public sealed class GiveawayLifecycleTests : IAsyncLifetime
         ended.Result.MessageKey.Should().Be("giveaway.end.no_entrants");
         (await RowAsync(giveaway.Id)).Status.Should().Be(GiveawayStatus.Finished);
         (await WinnerRowsAsync(giveaway.Id)).Should().BeEmpty();
-        Shown(Card(giveaway)).Description.Should().Be("Çekiliş sona erdi ancak geçerli katılımcı bulunamadı.");
+        Shown(Card(giveaway)).Fields[0].Value.Should().Be("Çekiliş sona erdi ancak geçerli katılımcı bulunamadı.");
         await TickAsync();
         Announcements().Should().BeEmpty();
         (await AnnouncementRowsAsync()).Should().BeEmpty();
@@ -527,8 +529,9 @@ public sealed class GiveawayLifecycleTests : IAsyncLifetime
             (await data.PreviewDeletionAsync(Guild, Admin.UserId, Ct)).Select(i => i.LabelKey).Should().Contain("giveaway.privacy.ended");
         });
         var shown = Shown(Card(giveaway));
-        shown.Title.Should().Be("🚫 ÇEKİLİŞ İPTAL EDİLDİ");
-        shown.Description.Should().Be("Bu çekiliş iptal edildi.");
+        shown.Title.Should().Be("⚠️ ÇEKİLİŞ İPTAL EDİLDİ");
+        shown.Description.Should().Be("🎁 **ÖDÜL**\n## Discord Nitro", "the prize stays visible");
+        shown.Fields.Should().Contain(new EmbedField("📌 Durum", "Bu çekiliş iptal edildi."));
 
         await TickAsync(TimeSpan.FromHours(1));
         (await RowAsync(giveaway.Id)).Status.Should().Be(GiveawayStatus.Cancelled);
@@ -728,7 +731,7 @@ public sealed class GiveawayLifecycleTests : IAsyncLifetime
         (await RowAsync(giveaway.Id)).RerollCount.Should().Be(1);
         var shown = Shown(Card(giveaway));
         shown.Fields.Single(f => f.Name == "🏆 Kazanan").Value.Should().Be($"🥇 <@{second}>");
-        shown.Description.Should().Contain("yeniden çekildi");
+        shown.Footer.Should().EndWith("1. kez yeniden çekildi");
         Announcements().Should().HaveCount(2);
         Pinged(Announcements()[1]).Should().Equal(second);
         Announcements()[1].Message.Content.Should().StartWith("🔁");
