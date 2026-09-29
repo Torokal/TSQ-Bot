@@ -6,16 +6,20 @@ namespace ToroSquad.Modules.Predictions.Domain;
 public enum LockDateError
 {
     None = 0,
-    Format = 1,
+    DateFormat = 1,
     NotInFuture = 2,
     TooFar = 3,
     NotInTimeZone = 4,
     Ambiguous = 5,
+    TimeFormat = 6,
+    DateMissing = 7,
+    TimeMissing = 8,
 }
 
 /// <summary>
-/// The automatic lock time as typed: Türkiye wall-clock time <c>GG.AA.YYYY SS:DD</c> (leading zeros optional), plus ISO
-/// <c>YYYY-AA-GG SS:DD</c>. Parsed explicitly — no culture, no machine time zone, no relative words, no two-digit year —
+/// The automatic lock time as typed in two fields: the Türkiye date <c>GG.AA.YYYY</c> (ISO <c>YYYY-AA-GG</c> too) and the
+/// Türkiye time <c>SS:DD</c> (<c>SS.DD</c> too; leading zeros optional). Both empty = locked by hand; one without the other is
+/// refused, never guessed. Parsed explicitly — no culture, no machine time zone, no relative words, no two-digit year —
 /// then converted to UTC with the Europe/Istanbul zone. A wall-clock time that does not exist or exists twice in the zone
 /// is refused rather than guessed; so is anything not at least <see cref="MinLead"/> ahead (checked again when the
 /// prediction is published).
@@ -25,30 +29,33 @@ public static partial class PredictionLockDate
     public static readonly TimeSpan MinLead = TimeSpan.FromMinutes(1);
     public static readonly TimeSpan MaxAhead = TimeSpan.FromDays(365);
 
-    public static bool TryReadWallClock(string? text, out DateTime local)
+    /// <summary>The lock time of the two fields: none when both are empty, otherwise the instant or every problem found.</summary>
+    public static (DateTimeOffset? At, IReadOnlyList<LockDateError> Errors) Resolve(string? date, string? time, TimeZoneInfo zone, DateTimeOffset now)
     {
-        local = default;
-        var value = text?.Trim();
-        if (string.IsNullOrEmpty(value))
-            return false;
-        var match = DatePattern().Match(value);
-        if (!match.Success)
-            match = IsoPattern().Match(value);
-        if (!match.Success)
-            return false;
+        var (d, t) = (date?.Trim() ?? "", time?.Trim() ?? "");
+        if (d.Length == 0 && t.Length == 0)
+            return (null, []);
+        if (t.Length == 0)
+            return (null, [LockDateError.TimeMissing]);
+        if (d.Length == 0)
+            return (null, [LockDateError.DateMissing]);
 
-        int Part(string name) => int.Parse(match.Groups[name].Value, NumberStyles.None, CultureInfo.InvariantCulture);
-        var (year, month, day, hour, minute) = (Part("y"), Part("m"), Part("d"), Part("h"), Part("min"));
-        if (year is < 2000 or > 9998 || month is < 1 or > 12 || day < 1 || day > DateTime.DaysInMonth(year, month) || hour > 23 || minute > 59)
-            return false;
-        local = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified);
-        return true;
+        var errors = new List<LockDateError>();
+        if (!TryReadDate(d, out var day))
+            errors.Add(LockDateError.DateFormat);
+        if (!TryReadTime(t, out var clock))
+            errors.Add(LockDateError.TimeFormat);
+        if (errors.Count > 0)
+            return (null, errors);
+
+        var (at, error) = Resolve(day.ToDateTime(clock), zone, now);
+        return error == LockDateError.None ? (at, []) : (null, [error]);
     }
 
-    public static (DateTimeOffset? At, LockDateError Error) Resolve(string text, TimeZoneInfo zone, DateTimeOffset now)
+    /// <summary>A Türkiye wall-clock time → UTC, refused when it is not a real, single, future instant within a year.</summary>
+    public static (DateTimeOffset? At, LockDateError Error) Resolve(DateTime local, TimeZoneInfo zone, DateTimeOffset now)
     {
-        if (!TryReadWallClock(text, out var local))
-            return (null, LockDateError.Format);
+        local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
         var year = TimeZoneInfo.ConvertTime(now, zone).Year;
         // Far outside the one-year window: refused before any time-zone arithmetic could overflow.
         if (local.Year < year - 1)
@@ -68,15 +75,46 @@ public static partial class PredictionLockDate
         return (at, LockDateError.None);
     }
 
-    /// <summary>"05.10.2026 20:00" in the zone (for prefilling the form again).</summary>
-    public static string Format(DateTimeOffset at, TimeZoneInfo zone) =>
-        TimeZoneInfo.ConvertTime(at, zone).ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture);
+    public static bool TryReadDate(string? text, out DateOnly date)
+    {
+        date = default;
+        var value = text?.Trim() ?? "";
+        var match = DatePattern().Match(value);
+        if (!match.Success)
+            match = IsoDatePattern().Match(value);
+        if (!match.Success)
+            return false;
 
-    [GeneratedRegex(@"^(?<d>[0-9]{1,2})\.(?<m>[0-9]{1,2})\.(?<y>[0-9]{4})\s+(?<h>[0-9]{1,2}):(?<min>[0-9]{2})$", RegexOptions.CultureInvariant)]
+        int Part(string name) => int.Parse(match.Groups[name].Value, NumberStyles.None, CultureInfo.InvariantCulture);
+        var (year, month, day) = (Part("y"), Part("m"), Part("d"));
+        if (year is < 2000 or > 9998 || month is < 1 or > 12 || day < 1 || day > DateTime.DaysInMonth(year, month))
+            return false;
+        date = new DateOnly(year, month, day);
+        return true;
+    }
+
+    public static bool TryReadTime(string? text, out TimeOnly time)
+    {
+        time = default;
+        var match = TimePattern().Match(text?.Trim() ?? "");
+        if (!match.Success)
+            return false;
+        var hour = int.Parse(match.Groups["h"].Value, NumberStyles.None, CultureInfo.InvariantCulture);
+        var minute = int.Parse(match.Groups["min"].Value, NumberStyles.None, CultureInfo.InvariantCulture);
+        if (hour > 23 || minute > 59)
+            return false;
+        time = new TimeOnly(hour, minute);
+        return true;
+    }
+
+    [GeneratedRegex(@"^(?<d>[0-9]{1,2})\.(?<m>[0-9]{1,2})\.(?<y>[0-9]{4})$", RegexOptions.CultureInvariant)]
     private static partial Regex DatePattern();
 
-    [GeneratedRegex(@"^(?<y>[0-9]{4})-(?<m>[0-9]{1,2})-(?<d>[0-9]{1,2})[\sT]+(?<h>[0-9]{1,2}):(?<min>[0-9]{2})$", RegexOptions.CultureInvariant)]
-    private static partial Regex IsoPattern();
+    [GeneratedRegex(@"^(?<y>[0-9]{4})-(?<m>[0-9]{1,2})-(?<d>[0-9]{1,2})$", RegexOptions.CultureInvariant)]
+    private static partial Regex IsoDatePattern();
+
+    [GeneratedRegex(@"^(?<h>[0-9]{1,2})[:.](?<min>[0-9]{2})$", RegexOptions.CultureInvariant)]
+    private static partial Regex TimePattern();
 }
 
 /// <summary>

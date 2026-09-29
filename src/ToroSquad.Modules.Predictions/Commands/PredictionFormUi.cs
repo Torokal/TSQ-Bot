@@ -7,8 +7,10 @@ using ToroSquad.Modules.Predictions.Domain;
 namespace ToroSquad.Modules.Predictions.Commands;
 
 /// <summary>
-/// The forms of TSQ Öngörü. Creation: title, outcomes (one "label | odds" per line), optional lock time and optional
-/// rules — prefilled with the draft's values when reopened (Düzenle), so a correction never loses the input. Entry
+/// The forms of TSQ Öngörü. Creation (🔮 Öngörü Oluştur): title, outcomes (one "label | odds" per line), optional lock
+/// date and lock time (two fields, Türkiye time) and optional result rule — short end-user hints only; limits and formats
+/// are named by the validation messages when something is wrong. Prefilled with the draft's values when reopened
+/// (Düzenle), so a correction never loses the input. Entry
 /// (🎯 Tahmin Yap): the outcome as a single-choice string select inside the modal (Discord.Net 3.20 label components, as
 /// TSQ LFG's form) plus the stake; reopened with Düzenle it is prefilled with the earlier choice and amount. Cancel: the
 /// reason. Custom ids carry only the draft id, the prediction number and a random token; everything is validated again
@@ -18,7 +20,8 @@ public static class PredictionFormUi
 {
     public const string TitleField = "title";
     public const string OutcomesField = "outcomes";
-    public const string LockField = "lock";
+    public const string LockDateField = "lock_date";
+    public const string LockTimeField = "lock_time";
     public const string RulesField = "rules";
     public const string AmountField = "amount";
     public const string OutcomeField = "outcome";
@@ -33,7 +36,7 @@ public static class PredictionFormUi
     /// </summary>
     public const int InputSlack = 2;
 
-    public static Modal CreateModal(string draftId, PredictionFormValues values, Func<string, string> L) => new ModalBuilder()
+    public static Modal CreateModal(string draftId, PredictionFormValues values, string defaultOdds, Func<string, string> L) => new ModalBuilder()
         .WithTitle(Cut(L("predictions.form.title"), MaxTitleLength))
         .WithCustomId(PredictionMessages.FormModalPrefix + draftId)
         .AddLabel(Cut(L("predictions.form.question"), MaxTitleLength),
@@ -41,10 +44,13 @@ public static class PredictionFormUi
             Cut(L("predictions.form.question_hint"), MaxHintLength))
         .AddLabel(Cut(L("predictions.form.outcomes"), MaxTitleLength),
             Input(OutcomesField, TextInputStyle.Paragraph, L("predictions.form.outcomes_placeholder"), 1, PredictionRules.OutcomesInputMaxLength, true, values.Outcomes),
-            Cut(L("predictions.form.outcomes_hint"), MaxHintLength))
-        .AddLabel(Cut(L("predictions.form.lock"), MaxTitleLength),
-            Input(LockField, TextInputStyle.Short, L("predictions.form.lock_placeholder"), null, PredictionRules.LockInputMaxLength, false, values.LockAt),
-            Cut(L("predictions.form.lock_hint"), MaxHintLength))
+            Cut(string.Format(CultureInfo.InvariantCulture, L("predictions.form.outcomes_hint"), defaultOdds), MaxHintLength))
+        .AddLabel(Cut(L("predictions.form.lock_date"), MaxTitleLength),
+            Input(LockDateField, TextInputStyle.Short, L("predictions.form.lock_date_placeholder"), null, PredictionRules.LockDateInputMaxLength, false, values.LockDate),
+            Cut(L("predictions.form.lock_date_hint"), MaxHintLength))
+        .AddLabel(Cut(L("predictions.form.lock_time"), MaxTitleLength),
+            Input(LockTimeField, TextInputStyle.Short, L("predictions.form.lock_time_placeholder"), null, PredictionRules.LockTimeInputMaxLength, false, values.LockTime),
+            Cut(L("predictions.form.lock_time_hint"), MaxHintLength))
         .AddLabel(Cut(L("predictions.form.rules"), MaxTitleLength),
             Input(RulesField, TextInputStyle.Paragraph, L("predictions.form.rules_placeholder"), null, PredictionRules.RulesMaxLength * InputSlack, false, values.Rules),
             Cut(L("predictions.form.rules_hint"), MaxHintLength))
@@ -123,14 +129,18 @@ public sealed class PredictionFormModal : IModal
     public string? Outcomes { get; set; }
 
     [RequiredInput(false)]
-    [ModalTextInput(PredictionFormUi.LockField)]
-    public string? LockAt { get; set; }
+    [ModalTextInput(PredictionFormUi.LockDateField)]
+    public string? LockDate { get; set; }
+
+    [RequiredInput(false)]
+    [ModalTextInput(PredictionFormUi.LockTimeField)]
+    public string? LockTime { get; set; }
 
     [RequiredInput(false)]
     [ModalTextInput(PredictionFormUi.RulesField, TextInputStyle.Paragraph)]
     public string? Rules { get; set; }
 
-    public PredictionFormValues ToValues() => new(Question, Outcomes, LockAt, Rules);
+    public PredictionFormValues ToValues() => new(Question, Outcomes, LockDate, LockTime, Rules);
 }
 
 /// <summary>The entry form's text field (the outcome select is read from the submitted components).</summary>

@@ -70,7 +70,8 @@ public static class PredictionRules
     /// <summary>The outcomes field: 25 lines of 80 characters plus odds fit comfortably; Discord's text input maximum is 4000.</summary>
     public const int OutcomesInputMaxLength = 4000;
 
-    public const int LockInputMaxLength = 20;
+    public const int LockDateInputMaxLength = 12;
+    public const int LockTimeInputMaxLength = 8;
     public const int AmountInputMaxLength = 20;
     public const int CancelReasonMinLength = 3;
     public const int CancelReasonMaxLength = 300;

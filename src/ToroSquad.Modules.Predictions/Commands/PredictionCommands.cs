@@ -35,7 +35,7 @@ public sealed class PredictionCommands(InteractionServices services, PredictionS
         }
 
         var language = await LangAsync();
-        await RespondWithModalAsync(PredictionFormUi.CreateModal(draftId, values, key => Localizer.Get(language, key)));
+        await RespondWithModalAsync(PredictionFormUi.CreateModal(draftId, values, predictions.DefaultOddsText, key => Localizer.Get(language, key)));
     }
 
     [SlashCommand("cuzdan", "Your TSQ Coin balance, pending coins and record")]
