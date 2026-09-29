@@ -81,10 +81,10 @@ public sealed class SummaryAiClientTests
         root.GetProperty("max_tokens").GetInt32().Should().Be(1200);
         root.GetProperty("temperature").GetDouble().Should().Be(0.3);
         root.GetProperty("top_p").GetDouble().Should().Be(0.9);
-        root.GetProperty("reasoning_effort").GetString().Should().Be("low");
-        root.GetProperty("thinking").GetProperty("type").GetString().Should().Be("disabled", "low reasoning alone spent the whole budget live");
+        root.GetProperty("thinking").GetProperty("type").GetString().Should().Be("disabled");
+        root.TryGetProperty("reasoning_effort", out _).Should().BeFalse("effort is a thinking-mode setting: never sent with thinking disabled");
         root.GetProperty("stream").GetBoolean().Should().BeFalse();
-        root.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("model", "messages", "max_tokens", "temperature", "top_p", "reasoning_effort", "thinking", "stream");
+        root.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo("model", "messages", "max_tokens", "temperature", "top_p", "thinking", "stream");
         var messages = root.GetProperty("messages").EnumerateArray().ToList();
         messages.Select(m => m.GetProperty("role").GetString()).Should().Equal("system", "user");
         messages[0].GetProperty("content").GetString().Should().Be(SummaryPrompt.System);
@@ -93,12 +93,15 @@ public sealed class SummaryAiClientTests
     }
 
     [Fact]
-    public void Thinking_is_only_sent_when_disabled_by_configuration()
+    public void Reasoning_effort_is_sent_only_in_thinking_mode()
     {
-        using var off = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(Prompt, new SummaryOptions { DisableThinking = false }));
+        using var enabled = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(Prompt, new SummaryOptions { DisableThinking = false, ReasoningEffort = "high" }));
+        enabled.RootElement.GetProperty("thinking").GetProperty("type").GetString().Should().Be("enabled");
+        enabled.RootElement.GetProperty("reasoning_effort").GetString().Should().Be("high");
 
-        off.RootElement.TryGetProperty("thinking", out _).Should().BeFalse();
-        off.RootElement.GetProperty("reasoning_effort").GetString().Should().Be("low");
+        using var disabled = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(Prompt, new SummaryOptions { DisableThinking = true, ReasoningEffort = "high" }));
+        disabled.RootElement.GetProperty("thinking").GetProperty("type").GetString().Should().Be("disabled");
+        disabled.RootElement.TryGetProperty("reasoning_effort", out _).Should().BeFalse("never both: a contradictory request reasoned without bound live");
     }
 
     [Fact]

@@ -60,20 +60,27 @@ arasına konur. Kurallar:
 |---|---|
 | Uç nokta | OpenCode Go, OpenAI uyumlu `POST https://opencode.ai/zen/go/v1/chat/completions` |
 | Model | `Summary:Model` = `deepseek-v4.1-flash` (API model ID'si; CLI'daki `opencode-go/` öneki yok, `/models` listesinden doğrulandı) |
-| Ayarlar | `thinking: {"type": "disabled"}`, `reasoning_effort: low`, `temperature: 0.3`, `top_p: 0.9`, `max_tokens: 1200`, `stream: false`; tool yok, web araması yok |
+| Ayarlar | `thinking: {"type": "disabled"}` (**`reasoning_effort` gönderilmez**), `temperature: 0.3`, `top_p: 0.9`, `max_tokens: 1200`, `stream: false`; tool yok, web araması yok |
 | Oturum | Her özet için yeni rastgele `x-opencode-session` (GUID); içinde sunucu, kanal, isim veya metin yok |
 | User-Agent | `TSQBot/<sürüm> SummaryModule (+https://github.com/Torokal/TSQ-Bot)` (dürüst tanıtım; kodlama ajanı taklidi yok) |
 | Zaman aşımı | 25 sn; aşılırsa istek iptal edilir ve kanala hiçbir şey gönderilmez |
 | Retry | **Yok.** 400/401/403/404, 429, 5xx, ağ hatası ve zaman aşımı olduğu gibi döner. Tekrar denemek isteyen üye `/ozetle`'yi yeniden çalıştırır. |
 
-**Thinking kapalı.** `reasoning_effort: low` tek başına yetmedi. Bu prompt'la DeepSeek gizli reasoning'e bütün bütçeyi
-harcadı ve metin üretemedi: canlıda 900 ve 2500 token'da, sentetik A/B transcript'iyle de 2500 token'da (`finish_reason: length`,
-özet gönderilmedi). Aynı isteğe DeepSeek'in `thinking: {"type": "disabled"}` alanı eklendiğinde (OpenCode Go iletiyor,
-2026-09-29'da doğrulandı) sonuç 0 reasoning token, ~640 cevap token'ı ve ~7 sn oldu; biçim ve atıf kuralları doğruydu.
-Kapatmak için: `Summary:DisableThinking=false`.
+**Thinking kapalı ve `reasoning_effort` yok.** DeepSeek'te `reasoning_effort` (low/high/max) thinking modunun ayarıdır;
+thinking'i kapatan tek sinyal `thinking: {"type": "disabled"}`'dır. İkisini birlikte göndermek çelişkili bir istektir.
+2026-09-29 geçmişi:
+
+- Yalnızca `reasoning_effort: low`: canlıda 900 ve 2500 token'ın tamamı gizli reasoning'e gitti, metin yok.
+- `disabled` + `low` birlikte: bazı isteklerde çalıştı (0 reasoning, 3,6–7 sn), bazılarında yine bütçenin tamamı reasoning'e
+  gitti (1200/1200, 2000/2000).
+- Yalnızca `disabled` (bugünkü istek): 0 reasoning, 757 cevap token'ı, 8,4 sn, `stop`, biçim eksiksiz. Bu tek bir teşhis
+  çağrısıdır; kararlılık canlıda izlenir.
+
+`Summary:DisableThinking=false` ayarı thinking'i açar: `thinking: {"type": "enabled"}` ve `reasoning_effort: <ReasoningEffort>`
+gönderilir.
 
 `max_tokens` 1200'dür, spesifikasyondaki yaklaşık 700 değil. Reasoning olmadan yalnızca cevabı taşıması gerekiyor (150–250
-kelime, ölçümde ~640 token); 1200 uzun sohbetler için pay bırakır. Model yine de sınıra takılırsa yarım kalan son satır atılır.
+kelime, ölçümde 640–760 token); 1200 uzun sohbetler için pay bırakır. Model yine de sınıra takılırsa yarım kalan son satır atılır.
 Hiç metin yoksa kullanıcıya özel "Özet oluşturulamadı" mesajı gider.
 
 ## Kötüye kullanım koruması

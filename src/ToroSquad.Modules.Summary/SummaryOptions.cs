@@ -43,14 +43,16 @@ public sealed class SummaryOptions
     /// </summary>
     public int MaxOutputTokens { get; set; } = 1200;
 
-    /// <summary><c>reasoning_effort</c>: the models on OpenCode Go accept low, high or max.</summary>
+    /// <summary>
+    /// <c>reasoning_effort</c> (low, high or max) — sent only in thinking mode, i.e. when <see cref="DisableThinking"/> is false.
+    /// </summary>
     public string ReasoningEffort { get; set; } = "low";
 
     /// <summary>
-    /// Sends DeepSeek's <c>thinking: {"type": "disabled"}</c>. With the summary prompt, "low" reasoning alone still spent the
-    /// whole budget on hidden reasoning (900 and then 2500 tokens, finish_reason "length", no text — live and with the
-    /// synthetic A/B transcript); with thinking disabled the same request used 0 reasoning tokens, ~640 answer tokens and
-    /// ~7 s. OpenCode Go forwards the field (verified 2026-09-29).
+    /// True: <c>thinking: {"type": "disabled"}</c> and NO <c>reasoning_effort</c> (DeepSeek: effort is a thinking-mode setting).
+    /// False: <c>thinking: {"type": "enabled"}</c> plus <see cref="ReasoningEffort"/>. History (2026-09-29): "low" alone spent
+    /// the whole budget on hidden reasoning (900, 2500 tokens, no text); disabled + low together still did on some requests
+    /// (1200/1200, 2000/2000); disabled alone used 0 reasoning tokens, 757 answer tokens, 8.4 s, complete format.
     /// </summary>
     public bool DisableThinking { get; set; } = true;
 
