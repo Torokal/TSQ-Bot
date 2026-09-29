@@ -218,6 +218,58 @@ public sealed partial class SummaryOutputAndPromptTests
         Words(string.Join(" ", parts).Replace("||", " ", StringComparison.Ordinal)).Should().Equal(Words(text.Replace("||", " ", StringComparison.Ordinal)));
     }
 
+    [Fact]
+    public void Prompt_encourages_display_names_instead_of_anonymous_wording()
+    {
+        var system = SummaryPrompt.System;
+        system.Should().NotContain("İnsan isimlerini yalnızca özeti anlamak için gerçekten gerekiyorsa kullan", "the rule that over-anonymized live summaries");
+        system.Should().NotContain("ve isim gibi ayrıntıları");
+        system.Should().Contain("Satır başındaki adlar kullanıcıların Discord görünen adlarıdır");
+        system.Should().Contain("Görünen adlardan özellikle kaçınma").And.Contain("o kişinin görünen adını doğal biçimde kullan");
+        foreach (var kind in new[] { "görüş", "soru", "şaka", "deneyim", "plan", "satın alma", "karar", "eylem" })
+            system.Should().Contain(kind);
+
+        // The transcript line carries the name the model is told to use.
+        SummaryPrompt.Build("Toro: Ben Nitro'yu iptal ettim.").User.Should().Contain("<transcript>\nToro: Ben Nitro'yu iptal ettim.\n</transcript>");
+    }
+
+    [Fact]
+    public void Prompt_limits_anonymous_wording_to_unknown_authors()
+    {
+        var system = SummaryPrompt.System;
+        system.Should().Contain("Görünen ad bilinirken gereksiz yere \"bir kullanıcı\", \"birisi\", \"bir üye\" veya \"bazı kullanıcılar\" deme");
+        system.Should().Contain("yalnızca kişinin kim olduğu transcript'ten anlaşılmıyorsa kullan");
+    }
+
+    [Fact]
+    public void Prompt_keeps_attribution_with_names_and_does_not_require_listing_everyone()
+    {
+        var system = SummaryPrompt.System;
+        system.Should().Contain("bir kişinin görüşü, iddiası veya söylentisi o kişiye ait olarak kalır");
+        system.Should().Contain("[Ad] kodlama tarafında Claude'u daha iyi bulduğunu söyledi.");
+        system.Should().Contain("\"Nitro 500 TL olacak.\" yazma");
+        system.Should().Contain("Tek kişinin görüşünü grubun ortak görüşü", "the earlier attribution rules stay");
+        system.Should().Contain("katılımcıları tek tek sayma").And.Contain("en fazla 2–3 isim").And.Contain("\"birkaç kişi\" gibi grupla");
+    }
+
+    [Fact]
+    public void Prompt_asks_for_plain_names_from_the_transcript_only()
+    {
+        var system = SummaryPrompt.System;
+        system.Should().Contain("İsimleri düz metin yaz: @ işareti, <@...> veya ID kullanma");
+        system.Should().Contain("isim uydurma veya tahmin etme").And.Contain("[Ad] örneklerdeki yer tutucudur");
+        system.Should().NotMatchRegex(@"\b(Toro|Hasom|Oykeli)\b", "no real member names in the fixed prompt: the model must not borrow them");
+    }
+
+    [Fact]
+    public void Prompt_combines_names_with_spoilers_without_leaking()
+    {
+        var system = SummaryPrompt.System;
+        system.Should().Contain("Spoiler'ı paylaşan kişinin adını kullanabilirsin, ama spoiler içeriğini adın yanında spoiler dışında yazma");
+        system.Should().Contain("\"[Ad] yeni sezon hakkında konuştu. **Spoiler (sezon):** ||...||\"");
+        system.Should().Contain("**Spoiler (konu):** ||özetlenen içerik||", "the spoiler rules stay");
+    }
+
     private static string[] Words(string text) => WordPattern().Matches(text).Select(m => m.Value).ToArray();
 
     [GeneratedRegex(@"\S+")]
