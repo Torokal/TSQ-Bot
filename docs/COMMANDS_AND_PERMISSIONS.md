@@ -148,6 +148,17 @@ yalnızca kazanan duyurusu o çekilişin kazananlarını etiketler. Kanalda bot 
 Embed Links, **Add Reactions**, Read Message History (form açılmadan ve gönderimde denetlenir). `/modules disable giveaway`
 yalnızca yeni çekilişleri kapatır; başlamış çekilişler duyurusuyla birlikte normal sonuçlanır. Ayrıntı: [giveaway/TSQ_GIVEAWAY.md](giveaway/TSQ_GIVEAWAY.md).
 
+## TSQ Özet (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/ozetle` | Herkes: bu kanalın (thread'de yalnızca thread'in) son 100 üye mesajını o anda okur, tek AI isteğiyle kısa bir Türkçe özet çıkarır ve **herkese açık** normal mesaj olarak gönderir (ping yok) |
+
+Retler ve hatalar (yapılandırma yok, desteklenmeyen kanal, üyenin veya botun View Channel + Read Message History izni yok,
+cooldown 30 sn üye / 60 sn kanal, aynı kanalda süren özet, bot genelinde en fazla 2 eşzamanlı özet, 5'ten az mesaj, AI hatası,
+zaman aşımı) yalnızca kullanana görünür. Retry ve yedek model yoktur. Kanalda bot izni: View Channel, Read Message History.
+Ayrıntı: [summary/TSQ_SUMMARY.md](summary/TSQ_SUMMARY.md).
+
 ## TSQ Doğum Günü (modül açıkken)
 
 | Komut | Ne yapar |
@@ -194,10 +205,10 @@ panel, autocomplete ve bildirimler modül kapalıyken çalışmaz.
 - Resmî bot hesabı + bot token (self-bot/kullanıcı token'ı yok). **Administrator istenmez.**
 - Gateway intent (Identify): yalnızca **Guilds** (ayrıcalıklı değil). Presence / Guild Members kapalı, gerekmez (etkileşim
   yükü üyenin rollerini içerir, rol ekleme/çıkarma REST ile yapılır). Mesaj olayları (`GuildMessages`) dinlenmez.
-- **Message Content** (ayrıcalıklı erişim, yalnızca TSQ Quote için): Developer Portal → Bot → Privileged Gateway Intents →
-  MESSAGE CONTENT INTENT **açık**. Discord'a göre bu erişim bir gateway olayına bağlı değildir ve REST cevaplarındaki içerik
-  alanlarını açar; bu yüzden Identify'a eklenmez ve bot hiçbir mesaj olayı almaz — yalnızca `/quote`'ta verilen tek
-  mesajı okur.
+- **Message Content** (ayrıcalıklı erişim, yalnızca TSQ Quote ve TSQ Özet için): Developer Portal → Bot → Privileged Gateway
+  Intents → MESSAGE CONTENT INTENT **açık**. Discord'a göre bu erişim bir gateway olayına bağlı değildir ve REST
+  cevaplarındaki içerik alanlarını açar; bu yüzden Identify'a eklenmez ve bot hiçbir mesaj olayı almaz. Yalnızca `/quote`'ta
+  verilen tek mesajı ve `/ozetle` çalıştırıldığında o kanalın son mesajlarını okur.
 - OAuth2 kapsamları: `bot` ve `applications.commands`.
 - İzinler (asgari, işleve göre):
 

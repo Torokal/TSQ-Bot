@@ -87,6 +87,11 @@ TSQ Live (isteğe bağlı, [live/TSQ_LIVE.md](live/TSQ_LIVE.md)): `TOROSQUAD_Liv
 `TOROSQUAD_Live__Kick__ClientId` + `TOROSQUAD_Live__Kick__ClientSecret` (**secret**); `TOROSQUAD_Live__GuildId` yalnızca
 `Discord:AllowedGuildIds` tek sunucu değilse. Ayrıca sunucuda `/modules enable live` ve kanalda Mention Everyone izni.
 
+TSQ Özet (isteğe bağlı, [summary/TSQ_SUMMARY.md](summary/TSQ_SUMMARY.md)): `OPENCODE_GO_API_KEY` (**secret**, önek yok;
+yoksa `/ozetle` "yapılandırılmamış" der, diğer modüller etkilenmez). Değeri sohbete yazmadan girmek için:
+`railway variable set OPENCODE_GO_API_KEY --stdin --skip-deploys` (değer stdin'den okunur, çıktıda gösterilmez).
+Ayrıca sunucuda `/modules enable summary`.
+
 İsteğe bağlı: `TOROSQUAD_Esports__Liquipedia__ApiKey` (secret, yoksa HLTV zenginleştirme kapalı kalır),
 `TOROSQUAD_Esports__Liquipedia__UserAgent`, `TOROSQUAD_Bot__OperatorContact`. Gerekmeyenler: `DOTNET_ENVIRONMENT`
 (imajda `Production`), `TOROSQUAD_Bot__DataDirectory` (imajda `/data`), sağlayıcı adı (varsayılan PandaScore).
