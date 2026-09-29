@@ -9,6 +9,9 @@ namespace ToroSquad.Modules.Predictions.Application;
 
 public sealed record OutcomeView(long Id, int Position, string Label, int OddsX100);
 
+/// <summary>What the card of an automatic football prediction adds: the planned kickoff and where its fixed odds came from.</summary>
+public sealed record AutoCardInfo(DateTimeOffset Kickoff, string BookmakerTitle, DateTimeOffset OddsUpdatedAt);
+
 /// <summary>A prediction as stored, with its outcomes (position order) and its tournament's number.</summary>
 public sealed record PredictionView(
     long Id,
@@ -36,7 +39,9 @@ public sealed record PredictionView(
     DateTimeOffset? SettledAt,
     DateTimeOffset? CancelledAt,
     bool CardMissing,
-    long Version)
+    long Version,
+    PredictionOrigin Origin = PredictionOrigin.Manual,
+    AutoCardInfo? Auto = null)
 {
     public OutcomeView? Winner => Outcomes.FirstOrDefault(o => o.Id == WinningOutcomeId);
 }
@@ -48,7 +53,8 @@ public sealed record PredictionView(
 /// it stays in the data, not on the card). Below
 /// the question: the numbered outcomes (1️⃣ …) each with its fixed odds; then participants and staked coins, the lock time
 /// (Discord timestamps — no per-second edits) or "locked manually", the result (settled) or the reason and refund
-/// (cancelled), and the creator's rules.
+/// (cancelled), and the creator's rules. An automatic football card also shows the PLANNED kickoff (separate from the entry
+/// lock) and the odds source with the time of its odds, and says "Otomatik" in the footer instead of a creator.
 /// <para>
 /// Buttons carry only the prediction number; every click is authorized server-side on the stored prediction. Open:
 /// 🎯 Tahmin Yap, then 🔒 Kilitle · ✅ Sonuçlandır · ↩️ İptal / İade. Locked: entries shown closed (disabled), Sonuçlandır ·
@@ -73,6 +79,7 @@ public sealed class PredictionCards(ILocalizer localizer)
     public const uint EndedColor = 0x747F8D;
 
     public const int CreatorNameMax = 64;
+    public const int BookmakerTitleMax = 60;
     private const int UntrustedMax = 8000; // never reached: the stored text is bounded; defusing only escapes
 
     private static readonly string[] Keycaps = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
@@ -107,9 +114,12 @@ public sealed class PredictionCards(ILocalizer localizer)
                 title = L("predictions.card.title_locked");
                 color = LockedColor;
                 fields.Add(new(L("predictions.card.participation"), Participation(view, language), true));
-                fields.Add(new(L("predictions.card.lock"), view.LockReason == PredictionLockReason.CardMissing
-                    ? L("predictions.card.locked_missing")
-                    : L("predictions.card.locked_at", DiscordText.Timestamp(view.LockedAt ?? view.LockAt ?? DateTimeOffset.UnixEpoch, 'f')), true));
+                fields.Add(new(L("predictions.card.lock"), view.LockReason switch
+                {
+                    PredictionLockReason.CardMissing => L("predictions.card.locked_missing"),
+                    PredictionLockReason.NeedsReview => L("predictions.card.locked_review"),
+                    _ => L("predictions.card.locked_at", DiscordText.Timestamp(view.LockedAt ?? view.LockAt ?? DateTimeOffset.UnixEpoch, 'f')),
+                }, true));
                 break;
 
             default:
@@ -122,6 +132,13 @@ public sealed class PredictionCards(ILocalizer localizer)
                 break;
         }
 
+        if (view.Auto is { } auto)
+        {
+            fields.Add(new(L("predictions.card.kickoff"), DiscordText.Timestamp(auto.Kickoff, 'F'), true));
+            fields.Add(new(L("predictions.card.odds_source"), L("predictions.card.odds_source_value",
+                DiscordText.UntrustedPlain(auto.BookmakerTitle, BookmakerTitleMax), DiscordText.Timestamp(auto.OddsUpdatedAt, 'f')), true));
+        }
+
         if (!string.IsNullOrEmpty(view.Rules))
         {
             var chunks = Chunks(DiscordText.Untrusted(view.Rules, UntrustedMax), DiscordLimits.EmbedFieldValueMax);
@@ -130,7 +147,9 @@ public sealed class PredictionCards(ILocalizer localizer)
         }
 
         var creator = string.IsNullOrWhiteSpace(view.CreatorName) ? L("predictions.card.creator_unknown") : DiscordText.UntrustedPlain(view.CreatorName, CreatorNameMax);
-        var footer = L("predictions.card.footer", Number(view.Id), creator); // the tournament is never shown on the card
+        var footer = view.Origin == PredictionOrigin.AutoFootball
+            ? L("predictions.card.footer_auto", Number(view.Id))
+            : L("predictions.card.footer", Number(view.Id), creator); // the tournament is never shown on the card
         var buttons = Buttons(view, language, preview);
 
         // Markdown lines → code block → fields: the first layout Discord accepts. Nothing is cut.

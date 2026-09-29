@@ -33,8 +33,13 @@ public sealed partial class SecretRedactor
         text = DiscordTokenPattern().Replace(text, Mask);
         text = ApiKeyHeaderPattern().Replace(text, "Apikey " + Mask);
         text = BotAuthHeaderPattern().Replace(text, "Bot " + Mask);
+        text = ApiKeyQueryPattern().Replace(text, m => m.Groups[1].Value + Mask);
         return text;
     }
+
+    /// <summary>A key sent as a query parameter (apiKey=…, api_key=…, token=…), whatever its value.</summary>
+    [GeneratedRegex(@"([?&](?:apiKey|api_key|apikey|token)=)[^&\s""']+", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex ApiKeyQueryPattern();
 
     /// <summary>Discord bot token shape: base64(user id).timestamp.hmac</summary>
     [GeneratedRegex(@"[MNO][A-Za-z\d_-]{22,30}\.[A-Za-z\d_-]{5,8}\.[A-Za-z\d_-]{25,45}", RegexOptions.CultureInvariant)]

@@ -42,6 +42,31 @@ public sealed record EntryFormInfo(
 /// <summary>What 🎯 Tahmin Yap / ✏️ Tahminimi Değiştir lead to: a private answer (a refusal or the active entry) or the form.</summary>
 public sealed record EntryStart(PredictionReply? Reply, EntryFormInfo? Form);
 
+/// <summary>An automatic prediction ready to open: the texts, the fixed odds snapshot, the lock and the last safe moment.</summary>
+public sealed record AutoPublishPlan(
+    long AutoEventId,
+    GuildId Guild,
+    string Title,
+    string Rules,
+    IReadOnlyList<(string Label, int OddsX100)> Outcomes,
+    DateTimeOffset LockAt,
+    DateTimeOffset Deadline,
+    string PublishKey,
+    AutoCardInfo Card);
+
+public enum AutoPublishResult
+{
+    Published,
+    Uncertain,
+    Refused,
+    Blocked,
+}
+
+public sealed record AutoPublishOutcome(AutoPublishResult Result, AutoBlockReason Reason, long? PredictionId)
+{
+    public static AutoPublishOutcome Blocked(AutoBlockReason reason) => new(AutoPublishResult.Blocked, reason, null);
+}
+
 /// <summary>
 /// The prediction lifecycle. Create: form → private preview → publish (row in Publishing, card posted by the bot, row
 /// Open) — never a second card for one draft. Enter: 🎯 Tahmin Yap → form (outcome + amount) → Submit = ONE write transaction
@@ -902,6 +927,152 @@ public sealed class PredictionService(
             Coins.Format(result.Total, await LanguageAsync(actor.GuildId, ct)));
     }
 
+    // ---- automatic football (called only by the automation job; no interaction reaches it) ----
+
+    /// <summary>
+    /// Opens ONE automatic football prediction for the tracked match <paramref name="plan"/> names, through the same pipeline
+    /// as a published form: a Publishing row (outcomes = the fixed odds snapshot), the card, Open when Discord confirms it —
+    /// an uncertain post is looked for and otherwise left to the worker's reconciliation, never posted twice.
+    /// <list type="bullet">
+    /// <item>Before anything: the module is enabled, the predictions channel is usable by the bot, the deadline has not
+    /// passed, and the card fits Discord's limits in every state.</item>
+    /// <item>ONE write transaction: the automation row must still be Live, not yet published and linked to nothing; the
+    /// prediction goes into the tournament active NOW (an old plan never writes into a closed one; the close is serialized
+    /// by the same write lock); the row is linked to it (unique). No wallet, no starting balance, no creator: CreatorUserId 0,
+    /// Origin AutoFootball — nobody becomes leaderboard-eligible by it.</item>
+    /// <item>Just before the post everything time- and gate-related is checked again (<paramref name="stillAllowed"/>,
+    /// deadline, module); a card that would come too late is abandoned without ever being posted.</item>
+    /// </list>
+    /// </summary>
+    public async Task<AutoPublishOutcome> PublishAutomaticAsync(AutoPublishPlan plan, Func<bool> stillAllowed, CancellationToken ct)
+    {
+        var channel = guards.PredictionsChannel;
+        if (await guards.EnabledAsync(plan.Guild, ct) is not null)
+            return AutoPublishOutcome.Blocked(AutoBlockReason.ModuleDisabled);
+        var access = await guilds.GetBotChannelAccessAsync(plan.Guild, channel, ct);
+        if (!access.Exists || !access.IsTextBased || !access.Permissions.Grants(PredictionRules.RequiredChannelPermissions))
+            return AutoPublishOutcome.Blocked(AutoBlockReason.ChannelUnavailable);
+        var now = Truncate(clock.GetUtcNow());
+        if (now >= plan.Deadline)
+            return AutoPublishOutcome.Blocked(AutoBlockReason.TooLateToPublish);
+
+        var outcomes = plan.Outcomes.Select((o, i) => new OutcomeView(i + 1, i + 1, o.Label, o.OddsX100)).ToList();
+        var draft = new PredictionView(0, plan.Guild, 0, 0, channel, null, new UserId(0), "", plan.Title, plan.Rules, plan.LockAt, PredictionStatus.Open, null, null,
+            outcomes, 0, 0, null, null, null, null, null, null, null, false, 0, PredictionOrigin.AutoFootball, plan.Card);
+        if (plan.Title.Length is < PredictionRules.TitleMinLength or > PredictionRules.TitleMaxLength ||
+            plan.Outcomes.Any(o => o.Label.Length is 0 or > PredictionRules.OutcomeLabelMaxLength) || !cards.Fits(draft))
+            return AutoPublishOutcome.Blocked(AutoBlockReason.CardInvalid);
+
+        long id;
+        try
+        {
+            id = await PredictionWrites.RunAsync(store.Db, async () =>
+            {
+                var row = await store.AutoEvents.FirstOrDefaultAsync(a => a.Id == plan.AutoEventId, ct);
+                if (row is not { Mode: AutomationMode.Live, State: AutoEventState.Planned or AutoEventState.WaitingForOdds, PredictionId: null } ||
+                    row.GuildId != plan.Guild.Value || await store.Predictions.AnyAsync(p => p.PublishKey == plan.PublishKey, ct))
+                    return 0L;
+                var tournament = await store.EnsureTournamentAsync(plan.Guild, now, ct);
+                var prediction = new PredictionEntity
+                {
+                    GuildId = plan.Guild.Value,
+                    TournamentId = tournament.Id,
+                    ChannelId = channel.Value,
+                    CreatorUserId = 0,
+                    CreatorName = "",
+                    Origin = PredictionOrigin.AutoFootball,
+                    Title = plan.Title,
+                    Rules = plan.Rules,
+                    LockAt = plan.LockAt,
+                    Status = PredictionStatus.Publishing,
+                    PublishKey = plan.PublishKey,
+                    CreatedAt = now,
+                };
+                store.Predictions.Add(prediction);
+                await store.Db.SaveChangesAsync(ct);
+                for (var i = 0; i < plan.Outcomes.Count; i++)
+                    store.Outcomes.Add(new PredictionOutcomeEntity { PredictionId = prediction.Id, Position = i + 1, Label = plan.Outcomes[i].Label, OddsX100 = plan.Outcomes[i].OddsX100 });
+                row.PredictionId = prediction.Id;
+                row.State = AutoEventState.Publishing;
+                row.Reason = AutoBlockReason.None;
+                row.UpdatedAt = now;
+                await store.Db.SaveChangesAsync(ct);
+                return prediction.Id;
+            }, ct);
+        }
+        catch (DbUpdateException ex) when (PredictionWrites.IsUniqueViolation(ex))
+        {
+            id = 0; // another pass or process linked this match first
+        }
+
+        if (id == 0)
+            return AutoPublishOutcome.Blocked(AutoBlockReason.None);
+
+        // The last gate: nothing is posted after the safe moment, after the automation was stopped or the module disabled.
+        var late = Truncate(clock.GetUtcNow()) >= plan.Deadline;
+        var disabled = await guards.EnabledAsync(plan.Guild, ct) is not null;
+        if (late || disabled || !stillAllowed())
+        {
+            var stop = late ? AutoBlockReason.TooLateToPublish : disabled ? AutoBlockReason.ModuleDisabled : AutoBlockReason.AutomationStopped;
+            await store.Predictions.Where(p => p.Id == id && p.Status == PredictionStatus.Publishing && p.MessageId == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, PredictionStatus.Abandoned).SetProperty(p => p.CancelledAt, now).SetProperty(p => p.Version, p => p.Version + 1), ct);
+            await SetAutoStateAsync(plan.AutoEventId, AutoEventState.Skipped, stop, ct);
+            var code = AutoBlockCodes.Code(stop);
+            logger.LogWarning("auto_football_not_posted {Prediction} event={Event} code={Code}", id, plan.AutoEventId, code);
+            return AutoPublishOutcome.Blocked(stop);
+        }
+
+        var language = await LanguageAsync(plan.Guild, ct);
+        var card = cards.Render((await store.ViewAsync(id, ct))! with { Status = PredictionStatus.Open }, language);
+        switch (await PostCardAsync(channel, card, now, ct))
+        {
+            case (CardPost.Posted, var message):
+                await AttachAsync(id, message, ct);
+                await SetAutoStateAsync(plan.AutoEventId, AutoEventState.Published, AutoBlockReason.None, ct);
+                logger.LogInformation("auto_football_published {Prediction} event={Event} guild={Guild} message={Message} lock={LockAt:O}",
+                    id, plan.AutoEventId, plan.Guild, message, plan.LockAt);
+                return new AutoPublishOutcome(AutoPublishResult.Published, AutoBlockReason.None, id);
+
+            case (CardPost.Refused, _):
+                // Discord did not create the message: the rows go away and the match waits for its next attempt.
+                await store.Outcomes.Where(o => o.PredictionId == id).ExecuteDeleteAsync(ct);
+                await store.AutoEvents.Where(a => a.Id == plan.AutoEventId && a.PredictionId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(a => a.PredictionId, (long?)null).SetProperty(a => a.State, AutoEventState.WaitingForOdds)
+                        .SetProperty(a => a.DeliveryFailures, a => a.DeliveryFailures + 1).SetProperty(a => a.UpdatedAt, now), ct);
+                await store.Predictions.Where(p => p.Id == id && p.Status == PredictionStatus.Publishing && p.MessageId == null).ExecuteDeleteAsync(ct);
+                logger.LogWarning("auto_football_card_refused event={Event} guild={Guild}", plan.AutoEventId, plan.Guild);
+                return new AutoPublishOutcome(AutoPublishResult.Refused, AutoBlockReason.ChannelUnavailable, null);
+
+            default:
+                logger.LogWarning("auto_football_card_uncertain {Prediction} event={Event}: the worker looks for it; never posted twice", id, plan.AutoEventId);
+                return new AutoPublishOutcome(AutoPublishResult.Uncertain, AutoBlockReason.None, id);
+        }
+    }
+
+    private Task<int> SetAutoStateAsync(long autoEventId, AutoEventState state, AutoBlockReason reason, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        return store.AutoEvents.Where(a => a.Id == autoEventId)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.State, state).SetProperty(a => a.Reason, reason).SetProperty(a => a.UpdatedAt, now), ct);
+    }
+
+    /// <summary>
+    /// Stops entries on an OPEN automatic prediction whose match changed or vanished at the provider after publishing (never
+    /// reopened or extended; stakes and odds stay; an administrator settles or cancels it). A prediction already locked,
+    /// settled or cancelled is left as it is.
+    /// </summary>
+    public async Task<bool> LockForReviewAsync(long predictionId, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var changed = await store.Predictions.Where(p => p.Id == predictionId && p.Origin == PredictionOrigin.AutoFootball && p.Status == PredictionStatus.Open)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Status, PredictionStatus.Locked).SetProperty(p => p.LockReason, PredictionLockReason.NeedsReview)
+                .SetProperty(p => p.LockedAt, now).SetProperty(p => p.CardStale, p => p.MessageId != null && !p.CardMissing)
+                .SetProperty(p => p.CardSyncAttempts, 0).SetProperty(p => p.Version, p => p.Version + 1), ct);
+        if (changed > 0)
+            logger.LogWarning("prediction_locked {Prediction} by=automation reason=needs_review", predictionId);
+        return changed > 0;
+    }
+
     // ---- worker: publishing, card presence ----
 
     /// <summary>
@@ -1045,7 +1216,9 @@ public sealed class PredictionService(
         var (prediction, refusal) = await LoadInChannelAsync(actor, here, id, card, ct);
         if (prediction is null)
             return (null, refusal);
-        return PredictionAccess.CanManage(actor, guards.CreatorRole, new UserId(prediction.CreatorUserId)) ? (prediction, null) : (null, PredictionGuards.NotManager());
+        return PredictionAccess.CanManage(actor, guards.CreatorRole, new UserId(prediction.CreatorUserId), prediction.Origin)
+            ? (prediction, null)
+            : (null, PredictionGuards.NotManager());
     }
 
     private async Task<string> LanguageAsync(GuildId guild, CancellationToken ct) => (await settings.GetAsync(guild, ct)).Language;

@@ -31,6 +31,7 @@ public static class InfrastructureServiceCollectionExtensions
         "Live:Kick:ClientId",
         "Live:Kick:ClientSecret",
         "OPENCODE_GO_API_KEY",
+        "Predictions:Automation:TheOddsApi:ApiKey",
     ];
 
     /// <summary>Secrets read from plain (unprefixed) environment variables rather than configuration (redacted the same way).</summary>
