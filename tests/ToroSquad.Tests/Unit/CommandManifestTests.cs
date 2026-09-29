@@ -39,7 +39,7 @@ public sealed class CommandManifestTests
         Sub("birthday").Should().BeEquivalentTo("set", "show", "remove");
         Sub("birthday-admin").Should().BeEquivalentTo("set", "show", "configure", "status", "doctor");
         Sub("giveaway").Should().BeEquivalentTo("create", "end", "cancel", "reroll");
-        Sub("ongoru").Should().BeEquivalentTo("yarat", "kilitle", "sonuclandir", "iptal", "cuzdan", "gunluk", "tahminlerim", "liderlik", "turnuva");
+        Sub("ongoru").Should().BeEquivalentTo("yarat", "cuzdan", "gunluk", "tahminlerim", "liderlik", "turnuva");
     }
 
     [Fact]

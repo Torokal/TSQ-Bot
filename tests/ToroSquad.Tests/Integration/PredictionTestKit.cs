@@ -139,23 +139,25 @@ public sealed class PredictionTestKit : IAsyncDisposable
         return (await Service(s => s.GetAsync(id, Ct)))!;
     }
 
-    // ---- enter ----
+    // ---- enter (🎯 Tahmin Yap → form → preview → Onayla) ----
 
-    /// <summary>The entry preview (select → amount form → preview); returns the confirmation token, or the refusal.</summary>
+    public static string Name(ActorContext actor) => "Üye " + actor.UserId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>🎯 Tahmin Yap on the card, then the submitted form; returns the confirmation token, or the refusal.</summary>
     public async Task<(string? Token, PredictionReply Reply)> PreviewEntryAsync(ActorContext actor, PredictionView prediction, int outcomePosition, string amount,
-        ChannelId? channel = null)
+        ChannelId? channel = null, MessageId? card = null)
     {
         var outcome = prediction.Outcomes.Single(o => o.Position == outcomePosition);
-        var (refusal, _) = await Service(s => s.StartEntryAsync(actor, channel ?? Predictions, prediction.Id, outcome.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), Ct));
+        var (refusal, info) = await Service(s => s.StartEntryAsync(actor, channel ?? Predictions, prediction.Id, card ?? prediction.Message, Ct));
         if (refusal is not null)
             return (null, refusal);
-        var reply = await Service(s => s.PreviewEntryAsync(actor, channel ?? Predictions, prediction.Id, outcome.Id, amount, Ct));
-        var token = reply.View?.Buttons?.FirstOrDefault(b => b.CustomId!.StartsWith(PredictionMessages.EntryConfirmPrefix, StringComparison.Ordinal))?.CustomId?[PredictionMessages.EntryConfirmPrefix.Length..];
-        return (token, reply);
+        info!.Outcomes.Select(o => o.Id).Should().Equal(prediction.Outcomes.Select(o => o.Id), "the form offers every outcome");
+        var reply = await Service(s => s.PreviewEntryAsync(actor, channel ?? Predictions, prediction.Id, Id(outcome.Id), amount, null, Ct));
+        return (Token(reply, PredictionMessages.EntryConfirmPrefix), reply);
     }
 
     public Task<PredictionReply> ConfirmEntryAsync(ActorContext actor, string token, ChannelId? channel = null) =>
-        Service(s => s.ConfirmEntryAsync(actor, channel ?? Predictions, token, Ct));
+        Service(s => s.ConfirmEntryAsync(actor, channel ?? Predictions, token, Name(actor), Ct));
 
     public async Task<PredictionReply> EnterAsync(ActorContext actor, PredictionView prediction, int outcomePosition, string amount)
     {
@@ -165,50 +167,88 @@ public sealed class PredictionTestKit : IAsyncDisposable
         return await ConfirmEntryAsync(actor, token);
     }
 
-    // ---- settle / cancel ----
+    public static string? Token(PredictionReply reply, string prefix) =>
+        reply.View?.Buttons?.FirstOrDefault(b => b.CustomId!.StartsWith(prefix, StringComparison.Ordinal))?.CustomId?[prefix.Length..];
 
-    public async Task<string?> SettleTokenAsync(ActorContext actor, PredictionView prediction, int outcomePosition, ChannelId? channel = null)
+    public static string Id(long id) => id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    // ---- manage from the card: lock / settle / cancel ----
+
+    /// <summary>🔒 Kilitle on the card, then the private confirmation.</summary>
+    public async Task<OperationResult> LockAsync(ActorContext actor, PredictionView prediction, MessageId? card = null)
     {
-        var start = await Service(s => s.StartSettleAsync(actor, channel ?? Predictions, "#" + prediction.Id, Ct));
+        var prompt = await Service(s => s.PromptLockAsync(actor, Predictions, prediction.Id, card ?? prediction.Message, Ct));
+        if (Token(prompt, PredictionMessages.LockConfirmPrefix) is not { } id)
+            return prompt.Result;
+        id.Should().Be(Id(prediction.Id), "the confirmation carries only the prediction number");
+        return await Service(s => s.LockAsync(actor, Predictions, prediction.Id, Ct));
+    }
+
+    /// <summary>✅ Sonuçlandır on the card → outcome picker → preview; the confirmation value ("{prediction}.{outcome}") or the refusal.</summary>
+    public async Task<(string? Confirm, PredictionReply Reply)> SettlePreviewAsync(ActorContext actor, PredictionView prediction, int outcomePosition)
+    {
+        var start = await Service(s => s.StartSettleAsync(actor, Predictions, prediction.Id, prediction.Message, Ct));
         if (start.View?.Select is not { } select)
-            return null;
-        var token = select.CustomId[PredictionMessages.SettlePickPrefix.Length..];
-        var outcome = prediction.Outcomes.Single(o => o.Position == outcomePosition).Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        var preview = await Service(s => s.PreviewSettleAsync(actor, channel ?? Predictions, token, outcome, Ct));
-        return preview.Result.Succeeded ? token : null;
+            return (null, start);
+        select.CustomId.Should().Be(PredictionMessages.SettlePickPrefix + Id(prediction.Id));
+        var outcome = prediction.Outcomes.Single(o => o.Position == outcomePosition).Id;
+        var preview = await Service(s => s.PreviewSettleAsync(actor, Predictions, prediction.Id, Id(outcome), Ct));
+        return (Token(preview, PredictionMessages.SettleConfirmPrefix), preview);
     }
 
     public async Task<PredictionReply> SettleAsync(ActorContext actor, PredictionView prediction, int outcomePosition)
     {
-        var token = await SettleTokenAsync(actor, prediction, outcomePosition);
-        token.Should().NotBeNull();
-        return await Service(s => s.ConfirmSettleAsync(actor, Predictions, token!, Ct));
+        var (confirm, reply) = await SettlePreviewAsync(actor, prediction, outcomePosition);
+        if (confirm is null)
+            return reply;
+        var parts = confirm.Split(PredictionMessages.Separator);
+        return await Service(s => s.ConfirmSettleAsync(actor, Predictions, long.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture),
+            long.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture), Ct));
     }
 
-    public async Task<string?> CancelTokenAsync(ActorContext actor, PredictionView prediction, string reason = "Maç ertelendi")
+    public Task<PredictionReply> ConfirmSettleAsync(ActorContext actor, PredictionView prediction, int outcomePosition) =>
+        Service(s => s.ConfirmSettleAsync(actor, Predictions, prediction.Id, prediction.Outcomes.Single(o => o.Position == outcomePosition).Id, Ct));
+
+    /// <summary>↩️ İptal / İade on the card → reason form → preview; the confirmation token or null (with the refusal).</summary>
+    public async Task<(string? Token, PredictionReply Reply)> CancelPreviewAsync(ActorContext actor, PredictionView prediction, string reason = "Maç ertelendi")
     {
-        var preview = await Service(s => s.PreviewCancelAsync(actor, Predictions, "#" + prediction.Id, reason, Ct));
-        return preview.View?.Buttons?.FirstOrDefault(b => b.CustomId!.StartsWith(PredictionMessages.CancelConfirmPrefix, StringComparison.Ordinal))
-            ?.CustomId?[PredictionMessages.CancelConfirmPrefix.Length..];
+        if (await Service(s => s.StartCancelAsync(actor, Predictions, prediction.Id, prediction.Message, Ct)) is { } refusal)
+            return (null, refusal);
+        var preview = await Service(s => s.PreviewCancelAsync(actor, Predictions, prediction.Id, reason, Ct));
+        return (Token(preview, PredictionMessages.CancelConfirmPrefix), preview);
     }
+
+    public async Task<string?> CancelTokenAsync(ActorContext actor, PredictionView prediction, string reason = "Maç ertelendi") =>
+        (await CancelPreviewAsync(actor, prediction, reason)).Token;
 
     public async Task<PredictionReply> CancelAsync(ActorContext actor, PredictionView prediction, string reason = "Maç ertelendi")
     {
-        var token = await CancelTokenAsync(actor, prediction, reason);
-        token.Should().NotBeNull();
-        return await Service(s => s.ConfirmCancelAsync(actor, Predictions, token!, Ct));
+        var (token, reply) = await CancelPreviewAsync(actor, prediction, reason);
+        if (token is null)
+            return reply;
+        return await Service(s => s.ConfirmCancelAsync(actor, Predictions, token, Ct));
     }
 
     // ---- tournament ----
 
-    public async Task<string?> EndTokenAsync(ActorContext actor)
-    {
-        var preview = await Economy(e => e.PreviewTournamentEndAsync(actor, Commands, Ct));
-        return preview.View?.Buttons?.FirstOrDefault(b => b.CustomId!.StartsWith(PredictionMessages.EndConfirmPrefix, StringComparison.Ordinal))
-            ?.CustomId?[PredictionMessages.EndConfirmPrefix.Length..];
-    }
+    public async Task<string?> EndTokenAsync(ActorContext actor) =>
+        Token(await Economy(e => e.PreviewTournamentEndAsync(actor, Commands, Ct)), PredictionMessages.EndConfirmPrefix);
 
     public Task<PredictionReply> ConfirmEndAsync(ActorContext actor, string token) => Economy(e => e.ConfirmTournamentEndAsync(actor, Commands, token, Ct));
+
+    public Task<PredictionReply> ClaimDailyAsync(ActorContext actor) => Economy(e => e.ClaimDailyAsync(actor, Commands, Name(actor), Ct));
+
+    /// <summary>
+    /// Makes <paramref name="users"/> leaderboard-eligible in the active tournament with nothing left unresolved: a prediction
+    /// by <see cref="Creator"/> they each enter with 1 coin, then cancelled (stakes refunded).
+    /// </summary>
+    public async Task ParticipateAsync(params ulong[] users)
+    {
+        var prediction = await CreatePredictionAsync(title: "Katılım öngörüsü " + Guid.NewGuid().ToString("N")[..6]);
+        foreach (var user in users)
+            (await EnterAsync(Member(user), prediction, 1, "1")).Result.Succeeded.Should().BeTrue();
+        (await CancelAsync(Creator(), prediction)).Result.Succeeded.Should().BeTrue();
+    }
 
     // ---- reads ----
 

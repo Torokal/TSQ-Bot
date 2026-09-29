@@ -170,7 +170,7 @@ public sealed partial class PredictionsArchitectureTests
 
         // Bots never create, enter or claim; every handler that could spend or create checks it first.
         var components = Source("Commands", "PredictionComponents.cs");
-        foreach (var handler in new[] { "SubmitFormAsync", "PublishAsync", "PickAsync", "SubmitStakeAsync", "ConfirmEntryAsync" })
+        foreach (var handler in new[] { "SubmitFormAsync", "PublishAsync", "EnterAsync", "EditEntryAsync", "SubmitEntryAsync", "ConfirmEntryAsync" })
             Regex.IsMatch(components, handler + @"\([^)]*\)\s*\{\s*if \(await RefuseBotAsync\(\)\)").Should().BeTrue(handler);
     }
 
@@ -193,62 +193,81 @@ public sealed partial class PredictionsArchitectureTests
     }
 
     [Fact]
-    public async Task Manifest_has_one_ongoru_group_with_member_and_manager_subcommands_and_turkish_descriptions()
+    public async Task Manifest_has_one_ongoru_group_the_final_api_and_no_reset_or_card_management_commands()
     {
         await using var host = await TestHost.CreateAsync();
         var interactions = host.Services.GetRequiredService<InteractionHost>();
         var manifest = await interactions.InitializeAsync(host.Services);
         CommandManifestValidator.Validate(manifest, interactions.AdminCommandNames).Should().BeEmpty();
         manifest.Commands.Where(c => c.OwnerModule == "predictions").Select(c => c.Name).Should().Equal("ongoru");
+        manifest.Find("ongoru-admin").Should().BeNull("tournament end stays /ongoru turnuva bitir");
 
         var ongoru = manifest.Find("ongoru")!;
         ongoru.DefaultMemberPermissions.Should().BeNull("hiding the group would hide the member commands; every subcommand authorizes itself");
-        ongoru.Options.Select(o => o.Name).Should().Equal("yarat", "kilitle", "sonuclandir", "iptal", "cuzdan", "gunluk", "tahminlerim", "liderlik", "turnuva");
+        ongoru.Options.Select(o => o.Name).Should().Equal("yarat", "cuzdan", "gunluk", "tahminlerim", "liderlik", "turnuva");
         ongoru.Options.Single(o => o.Name == "turnuva").Options.Select(o => o.Name).Should().Equal("durum", "bitir");
-        foreach (var name in new[] { "kilitle", "sonuclandir", "iptal" })
-        {
-            var target = ongoru.Options.Single(o => o.Name == name).Options[0];
-            (target.Name, target.Required, target.Autocomplete, target.MaxLength).Should().Be(("ongoru", true, true, (int?)PredictionTarget.MaxInputLength));
-        }
-
-        var reason = ongoru.Options.Single(o => o.Name == "iptal").Options[1];
-        (reason.Name, reason.Required, reason.MinLength, reason.MaxLength).Should().Be(("gerekce", true, (int?)3, (int?)300));
+        ongoru.Options.Where(o => o.Name != "turnuva").Should().OnlyContain(o => o.Options.Count == 0, "no subcommand takes an option (no prediction number to type)");
         ongoru.DescriptionLocalizations["tr"].Should().Be("TSQ Öngörü: sabit oranlı topluluk öngörüleri (sanal TSQ Coin)");
+        ongoru.Options.Single(o => o.Name == "turnuva").Options.Single(o => o.Name == "bitir").DescriptionLocalizations["tr"]
+            .Should().Be("Turnuvayı bitirir, yenisini 1000 TSQ Coin ile başlatır (yöneticiler)");
+
+        // No member-facing way to reset coins, in any command of the bot.
+        var names = manifest.Commands.SelectMany(c => new[] { c.Name }.Concat(c.Options.SelectMany(o => new[] { o.Name }.Concat(o.Options.Select(x => x.Name)))));
+        names.Should().NotContain(n => Regex.IsMatch(n, "reset|sifirla|sıfırla|kilitle|sonuclandir|iptal|cuzdan-sifirla|turnuvasonu"));
     }
 
     [Fact]
     public void The_forms_fit_discords_modal_limits_in_both_languages()
     {
         var catalog = Catalog();
+        var outcomes = Enumerable.Range(1, 25).Select(i => new OutcomeView(100 + i, i, new string('x', 80), 110)).ToList();
         foreach (var language in new[] { "tr", "en" })
         {
             string L(string key) => catalog.Get(language, key);
             var create = PredictionFormUi.CreateModal("draft", new PredictionFormValues("t", "o", "l", "r"), L);
             create.Title.Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxTitleLength);
             create.CustomId.Should().Be(PredictionMessages.FormModalPrefix + "draft");
-            var stake = PredictionFormUi.StakeModal(new EntryFormInfo(12, 34, new string('x', 80), 110, 100_000), "1000", L);
-            stake.CustomId.Should().Be("tsq:pred:stake:12:34");
-            foreach (var key in new[] { "predictions.form.question", "predictions.form.outcomes", "predictions.form.lock", "predictions.form.rules", "predictions.stake.amount", "predictions.stake.title", "predictions.form.title" })
+            PredictionFormUi.StakeModal(new EntryFormInfo(12, 1, "Başlık", outcomes, 100_000), "1000", L).CustomId.Should().Be("tsq:pred:stake:12");
+            PredictionFormUi.StakeModal(new EntryFormInfo(12, 1, "Başlık", outcomes, 100_000, 101, "12.50", "tok"), "1000", L).CustomId.Should().Be("tsq:pred:stake:12.tok");
+            PredictionFormUi.CancelModal(12, L).CustomId.Should().Be("tsq:pred:cancel-reason:12");
+            foreach (var key in new[] { "predictions.form.question", "predictions.form.outcomes", "predictions.form.lock", "predictions.form.rules", "predictions.stake.amount",
+                         "predictions.stake.outcome", "predictions.stake.title", "predictions.form.title", "predictions.cancel.form_title", "predictions.cancel.reason" })
                 L(key).Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxTitleLength, key);
             foreach (var key in new[] { "predictions.form.question_hint", "predictions.form.outcomes_hint", "predictions.form.lock_hint", "predictions.form.rules_hint",
-                         "predictions.form.question_placeholder", "predictions.form.outcomes_placeholder", "predictions.form.lock_placeholder", "predictions.form.rules_placeholder" })
+                         "predictions.form.question_placeholder", "predictions.form.outcomes_placeholder", "predictions.form.lock_placeholder", "predictions.form.rules_placeholder",
+                         "predictions.stake.outcome_placeholder", "predictions.cancel.reason_placeholder", "predictions.cancel.reason_hint" })
                 L(key).Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxHintLength, key);
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, L("predictions.stake.hint"), "1.000.000.000,00").Length.Should().BeLessThanOrEqualTo(PredictionFormUi.MaxHintLength);
         }
     }
 
     [Fact]
-    public void Custom_ids_fit_discords_100_characters_and_carry_no_authority()
+    public void Custom_ids_fit_discords_100_characters_and_carry_only_numbers_or_random_tokens()
     {
         var token = new string('A', 22); // 128 random bits, base64url
         foreach (var prefix in new[]
                  {
                      PredictionMessages.FormModalPrefix, PredictionMessages.PublishPrefix, PredictionMessages.EditPrefix, PredictionMessages.DiscardPrefix,
-                     PredictionMessages.EntryConfirmPrefix, PredictionMessages.SettlePickPrefix, PredictionMessages.SettleConfirmPrefix, PredictionMessages.CancelConfirmPrefix,
-                     PredictionMessages.EndConfirmPrefix, PredictionMessages.DismissPrefix,
+                     PredictionMessages.EntryConfirmPrefix, PredictionMessages.EntryEditPrefix, PredictionMessages.CancelConfirmPrefix, PredictionMessages.EndConfirmPrefix,
+                     PredictionMessages.DismissPrefix,
                  })
             (prefix + token).Length.Should().BeLessThanOrEqualTo(100);
-        (PredictionMessages.StakeModalPrefix + long.MaxValue + ":" + long.MaxValue).Length.Should().BeLessThanOrEqualTo(100);
-        Code().Should().NotMatchRegex(@"CustomId\s*\+\s*.*(Amount|Odds|Balance|Permission)", "amounts, odds and rights never travel in a custom id");
+        foreach (var prefix in new[]
+                 {
+                     PredictionCards.EnterPrefix, PredictionCards.LockPrefix, PredictionCards.SettlePrefix, PredictionCards.CancelPrefix, PredictionMessages.LockConfirmPrefix,
+                     PredictionMessages.SettlePickPrefix, PredictionMessages.CancelReasonModalPrefix,
+                 })
+            (prefix + long.MaxValue).Length.Should().BeLessThanOrEqualTo(100);
+        (PredictionMessages.StakeModalPrefix + long.MaxValue + "." + token).Length.Should().BeLessThanOrEqualTo(100);
+        (PredictionMessages.SettleConfirmPrefix + long.MaxValue + "." + long.MaxValue).Length.Should().BeLessThanOrEqualTo(100);
+
+        // Distinct prefixes (Discord.Net matches "prefix*"): no prefix is the start of another.
+        var all = typeof(PredictionMessages).GetFields().Concat(typeof(PredictionCards).GetFields())
+            .Where(f => f.IsLiteral && f.Name.EndsWith("Prefix", StringComparison.Ordinal)).Select(f => (string)f.GetRawConstantValue()!).ToList();
+        all.Should().OnlyHaveUniqueItems();
+        foreach (var a in all)
+            all.Where(b => b != a).Should().NotContain(b => b.StartsWith(a, StringComparison.Ordinal), a);
+        Code().Should().NotMatchRegex(@"CustomId\s*\+\s*.*(Amount|Odds|Balance|Permission|Creator|Role)", "amounts, odds, roles and rights never travel in a custom id");
     }
 
     [Fact]

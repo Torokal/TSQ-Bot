@@ -12,8 +12,8 @@ namespace ToroSquad.Tests.Unit;
 
 /// <summary>
 /// TSQ Öngörü without Discord or a database: coin and odds arithmetic (integer units, rounding down, overflow), the creation
-/// form (every field, every line, never a silent repair or cut), lock dates in Türkiye time, the daily day boundary, target
-/// parsing, the access rules, and the card layout (2/3/5/25 outcomes within Discord's limits, no pings).
+/// form (every field, every line, never a silent repair or cut), lock dates in Türkiye time, the daily day boundary, the
+/// access rules, the card layout and buttons (2/3/5/25 outcomes within Discord's limits, no pings) and the announcement.
 /// </summary>
 public sealed class PredictionDomainTests
 {
@@ -264,24 +264,6 @@ public sealed class PredictionDomainTests
         TurkeyCalendar.NextDayStart(midnight, Turkey).Should().Be(midnight.AddDays(1));
     }
 
-    // ---- targets ----
-
-    [Theory]
-    [InlineData("#12", 12L, null, null)]
-    [InlineData("12", 12L, null, null)]
-    [InlineData("1234567890123456789", null, 1234567890123456789UL, null)]
-    [InlineData("https://discord.com/channels/111111111111111111/222222222222222222/333333333333333333", null, 333333333333333333UL, 111111111111111111UL)]
-    public void Targets_are_a_number_a_card_link_or_a_message_id(string text, long? id, ulong? message, ulong? guild) =>
-        PredictionTarget.Parse(text).Should().Be(new PredictionTarget(id, message, guild));
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("#0")]
-    [InlineData("abc")]
-    [InlineData("#1234567890123456789")]
-    [InlineData("https://example.com/channels/1/2/3")]
-    public void Anything_else_is_not_a_target(string text) => PredictionTarget.Parse(text).Should().BeNull();
-
     // ---- access ----
 
     private static readonly RoleId Creator = new(PredictionsOptions.DefaultCreatorRoleId);
@@ -333,41 +315,46 @@ public sealed class PredictionDomainTests
     [InlineData(3)]
     [InlineData(5)]
     [InlineData(25)]
-    public void The_open_card_leads_with_the_question_and_offers_one_select_option_per_outcome(int outcomes)
+    public void The_open_card_leads_with_the_question_lists_every_outcome_with_its_odds_and_offers_the_buttons(int outcomes)
     {
         var card = Cards.Render(View(outcomes), "tr");
         DiscordLimits.Validate(card).Should().BeEmpty();
         card.Mentions.Should().Be(MentionPolicy.None);
-        card.Embed!.Description.Should().StartWith("## Galatasaray \\- Fenerbahçe Maç Sonucu Ne Olur?");
-        card.Embed.Title.Should().Be("🟢 Katılım açık");
-        card.Embed.Footer.Should().Be("TSQ Öngörü #12 · Turnuva 1 · Oluşturan: Kaan · Sabit oran");
-        card.Select!.CustomId.Should().Be("tsq:pred:pick:12");
-        card.Select.Disabled.Should().BeFalse();
-        card.Select.Options.Should().HaveCount(outcomes);
-        card.Select.Options[0].Should().Be(new MessageSelectOption("1. Sonuç 1", "101", "Oran 1.07"));
+        card.Embed!.Description.Should().StartWith("## Galatasaray \\- Fenerbahçe Maç Sonucu Ne Olur?\n\n1️⃣ Sonuç 1\nOran: **1.07**\n\n2️⃣ Sonuç 2\nOran: **1.14**");
+        if (outcomes == 25)
+            card.Embed.Description.Should().Contain("🔟 Sonuç 10\nOran: **1.70**").And.Contain("**11.** Sonuç 11\nOran: **1.77**").And.Contain("**25.** Sonuç 25\nOran: **2.75**");
+        card.Embed.Title.Should().Be("🟢 Katılım Açık");
+        card.Embed.Footer.Should().Be("TSQ Öngörü #12 · Turnuva 1 · Oluşturan: Kaan");
+        card.Select.Should().BeNull("no shared select state on the public card");
+        card.Buttons!.Select(b => (b.Label, b.CustomId, b.Style, b.NewRow)).Should().Equal(
+            ("🎯 Tahmin Yap", "tsq:pred:enter:12", MessageButtonStyle.Primary, false), ("🔒 Kilitle", "tsq:pred:lock:12", MessageButtonStyle.Secondary, true),
+            ("✅ Sonuçlandır", "tsq:pred:settle:12", MessageButtonStyle.Success, false), ("↩️ İptal / İade", "tsq:pred:cancel:12", MessageButtonStyle.Danger, false));
         card.Embed.Fields.Should().Contain(f => f.Name == "⏳ Kilitlenme" && f.Value == "Manuel kilitlenecek");
-        card.Embed.Fields.Should().Contain(f => f.Name == "👥 Katılım" && f.Value == "3 katılımcı\n300 TSQ Coin yatırıldı");
+        card.Embed.Fields.Should().Contain(f => f.Name == "👥 Katılım" && f.Value == "3 katılımcı\n🪙 300 TSQ Coin yatırıldı");
         Cards.Fits(View(outcomes)).Should().BeTrue();
+        Cards.Render(View(outcomes), "tr", preview: true).Buttons.Should().BeNull("the private preview has its own buttons");
     }
 
     [Fact]
-    public void The_lock_time_is_a_discord_timestamp_and_later_states_close_the_select()
+    public void The_lock_time_is_a_discord_timestamp_and_later_states_close_the_buttons()
     {
         var at = new DateTimeOffset(2026, 10, 5, 17, 0, 0, TimeSpan.Zero);
         Cards.Render(View(3, lockAt: at), "tr").Embed!.Fields.Should().Contain(f => f.Value == "<t:1791219600:R>\n<t:1791219600:F>");
 
         var locked = Cards.Render(View(3, PredictionStatus.Locked), "tr");
-        locked.Embed!.Title.Should().Be("🔒 Katılım kapandı");
-        locked.Select!.Disabled.Should().BeTrue();
+        locked.Embed!.Title.Should().Be("🔒 Katılım Kapandı");
+        locked.Buttons!.Select(b => (b.Label, b.Disabled, b.NewRow)).Should().Equal(("🔒 Katılım kapandı", true, false), ("✅ Sonuçlandır", false, true), ("↩️ İptal / İade", false, false));
 
         var settled = Cards.Render(View(3, PredictionStatus.Settled), "tr");
-        settled.Select.Should().BeNull();
-        settled.Embed!.Description.Should().Contain("🏆 **1.** Sonuç 1 — **1.07**");
-        settled.Embed.Fields.Single(f => f.Name == "🏆 Sonuç").Value.Should().Be("Kazanan: **Sonuç 1** (1.07)\n1 kazanan · Toplam ödeme **110 TSQ Coin**");
+        settled.Buttons.Should().BeNull();
+        settled.Embed!.Description.Should().Contain("🏆 **Sonuç 1**\nOran: **1.07**").And.Contain("2️⃣ Sonuç 2");
+        settled.Embed.Fields.Single(f => f.Name == "🏆 Sonuç").Value.Should()
+            .Be("🏆 **Sonuç 1** — 1.07\n1 kazanan · Toplam ödeme **110 TSQ Coin**\n👥 3 katılım · 🪙 300 TSQ Coin yatırılmıştı");
 
         var cancelled = Cards.Render(View(3, PredictionStatus.Cancelled), "tr");
-        cancelled.Select.Should().BeNull();
-        cancelled.Embed!.Fields.Single(f => f.Name == "Durum").Value.Should().Be("Gerekçe: Maç ertelendi\nYatırılan **300 TSQ Coin** sahiplerine iade edildi.");
+        cancelled.Buttons.Should().BeNull();
+        cancelled.Embed!.Title.Should().Be("⚠️ Öngörü İptal Edildi");
+        cancelled.Embed.Fields.Single(f => f.Name == "Durum").Value.Should().Be("İptal nedeni: Maç ertelendi\nYatırılan **300 TSQ Coin** oyunculara tam olarak iade edildi.");
     }
 
     [Fact]
@@ -405,8 +392,7 @@ public sealed class PredictionDomainTests
     public void Untrusted_text_cannot_ping_or_add_its_own_heading()
     {
         var card = Cards.Render(View(2, title: "@everyone <@&1> ## Büyük", label: "@here"), "tr");
-        card.Embed!.Description.Should().NotContain("@everyone").And.NotContain("<@&1>").And.NotContain("\n## ");
-        card.Select!.Options[0].Label.Should().NotContain("@here");
+        card.Embed!.Description.Should().NotContain("@everyone").And.NotContain("<@&1>").And.NotContain("\n## ").And.NotContain("@here");
         card.Mentions.PingsAnything.Should().BeFalse();
     }
 
@@ -423,23 +409,25 @@ public sealed class PredictionDomainTests
             ("Sabit oran", "1.10"), ("Yatırılacak", "100 TSQ Coin"), ("Kazanırsan toplam dönüş", "110 TSQ Coin"), ("Net kazanç", "10 TSQ Coin"),
             ("İşlem sonrası kullanılabilir", "900 TSQ Coin"),
         });
-        preview.Buttons!.Select(b => b.CustomId).Should().Equal("tsq:pred:entry-ok:tok", "tsq:pred:dismiss:tok");
+        preview.Buttons!.Select(b => (b.Label, b.CustomId)).Should().Equal(("✅ Onayla", "tsq:pred:entry-ok:tok"), ("✏️ Düzenle", "tsq:pred:entry-edit:tok"),
+            ("Vazgeç", "tsq:pred:dismiss:tok"));
         preview.Mentions.Should().Be(MentionPolicy.None);
     }
 
     [Fact]
-    public void The_closing_announcement_is_rendered_from_the_frozen_podium_without_pings()
+    public void The_closing_announcement_is_rendered_from_the_frozen_podiums_with_names_and_no_mention()
     {
         var messages = new PredictionMessages(Localizer(), Options.Create(new PredictionsOptions()));
-        var closing = new TournamentClosing(1, 2, 5, 7,
-        [
-            new StandingRow(1, new UserId(11), 250_000, 4, 5), new StandingRow(2, new UserId(12), 120_050, 2, 5),
-        ]);
-        var message = messages.TournamentAnnouncement(closing, "tr");
+        var coins = new[] { new StandingRow(1, new UserId(11), 284_000, 4, 5, "Toro"), new StandingRow(2, new UserId(12), 120_050, 2, 5, "@everyone") };
+        var correct = new[] { new StandingRow(1, new UserId(11), 284_000, 12, 15, "Toro"), new StandingRow(2, new UserId(13), 100_000, 0, 0, null) };
+        var message = messages.TournamentAnnouncement(new TournamentClosing(3, 4, 5, 7, coins, correct), "tr");
         message.Mentions.Should().Be(MentionPolicy.None);
-        message.Embed!.Title.Should().Be("🏁 TSQ Öngörü · Turnuva 1 sona erdi");
-        message.Embed.Fields[0].Value.Should().Be("🥇 <@11> — **2500 TSQ Coin** · 4 doğru\n🥈 <@12> — **1200,50 TSQ Coin** · 2 doğru");
-        message.Embed.Fields[1].Value.Should().Be("Yeni turnuva başladı. Bakiyeler 1000 TSQ Coin olarak yenilendi.");
+        message.Embed!.Title.Should().Be("🏁 TSQ Öngörü · Turnuva 3 Sona Erdi");
+        message.Embed.Fields.Select(f => f.Name).Should().Equal("💰 En Çok TSQ Coin", "🎯 En Çok Doğru Tahmin", "🔄 Yeni Turnuva Başladı");
+        message.Embed.Fields[0].Value.Should().Be("🥇 **Toro** — **2840 TSQ Coin**\n🥈 **@​everyone** — **1200,50 TSQ Coin**");
+        message.Embed.Fields[1].Value.Should().Be("🥇 **Toro** — **12** doğru / 15 sonuçlanan (%80)\n🥈 — — 0 doğru · Henüz sonuçlanmış tahmini yok");
+        message.Embed.Fields[2].Value.Should().Be("Herkes yeni turnuvaya 1000 TSQ Coin ile başlar.");
+        string.Join("", message.Embed.Fields.Select(f => f.Value)).Should().NotContain("<@");
         DiscordLimits.Validate(message).Should().BeEmpty();
     }
 
