@@ -222,7 +222,7 @@ public sealed class OfflineInteractionService(InteractionHost host, IServiceProv
     {
         var manifest = await host.InitializeAsync(services);
         logger.LogInformation("Discord transport is FAKE: no Discord connection. {Count} slash commands validated offline: {Names}",
-            manifest.Commands.Count, string.Join(", ", manifest.Commands.Select(c => "/" + c.Name)));
+            manifest.Commands.Count, string.Join(", ", manifest.Commands.Select(c => c.Display)));
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

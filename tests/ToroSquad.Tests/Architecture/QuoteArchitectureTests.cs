@@ -103,8 +103,9 @@ public sealed partial class QuoteArchitectureTests
                 .And.NotContain("GatewayIntents.MessageContent", Path.GetFileName(file));
         }
 
-        // No context-menu command: /quote is the only entry point.
-        File.ReadAllText(Path.Combine(Root(), "Commands", "QuoteCommands.cs")).Should().NotContain("MessageCommand");
+        // Two entry points and no more: /quote and the MESSAGE command Apps → Quote (no user command, no other context command).
+        var commands = File.ReadAllText(Path.Combine(Root(), "Commands", "QuoteCommands.cs"));
+        Regex.Matches(commands, @"\[(SlashCommand|MessageCommand|UserCommand)\(").Select(m => m.Groups[1].Value).Should().Equal("SlashCommand", "MessageCommand");
     }
 
     [Fact]

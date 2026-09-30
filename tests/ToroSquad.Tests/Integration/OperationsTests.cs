@@ -331,8 +331,12 @@ public sealed partial class OperationsTests
                 if (property.Name == "description" && property.Value.ValueKind == JsonValueKind.String)
                     yield return property.Value.GetString()!;
                 else if (property.Name == "description_localizations")
-                    foreach (var localized in property.Value.EnumerateObject())
-                        yield return localized.Value.GetString()!;
+                {
+                    // null for a message command (Discord: no description at all).
+                    if (property.Value.ValueKind == JsonValueKind.Object)
+                        foreach (var localized in property.Value.EnumerateObject())
+                            yield return localized.Value.GetString()!;
+                }
                 else
                     foreach (var nested in DescriptionTexts(property.Value))
                         yield return nested;

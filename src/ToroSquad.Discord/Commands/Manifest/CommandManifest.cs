@@ -23,6 +23,14 @@ public enum OptionType
 }
 #pragma warning restore CA1720
 
+/// <summary>Discord application command types (wire values). TSQ Bot registers CHAT_INPUT (slash) and MESSAGE (Apps menu) commands.</summary>
+public enum CommandKind
+{
+    ChatInput = 1,
+    User = 2,
+    Message = 3,
+}
+
 public sealed record ManifestChoice(string Name, string Value, IReadOnlyDictionary<string, string> NameLocalizations);
 
 public sealed record ManifestOption(
@@ -41,8 +49,9 @@ public sealed record ManifestOption(
     IReadOnlyList<int> ChannelTypes);
 
 /// <summary>
-/// One top-level CHAT_INPUT command as it will be registered with Discord. <see cref="OwnerModule"/> is metadata
-/// for docs/tests only and is not part of the Discord payload.
+/// One top-level application command as it will be registered with Discord: a CHAT_INPUT (slash) command, or a MESSAGE
+/// command (message → Apps; no description, no options). <see cref="OwnerModule"/> is metadata for docs/tests only and is
+/// not part of the Discord payload.
 /// </summary>
 public sealed record ManifestCommand(
     string Name,
@@ -53,7 +62,12 @@ public sealed record ManifestCommand(
     IReadOnlyList<int> Contexts,
     IReadOnlyList<int> IntegrationTypes,
     bool Nsfw,
-    string OwnerModule);
+    string OwnerModule,
+    CommandKind Type = CommandKind.ChatInput)
+{
+    /// <summary>How people find it: "/quote" for a slash command, "Apps → Quote" for a message command.</summary>
+    public string Display => Type == CommandKind.ChatInput ? "/" + Name : $"Apps → {Name} ({Type.ToString().ToLowerInvariant()} command)";
+}
 
 /// <summary>
 /// The complete set of slash commands this build exposes, generated offline from the interaction modules.
@@ -85,7 +99,7 @@ public sealed record CommandManifest(IReadOnlyList<ManifestCommand> Commands, IR
         using (var w = new Utf8JsonWriter(stream, WriterOptions))
         {
             w.WriteStartObject();
-            w.WriteNumber("type", 1);
+            w.WriteNumber("type", (int)command.Type);
             w.WriteString("name", command.Name);
             w.WriteString("description", command.Description);
             WriteLocalizations(w, "description_localizations", command.DescriptionLocalizations);

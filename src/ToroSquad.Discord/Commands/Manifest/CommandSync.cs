@@ -57,7 +57,7 @@ public sealed class CommandSyncService(IManagedCommandStore managedStore, ILogge
                         var id = await registrar.UpsertAsync(request.Scope, command, cancellationToken);
                         await managedStore.UpsertAsync(request.ExpectedApplicationId, request.Scope.Key, item.Name, id,
                             CommandManifest.Sha256(CommandManifest.CanonicalJson(command, true)), cancellationToken);
-                        performed.Add($"{item.Action} /{item.Name}");
+                        performed.Add($"{item.Action} {item.Display}");
                         break;
                     case SyncAction.Unchanged:
                         // Adopt existing identical commands as managed (same name, same payload, our application).
@@ -67,13 +67,13 @@ public sealed class CommandSyncService(IManagedCommandStore managedStore, ILogge
                     case SyncAction.DeleteManaged:
                         await registrar.DeleteAsync(request.Scope, item.RemoteId!.Value, cancellationToken);
                         await managedStore.RemoveAsync(request.ExpectedApplicationId, request.Scope.Key, item.Name, cancellationToken);
-                        performed.Add($"Delete /{item.Name}");
+                        performed.Add($"Delete {item.Display}");
                         break;
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                failures.Add($"{item.Action} /{item.Name}: {ex.GetType().Name}: {ex.Message}");
+                failures.Add($"{item.Action} {item.Display}: {ex.GetType().Name}: {ex.Message}");
                 logger.LogError(ex, "Command sync step failed for /{Name}", item.Name);
             }
         }
@@ -82,7 +82,7 @@ public sealed class CommandSyncService(IManagedCommandStore managedStore, ILogge
     }
 }
 
-/// <summary>Discord REST implementation. Only CHAT_INPUT commands are compared; other types are always kept.</summary>
+/// <summary>Discord REST implementation. CHAT_INPUT and MESSAGE commands are compared; USER commands are never touched.</summary>
 public sealed class DiscordCommandRegistrar(DiscordRestClient client) : ICommandRegistrar
 {
     public async Task<ulong> GetApplicationIdAsync(CancellationToken cancellationToken) =>
@@ -98,14 +98,14 @@ public sealed class DiscordCommandRegistrar(DiscordRestClient client) : ICommand
         };
         var includeGlobal = scope is SyncScope.Global;
         return commands
-            .Where(c => c.Type == ApplicationCommandType.Slash)
-            .Select(c => new RemoteCommand(c.Id, c.Name, CommandManifest.CanonicalJson(FromRemote(c), includeGlobal)))
+            .Where(c => c.Type is ApplicationCommandType.Slash or ApplicationCommandType.Message)
+            .Select(c => new RemoteCommand(c.Id, c.Name, CommandManifest.CanonicalJson(FromRemote(c), includeGlobal), (CommandKind)(int)c.Type))
             .ToList();
     }
 
     public async Task<ulong> UpsertAsync(SyncScope scope, ManifestCommand command, CancellationToken cancellationToken)
     {
-        var properties = ToProperties(command);
+        var properties = ToApplicationProperties(command);
         var options = new RequestOptions { CancelToken = cancellationToken };
         return scope switch
         {
@@ -126,6 +126,26 @@ public sealed class DiscordCommandRegistrar(DiscordRestClient client) : ICommand
         if (target is not null)
             await target.DeleteAsync(options);
     }
+
+    /// <summary>The registration payload for either supported command type.</summary>
+    public static ApplicationCommandProperties ToApplicationProperties(ManifestCommand command) => command.Type switch
+    {
+        CommandKind.ChatInput => ToProperties(command),
+        CommandKind.Message => ToMessageProperties(command),
+        _ => throw new NotSupportedException($"Command type {command.Type} is not registered by this tool."),
+    };
+
+    /// <summary>MESSAGE command: name, permissions, contexts only — Discord refuses a description or options.</summary>
+    public static MessageCommandProperties ToMessageProperties(ManifestCommand command) =>
+        new MessageCommandBuilder()
+            .WithName(command.Name)
+            .WithNsfw(command.Nsfw)
+            .WithDefaultMemberPermissions(command.DefaultMemberPermissions is null
+                ? null
+                : (GuildPermission)ulong.Parse(command.DefaultMemberPermissions, CultureInfo.InvariantCulture))
+            .WithContextTypes(command.Contexts.Select(c => (InteractionContextType)c).ToArray())
+            .WithIntegrationTypes(command.IntegrationTypes.Select(i => (ApplicationIntegrationType)i).ToArray())
+            .Build();
 
     public static SlashCommandProperties ToProperties(ManifestCommand command)
     {
@@ -193,7 +213,8 @@ public sealed class DiscordCommandRegistrar(DiscordRestClient client) : ICommand
             c.ContextTypes?.Select(t => (int)t).Order().ToArray() ?? [],
             c.IntegrationTypes?.Select(t => (int)t).Order().ToArray() ?? [],
             c.IsNsfw,
-            "remote");
+            "remote",
+            (CommandKind)(int)c.Type);
     }
 
     private static ManifestOption FromRemote(IApplicationCommandOption o) => new(

@@ -1,6 +1,6 @@
 # TSQ Quote — Alıntı Kartı
 
-`/quote`, bu sunucudaki bir mesajı siyah-beyaz bir alıntı görseline (`quote.png`) çevirip komutun çalıştırıldığı kanala
+TSQ Quote, bu sunucudaki bir mesajı siyah-beyaz bir alıntı görseline (`quote.png`) çevirip komutun çalıştırıldığı kanala
 gönderir: solda yazarın profil fotoğrafı siyah-beyaz ve siyaha doğru kararan bir geçişle, sağda mesaj büyük beyaz
 harflerle, altında "— Görünen Ad" ve gri "@kullanıcıadı". Logo, çerçeve, renk yok.
 
@@ -9,10 +9,19 @@ kapalıdır: `/modules enable quote`.
 
 ## Kullanım
 
+**En hızlı:** mesaja sağ tık → **Uygulamalar (Apps) → Quote**. Mobilde: mesaja uzun bas → Uygulamalar → Quote. Kart,
+mesajın bulunduğu kanala gider.
+
+**Alternatif (başka kanaldaki mesaj için de):**
+
 1. Discord → Ayarlar → Gelişmiş → **Geliştirici Modu**'nu aç.
 2. Mesaja sağ tık → **Mesaj Kimliğini Kopyala**.
 3. Aynı kanalda: `/quote message:<mesaj-id>`
    Başka kanaldaki mesaj: `/quote message:<mesaj-id> channel:<kanal>`
+
+İkisi aynı kartı, aynı metin kurallarını ve aynı çizimi kullanır; `/quote` kaldırılmadı.
+
+### /quote
 
 | Girdi | Mesajın arandığı kanal |
 |---|---|
@@ -25,9 +34,26 @@ kanallar **asla taranmaz**: tek kanal, tek mesaj, tek REST okuması (`GET /chann
 17–20 haneli ASCII snowflake. Kabul edilen bağlantı hostları: `discord.com`, `ptb.`/`canary.`/`www.` varyantları ve eski
 `discordapp.com`; yalnızca https, varsayılan port, kullanıcı bilgisi yok, yol tam olarak `channels/<sunucu>/<kanal>/<mesaj>`.
 
+### Apps → Quote (mesaj komutu)
+
+Discord'un MESSAGE (type 3) uygulama komutu. Tıklanan mesaj etkileşimin kendisiyle (`data.resolved.messages`) gelir;
+bot mesajı Discord'dan **okumaz** (REST mesaj okuması sıfır; testle kilitli). Yalnızca yazarın sunucu takma adı ve sunucu
+avatarı için, üye önbellekte değilse tek bir üye okuması (`GET /guilds/{sunucu}/members/{kullanıcı}`) yapılabilir.
+`CHAT_INPUT quote` ile `MESSAGE Quote` aynı uygulamada birlikte bulunur: Discord komut adlarını uygulama, **tip** ve kapsam
+başına benzersiz tutar (discord-api-docs, application-commands).
+
 ## Güvenlik (sunucu tarafında, istemciye güvenmeden)
 
-Sırasıyla; her adım geçmeden hiçbir mesaj okunmaz:
+Her iki yol da `quote` modül kapısının arkasındadır (kapalıyken mevcut "modül kapalı" cevabı), yalnızca sunucuda ve yalnızca
+izin verilen ana sunucuda çalışır (etkileşim, komuta ulaşmadan reddedilir).
+
+**Apps → Quote:** mesaj, komutun kullanıldığı kanaldadır ve kart da oraya gider (kaynak = hedef). Denetimler:
+etkileşimdeki mesaj bu kanala ait olmalı; kanal bu sunucunun bir mesaj kanalı olmalı; botun burada **View Channel +
+Attach Files** izni olmalı (yoksa hiçbir şey çizilmez); üyenin burada **View Channel + Read Message History** izni sunucu
+tarafında yeniden doğrulanır (tıklamış olması yetmez). Kanallar arası kurallar burada korunacak bir şey bulmaz: özel
+thread'de ve yaş sınırlı kanalda da çalışır, çünkü kart mesajın bulunduğu yerde, aynı kişilere görünür.
+
+**/quote:** sırasıyla; her adım geçmeden hiçbir mesaj okunmaz:
 
 1. Bağlantı başka bir sunucuya veya DM'e aitse → "Yalnızca bu sunucudaki mesajlar alıntılanabilir."
 2. Komutun çalıştırıldığı kanalda botun **View Channel + Attach Files** izni olmalı (thread'de üst kanal;
@@ -71,7 +97,12 @@ değildir; erişim, uygulamanın mesaj içeriğini **API'lerin genelinde** (REST
 Identify yine yalnızca `Guilds`; `GuildMessages`/`MessageContent` bitleri, `MessageReceived` işleyicisi, mesaj önbelleği
 veya dinleyici eklenmedi. Bot hiçbir mesaj olayı almaz; yalnızca kullanıcının verdiği kimlikteki tek mesajı REST ile okur.
 
-Metin boş gelirse cevap, Discord'un döndürdüğü mesajın biçimine göre ayrılır (`QuoteMessageShape`):
+**Apps → Quote bu erişime bağlı değildir:** Discord, bir mesaj bağlam menüsü komutunun kullanıldığı mesajın içeriğini
+Message Content olmadan da gönderir (aynı doküman, istisnalar listesi). Portal ayarı `/quote message:<id>` yolu için açık
+kalır.
+
+Metin boş gelirse cevap, Discord'un döndürdüğü mesajın biçimine göre ayrılır (`QuoteMessageShape`). Apps → Quote'ta
+boş metin her zaman "metin yok"tur, hiçbir zaman "iletilmedi" değildir:
 
 | Mesaj | Cevap |
 |---|---|
@@ -122,7 +153,7 @@ yolundan geçer.
 
 ## Gizlilik
 
-İçerik yalnızca istek sırasında işlenir: **oku (tek REST okuması) → düz metne çevir → çiz → at**. Mesaj metni, görünen
+İçerik yalnızca istek sırasında işlenir: **al (Apps → Quote: etkileşimden; /quote: tek REST okuması) → düz metne çevir → çiz → at**. Mesaj metni, görünen
 ad, kullanıcı adı, avatar URL'si ve avatar baytları yalnızca o isteğin belleğinde yaşar; veritabanına, önbelleğe, dosyaya
 veya loga yazılmaz; alıntı geçmişi yoktur. Loglar yalnızca sunucu/kanal/mesaj kimliklerini ve sonucu (çözüldü, ret
 nedeni, metin yok, içerik iletilmedi, takip kodu + istisna türü) içerir — istisna mesajı bile yazılmaz, çünkü metni
@@ -146,8 +177,11 @@ Ek kontroller: `channel:` ile başka kanaldaki mesaj; erişemediğin bir kanalı
 erişim iznin yok."; Attach Files'ı olmayan bir kanalda → "TSQ Bot'un bu kanalda dosya gönderme izni yok."; yalnız görsel
 eki olan bir mesaj → "Bu mesajda alıntılanabilecek bir metin yok.". Geri alma: `/modules disable quote`.
 
+Apps → Quote için: normal bir üyenin mesajına sağ tık (mobilde uzun bas) → Uygulamalar → Quote → aynı kart gelir; logda
+`Quote resolved … via=apps` satırı bulunur (metin, isim, avatar URL'si yok).
+
 ## Kapsam dışı (V1)
 
 Alıntı geçmişi/veritabanı, liderlik tablosu, tepkiler, rastgele/zamanlanmış alıntı, web paneli, tema/şablon sistemi,
-bağlam menüsü (Apps → Quote) komutu — bilerek yok, ana kullanım `/quote message:<id>` —, animasyonlu GIF, sunucu
+kullanıcı (sağ tık → kullanıcı) komutu, tepkiyle alıntı, yanıt düğmesi, animasyonlu GIF, sunucu
 genelinde mesaj arama, eklerin karta eklenmesi.

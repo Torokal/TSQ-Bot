@@ -12,14 +12,15 @@ namespace ToroSquad.Modules.Quote.Commands;
 
 /// <summary>
 /// <see cref="IQuoteDiscord"/> over Discord.Net. Channels, roles and permission overwrites come from the gateway cache
-/// (Guilds intent — no privileged intents); a member outside the cache and the message itself are single REST reads.
+/// (Guilds intent — no privileged intents); a member outside the cache and, for /quote, the message itself are single
+/// REST reads. The Apps → Quote path never reads a message: <see cref="DescribeSelectedAsync"/> maps the one the
+/// interaction delivered.
 /// Discord.Net's own permission resolution is used (owner, Administrator, @everyone, roles, overwrites). Created per
 /// interaction with the invoking member, whose roles come from the interaction payload.
 /// </summary>
 public sealed partial class DiscordQuoteSource(DiscordSocketClient client, IGuildUser invoker) : IQuoteDiscord
 {
     private const int RequestTimeoutMs = 10_000;
-    private const int AvatarSize = 1024;
 
     public QuoteChannel? GetChannel(GuildId guild, ChannelId channel)
     {
@@ -76,24 +77,29 @@ public sealed partial class DiscordQuoteSource(DiscordSocketClient client, IGuil
         if (found is null || found.Channel.Id != channel.Value)
             return QuoteFetch.NotFound;
 
-        var author = await AuthorAsync(g, found, cancellationToken);
-        var shape = await ShapeAsync(found);
-        return new QuoteFetch(QuoteFetchStatus.Found, new QuoteSourceMessage(
-            new MessageId(found.Id), channel, found.Content ?? "", author, Mentions(g, found), shape.Classify(), shape.ApplicationHasContentAccess));
+        var botId = client.CurrentUser?.Id;
+        var access = QuoteMessageMapper.NeedsContentAccessFlag(found, botId) ? await ContentAccessAsync() : null;
+        return new QuoteFetch(QuoteFetchStatus.Found, QuoteMessageMapper.ToSource(found, await AuthorAsync(g, found, cancellationToken),
+            Mentions(g, found), QuoteMessageMapper.Shape(found, botId, deliveredByInteraction: false, access)));
     }
 
     /// <summary>
-    /// Nickname and server avatar when the author is (still) a member; the global identity otherwise (left the server,
-    /// webhook). Avatar order is Discord.Net's display avatar: server avatar → account avatar → Discord's default avatar.
-    /// PNG: an animated avatar becomes its first frame.
+    /// The message a MESSAGE command (Apps → Quote) was used on, exactly as the interaction payload delivered it. Nothing
+    /// about the message is read from Discord; only the author's server nickname/avatar may need a member lookup.
     /// </summary>
+    public async Task<QuoteSourceMessage> DescribeSelectedAsync(GuildId guild, IMessage message, CancellationToken cancellationToken)
+    {
+        var g = client.GetGuild(guild.Value);
+        var author = g is null ? QuoteMessageMapper.Author(message.Author, null) : await AuthorAsync(g, message, cancellationToken);
+        var mentions = g is null ? QuoteMentionNames.Empty : Mentions(g, message);
+        return QuoteMessageMapper.ToSource(message, author, mentions,
+            QuoteMessageMapper.Shape(message, client.CurrentUser?.Id, deliveredByInteraction: true, applicationHasContentAccess: null));
+    }
+
     private async Task<QuoteAuthor> AuthorAsync(SocketGuild guild, IMessage message, CancellationToken cancellationToken)
     {
         var user = message.Author;
-        var member = user.IsWebhook ? null : await MemberAsync(guild, user.Id, cancellationToken);
-        return member is not null
-            ? new QuoteAuthor(new UserId(user.Id), member.DisplayName, user.Username, member.GetDisplayAvatarUrl(ImageFormat.Png, AvatarSize))
-            : new QuoteAuthor(new UserId(user.Id), user.GlobalName ?? user.Username, user.Username, user.GetDisplayAvatarUrl(ImageFormat.Png, AvatarSize));
+        return QuoteMessageMapper.Author(user, user.IsWebhook ? null : await MemberAsync(guild, user.Id, cancellationToken));
     }
 
     /// <summary>
@@ -129,25 +135,7 @@ public sealed partial class DiscordQuoteSource(DiscordSocketClient client, IGuil
         return new QuoteMentionNames(users, roles, channels);
     }
 
-    /// <summary>
-    /// The facts <see cref="QuoteMessageShape"/> needs to tell a text-less message from withheld text. The application's
-    /// Message Content flag is read (one cached application-info request) only when the text came back empty.
-    /// </summary>
-    private async Task<QuoteMessageShape> ShapeAsync(IMessage message)
-    {
-        var hasText = !string.IsNullOrEmpty(message.Content);
-        var user = message as IUserMessage;
-        var exempt = client.CurrentUser is { } me && (message.Author.Id == me.Id || message.MentionedUserIds.Contains(me.Id));
-        return new QuoteMessageShape(
-            hasText,
-            IsRegularMessage: message.Type is MessageType.Default or MessageType.Reply,
-            HasGatedContent: message.Attachments.Count > 0 || message.Embeds.Count > 0 || message.Components.Count > 0 || user?.Poll is not null,
-            HasStickers: message.Stickers.Count > 0,
-            IsForward: message.Reference?.ReferenceType.GetValueOrDefault() == MessageReferenceType.Forward,
-            ContentExempt: exempt,
-            ApplicationHasContentAccess: hasText || exempt ? null : await ContentAccessAsync());
-    }
-
+    /// <summary>The application's Message Content flag (one cached application-info request), read only for an empty /quote text.</summary>
     private async Task<bool?> ContentAccessAsync()
     {
         try

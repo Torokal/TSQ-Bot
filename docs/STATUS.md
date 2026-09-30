@@ -129,6 +129,12 @@ invite link and no global command registration. The source code is public under 
   Railway log held only `Quote resolved guild=… channel=… message=…` — no text, names or avatar url.
 - **Owner-reported working (2026-09-30)**: the other paths (`channel:`, message links, refusals). Not observed in the
   logs here: Railway keeps logs only since the latest deployment and they hold no Quote lines.
+- **Apps → Quote IMPLEMENTED / TESTED_OFFLINE** (`feat/quote-context-menu`): MESSAGE command `Quote` (type 3) next to
+  `/quote`; the message comes from the interaction payload (REST message reads: zero, test-pinned) and runs the same text
+  rules, card builder and renderer; checks: payload message in this channel, bot View Channel + Attach Files, member View
+  Channel + Read Message History; works in private threads and age-restricted channels (the card stays where the message
+  is); no Message Content dependency. The manifest/sync pipeline now also handles MESSAGE commands (dry-run offline:
+  Create `Quote`, everything else Unchanged, no delete). **Not synced, NOT_VERIFIED_LIVE.**
 
 ## TSQ Doğum Günü (new, 2026-09-28, branch `feat/birthday`)
 
