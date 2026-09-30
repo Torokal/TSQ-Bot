@@ -102,11 +102,83 @@ public sealed class CurrencyCardRenderer(ILocalizer localizer)
         return new MessageEmbed(L(lang, "currency.daily.title"), null, null, fields, null, null, stale ? StaleColor : NormalColor);
     }
 
-    /// <summary>tr-TR lira: "48,820 ₺", "6.439,47 ₺". The provider's own precision is kept (2 to 4 decimals).</summary>
-    public static string Price(decimal value)
+    /// <summary>
+    /// The /çevir card: the amount given, "≈" the result, the rate used with its side (Alış / Satış), the provider's time
+    /// and source — with the same fallback, TCMB and stale labels as the other cards. Rounded for display only.
+    /// </summary>
+    public CurrencyReply RenderConversion(string lang, ConversionResult result)
     {
-        var decimals = Math.Clamp((int)value.Scale, 2, 4);
-        return value.ToString("N" + decimals.ToString(CultureInfo.InvariantCulture), ProviderFormats.Turkish) + " " + Lira;
+        var request = result.Request;
+        var quote = result.Quote;
+        var notes = new List<string>();
+        if (quote.IsStale)
+            notes.Add(L(lang, "currency.convert.stale"));
+        else if (quote.IsFallback)
+            notes.Add(L(lang, "currency.note.fallback"));
+        if (quote.Source == MarketSource.Tcmb)
+            notes.Add(L(lang, "currency.note.tcmb_indicative"));
+
+        var description = "**" + Amount(request.Amount, request.From) + "**\n≈ **" + Amount(result.Result, request.To) + "**";
+        if (notes.Count > 0)
+            description += "\n\n" + string.Join("\n", notes);
+
+        var fields = new List<EmbedField>
+        {
+            new(L(lang, request.Instrument == MarketInstrument.GramGold ? "currency.convert.gram_price" : "currency.convert.rate"), Price(result.Rate), true),
+            new(L(lang, "currency.convert.side"), L(lang, request.Side == RateSide.Buy ? "currency.card.buy" : "currency.card.sell"), true),
+            Updated(lang, quote),
+        };
+        if (quote.IsStale)
+            fields.Add(new EmbedField(L(lang, "currency.card.last_received"), DiscordText.Timestamp(quote.RetrievedAt, 'R')));
+
+        return new CurrencyReply(new MessageEmbed(
+            L(lang, "currency.convert.title"),
+            description,
+            null,
+            fields,
+            L(lang, "currency.card.source", L(lang, SourceKey(quote.Source))),
+            null,
+            quote.IsStale ? StaleColor : NormalColor), null);
+    }
+
+    /// <summary>The private text for a /çevir refusal (nothing was fetched).</summary>
+    public string RenderRefusal(string lang, ConversionRefusal refusal) => refusal switch
+    {
+        ConversionRefusal.AmountNotPositive => L(lang, "currency.convert.amount_not_positive"),
+        ConversionRefusal.AmountTooLarge => L(lang, "currency.convert.amount_too_large", Number(CurrencyConversionService.MaxAmount, 0)),
+        ConversionRefusal.SameAsset => L(lang, "currency.convert.same_asset") + "\n" + L(lang, "currency.convert.supported"),
+        _ => L(lang, "currency.convert.unsupported") + "\n" + L(lang, "currency.convert.supported"),
+    };
+
+    /// <summary>tr-TR lira: "48,820 ₺", "6.439,47 ₺". The provider's own precision is kept (2 to 4 decimals).</summary>
+    public static string Price(decimal value) => Number(value, Math.Clamp((int)value.Scale, 2, 4)) + " " + Lira;
+
+    /// <summary>
+    /// A converted or given amount: lira "122.175,00 ₺", USD/EUR "2.500,00 USD" (2 decimals), gram gold up to 4 decimals
+    /// and at least 2 ("7,5488 g", "5,00 g") so small amounts stay meaningful.
+    /// </summary>
+    public static string Amount(decimal value, ConvertibleAsset asset) => asset switch
+    {
+        ConvertibleAsset.Try => Number(value, 2) + " " + Lira,
+        ConvertibleAsset.Usd => Number(value, 2) + " USD",
+        ConvertibleAsset.Eur => Number(value, 2) + " EUR",
+        _ => Grams(value),
+    };
+
+    /// <summary>
+    /// The one tr-TR number formatter of the module ("1.234,56"): rounded to <paramref name="decimals"/> with banker's
+    /// rounding (MidpointRounding.ToEven) — display only, calculations keep full precision.
+    /// </summary>
+    public static string Number(decimal value, int decimals) =>
+        Math.Round(value, decimals, MidpointRounding.ToEven).ToString("N" + decimals.ToString(CultureInfo.InvariantCulture), ProviderFormats.Turkish);
+
+    private static string Grams(decimal value)
+    {
+        var rounded = Math.Round(value, 4, MidpointRounding.ToEven);
+        var decimals = 2;
+        while (decimals < 4 && Math.Round(rounded, decimals, MidpointRounding.ToEven) != rounded)
+            decimals++;
+        return Number(rounded, decimals) + " g";
     }
 
     public static string Emoji(MarketInstrument instrument) => instrument switch

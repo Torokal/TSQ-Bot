@@ -129,14 +129,24 @@ public sealed partial class CurrencyArchitectureTests
         {
             var code = File.ReadAllText(file);
             code.Should().NotContain("new HttpClient(", Path.GetFileName(file));
+            if (Path.GetFileName(file) == "CurrencyCommands.cs")
+            {
+                // Discord's number option is a double: allowed only at that boundary, converted to decimal right there.
+                code.Should().Contain("private static decimal ToAmount(double value)");
+                code = code.Replace("double miktar", "", StringComparison.Ordinal).Replace("ToAmount(double value)", "", StringComparison.Ordinal)
+                    .Replace("double.IsFinite", "", StringComparison.Ordinal).Replace("(double)CurrencyConversionService", "", StringComparison.Ordinal);
+            }
+
             code.Should().NotMatchRegex(@"\b(float|double)\b", Path.GetFileName(file) + ": money is decimal");
         }
 
         // The only request targets: three configured base URLs + fixed relative paths. Nothing a user types reaches a URL.
         new[] { MarketDataset.AltinkaynakCurrency, MarketDataset.AltinkaynakGold, MarketDataset.Tcmb, MarketDataset.Truncgil }
             .Select(d => MarketDataClient.Endpoint(d).Path).Should().Equal("Currency", "Gold", "today.xml", "today.json");
-        typeof(CurrencyCommands).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-            .Should().OnlyContain(m => m.GetParameters().Length == 0, "the commands take no arguments");
+        // Only /çevir takes options — a number and two fixed choices; no free text a URL could be built from.
+        var parameters = typeof(CurrencyCommands).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            .SelectMany(m => m.GetParameters()).Select(p => (p.Name, p.ParameterType)).ToList();
+        parameters.Should().Equal(("miktar", typeof(double)), ("kaynak", typeof(string)), ("hedef", typeof(string)));
     }
 
     [Fact]
@@ -255,7 +265,7 @@ public sealed partial class CurrencyArchitectureTests
         }
 
         manifest.Find("altin").Should().BeNull("the name keeps its Turkish ı; it is not silently transliterated");
-        manifest.Commands.Where(c => c.OwnerModule == "currency").Select(c => c.Name).Should().BeEquivalentTo("dolar", "euro", "altın");
+        manifest.Commands.Where(c => c.OwnerModule == "currency").Select(c => c.Name).Should().BeEquivalentTo("dolar", "euro", "altın", "çevir");
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "0e37a88d6200cf05048651e2c603e4531d146a5283e6c68a5fba941ae7b6d47a",
+  "hash": "bf1f703f56f7029f4cf79e9e97a7cf0769bc9edffdc9faf12479fe5c134f239c",
   "commands": [
     {
       "module": "currency",
@@ -2401,6 +2401,116 @@
             "required": true,
             "min_length": 1,
             "max_length": 32
+          }
+        ]
+      }
+    },
+    {
+      "module": "currency",
+      "payload": {
+        "type": 1,
+        "name": "çevir",
+        "description": "Convert between Turkish lira, US dollar, euro and gram gold",
+        "description_localizations": {
+          "tr": "TL, dolar, euro ve gram altın arasında dönüşüm yapar."
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 10,
+            "name": "miktar",
+            "description": "Amount to convert",
+            "description_localizations": {
+              "tr": "Çevrilecek miktar"
+            },
+            "required": true,
+            "min_value": 0,
+            "max_value": 1000000000
+          },
+          {
+            "type": 3,
+            "name": "kaynak",
+            "description": "What you have",
+            "description_localizations": {
+              "tr": "Elinizdeki para veya varlık"
+            },
+            "required": true,
+            "choices": [
+              {
+                "name": "Turkish lira (TRY)",
+                "name_localizations": {
+                  "tr": "Türk Lirası (TRY)"
+                },
+                "value": "TRY"
+              },
+              {
+                "name": "US dollar (USD)",
+                "name_localizations": {
+                  "tr": "Amerikan Doları (USD)"
+                },
+                "value": "USD"
+              },
+              {
+                "name": "Euro (EUR)",
+                "name_localizations": {
+                  "tr": "Euro (EUR)"
+                },
+                "value": "EUR"
+              },
+              {
+                "name": "Gram gold",
+                "name_localizations": {
+                  "tr": "Gram Altın"
+                },
+                "value": "GRAM_GOLD"
+              }
+            ]
+          },
+          {
+            "type": 3,
+            "name": "hedef",
+            "description": "What to convert it to",
+            "description_localizations": {
+              "tr": "Dönüştürülecek para veya varlık"
+            },
+            "required": true,
+            "choices": [
+              {
+                "name": "Turkish lira (TRY)",
+                "name_localizations": {
+                  "tr": "Türk Lirası (TRY)"
+                },
+                "value": "TRY"
+              },
+              {
+                "name": "US dollar (USD)",
+                "name_localizations": {
+                  "tr": "Amerikan Doları (USD)"
+                },
+                "value": "USD"
+              },
+              {
+                "name": "Euro (EUR)",
+                "name_localizations": {
+                  "tr": "Euro (EUR)"
+                },
+                "value": "EUR"
+              },
+              {
+                "name": "Gram gold",
+                "name_localizations": {
+                  "tr": "Gram Altın"
+                },
+                "value": "GRAM_GOLD"
+              }
+            ]
           }
         ]
       }
