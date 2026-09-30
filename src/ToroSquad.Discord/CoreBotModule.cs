@@ -3,12 +3,14 @@ using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Security;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Discord.Commands.Core;
 
 namespace ToroSquad.Discord;
 
 /// <summary>
-/// The always-on core module: /help, /bot, /privacy, /setup, /modules. It cannot be disabled, so these keep working
+/// The always-on core module: /help, /bot, /privacy, /setup, /modules and the flat /tsq-admin command (whose operations
+/// belong to the feature modules). It cannot be disabled, so these keep working
 /// when every feature module is off.
 /// </summary>
 public sealed class CoreBotModule : IToroModule
@@ -22,7 +24,7 @@ public sealed class CoreBotModule : IToroModule
         EnabledByDefault: true,
         RequiredBotChannelPermissions: GuildPermission.None,
         OptionalBotPermissions: GuildPermission.None,
-        AdminCommands: ["setup", "modules"]);
+        AdminCommands: ["setup", "modules", AdminCatalog.Name]);
 
     public IReadOnlyList<Type> InteractionModuleTypes { get; } =
     [
@@ -31,6 +33,7 @@ public sealed class CoreBotModule : IToroModule
         typeof(PrivacyCommands),
         typeof(ModulesCommands),
         typeof(SetupCommands),
+        typeof(TsqAdminCommands),
     ];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration) =>

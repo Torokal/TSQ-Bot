@@ -4,7 +4,7 @@ using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
-using ToroSquad.Discord.Interactions;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Lfg.Application;
 using ToroSquad.Modules.Lfg.Commands;
@@ -23,6 +23,9 @@ namespace ToroSquad.Modules.Lfg;
 public sealed class LfgModule : IToroModule
 {
     public const string ModuleIdValue = "lfg";
+
+    /// <summary>The <c>modul</c> value of this module's operations in <c>/tsq-admin</c> (the former <c>/lfg-admin</c>).</summary>
+    public const string AdminId = "lfg";
     public static readonly ModuleId ModuleIdTyped = new(ModuleIdValue);
 
     /// <summary>
@@ -40,12 +43,13 @@ public sealed class LfgModule : IToroModule
         EnabledByDefault: false, // explicit activation: /modules enable lfg
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks, // the bot edits its cards on expiry/close
         OptionalBotPermissions: OptionalPermissions,
-        AdminCommands: [TsqAdminRoot.Group("lfg")]);
+        AdminCommands: [AdminCatalog.Entry(AdminId)]);
 
-    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LfgFormCommands), typeof(LfgCommands), typeof(LfgTsqAdmin)];
+    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LfgFormCommands), typeof(LfgCommands)];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddAdminOperations(LfgAdminOperations.Definition);
         services.AddOptions<LfgOptions>().Bind(configuration.GetSection(LfgOptions.Section));
         services.AddSingleton(new LocalizationSource(typeof(LfgModule).Assembly, "ToroSquad.Modules.Lfg.Localization"));
         services.AddSingleton<IModelContributor, LfgModelContributor>();

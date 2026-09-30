@@ -7,7 +7,7 @@ using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
 using ToroSquad.Discord;
-using ToroSquad.Discord.Interactions;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Live.Application;
 using ToroSquad.Modules.Live.Commands;
@@ -27,6 +27,9 @@ namespace ToroSquad.Modules.Live;
 public sealed class LiveModule : IToroModule
 {
     public const string ModuleIdValue = "live";
+
+    /// <summary>The <c>modul</c> value of this module's operations in <c>/tsq-admin</c> (the former <c>/live-admin</c>).</summary>
+    public const string AdminId = "live";
     public static readonly ModuleId ModuleIdTyped = new(ModuleIdValue);
 
     public ModuleDescriptor Descriptor { get; } = new(
@@ -38,12 +41,13 @@ public sealed class LiveModule : IToroModule
         EnabledByDefault: false, // explicit activation: /modules enable live (after Live:* is configured)
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks,
         OptionalBotPermissions: GuildPermission.MentionEveryone | GuildPermission.ReadMessageHistory,
-        AdminCommands: [TsqAdminRoot.Group("live")]);
+        AdminCommands: [AdminCatalog.Entry(AdminId)]);
 
-    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LiveTsqAdmin)];
+    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddAdminOperations(LiveAdminOperations.Definition);
         var section = configuration.GetSection(LiveOptions.Section);
         services.AddOptions<LiveOptions>().Bind(section);
         services.AddOptions<TwitchOptions>().Bind(section.GetSection("Twitch"));

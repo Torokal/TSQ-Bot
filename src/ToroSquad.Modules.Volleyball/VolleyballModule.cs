@@ -7,8 +7,8 @@ using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Discord.Commands.Core;
-using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Volleyball.Application;
 using ToroSquad.Modules.Volleyball.Commands;
@@ -27,6 +27,9 @@ namespace ToroSquad.Modules.Volleyball;
 public sealed class VolleyballModule : IToroModule
 {
     public const string ModuleIdValue = "volleyball";
+
+    /// <summary>The <c>modul</c> value of this module's operations in <c>/tsq-admin</c> (the former <c>/volleyball-admin</c>).</summary>
+    public const string AdminId = "volleyball";
     public static readonly ModuleId ModuleIdTyped = new(ModuleIdValue);
 
     public const string FivbHttpClient = "vb-fivb";
@@ -40,17 +43,17 @@ public sealed class VolleyballModule : IToroModule
         EnabledByDefault: false, // explicit activation after setup + ping-free preview
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks,
         OptionalBotPermissions: GuildPermission.MentionEveryone,
-        AdminCommands: [TsqAdminRoot.Group("volleyball")]);
+        AdminCommands: [AdminCatalog.Entry(AdminId)]);
 
     public IReadOnlyList<Type> InteractionModuleTypes { get; } =
     [
         typeof(VolleyballCommands),
-        typeof(VolleyballTsqAdmin),
         typeof(VolleyballSetupComponents),
     ];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddAdminOperations(VolleyballAdminOperations.Definition);
         var section = configuration.GetSection(VolleyballOptions.Section);
         services.AddOptions<VolleyballOptions>().Bind(section);
         services.AddOptions<FivbVisOptions>().Bind(section.GetSection("Fivb"));

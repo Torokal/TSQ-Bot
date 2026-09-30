@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Discord.Commands.Manifest;
 
 namespace ToroSquad.Discord.Interactions;
@@ -63,6 +64,8 @@ public sealed class InteractionHost(InteractionService service, ModuleRegistry r
                 }
             }
 
+            // A module that declares admin operations but did not register them (or the reverse) must block a sync too.
+            errors.AddRange(scope.ServiceProvider.GetRequiredService<AdminCatalog>().Problems(registry).Select(p => "admin: " + p));
             Manifest = CommandManifestBuilder.Build(service, registry, localizer, errors);
             var problems = CommandManifestValidator.Validate(Manifest, AdminCommandNames);
             if (problems.Count > 0)

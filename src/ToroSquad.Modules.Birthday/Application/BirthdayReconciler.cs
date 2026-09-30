@@ -304,7 +304,7 @@ public sealed class BirthdayReconciler(
         var config = await db.Set<BirthdayGuildConfigEntity>().AsNoTracking().FirstOrDefaultAsync(c => c.GuildId == guild.Value, ct);
         if (config?.ChannelId is not { } channel)
         {
-            Note(LogLevel.Warning, $"nochannel|{guild}", "birthday_announcement_skipped guild={Guild} localDate={Date}: no announcement channel configured (/tsq-admin birthday configure); roles are unaffected",
+            Note(LogLevel.Warning, $"nochannel|{guild}", "birthday_announcement_skipped guild={Guild} localDate={Date}: no announcement channel configured (/tsq-admin modul:birthday islem:configure); roles are unaffected",
                 guild, today);
             return;
         }

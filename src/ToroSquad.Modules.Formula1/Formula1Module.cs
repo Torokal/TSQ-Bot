@@ -6,8 +6,8 @@ using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Discord.Commands.Core;
-using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Formula1.Application;
 using ToroSquad.Modules.Formula1.Commands;
@@ -26,6 +26,9 @@ namespace ToroSquad.Modules.Formula1;
 public sealed class Formula1Module : IToroModule
 {
     public const string ModuleIdValue = "formula1";
+
+    /// <summary>The <c>modul</c> value of this module's operations in <c>/tsq-admin</c> (the former <c>/f1-admin</c>).</summary>
+    public const string AdminId = "f1";
     public static readonly ModuleId ModuleIdTyped = new(ModuleIdValue);
 
     public const string JolpicaHttpClient = "f1-jolpica";
@@ -40,17 +43,17 @@ public sealed class Formula1Module : IToroModule
         EnabledByDefault: false, // explicit activation after setup + ping-free preview
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks,
         OptionalBotPermissions: GuildPermission.ReadMessageHistory | GuildPermission.MentionEveryone,
-        AdminCommands: [TsqAdminRoot.Group("f1")]);
+        AdminCommands: [AdminCatalog.Entry(AdminId)]);
 
     public IReadOnlyList<Type> InteractionModuleTypes { get; } =
     [
         typeof(Formula1Commands),
-        typeof(Formula1TsqAdmin),
         typeof(Formula1SetupComponents),
     ];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddAdminOperations(Formula1AdminOperations.Definition);
         var section = configuration.GetSection(Formula1Options.Section);
         services.AddOptions<Formula1Options>().Bind(section);
         services.AddOptions<JolpicaOptions>().Bind(section.GetSection("Jolpica"));

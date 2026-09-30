@@ -5,7 +5,7 @@ using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
-using ToroSquad.Discord.Interactions;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Birthday.Application;
 using ToroSquad.Modules.Birthday.Commands;
@@ -23,6 +23,9 @@ namespace ToroSquad.Modules.Birthday;
 public sealed class BirthdayModule : IToroModule
 {
     public const string ModuleIdValue = "birthday";
+
+    /// <summary>The <c>modul</c> value of this module's operations in <c>/tsq-admin</c> (the former <c>/birthday-admin</c>).</summary>
+    public const string AdminId = "birthday";
     public static readonly ModuleId ModuleIdTyped = new(ModuleIdValue);
 
     public ModuleDescriptor Descriptor { get; } = new(
@@ -31,15 +34,16 @@ public sealed class BirthdayModule : IToroModule
         "module.birthday.name",
         "module.birthday.description",
         IsCore: false,
-        EnabledByDefault: false, // explicit activation: /modules enable birthday (after /tsq-admin birthday configure)
+        EnabledByDefault: false, // explicit activation: /modules enable birthday (after /tsq-admin modul:birthday islem:configure)
         RequiredBotChannelPermissions: BirthdayConfigService.RequiredChannelPermissions, // a plain text message
         OptionalBotPermissions: GuildPermission.ManageRoles, // the temporary birthday role
-        AdminCommands: [TsqAdminRoot.Group("birthday")]);
+        AdminCommands: [AdminCatalog.Entry(AdminId)]);
 
-    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(BirthdayCommands), typeof(BirthdayTsqAdmin)];
+    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(BirthdayCommands)];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddAdminOperations(BirthdayAdminOperations.Definition);
         services.AddOptions<BirthdayOptions>().Bind(configuration.GetSection(BirthdayOptions.Section));
         services.AddSingleton(new LocalizationSource(typeof(BirthdayModule).Assembly, "ToroSquad.Modules.Birthday.Localization"));
         services.AddSingleton<IModelContributor, BirthdayModelContributor>();

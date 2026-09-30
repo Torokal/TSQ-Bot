@@ -28,7 +28,7 @@ public enum LiveCheckState
 public sealed record LiveDoctorCheck(string LabelKey, LiveCheckState State, string DetailKey, IReadOnlyList<object> Args);
 
 /// <summary>
-/// /tsq-admin live doctor — actionable diagnostics from cached/persisted state only (no provider request, never a token or
+/// /tsq-admin modul:live islem:doctor — actionable diagnostics from cached/persisted state only (no provider request, never a token or
 /// secret): switches, Discord target and permissions (incl. Mention Everyone), delivery mode, per-provider auth and last
 /// successful reconciliation, push transport state, every creator's session/platform state and announcement message.
 /// </summary>
