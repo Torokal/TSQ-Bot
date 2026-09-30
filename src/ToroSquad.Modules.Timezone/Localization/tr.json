@@ -2,7 +2,7 @@
   "module.timezone.name": "TSQ Saat Dönüştürücü",
   "module.timezone.description": "Bir saati (varsayılan: Türkiye) diğer saat dilimlerinde ve Discord zamanı olarak gösterir: /saat 21:00 [timezone:pdt].",
   "cmd.saat": "Girilen saati farklı saat dilimlerine çevirir.",
-  "cmd.saat.time": "Saat. Örn: 21:00 veya 9.30 (bugün; saat dilimi verilmezse Türkiye saati)",
+  "cmd.saat.time": "Saat veya now. Örn: 21:00, 9.30 veya now (saat dilimi verilmezse Türkiye saati)",
   "timezone.title": "🕐 Saat Dönüştürücü",
   "timezone.input": "Girilen saat",
   "timezone.input.value": "`{0}` · {1} · {2}",
@@ -25,5 +25,13 @@
   "timezone.source.utc": "UTC",
   "timezone.invalid_zone": "Geçerli bir saat dilimi girin. Örnek: tr, pdt, est, cst, uk veya utc.",
   "timezone.skipped_time": "Bu saat seçilen saat diliminde yaz saati geçişi nedeniyle mevcut değil.",
-  "timezone.repeated_time": "Bu saat seçilen saat diliminde yaz saati geçişi nedeniyle iki kez yaşanıyor, yani iki farklı ana karşılık gelebilir. Başka bir saat girin veya timezone:utc kullanın."
+  "timezone.repeated_time": "Bu saat seçilen saat diliminde yaz saati geçişi nedeniyle iki kez yaşanıyor, yani iki farklı ana karşılık gelebilir. Başka bir saat girin veya timezone:utc kullanın.",
+  "cmd.saat.date": "Tarih. Örn: 15.11 veya 15.11.2026 (varsayılan: o saat dilimindeki bugün)",
+  "cmd.saat.to": "Yalnızca bu saat dilimine dönüştür. Örn: tr, uk, est, pdt, tokyo",
+  "timezone.source.tokyo": "Tokyo (Japonya Saati)",
+  "timezone.target": "Hedef saat",
+  "timezone.discord_code": "Discord timestamp kodu",
+  "timezone.invalid_date": "Geçerli bir tarih girin. Örnek: 15.11 veya 15.11.2026",
+  "timezone.invalid_target": "Geçerli bir hedef saat dilimi girin. Örnek: tr, uk, est, pdt, tokyo veya utc.",
+  "timezone.now_with_date": "date seçeneği time:now ile birlikte kullanılamaz."
 }

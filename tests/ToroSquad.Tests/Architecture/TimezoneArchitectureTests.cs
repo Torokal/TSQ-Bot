@@ -185,12 +185,17 @@ public sealed partial class TimezoneArchitectureTests
         saat.DefaultMemberPermissions.Should().BeNull("/saat is for everyone");
         saat.Contexts.Should().Equal(0);
         saat.IntegrationTypes.Should().Equal(0);
-        saat.Options.Select(o => o.Name).Should().Equal("time", "timezone");
+        saat.Options.Select(o => o.Name).Should().Equal("time", "timezone", "date", "to");
         var time = saat.Options[0];
         (time.Name, time.Type, time.Required, time.MinLength, time.MaxLength, time.Autocomplete).Should().Be(("time", OptionType.String, true, (int?)1, (int?)ClockInput.MaxInputLength, false));
         var zone = saat.Options[1];
         (zone.Name, zone.Type, zone.Required, zone.MaxLength, zone.Autocomplete).Should().Be(("timezone", OptionType.String, false, (int?)SourceTimeZones.MaxInputLength, true));
         zone.Choices.Should().BeEmpty("autocomplete suggests; any alias can still be typed");
+        var date = saat.Options[2];
+        (date.Name, date.Type, date.Required, date.MaxLength, date.Autocomplete).Should().Be(("date", OptionType.String, false, (int?)DateInput.MaxInputLength, false));
+        var to = saat.Options[3];
+        (to.Name, to.Type, to.Required, to.MaxLength, to.Autocomplete).Should().Be(("to", OptionType.String, false, (int?)SourceTimeZones.MaxInputLength, true));
+        to.Choices.Should().BeEmpty();
 
         // What DiscordCommandRegistrar actually sends: the English default plus the "tr" localization.
         var properties = DiscordCommandRegistrar.ToProperties(saat);
@@ -198,11 +203,15 @@ public sealed partial class TimezoneArchitectureTests
         (properties.Description.Value, properties.DescriptionLocalizations["tr"]).Should().Be(("Convert a time to other time zones", "Girilen saati farklı saat dilimlerine çevirir."));
         var options = properties.Options.Value;
         options.Select(o => (o.Name, o.Description, o.DescriptionLocalizations["tr"])).Should().Equal(
-            ("time", "Time, e.g. 21:00 or 9.30 (today; Türkiye time unless a time zone is given)", "Saat. Örn: 21:00 veya 9.30 (bugün; saat dilimi verilmezse Türkiye saati)"),
-            ("timezone", "Time zone of the entered time (default: Türkiye), e.g. tr, pdt, est, uk, utc", "Girilen saatin saat dilimi (varsayılan: Türkiye). Örn: tr, pdt, est, uk, utc"));
+            ("time", "Time or now, e.g. 21:00, 9.30 or now (Türkiye time unless a time zone is given)", "Saat veya now. Örn: 21:00, 9.30 veya now (saat dilimi verilmezse Türkiye saati)"),
+            ("timezone", "Time zone of the entered time (default: Türkiye), e.g. tr, pdt, est, uk, utc", "Girilen saatin saat dilimi (varsayılan: Türkiye). Örn: tr, pdt, est, uk, utc"),
+            ("date", "Date, e.g. 15.11 or 15.11.2026 (default: today in that time zone)", "Tarih. Örn: 15.11 veya 15.11.2026 (varsayılan: o saat dilimindeki bugün)"),
+            ("to", "Convert only to this time zone, e.g. tr, uk, est, pdt, tokyo", "Yalnızca bu saat dilimine dönüştür. Örn: tr, uk, est, pdt, tokyo"));
         options.Should().OnlyContain(o => o.Description.Length <= 100 && o.DescriptionLocalizations["tr"].Length <= 100);
         options[1].IsAutocomplete.Should().BeTrue();
         options[1].IsRequired.Should().NotBe(true);
+        options[3].IsAutocomplete.Should().BeTrue();
+        options.Skip(1).Should().OnlyContain(o => o.IsRequired != true);
     }
 
     [Fact]

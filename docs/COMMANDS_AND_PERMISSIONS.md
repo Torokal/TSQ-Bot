@@ -130,6 +130,7 @@ gerekmez (yalnızca etkileşim cevabı). Ayrıntı: [randomizer/TSQ_RANDOMIZER.m
 | Komut | Ne yapar |
 |---|---|
 | `/saat time:<saat> [timezone:<bölge>]` | Herkes: `21:00`, `9:00`, `09:00` veya `21.00` — saati kaynak bölgenin **bugünkü tarihiyle** okur (varsayılan Türkiye / Europe/Istanbul; `timezone`: `tr`, `uk`/`gmt`/`bst`, `ny`/`est`/`edt`, `chicago`/`cst`/`cdt`, `la`/`pst`/`pdt`, `utc` vb., autocomplete ile); Türkiye, Birleşik Krallık, New York, Chicago ve Los Angeles karşılıklarını (gün değişiyorsa "Önceki gün"/"Sonraki gün") ve tek bir Discord zaman damgasını (`<t:…:t>` · `<t:…:R>`, izleyenin kendi saatinde) **herkese açık** kartla gösterir |
+| `/saat time:<saat\|now> [timezone:…] [date:<GG.AA[.YYYY]>] [to:<bölge>]` | `date`: saati o tarihte okur (yıl yoksa kaynak bölgedeki bu yıl; DST o tarihe göre). `to`: yalnızca tek hedef satırı (aynı alias kataloğu; `tokyo`/`jst` dahil). `time:now`: şu anki an (`date` ile birlikte reddedilir). Kartta ayrıca kopyalanabilir ham `<t:…:t>` / `<t:…:R>` kodu |
 
 Dönüşüm işletim sisteminin IANA saat dilimi verisiyle yapılır (DST otomatik, sabit UTC offset yok; `pdt`/`pst` gibi
 kısaltmalar yalnızca bölgeyi seçer, o tarihteki offset'i `TimeZoneInfo` belirler). Kaynak bölgede yaz saati geçişi nedeniyle

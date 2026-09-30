@@ -12,6 +12,10 @@ public static partial class ClockInput
 {
     public const int MaxInputLength = 10;
     public const string InvalidKey = "timezone.invalid_time";
+    public const string Now = "now";
+
+    /// <summary><c>now</c> (any case, surrounding whitespace ignored): the current instant instead of a wall-clock time.</summary>
+    public static bool IsNow(string? input) => string.Equals(input?.Trim(), Now, StringComparison.OrdinalIgnoreCase);
 
     public static TimeOnly? Parse(string? input)
     {

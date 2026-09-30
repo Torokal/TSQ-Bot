@@ -2,7 +2,7 @@
   "module.timezone.name": "TSQ Time Converter",
   "module.timezone.description": "Shows a time (default: Türkiye) in other time zones and as a Discord timestamp: /saat 21:00 [timezone:pdt].",
   "cmd.saat": "Convert a time to other time zones",
-  "cmd.saat.time": "Time, e.g. 21:00 or 9.30 (today; Türkiye time unless a time zone is given)",
+  "cmd.saat.time": "Time or now, e.g. 21:00, 9.30 or now (Türkiye time unless a time zone is given)",
   "timezone.title": "🕐 Time Converter",
   "timezone.input": "Entered time",
   "timezone.input.value": "`{0}` · {1} · {2}",
@@ -25,5 +25,13 @@
   "timezone.source.utc": "UTC",
   "timezone.invalid_zone": "Enter a valid time zone. Example: tr, pdt, est, cst, uk or utc.",
   "timezone.skipped_time": "This time does not exist in the chosen time zone because of a daylight saving time change.",
-  "timezone.repeated_time": "This time happens twice in the chosen time zone because of a daylight saving time change, so it could mean two different moments. Enter another time or use timezone:utc."
+  "timezone.repeated_time": "This time happens twice in the chosen time zone because of a daylight saving time change, so it could mean two different moments. Enter another time or use timezone:utc.",
+  "cmd.saat.date": "Date, e.g. 15.11 or 15.11.2026 (default: today in that time zone)",
+  "cmd.saat.to": "Convert only to this time zone, e.g. tr, uk, est, pdt, tokyo",
+  "timezone.source.tokyo": "Tokyo (Japan Standard Time)",
+  "timezone.target": "Target time",
+  "timezone.discord_code": "Discord timestamp code",
+  "timezone.invalid_date": "Enter a valid date. Example: 15.11 or 15.11.2026",
+  "timezone.invalid_target": "Enter a valid target time zone. Example: tr, uk, est, pdt, tokyo or utc.",
+  "timezone.now_with_date": "The date option cannot be used together with time:now."
 }
