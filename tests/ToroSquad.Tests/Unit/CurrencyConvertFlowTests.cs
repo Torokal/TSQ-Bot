@@ -137,6 +137,19 @@ public sealed class CurrencyConvertFlowTests
     }
 
     [Fact]
+    public async Task A_tiny_positive_result_is_shown_as_less_than_the_smallest_unit_never_as_zero()
+    {
+        var (flow, _, _, _) = Create();
+        var responder = await ConvertAsync(flow, 0.3m, "TRY", "GRAM_GOLD"); // 0.3 ÷ 6574.16 ≈ 0.0000456 g, 0,0000 at 4 decimals
+        var card = responder.Public.Should().ContainSingle().Subject.Embed!;
+        card.Description.Should().Be("**0,30 ₺**\n≈ **<0,0001 g**");
+        card.Description.Should().NotContain("0,00 g").And.NotContain("0,0000 g");
+
+        var usd = (await ConvertAsync(flow, 0.1m, "TRY", "USD")).Public.Single().Embed!; // 0.1 ÷ 49.030 ≈ 0.002 USD
+        usd.Description.Should().Be("**0,10 ₺**\n≈ **<0,01 USD**");
+    }
+
+    [Fact]
     public async Task Gold_then_lira_to_gold_shares_the_cached_quote()
     {
         var (flow, _, http, clock) = Create();

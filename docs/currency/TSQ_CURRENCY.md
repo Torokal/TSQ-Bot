@@ -58,7 +58,8 @@ ve kaynak = hedef şimdilik reddedilir.
 
 Hesap `decimal` ile tam hassasiyette yapılır (erken yuvarlama yok); yalnızca kartta yuvarlanır (banker's rounding,
 `MidpointRounding.ToEven`): TL/USD/EUR 2 ondalık (`122.175,00 ₺`, `50,93 USD`), gram altın en az 2, en fazla 4 ondalık
-(`7,5488 g`, `5,00 g`); kullanılan kur sağlayıcının hassasiyetiyle (`48,870 ₺`).
+(`7,5488 g`, `5,00 g`); kullanılan kur sağlayıcının hassasiyetiyle (`48,870 ₺`). Sıfırdan büyük bir sonuç bu hassasiyette sıfıra yuvarlanıyorsa
+`0,00` yerine en küçük birimden az olarak gösterilir: `<0,01 USD`, `<0,01 ₺`, `<0,0001 g` (hesap değişmez).
 
 **Fiyat:** aynı `MarketQuoteService` — `/dolar`, `/euro`, `/altın` ile aynı sağlayıcılar, yedekler, önbellek ve single flight;
 ayrı bir dönüşüm önbelleği yoktur (ör. `/dolar`'dan sonraki `/çevir USD → TRY` sağlayıcıya yeni istek atmaz).

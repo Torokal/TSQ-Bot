@@ -155,15 +155,34 @@ public sealed class CurrencyCardRenderer(ILocalizer localizer)
 
     /// <summary>
     /// A converted or given amount: lira "122.175,00 ₺", USD/EUR "2.500,00 USD" (2 decimals), gram gold up to 4 decimals
-    /// and at least 2 ("7,5488 g", "5,00 g") so small amounts stay meaningful.
+    /// and at least 2 ("7,5488 g", "5,00 g") so small amounts stay meaningful. A positive value that would round to zero at
+    /// that precision is shown as "less than the smallest unit" ("&lt;0,01 USD", "&lt;0,0001 g"), never as a literal zero; a
+    /// real zero stays "0,00".
     /// </summary>
     public static string Amount(decimal value, ConvertibleAsset asset) => asset switch
     {
-        ConvertibleAsset.Try => Number(value, 2) + " " + Lira,
-        ConvertibleAsset.Usd => Number(value, 2) + " USD",
-        ConvertibleAsset.Eur => Number(value, 2) + " EUR",
+        ConvertibleAsset.Try => NonZero(value, 2) + " " + Lira,
+        ConvertibleAsset.Usd => NonZero(value, 2) + " USD",
+        ConvertibleAsset.Eur => NonZero(value, 2) + " EUR",
         _ => Grams(value),
     };
+
+    /// <summary>
+    /// <see cref="Number"/>, except that a positive value rounding to zero becomes "&lt;" + the smallest unit shown
+    /// ("&lt;0,01"). Display only: the value itself is not changed.
+    /// </summary>
+    private static string NonZero(decimal value, int decimals) =>
+        value > 0 && Math.Round(value, decimals, MidpointRounding.ToEven) == 0
+            ? "<" + Number(1m / Pow10(decimals), decimals)
+            : Number(value, decimals);
+
+    private static decimal Pow10(int exponent)
+    {
+        var result = 1m;
+        for (var i = 0; i < exponent; i++)
+            result *= 10;
+        return result;
+    }
 
     /// <summary>
     /// The one tr-TR number formatter of the module ("1.234,56"): rounded to <paramref name="decimals"/> with banker's
@@ -175,6 +194,8 @@ public sealed class CurrencyCardRenderer(ILocalizer localizer)
     private static string Grams(decimal value)
     {
         var rounded = Math.Round(value, 4, MidpointRounding.ToEven);
+        if (value > 0 && rounded == 0)
+            return NonZero(value, 4) + " g";
         var decimals = 2;
         while (decimals < 4 && Math.Round(rounded, decimals, MidpointRounding.ToEven) != rounded)
             decimals++;

@@ -157,7 +157,16 @@ public sealed class CurrencyConversionTests
     [InlineData("5", ConvertibleAsset.GramGold, "5,00 g")]
     [InlineData("1.5", ConvertibleAsset.GramGold, "1,50 g")]
     [InlineData("0.00125", ConvertibleAsset.GramGold, "0,0012 g")] // banker's rounding at 4 decimals
-    [InlineData("0.00005", ConvertibleAsset.GramGold, "0,00 g")]
+    [InlineData("0.00005", ConvertibleAsset.GramGold, "<0,0001 g")] // positive, rounds to zero: never "0,00 g"
+    [InlineData("0.00001", ConvertibleAsset.GramGold, "<0,0001 g")]
+    [InlineData("0.0001", ConvertibleAsset.GramGold, "0,0001 g")]
+    [InlineData("0.001", ConvertibleAsset.Usd, "<0,01 USD")]
+    [InlineData("0.001", ConvertibleAsset.Eur, "<0,01 EUR")]
+    [InlineData("0.001", ConvertibleAsset.Try, "<0,01 ₺")]
+    [InlineData("0.005", ConvertibleAsset.Usd, "<0,01 USD")] // banker's rounding would give 0,00
+    [InlineData("0.01", ConvertibleAsset.Usd, "0,01 USD")]
+    [InlineData("0", ConvertibleAsset.Try, "0,00 ₺")] // a real zero stays a zero
+    [InlineData("0", ConvertibleAsset.GramGold, "0,00 g")]
     public void Amounts_are_tr_TR_with_fixed_display_precision(string value, ConvertibleAsset asset, string expected) =>
         CurrencyCardRenderer.Amount(decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture), asset).Should().Be(expected);
 
