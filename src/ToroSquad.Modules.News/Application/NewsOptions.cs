@@ -111,7 +111,8 @@ public sealed class NewsTeamOptions
 
 /// <summary>
 /// The current players, used only for "a current player is in the headline". The automatic source is the team page's
-/// Active squad on Liquipedia (MediaWiki API, at most once per <see cref="RefreshHours"/>). Until the first successful sync
+/// Active squad on Liquipedia (MediaWiki API, one automatic request per <see cref="RefreshHours"/> at most — at least 24 h,
+/// successful or not; the manual `news check --roster` CLI is a separate, operator-run request). Until the first successful sync
 /// the dated <see cref="SeedPlayers"/> are used; either list expires after <see cref="MaxAgeDays"/> without a successful
 /// refresh, and then only team-name matching remains.
 /// </summary>
@@ -140,8 +141,8 @@ public sealed class NewsRosterOptions
     public IReadOnlyList<string> Validate()
     {
         var errors = new List<string>();
-        if (RefreshHours is < 6 or > 168)
-            errors.Add("News:Roster:RefreshHours must be between 6 and 168");
+        if (RefreshHours is < 24 or > 168)
+            errors.Add("News:Roster:RefreshHours must be between 24 and 168 (at most one automatic Liquipedia request per day)");
         if (MaxAgeDays is < 1 or > 60)
             errors.Add("News:Roster:MaxAgeDays must be between 1 and 60");
         if (SeedPlayers.Length > 0 && SeedVerifiedAtValue is null)

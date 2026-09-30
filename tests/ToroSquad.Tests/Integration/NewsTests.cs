@@ -614,6 +614,45 @@ public sealed class NewsTests
         rig.Host.Transport.Messages.Should().ContainSingle();
     }
 
+    [Fact]
+    public async Task Automatic_roster_requests_are_at_least_24_hours_apart_whatever_the_outcome_and_across_restarts()
+    {
+        await using var rig = await RigAsync(extra: new() { ["News:Roster:SyncFromLiquipedia"] = "true" });
+        rig.Feed.Serve([Other(1, Start)]);
+        rig.Wiki.Respond = _ => NewsFeeds.Status(HttpStatusCode.ServiceUnavailable);
+        await PollAsync(rig);
+        rig.Wiki.Requests.Should().HaveCount(1);
+        var first = rig.Host.Clock.GetUtcNow();
+        (await StateAsync(rig.Host))!.RosterNextAt.Should().BeOnOrAfter(first.AddHours(24), "a failure waits as long as a success");
+
+        await PollAsync(rig, TimeSpan.FromHours(7));
+        rig.Wiki.Requests.Should().HaveCount(1, "no 6-hour retry after a failure");
+        rig.Host.Clock.SetUtcNow(first.AddHours(23));
+        await ActivatorUtilities.CreateInstance<NewsPoller>(rig.Host.Services).TickAsync(Ct);
+        rig.Wiki.Requests.Should().HaveCount(1, "a restart does not reset the spacing");
+
+        // A longer Retry-After is honoured…
+        rig.Wiki.Respond = _ => NewsFeeds.Status(HttpStatusCode.TooManyRequests, TimeSpan.FromHours(48));
+        rig.Host.Clock.SetUtcNow(first.AddHours(24));
+        await PollAsync(rig);
+        rig.Wiki.Requests.Should().HaveCount(2);
+        var second = rig.Host.Clock.GetUtcNow();
+        rig.Host.Clock.SetUtcNow(second.AddHours(30));
+        await PollAsync(rig);
+        rig.Wiki.Requests.Should().HaveCount(2, "Retry-After 48 h is longer than the 24 h minimum");
+
+        // …a shorter one never shortens the 24 h minimum.
+        rig.Wiki.Respond = _ => NewsFeeds.Status(HttpStatusCode.TooManyRequests, TimeSpan.FromHours(1));
+        rig.Host.Clock.SetUtcNow(second.AddHours(48));
+        await PollAsync(rig);
+        rig.Wiki.Requests.Should().HaveCount(3);
+        var third = rig.Host.Clock.GetUtcNow();
+        (await StateAsync(rig.Host))!.RosterNextAt.Should().BeOnOrAfter(third.AddHours(24));
+        rig.Host.Clock.SetUtcNow(third.AddHours(2));
+        await PollAsync(rig);
+        rig.Wiki.Requests.Should().HaveCount(3);
+    }
+
     /// <summary>Throws on the first staging while armed (a failing round) and delegates otherwise.</summary>
     private sealed class FailOnceOutbox
     {

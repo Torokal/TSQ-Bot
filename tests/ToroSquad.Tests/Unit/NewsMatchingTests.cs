@@ -224,6 +224,8 @@ public sealed class NewsMatchingTests
         new NewsModule().Descriptor.EnabledByDefault.Should().BeFalse();
         new NewsOptions { PollIntervalMinutes = 1 }.Validate().Should().NotBeEmpty("never faster than every 5 minutes");
         new NewsOptions { UserAgent = "curl" }.Validate().Should().NotBeEmpty();
+        new NewsOptions { Roster = { RefreshHours = 6 } }.Validate().Should().NotBeEmpty("at most one automatic roster request per day");
+        new NewsOptions { Roster = { RefreshHours = 24 } }.Validate().Should().BeEmpty();
 
         var appsettings = new ConfigurationBuilder()
             .AddJsonFile(Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Bot", "appsettings.json")).Build();

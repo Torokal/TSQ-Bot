@@ -12,8 +12,8 @@ namespace ToroSquad.Modules.News.Application;
 /// channel set, not paused). Otherwise ONE shared feed request per interval — never per team, player or guild — where the
 /// interval is the project default or the feed's own RSS &lt;ttl&gt;, whichever is longer. Failures back off exponentially
 /// (429 honours Retry-After; 403 waits hours and is never worked around). The next poll time lives in the database, so a
-/// restart neither resets a backoff nor causes an extra request. Rounds never overlap. The roster refresh is separate and
-/// rare (News:Roster:RefreshHours). Any failure here stays in this module: other modules and the outbox are unaffected.
+/// restart neither resets a backoff nor causes an extra request. Rounds never overlap. The roster refresh is separate: at most
+/// one automatic request per News:Roster:RefreshHours (at least 24 h, success or failure, stored in the database). Any failure here stays in this module: other modules and the outbox are unaffected.
 /// </summary>
 public sealed class NewsPoller(
     IServiceScopeFactory scopes,
@@ -112,6 +112,9 @@ public sealed class NewsPoller(
             var rosterState = await rosterPlanner.StateAsync(ct);
             if (options.Value.Roster.SyncFromLiquipedia && (rosterState.RosterNextAt is null || clock.GetUtcNow() >= rosterState.RosterNextAt))
             {
+                // Reserve the slot BEFORE the request: a crash in between cannot cause a second request after a restart.
+                rosterState.RosterNextAt = clock.GetUtcNow() + TimeSpan.FromHours(options.Value.Roster.RefreshHours);
+                await rosterScope.ServiceProvider.GetRequiredService<ToroDbContext>().SaveChangesAsync(ct);
                 await RefreshRosterAsync(rosterState, ct);
                 await rosterScope.ServiceProvider.GetRequiredService<ToroDbContext>().SaveChangesAsync(ct);
                 ran = true;
@@ -157,6 +160,12 @@ public sealed class NewsPoller(
         var now = clock.GetUtcNow();
         state.RosterLastAttemptAt = now;
         state.RosterLastOutcome = (int)result.Outcome;
+        // One automatic roster request per RefreshHours (at least 24 h) whatever the outcome; a longer Retry-After wins, a
+        // shorter one never shortens it. Stored in the database, so a restart does not reset it.
+        var wait = TimeSpan.FromHours(o.Roster.RefreshHours);
+        if (result.RetryAfter is { } retryAfter && retryAfter > wait)
+            wait = retryAfter;
+        state.RosterNextAt = now + wait;
         if (result.Outcome == RosterOutcome.Ok)
         {
             var players = string.Join(',', result.Players);
@@ -167,15 +176,12 @@ public sealed class NewsPoller(
             state.RosterSource = "liquipedia";
             state.RosterDetail = null;
             state.RosterFailures = 0;
-            state.RosterNextAt = now + TimeSpan.FromHours(o.Roster.RefreshHours);
             return;
         }
 
         // The last good roster is kept (never emptied); it simply ages until it is too old to be used.
         state.RosterFailures++;
         state.RosterDetail = result.Detail is { Length: > 300 } d ? d[..300] : result.Detail;
-        var wait = result.RetryAfter ?? TimeSpan.FromHours(Math.Min(o.Roster.RefreshHours, 6 * state.RosterFailures));
-        state.RosterNextAt = now + wait;
         logger.LogWarning("news roster refresh failed: {Outcome} {Detail} (attempt {Failures}; previous roster kept)", result.Outcome, result.Detail, state.RosterFailures);
     }
 
