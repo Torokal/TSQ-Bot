@@ -29,7 +29,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 
 ## Features
 
-- **Real slash commands only** (no prefix commands; the Message Content intent is not used).
+- **Real application commands only**: slash commands plus one message command (Apps → Quote); no prefix commands, no
+  message events.
 - **Modules** that each server can enable or disable; disabling stops delivery but keeps data.
 - **Esports (CS2)**: upcoming matches, results, events, Valve Regional Standings (VRS), team lookup, personal team
   follows, and server filters (team / tournament / tier / VRS top-N) set by server admins.
@@ -47,12 +48,14 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   waitlist when the team is full (freed slots are filled automatically), opt-in pings of the joined
   players 30 minutes before / at the start, optional voice channel; one generic lifecycle for every game, restart- and
   race-safe.
-- **TSQ Quote** (separate module, off by default): `/quote message:<message id> [channel]` (Copy Message ID; a message
-  link also works) posts one message of this server as a PNG quote card — the author's avatar in black and white fading
-  into black, the text in large white type, "— name" and "@username" below. The message is read once by id over REST
-  (no channel scan, no message events); server-side access checks (same server; the member and the bot may view the
-  channel and read its history; the bot may attach files where the command ran); stateless (nothing stored or logged).
-  Needs the application's Message Content access (Developer Portal) — the gateway intents stay `Guilds`.
+- **TSQ Quote** (separate module, off by default): right click (mobile: long press) a message → **Apps → Quote**, or
+  `/quote message:<message id> [channel]` (Copy Message ID; a message link also works), posts one message of this server
+  as a PNG quote card — the author's avatar in black and white fading into black, the text in large white type, "— name"
+  and "@username" below. Apps → Quote uses the message from the interaction itself; `/quote` reads it once by id over
+  REST (no channel scan, no message events). Server-side access checks (same server; the member and the bot may view
+  the channel and read its history; the bot may attach files where the command ran); stateless (nothing stored or
+  logged). `/quote` needs the application's Message Content access (Developer Portal); Apps → Quote does not — the
+  gateway intents stay `Guilds`.
 - **TSQ Döviz & Altın** (separate module, off by default): `/dolar`, `/euro`, `/altın` answer publicly in the currency
   channel (elsewhere: a private pointer to it) with the current USD/TRY, EUR/TRY and gram gold buy/sell prices and the
   provider's own update time; one combined card is posted there daily at 09:00 Türkiye time (outbox, catch-up until 09:30). Altınkaynak's public JSON service is
@@ -110,7 +113,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Live admin | `/live-admin doctor` | Manage Server |
 | TSQ LFG | `/ekip` (opens the listing form; buttons: Katıl (🎟️ Sıraya Gir while full) · Belki · Ayrıl · 🔊 Ses Odası · ✏️ Düzenle (owner only) · İlanı Kapat) | everyone (module on) |
 | TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
-| TSQ Quote | `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
+| TSQ Quote | message → Apps → Quote, or `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
 | TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options), `/çevir miktar kaynak hedef` (TRY ↔ USD/EUR/gram gold); public answer, currency channel only | everyone (module on) |
 | TSQ Randomizer | `/zarat zar:…`, `/randomsayi maksimum:… [minimum:…]`, `/sec seçenekler:…`, `/yazitura` (public answer) | everyone (module on) |

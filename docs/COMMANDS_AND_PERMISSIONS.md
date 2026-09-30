@@ -89,6 +89,7 @@ Ayrıntı: [lfg/TSQ_LFG.md](lfg/TSQ_LFG.md).
 
 | Komut | Ne yapar |
 |---|---|
+| Mesaja sağ tık (mobilde uzun bas) → **Uygulamalar → Quote** (MESSAGE komutu `Quote`) | Herkes: tıklanan mesajı aynı kartla **bu kanala** gönderir. Mesaj etkileşimle gelir (Discord'dan okunmaz; Message Content gerekmez). Sunucu tarafında: mesaj bu kanalın olmalı; botun burada `ViewChannel` + `AttachFiles` izni; üyenin burada `ViewChannel` + `ReadMessageHistory` izni. Kart mesajın kanalında kaldığı için özel thread ve yaş sınırlı kanalda da çalışır |
 | `/quote message:<mesaj-id> [channel]` | Herkes: mesajı siyah-beyaz alıntı görseline (`quote.png`) çevirip **bu kanala** gönderir. Mesaj kimliği bu kanalda, `channel` verilirse o kanalda aranır (kanallar taranmaz); mesaj bağlantısı da kabul edilir (kanal bağlantıdan). Sunucu tarafında: botun **bu kanalda** `ViewChannel` + `AttachFiles` izni (yoksa hiçbir şey okunmaz); mesaj **bu sunucuya** ait olmalı; üyenin ve botun kaynak kanalda `ViewChannel` + `ReadMessageHistory` izni olmalı (thread'de üst kanal; özel thread desteklenmez); yaş sınırlı kanaldan yaş sınırı olmayan kanala alıntı yapılmaz. Tüm "yok/erişim yok" durumları tek, ephemeral cevaptır; kart ping'sizdir |
 
 Mesaj kimliği: Discord → Ayarlar → Gelişmiş → **Geliştirici Modu**; mesaja sağ tık → **Mesaj Kimliğini Kopyala**; aynı
@@ -96,7 +97,7 @@ kanalda `/quote message:<mesaj-id>`, başka kanalda `/quote message:<mesaj-id> c
 
 Bot izinleri: kaynak kanalda `ViewChannel` + `ReadMessageHistory`; komutun çalıştığı kanalda `ViewChannel` +
 `AttachFiles` (kart etkileşim takip mesajıdır, `SendMessages` gerekmez). Başka üyelerin mesaj metni için uygulamanın
-**Message Content** erişimi (Developer Portal → Bot → Privileged Gateway Intents) açık olmalıdır; gateway intent'i
+**Message Content** erişimi (Developer Portal → Bot → Privileged Gateway Intents) `/quote` için açık olmalıdır (Apps → Quote için değil); gateway intent'i
 değişmez (aşağıya bakın).
 Ayrıntı: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md).
 
