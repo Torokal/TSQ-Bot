@@ -22,25 +22,28 @@ public sealed class CommandManifestTests
         var (manifest, admin) = await BuildAsync();
         CommandManifestValidator.Validate(manifest, admin).Should().BeEmpty();
         manifest.LoadErrors.Should().BeEmpty();
-        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "esports-admin", "f1", "f1-admin", "volleyball", "volleyball-admin", "live-admin", "ekip", "lfg-admin", "quote", "birthday", "birthday-admin", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "giveaway", "ozetle", "ongoru", "Quote", "news-admin");
+        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "giveaway", "ozetle", "ongoru", "Quote", "tsq-admin");
 
         string[] Sub(string name) => manifest.Find(name)!.Options.Select(o => o.Name).ToArray();
+        string[] Admin(string group) => manifest.Find("tsq-admin")!.Options.Single(o => o.Name == group).Options.Select(o => o.Name).ToArray();
         Sub("bot").Should().BeEquivalentTo("status", "about", "source");
         Sub("privacy").Should().BeEquivalentTo("export", "delete");
         Sub("modules").Should().BeEquivalentTo("list", "enable", "disable");
         Sub("esports").Should().BeEquivalentTo("matches", "results", "events", "rankings", "team", "follow", "unfollow", "subscriptions");
-        Sub("esports-admin").Should().BeEquivalentTo("configure", "filters", "roles", "panel", "preview", "pause", "resume", "doctor");
+        Sub("tsq-admin").Should().Equal("birthday", "esports", "f1", "lfg", "live", "news", "volleyball");
+        Admin("esports").Should().BeEquivalentTo("configure", "panel", "preview", "pause", "resume", "doctor", "filters-show", "filters-team", "filters-tournament",
+            "filters-tier", "filters-vrs", "filters-clear", "roles-list", "roles-map", "roles-unmap", "roles-selfservice");
         Sub("f1").Should().BeEquivalentTo("next", "schedule", "results", "now", "standings");
-        Sub("f1-admin").Should().BeEquivalentTo("configure", "preview", "status", "doctor", "pause", "resume");
+        Admin("f1").Should().BeEquivalentTo("configure-channel", "configure-notifications", "configure-role", "configure-spoilers", "preview", "status", "doctor", "pause", "resume");
         Sub("volleyball").Should().BeEquivalentTo("next", "schedule");
-        Sub("volleyball-admin").Should().BeEquivalentTo("configure", "preview", "status", "doctor", "pause", "resume");
-        Sub("live-admin").Should().BeEquivalentTo("doctor");
-        Sub("lfg-admin").Should().BeEquivalentTo("channel", "status");
+        Admin("volleyball").Should().BeEquivalentTo("configure-channel", "configure-notifications", "configure-role", "preview", "status", "doctor", "pause", "resume");
+        Admin("live").Should().BeEquivalentTo("doctor");
+        Admin("lfg").Should().BeEquivalentTo("channel", "status");
         Sub("birthday").Should().BeEquivalentTo("set", "show", "remove");
-        Sub("birthday-admin").Should().BeEquivalentTo("set", "show", "configure", "status", "doctor");
+        Admin("birthday").Should().BeEquivalentTo("set", "show", "configure", "status", "doctor");
         Sub("giveaway").Should().BeEquivalentTo("create", "end", "cancel", "reroll");
         Sub("ongoru").Should().BeEquivalentTo("yarat", "cuzdan", "gunluk", "tahminlerim", "liderlik", "turnuva");
-        Sub("news-admin").Should().BeEquivalentTo("configure", "pause", "resume", "preview", "status", "doctor");
+        Admin("news").Should().BeEquivalentTo("configure", "pause", "resume", "preview", "status", "doctor");
     }
 
     [Fact]
@@ -48,7 +51,7 @@ public sealed class CommandManifestTests
     {
         var (manifest, _) = await BuildAsync();
         const string manageGuild = "32"; // 1 << 5
-        foreach (var name in new[] { "setup", "modules", "esports-admin", "f1-admin", "volleyball-admin", "live-admin", "lfg-admin", "birthday-admin", "giveaway", "news-admin" })
+        foreach (var name in new[] { "setup", "modules", "tsq-admin", "giveaway" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().Be(manageGuild, $"/{name} is admin-only");
         foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "ozetle", "ongoru", "Quote" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().BeNull($"/{name} is for everyone");
@@ -87,7 +90,8 @@ public sealed class CommandManifestTests
         var (manifest, _) = await BuildAsync();
         var all = manifest.Commands.SelectMany(c => Flatten(c.Options).Select(o => (Command: c.Name, Option: o))).ToList();
         all.Where(x => x.Option.Type is not (OptionType.SubCommand or OptionType.SubCommandGroup) && x.Option.Name is "team" or "tournament" or "module" or "mapping").Should().OnlyContain(x => x.Option.Autocomplete);
-        all.Single(x => x.Command == "esports-admin" && x.Option.Name == "channel").Option.Type.Should().Be(OptionType.Channel);
+        all.Where(x => x.Command == "tsq-admin" && x.Option.Name == "channel" && x.Option.Type != OptionType.SubCommand)
+            .Should().HaveCount(6).And.OnlyContain(x => x.Option.Type == OptionType.Channel);
         all.Single(x => x.Option.Name == "role" && x.Option.Type != OptionType.SubCommand).Option.Type.Should().Be(OptionType.Role);
     }
 

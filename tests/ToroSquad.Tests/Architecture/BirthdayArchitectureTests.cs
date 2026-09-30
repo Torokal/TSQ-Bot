@@ -147,7 +147,7 @@ public sealed partial class BirthdayArchitectureTests
         var module = new BirthdayModule();
         module.Descriptor.EnabledByDefault.Should().BeFalse();
         module.Descriptor.IsCore.Should().BeFalse();
-        module.Descriptor.AdminCommands.Should().Equal("birthday-admin");
+        module.Descriptor.AdminCommands.Should().Equal("tsq-admin birthday");
         module.ValidateConfiguration(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build()).Should().BeEmpty();
         DesignTimeDbContextFactory.AllContributors().Should().ContainSingle(c => c is BirthdayModelContributor);
     }

@@ -97,7 +97,7 @@ public sealed partial class VbArchitectureTests
     {
         var module = new ToroSquad.Modules.Volleyball.VolleyballModule();
         module.Descriptor.EnabledByDefault.Should().BeFalse();
-        module.Descriptor.AdminCommands.Should().Equal("volleyball-admin");
+        module.Descriptor.AdminCommands.Should().Equal("tsq-admin volleyball");
         typeof(ToroSquad.Modules.Volleyball.Application.VolleyballOptions).GetProperties().Select(p => p.Name)
             .Should().NotContain(n => n.Contains("Team", StringComparison.OrdinalIgnoreCase) || n.Contains("Country", StringComparison.OrdinalIgnoreCase));
     }

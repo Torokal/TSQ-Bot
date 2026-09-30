@@ -112,7 +112,7 @@ public sealed partial class LiveArchitectureTests
             type.GetCustomAttribute<ToroModuleAttribute>(inherit: true)!.ModuleId.Should().Be("live", type.Name);
         var module = new ToroSquad.Modules.Live.LiveModule();
         module.Descriptor.EnabledByDefault.Should().BeFalse();
-        module.Descriptor.AdminCommands.Should().Equal("live-admin");
+        module.Descriptor.AdminCommands.Should().Equal("tsq-admin live");
     }
 
     [Fact]
