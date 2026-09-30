@@ -133,5 +133,6 @@
   "admin.form.turn_off": "Kapat",
   "admin.form.page": "Sayfa {0}/{1}",
   "admin.form.previous": "◀ Önceki",
-  "admin.form.next": "Sonraki ▶"
+  "admin.form.next": "Sonraki ▶",
+  "admin.form.incomplete": "Form eksik gönderildi; hiçbir ayar değişmedi. Formu yeniden açıp tekrar deneyin."
 }

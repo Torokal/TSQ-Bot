@@ -49,19 +49,14 @@ public sealed class TsqAdminCommands(InteractionServices services, AdminRouter r
     [ComponentInteraction(AdminCall.CustomIdPrefix + "*:*", ignoreGroupNames: true)]
     public async Task FormComponentAsync(string draft, string action)
     {
-        var data = ((IComponentInteraction)Context.Interaction).Data;
-        var input = new AdminInput(data.Values?.ToList() ?? [], new Dictionary<string, IReadOnlyList<string>>(),
-            data.Members?.ToList() ?? [], data.Channels?.Cast<IChannel>().ToList() ?? []);
+        var input = AdminInput.FromComponent(((IComponentInteraction)Context.Interaction).Data);
         await router.FormAsync(Actor, await LangAsync(), draft, action, input, this, provider);
     }
 
     [ModalInteraction(AdminCall.CustomIdPrefix + "*:*", ignoreGroupNames: true)]
     public async Task FormModalAsync(string draft, string action, AdminFormModal modal)
     {
-        var data = ((IModalInteraction)Context.Interaction).Data;
-        var fields = data.Components.Where(c => !string.IsNullOrEmpty(c.CustomId)).GroupBy(c => c.CustomId).ToDictionary(g => g.Key,
-            g => (IReadOnlyList<string>)(g.First().Value is { } text ? [text] : g.First().Values?.ToList() ?? []));
-        var input = new AdminInput([], fields, data.Members?.ToList() ?? [], data.Channels?.Cast<IChannel>().ToList() ?? []);
+        var input = AdminInput.FromModal(((IModalInteraction)Context.Interaction).Data);
         await router.FormAsync(Actor, await LangAsync(), draft, action, input, this, provider);
     }
 

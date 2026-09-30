@@ -128,9 +128,15 @@ public static class AdminForms
 
     public const string SwitchesField = "on";
 
-    /// <summary>Switch name → new value, only for switches whose submitted state differs from <paramref name="snapshot"/>.</summary>
-    public static IReadOnlyDictionary<string, bool> ChangedSwitches(AdminCall call, IReadOnlyDictionary<string, bool> snapshot)
+    /// <summary>
+    /// Switch name → new value, only for switches whose submitted state differs from <paramref name="snapshot"/>. An empty
+    /// selection is a real answer (everything off); a submission WITHOUT the field is incomplete and returns null, so it can
+    /// never be mistaken for "turn everything off". Values that are not switches of this form are ignored.
+    /// </summary>
+    public static IReadOnlyDictionary<string, bool>? ChangedSwitches(AdminCall call, IReadOnlyDictionary<string, bool> snapshot)
     {
+        if (!call.Input.Fields.ContainsKey(SwitchesField))
+            return null;
         var on = call.Input.Selected(SwitchesField).ToHashSet(StringComparer.Ordinal);
         return snapshot.Where(s => on.Contains(s.Key) != s.Value).ToDictionary(s => s.Key, s => !s.Value);
     }

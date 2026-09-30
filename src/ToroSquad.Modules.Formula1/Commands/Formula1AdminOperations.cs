@@ -190,9 +190,14 @@ public sealed class Formula1AdminOperations(
                     await call.FinishAsync(await config.SetChannelAsync(call.Actor, channel, CancellationToken.None));
                 return;
             case ("configure-notifications", SaveAction) when call.Draft?.State is Snapshot snapshot:
+                if (AdminForms.ChangedSwitches(call, snapshot.Values) is not { } changed)
+                {
+                    await call.ReplyTextAsync("admin.form.incomplete");
+                    return;
+                }
+
                 if (!await AdminForms.ClaimAsync(call))
                     return;
-                var changed = AdminForms.ChangedSwitches(call, snapshot.Values);
                 if (changed.Count == 0)
                 {
                     await call.FinishTextAsync(call.T("admin.form.no_changes"));
@@ -206,10 +211,15 @@ public sealed class Formula1AdminOperations(
                     Get("weekend_schedule"), Get("race_reminder"), Get("disqualification"), Get("safety_car"), Get("red_flag")), CancellationToken.None));
                 return;
             case ("configure-role", SaveAction) when call.Draft?.State is Snapshot pings:
+                if (AdminForms.ChangedSwitches(call, pings.Values) is not { } pingChanges)
+                {
+                    await call.ReplyTextAsync("admin.form.incomplete");
+                    return;
+                }
+
                 if (!await AdminForms.ClaimAsync(call))
                     return;
                 var (clear, role) = AdminForms.SubmittedRole(call);
-                var pingChanges = AdminForms.ChangedSwitches(call, pings.Values);
                 // As before: an empty role keeps the current one; only "remove" clears it (read now, not from the form's start).
                 var roleId = clear ? null : role ?? (await config.GetAsync(call.Actor.GuildId, CancellationToken.None))?.PingRoleId;
                 await call.FinishAsync(await config.SetRoleAsync(call.Actor, roleId,

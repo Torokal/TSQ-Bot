@@ -159,9 +159,14 @@ public sealed class VolleyballAdminOperations(
                     await call.FinishAsync(await config.SetChannelAsync(call.Actor, channel, CancellationToken.None));
                 return;
             case ("configure-notifications", SaveAction) when call.Draft?.State is Snapshot snapshot:
+                if (AdminForms.ChangedSwitches(call, snapshot.Values) is not { } changed)
+                {
+                    await call.ReplyTextAsync("admin.form.incomplete");
+                    return;
+                }
+
                 if (!await AdminForms.ClaimAsync(call))
                     return;
-                var changed = AdminForms.ChangedSwitches(call, snapshot.Values);
                 if (changed.Count == 0)
                 {
                     await call.FinishTextAsync(call.T("admin.form.no_changes"));
@@ -173,10 +178,15 @@ public sealed class VolleyballAdminOperations(
                     Get("match_reminder_15m"), Get("match_started"), Get("set_finished"), Get("match_finished"), Get("match_postponed_cancelled")), CancellationToken.None));
                 return;
             case ("configure-role", SaveAction) when call.Draft?.State is Snapshot pings:
+                if (AdminForms.ChangedSwitches(call, pings.Values) is not { } pingChanges)
+                {
+                    await call.ReplyTextAsync("admin.form.incomplete");
+                    return;
+                }
+
                 if (!await AdminForms.ClaimAsync(call))
                     return;
                 var (clear, role) = AdminForms.SubmittedRole(call);
-                var pingChanges = AdminForms.ChangedSwitches(call, pings.Values);
                 var roleId = clear ? null : role ?? (await config.GetAsync(call.Actor.GuildId, CancellationToken.None))?.PingRoleId;
                 await call.FinishAsync(await config.SetRoleAsync(call.Actor, roleId,
                     pingChanges.TryGetValue("ping_reminder", out var reminder) ? reminder : null,

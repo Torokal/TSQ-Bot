@@ -425,7 +425,7 @@ public sealed class TsqAdminCommandTests
         stored.PingOnStarts.Should().BeFalse("the ping switch was unticked");
 
         var clear = await RunAsync(host, admin, "f1", "configure-role");
-        await FormAsync(host, admin, DraftId(clear.Modals.Single().CustomId), "save", Modal((AdminForms.ClearField, [AdminForms.ClearField])));
+        await FormAsync(host, admin, DraftId(clear.Modals.Single().CustomId), "save", Modal((AdminForms.ClearField, [AdminForms.ClearField]), (AdminForms.SwitchesField, [])));
         (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None)))!.PingRoleId.Should().BeNull();
     }
 
@@ -442,6 +442,164 @@ public sealed class TsqAdminCommandTests
         (await LfgChannelAsync(host)).Should().Be(Channel.Value, "an empty kanal does not remove the restriction by itself");
         await FormAsync(host, admin, DraftId(open.AllCustomIds()[0]), AdminForms.ClearAction, AdminInput.None);
         (await LfgChannelAsync(host)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Roles_list_needs_manage_server_and_every_mapping_change_needs_manage_roles_too()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var service = await ServiceAsync(host);
+        await host.InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<ToroDbContext>();
+            db.Set<RoleMappingEntity>().Add(new RoleMappingEntity { GuildId = Guild.Value, RoleId = Role, CreatedAt = TestHost.T0 });
+            await db.SaveChangesAsync();
+        });
+        var manageOnly = new ActorContext(Guild, new UserId(1), CorePermission.ManageGuild, [], false, 50);
+        var roles = TestHost.Admin(Guild); // Manage Server + Manage Roles
+
+        // Suggestions: Manage Server alone sees roles-list, not the three operations that change mappings.
+        var suggested = (await SuggestAsync(host, service, "islem", "roles", "esports", CorePermission.ManageGuild)).Select(r => r.Value).ToList();
+        suggested.Should().Equal("roles-list");
+        (await SuggestAsync(host, service, "islem", "roles", "esports", CorePermission.ManageGuild | CorePermission.ManageRoles)).Select(r => r.Value).Should()
+            .Equal("roles-list", "roles-map", "roles-unmap", "roles-selfservice");
+
+        (await RunAsync(host, manageOnly, "esports", "roles-list")).Embeds.Should().ContainSingle("Manage Server is enough to read the mappings, as before");
+        foreach (var change in new[] { "roles-map", "roles-unmap", "roles-selfservice" })
+        {
+            var refused = await RunAsync(host, manageOnly, "esports", change);
+            refused.Text.Should().Contain("yetki", change);
+            refused.Modals.Should().BeEmpty(change);
+            refused.AllCustomIds().Should().BeEmpty($"{change}: not even the mapping picker opens without Manage Roles");
+        }
+
+        var member = await RunAsync(host, TestHost.Member(Guild), "esports", "roles-list");
+        member.Embeds.Should().BeEmpty("a member reads no admin data");
+        member.Text.Should().Contain("yetki");
+
+        // The picker belongs to the change operation: losing Manage Roles after opening it stops the change.
+        var picker = await RunAsync(host, roles, "esports", "roles-unmap");
+        var draft = DraftId(picker.AllCustomIds()[0]);
+        (await FormAsync(host, manageOnly, draft, "mapping", Selected("1"))).Text.Should().Contain("yetki");
+        (await host.InScopeAsync(sp => sp.GetRequiredService<RoleMappingService>().ListAsync(Guild, CancellationToken.None))).Should().ContainSingle();
+
+        // Administrator and the guild owner keep full access.
+        (await RunAsync(host, Administrator(), "esports", "roles-unmap")).AllCustomIds().Should().NotBeEmpty();
+        var owner = new ActorContext(Guild, new UserId(1), CorePermission.None, [], true, 0);
+        (await RunAsync(host, owner, "esports", "roles-map")).Modals.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// The JSON Discord.Net 3.20.1 itself sends for each modal (its internal component → API model mapping and serializer, as
+    /// in <c>RespondWithModalAsync</c>), measured against Discord's documented limits (components reference, 2026-09-29):
+    /// 1-5 top-level components, each a Label (type 18, text ≤ 45) wrapping one input; Checkbox Group ≤ 10 options; String
+    /// Select ≤ 25 options; custom ids 1-100 and unique; no <c>disabled</c> in a modal; an empty choice needs required=false and
+    /// min_values=0.
+    /// </summary>
+    [Fact]
+    public async Task Every_admin_modal_payload_respects_discords_modal_limits_and_allows_an_empty_choice()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var admin = Administrator();
+        var modals = new List<(string Name, Modal Modal, string Shape)>();
+        async Task AddAsync(string module, string op, AdminArgs? args = null, AdminFields provided = AdminFields.None, string shape = "")
+        {
+            var respond = await RunAsync(host, admin, module, op, args, provided);
+            modals.Add((module + " " + op, respond.Modals.Single(), shape));
+        }
+
+        await AddAsync("f1", "configure-notifications", shape: "18>3[16]");
+        await AddAsync("volleyball", "configure-notifications", shape: "18>3[5]");
+        await AddAsync("f1", "configure-role", shape: "18>6 | 18>22[2] | 18>22[1]");
+        await AddAsync("volleyball", "configure-role", shape: "18>6 | 18>22[2] | 18>22[1]");
+        await AddAsync("esports", "configure", shape: "18>8 | 18>22[3] | 18>4");
+        await AddAsync("esports", "roles-map", shape: "18>6 | 18>4 | 18>22[2]");
+        await AddAsync("esports", "filters-vrs", shape: "18>4");
+        await AddAsync("birthday", "set", new AdminArgs(null, new AdminMember(5, true), null, null), AdminFields.User, "18>4");
+        var menu = await RunAsync(host, admin, "esports", "filters-team");
+        var search = await FormAsync(host, admin, DraftId(menu.AllCustomIds()[0]), "add", AdminInput.None);
+        modals.Add(("esports filters-team search", search.Modals.Single(), "18>4"));
+
+        foreach (var (name, modal, shape) in modals)
+        {
+            modal.Title.Length.Should().BeInRange(1, 45, name);
+            modal.CustomId.Length.Should().BeInRange(1, 100, name);
+            var top = DiscordPayload(modal);
+            top.Count.Should().BeInRange(1, 5, name);
+            string.Join(" | ", top.Select(t => Shape(t!))).Should().Be(shape, name);
+            payloadText(top).Should().NotContain("\"disabled\":true", name);
+
+            var inputs = top.Select(t => t!["component"]!).ToList();
+            inputs.Select(i => (string)i["custom_id"]!).Should().OnlyHaveUniqueItems(name).And.OnlyContain(id => id.Length >= 1 && id.Length <= 100);
+            foreach (var label in top)
+                ((string)label!["label"]!).Length.Should().BeInRange(1, 45, name);
+            foreach (var group in inputs.Where(i => (int)i["type"]! == 22))
+            {
+                group["options"]!.AsArray().Count.Should().BeInRange(1, 10, name);
+                ((bool)group["required"]!).Should().BeFalse($"{name}: nothing ticked is a valid answer");
+                ((int)group["min_values"]!).Should().Be(0, name);
+            }
+
+            foreach (var select in inputs.Where(i => (int)i["type"]! == 3))
+            {
+                select["options"]!.AsArray().Count.Should().BeInRange(1, 25, name);
+                ((bool)select["required"]!).Should().BeFalse($"{name}: every notification can be switched off");
+                ((int)select["min_values"]!).Should().Be(0, name);
+                ((int)select["max_values"]!).Should().Be(select["options"]!.AsArray().Count, name);
+            }
+        }
+
+        // F1: the 16 switches are ONE string select (not a checkbox group, whose limit is 10), pre-selected as stored.
+        var f1 = DiscordPayload(modals[0].Modal)[0]!["component"]!;
+        f1["options"]!.AsArray().Where(o => (bool?)o!["default"] == true).Select(o => (string)o!["value"]!).Should().BeEquivalentTo(
+            ["practice_start", "practice_results", "sprint_start", "sprint_results", "race_start", "race_results", "standings"]);
+
+        static string payloadText(JsonArray top) => top.ToJsonString();
+    }
+
+    [Fact]
+    public void A_submitted_modal_is_read_by_custom_id_and_an_empty_choice_is_not_a_missing_field()
+    {
+        IComponentInteractionData Field(string id, string? value, string[]? values) =>
+            InterfaceFake.Create<IComponentInteractionData>(new() { ["CustomId"] = id, ["Value"] = value, ["Values"] = (IReadOnlyCollection<string>?)values });
+        var data = InterfaceFake.Create<IModalInteractionData>(new()
+        {
+            ["Components"] = (IReadOnlyCollection<IComponentInteractionData>)
+            [
+                Field(AdminForms.SwitchesField, null, []),
+                Field("query", "aurora", null),
+                Field(AdminForms.RoleField, null, ["77"]),
+            ],
+        });
+        var input = AdminInput.FromModal(data);
+        input.Fields.Should().ContainKey(AdminForms.SwitchesField).WhoseValue.Should().BeEmpty("nothing ticked");
+        input.Text("query").Should().Be("aurora");
+        input.Id(AdminForms.RoleField).Should().Be(77);
+        input.Fields.Should().NotContainKey(AdminForms.ClearField, "a field Discord did not send stays absent");
+    }
+
+    [Fact]
+    public async Task F1_notifications_can_all_be_switched_off_and_an_incomplete_submission_writes_nothing()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var admin = TestHost.Admin(Guild);
+        var open = await RunAsync(host, admin, "f1", "configure-notifications");
+        var draft = DraftId(open.Modals.Single().CustomId);
+        (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None))).Should().BeNull("opening the form writes nothing");
+
+        (await FormAsync(host, admin, draft, "save", Modal(("unrelated", ["x"])))).Text.Should().Contain("eksik");
+        (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None))).Should().BeNull(
+            "a submission without the switches field is not 'everything off'");
+
+        await FormAsync(host, admin, draft, "save", Modal((AdminForms.SwitchesField, [])));
+        var stored = (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None)))!;
+        new[]
+        {
+            stored.NotifyPracticeStart, stored.NotifyPracticeResults, stored.NotifySprintStart, stored.NotifySprintResults, stored.NotifyRaceStart,
+            stored.NotifyRaceResults, stored.NotifyStandings, stored.NotifyQualifyingStart, stored.NotifyQualifyingResults, stored.NotifySprintQualifyingStart,
+            stored.NotifySprintQualifyingResults, stored.NotifyWeekendSchedule, stored.NotifyRaceReminder, stored.NotifyDisqualification, stored.NotifySafetyCar,
+            stored.NotifyRedFlag,
+        }.Should().OnlyContain(on => !on, "an empty selection switches every notification off");
     }
 
     // ================================================================== E. form safety
@@ -612,6 +770,31 @@ public sealed class TsqAdminCommandTests
 
     private static ITextChannel TextChannel(ulong id, ulong? guild = null) =>
         InterfaceFake.Create<ITextChannel>(new() { ["Id"] = id, ["GuildId"] = guild ?? Guild.Value });
+
+    /// <summary>
+    /// The modal's top-level components exactly as Discord.Net 3.20.1 serializes them in RespondWithModalAsync
+    /// (<c>modal.Component.Components.Select(x =&gt; x.ToModel())</c>, its internal API models and JSON contract resolver).
+    /// </summary>
+    private static JsonArray DiscordPayload(Modal modal)
+    {
+        var rest = typeof(global::Discord.Rest.DiscordRestClient).Assembly;
+        var toModel = rest.GetTypes().Single(t => t.Name == "MessageComponentExtension")
+            .GetMethod("ToModel", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, [typeof(IMessageComponent)])!;
+        var resolver = (Newtonsoft.Json.Serialization.IContractResolver)Activator.CreateInstance(rest.GetType("Discord.Net.Converters.DiscordContractResolver")!, nonPublic: true)!;
+        var serializer = new Newtonsoft.Json.JsonSerializer { ContractResolver = resolver };
+        using var writer = new StringWriter(System.Globalization.CultureInfo.InvariantCulture);
+        serializer.Serialize(writer, modal.Component.Components.Select(c => toModel.Invoke(null, [c])).ToArray());
+        return JsonNode.Parse(writer.ToString())!.AsArray();
+    }
+
+    /// <summary>"18>3[16]": a label (18) wrapping a string select (3) with 16 options.</summary>
+    private static string Shape(JsonNode label)
+    {
+        var inner = label["component"]!;
+        // Discord.Net sends an empty "options" array for auto-populated (role/channel) selects, as for the LFG voice select.
+        var options = inner["options"] is JsonArray { Count: > 0 } list ? $"[{list.Count}]" : "";
+        return $"{(int)label["type"]!}>{(int)inner["type"]!}{options}";
+    }
 
     private static List<string> CustomIds(MessageComponent components) =>
         components.Components.OfType<ActionRowComponent>().SelectMany(r => r.Components)

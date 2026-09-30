@@ -122,9 +122,14 @@ public sealed class EsportsAdminOperations(
             return;
         }
 
+        if (AdminForms.ChangedSwitches(call, snapshot.Switches) is not { } changed)
+        {
+            await call.ReplyTextAsync("admin.form.incomplete");
+            return;
+        }
+
         if (!await AdminForms.ClaimAsync(call))
             return;
-        var changed = AdminForms.ChangedSwitches(call, snapshot.Switches);
         bool? Get(string name) => changed.TryGetValue(name, out var value) ? value : null;
         var channel = picked is { } id && id != snapshot.Channel ? id : (ulong?)null;
         int? lead = minutes != snapshot.Minutes ? minutes : null;

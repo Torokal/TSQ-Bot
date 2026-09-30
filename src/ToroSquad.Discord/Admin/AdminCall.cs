@@ -54,6 +54,19 @@ public sealed record AdminInput(
 {
     public static readonly AdminInput None = new([], new Dictionary<string, IReadOnlyList<string>>(), [], []);
 
+    /// <summary>A button or select click: its values and Discord's resolved members and channels.</summary>
+    public static AdminInput FromComponent(IComponentInteractionData data) =>
+        new(data.Values?.ToList() ?? [], new Dictionary<string, IReadOnlyList<string>>(), data.Members?.ToList() ?? [], data.Channels?.Cast<IChannel>().ToList() ?? []);
+
+    /// <summary>
+    /// A submitted modal: every field by custom id — a text input's value, or a select's / checkbox group's values (an empty
+    /// list when nothing is ticked). A field Discord did not send is absent, not empty.
+    /// </summary>
+    public static AdminInput FromModal(IModalInteractionData data) =>
+        new([], data.Components.Where(c => !string.IsNullOrEmpty(c.CustomId)).GroupBy(c => c.CustomId).ToDictionary(g => g.Key,
+                g => (IReadOnlyList<string>)(g.First().Value is { } text ? [text] : g.First().Values?.ToList() ?? [])),
+            data.Members?.ToList() ?? [], data.Channels?.Cast<IChannel>().ToList() ?? []);
+
     public string? Text(string field) => Fields.TryGetValue(field, out var v) && v.Count > 0 ? v[0] : null;
 
     public IReadOnlyList<string> Selected(string field) => Fields.TryGetValue(field, out var v) ? v : [];

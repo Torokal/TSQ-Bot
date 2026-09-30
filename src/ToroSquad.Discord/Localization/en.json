@@ -133,5 +133,6 @@
   "admin.form.turn_off": "Off",
   "admin.form.page": "Page {0}/{1}",
   "admin.form.previous": "◀ Previous",
-  "admin.form.next": "Next ▶"
+  "admin.form.next": "Next ▶",
+  "admin.form.incomplete": "The form arrived incomplete; no setting changed. Open it again and retry."
 }
