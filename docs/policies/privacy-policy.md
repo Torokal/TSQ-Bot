@@ -13,7 +13,7 @@
 - **Doğum gününüz** (`/birthday set` ile siz ya da bir sunucu yöneticisi — Administrator — kaydederse, TSQ Doğum Günü
   modülü açıksa): yalnızca gün ve ay — doğum yılı sorulmaz ve saklanmaz — ile kutlama/rol kaydı. Doğum gününüzde duyuruda
   etiketlenirsiniz. Kendi kaydınızı `/birthday show` ile görürsünüz; sunucunun Administrator yetkili yöneticileri veya
-  sunucu sahibi yalnızca sizin kaydınızı tek tek görebilir (`/birthday-admin show`, kayıt altına alınır). Doğum günlerinin
+  sunucu sahibi yalnızca sizin kaydınızı tek tek görebilir (`/tsq-admin birthday show`, kayıt altına alınır). Doğum günlerinin
   toplu veya herkese açık bir listesi yoktur. `/birthday remove` veya `/privacy delete` ile silinir.
 - **Randomizer komutları** (`/zarat`, `/randomsayi`, `/sec`, `/yazitura`; TSQ Randomizer modülü açıksa): yazdığınız girdi
   ve sunucudaki görünen adınız yalnızca o anki sonuç kartı için işlenir; sonuçlar, seçenek metinleri ve adınız saklanmaz ve

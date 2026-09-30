@@ -12,14 +12,14 @@ Her sunucuda varsayılan kapalıdır (`/modules enable birthday`).
 | `/birthday set <tarih>` | herkes | `14.03`, `14/03` veya `14-03` (gün önce). Var olan kaydı günceller. Olmayan tarihler (`31.02`, `00.05`, `32.01`, `13.13`) ve yıl içeren girdiler reddedilir; `29.02` geçerlidir. Cevaba her zaman "🎂 Lütfen gerçek doğum gününüzü giriniz. Bizim için önemli." eklenir |
 | `/birthday show` | herkes | Yalnızca kendi kaydını gösterir |
 | `/birthday remove` | herkes | Kendi kaydını siler; o gün botun verdiği rol bir sonraki turda geri alınır |
-| `/birthday-admin set member:@üye date:14.03` | **Administrator** veya sunucu sahibi | Başka bir üyenin gün + ayını oluşturur/günceller (aynı `(sunucu, kullanıcı)` kaydı, aynı tarih kuralları). Manage Server yetmez. Hedef bu sunucunun insan üyesi olmalı |
-| `/birthday-admin show member:@üye` | **Administrator** veya sunucu sahibi | Tek bir üyenin kayıtlı gün + ayını gösterir ("🎂 @X kullanıcısının kayıtlı doğum günü: 14 Mart" / "… kayıtlı bir doğum günü yok."). Yetki DB okunmadan önce denetlenir; yetkisiz kişi kayıt olup olmadığını bile öğrenemez. Her bakış denetim logudur (tarih loglanmaz). Hedef bu sunucunun insan üyesi olmalı |
-| `/birthday-admin configure channel:` | Manage Server | Duyuru kanalı (bu sunucuda, botun görebildiği metin kanalı; tahmin edilmez) |
-| `/birthday-admin status` | Manage Server | Modül, kanal, rol ID, saat dilimi ve bugünün tarihi, kayıt sayısı, bugünkü kutlama sayısı ve duyuru durumu, aktif/sorunlu rol sayısı, zamanlayıcı |
-| `/birthday-admin doctor` | Manage Server | Yapılandırma, modül, veritabanı, kanal (var mı, görme, mesaj gönderme), rol (var mı, Rolleri Yönet, **hiyerarşi**, yönetilen rol, ek izin), zamanlayıcı, gönderim modu |
+| `/tsq-admin birthday set member:@üye date:14.03` | **Administrator** veya sunucu sahibi | Başka bir üyenin gün + ayını oluşturur/günceller (aynı `(sunucu, kullanıcı)` kaydı, aynı tarih kuralları). Manage Server yetmez. Hedef bu sunucunun insan üyesi olmalı |
+| `/tsq-admin birthday show member:@üye` | **Administrator** veya sunucu sahibi | Tek bir üyenin kayıtlı gün + ayını gösterir ("🎂 @X kullanıcısının kayıtlı doğum günü: 14 Mart" / "… kayıtlı bir doğum günü yok."). Yetki DB okunmadan önce denetlenir; yetkisiz kişi kayıt olup olmadığını bile öğrenemez. Her bakış denetim logudur (tarih loglanmaz). Hedef bu sunucunun insan üyesi olmalı |
+| `/tsq-admin birthday configure channel:` | Manage Server | Duyuru kanalı (bu sunucuda, botun görebildiği metin kanalı; tahmin edilmez) |
+| `/tsq-admin birthday status` | Manage Server | Modül, kanal, rol ID, saat dilimi ve bugünün tarihi, kayıt sayısı, bugünkü kutlama sayısı ve duyuru durumu, aktif/sorunlu rol sayısı, zamanlayıcı |
+| `/tsq-admin birthday doctor` | Manage Server | Yapılandırma, modül, veritabanı, kanal (var mı, görme, mesaj gönderme), rol (var mı, Rolleri Yönet, **hiyerarşi**, yönetilen rol, ek izin), zamanlayıcı, gönderim modu |
 
 Tüm cevaplar ephemeral ve ping'siz. Toplu/herkese açık doğum günü listesi **yoktur**. Başkasının kaydını yalnızca
-`/birthday-admin show` (tek üye, okuma) ve `/birthday-admin set` (yazma) görür/değiştirir. Discord bir alt komutu ayrı
+`/tsq-admin birthday show` (tek üye, okuma) ve `/tsq-admin birthday set` (yazma) görür/değiştirir. Discord bir alt komutu ayrı
 gizleyemediği için `set` ve `show` Manage Server sahiplerine de görünür; yetki
 sunucu tarafında çağıranın gerçek izinlerinden denetlenir (`Authorize.Require(..., Administrator)`; `ActorContext.Has`
 sunucu sahibini de kabul eder = `user.Id == guild.OwnerId || Administrator`; rol adına bakılmaz). Yetkisiz çağrı hiçbir şey
@@ -99,5 +99,5 @@ Log olayları: `birthday_registered`, `birthday_updated`, `birthday_removed`, `b
 ## Canlıya alma
 
 1. Deploy (migration açılışta uygulanır), `scripts/Sync-Commands.ps1` önce dry-run, sonra onayla.
-2. `/birthday-admin configure channel:#kanal` → `/birthday-admin doctor` (hiyerarşi ✅ olmalı).
+2. `/tsq-admin birthday configure channel:#kanal` → `/tsq-admin birthday doctor` (hiyerarşi ✅ olmalı).
 3. `/modules enable birthday`. Etkinleştirmeden önce hiçbir şey duyurulmaz ve rol verilmez.

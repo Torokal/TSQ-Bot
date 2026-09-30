@@ -150,7 +150,7 @@ gönderimlerin uzlaştırılması için, önerilir).
 
 ## Tanı ve loglar
 
-- `/live-admin doctor` (Manage Server): `Live:Enabled`, modül kapısı, hedef kanal ve izinler (Mention Everyone dahil),
+- `/tsq-admin live doctor` (Manage Server): `Live:Enabled`, modül kapısı, hedef kanal ve izinler (Mention Everyone dahil),
   gönderim modu, platform başına yetkilendirme durumu ve son başarılı uzlaştırma, olay aktarımı, her yayıncının faz /
   platform durumu / oturum / duyuru mesaj bağlantısı / başlık, 24 saatlik gönderim istatistiği. Sağlayıcıya istek atmaz.
 - `/bot status`: Twitch/Kick uzlaştırma sağlığı. CLI `doctor`: `Live` yapılandırması ve kimlik bilgilerinin varlığı

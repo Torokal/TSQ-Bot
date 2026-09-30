@@ -21,6 +21,44 @@ bağlamında (`contexts=[0]`, `integration_types=[0]`); DM komutu ve DM bildirim
 | `/setup` | Dil → zaman dilimi (Europe/Istanbul varsayılan) → modül adımları (esports: kanal, pingsiz önizleme, etkinleştir). Düğmeler yalnızca sihirbazı açan kişi için ve her tıklamada yeniden yetki kontrolü |
 | `/modules list \| enable module: \| disable module:` | Modül durumları; kapatmak veri silmez; çekirdek kapatılamaz |
 
+## Modül yönetimi: tek kök `/tsq-admin` (`default_member_permissions = ManageGuild (32)` + sunucu tarafı yetki kontrolü)
+
+Modüllerin yönetici işlemleri tek bir slash komutunda toplanır: `/tsq-admin <modül> <işlem> [seçenekler]`. Her modül
+Discord'un yerel alt komut grubudur (`birthday`, `esports`, `f1`, `lfg`, `live`, `news`, `volleyball`); işlem ve seçenekler
+(kanal/rol/kullanıcı seçicileri, sayı sınırları, choice'lar, autocomplete) eskisiyle aynıdır. Discord bir komutun altında
+yalnızca bir grup seviyesine izin verdiği için eski alt grupların işlemleri `<altgrup>-<işlem>` adını alır
+(`/tsq-admin esports roles-map`, `/tsq-admin f1 configure-channel`).
+
+- Kök core'a aittir; her grup kendi modülüne aittir (`[ToroModule]` modül kapısı, servis katmanındaki `Authorize.Require`).
+  Kökün kendi ön koşulu yoktur: bir modülü kapatmak başka grupları etkilemez, kök de bir modülün kapısını atlatmaz. Tüm
+  gruplar modül kapalıyken de çalışır (eskiden olduğu gibi); esports `panel` modül açık değilse yine reddedilir.
+- `default_member_permissions` yalnızca kökte vardır (Discord alt komut/grup başına izin desteklemez): eski yedi kökün hepsi
+  gibi **Manage Server**. Daha sıkı kontroller sunucu tarafında aynen kalır: `/tsq-admin birthday set|show` Administrator
+  veya sunucu sahibi ister, esports rol işlemleri ayrıca Manage Roles + hiyerarşi ister.
+- Arayüz farkı: Discord'un Sunucu Ayarları → Entegrasyonlar ekranında izin artık tüm `/tsq-admin` için tek komut olarak
+  verilir; eski köklere tek tek verilmiş özel izinler yeni köke kendiliğinden taşınmaz (komut ID'si değişir).
+- `/help` yöneticilere `/tsq-admin` yerine açık modüllerin gruplarını ayrı satırlarda gösterir.
+
+### Eski → yeni komut yolları (2026-09-30 birleşmesi)
+
+| Eski | Yeni |
+|---|---|
+| `/birthday-admin set \| show \| configure \| status \| doctor` | `/tsq-admin birthday set \| show \| configure \| status \| doctor` |
+| `/esports-admin configure \| panel \| preview \| pause \| resume \| doctor` | `/tsq-admin esports configure \| panel \| preview \| pause \| resume \| doctor` |
+| `/esports-admin filters show \| team \| tournament \| tier \| vrs \| clear` | `/tsq-admin esports filters-show \| filters-team \| filters-tournament \| filters-tier \| filters-vrs \| filters-clear` |
+| `/esports-admin roles list \| map \| unmap \| selfservice` | `/tsq-admin esports roles-list \| roles-map \| roles-unmap \| roles-selfservice` |
+| `/f1-admin preview \| status \| doctor \| pause \| resume` | `/tsq-admin f1 preview \| status \| doctor \| pause \| resume` |
+| `/f1-admin configure channel \| notifications \| role \| spoilers` | `/tsq-admin f1 configure-channel \| configure-notifications \| configure-role \| configure-spoilers` |
+| `/lfg-admin channel \| status` | `/tsq-admin lfg channel \| status` |
+| `/live-admin doctor` | `/tsq-admin live doctor` |
+| `/news-admin configure \| pause \| resume \| preview \| status \| doctor` | `/tsq-admin news configure \| pause \| resume \| preview \| status \| doctor` |
+| `/volleyball-admin preview \| status \| doctor \| pause \| resume` | `/tsq-admin volleyball preview \| status \| doctor \| pause \| resume` |
+| `/volleyball-admin configure channel \| notifications \| role` | `/tsq-admin volleyball configure-channel \| configure-notifications \| configure-role` |
+
+Eski adlar takma ad olarak kaydedilmez. Adı `-admin` ile bitmeyen komutlar (`/giveaway`, `/ozetle`, `/setup`, `/modules`,
+`/help`, `/bot`, `/privacy`, `/esports`, `/f1`, `/volleyball`, `/birthday`, `/quote`, Apps → Quote, `/ekip`, döviz, saat,
+randomizer, `/ongoru`) değişmedi. Tablonun tamamı (47 işlem) `TsqAdminCommandTests.Moves` içinde test edilir.
+
 ## Formula 1 (modül açıkken)
 
 | Komut | Ne yapar |
@@ -33,15 +71,15 @@ bağlamında (`contexts=[0]`, `integration_types=[0]`); DM komutu ve DM bildirim
 
 Hepsi yalnızca botun önbelleğinden okur (etkileşim yolunda sağlayıcı çağrısı yok; mimari testli) ve ephemeral yanıt verir.
 
-## Formula 1 yönetici (`/f1-admin`, ManageGuild + sunucu tarafı `Authorize.Require`)
+## Formula 1 yönetici (`/tsq-admin f1`, ManageGuild + sunucu tarafı `Authorize.Require`)
 
 | Komut | Ne yapar |
 |---|---|
-| `/f1-admin configure channel` | Bildirim kanalı (bu sunucudan; eksik izinler uyarılır, başka kanala otomatik geçiş yok) |
-| `/f1-admin configure notifications` | Antrenman/sprint/yarış başlangıç ve sonuç, puan durumu; sıralama türleri (vars. kapalı) |
-| `/f1-admin configure role` | İsteğe bağlı ping rolü (`ping_role`; asla @everyone), başlangıç/sonuç ping anahtarları, `clear` |
-| `/f1-admin configure spoilers` | Spoiler modu |
-| `/f1-admin preview` · `status` · `doctor` · `pause` · `resume` | TEST/DEMO pingsiz önizleme · ayarlar · tanı · duraklat/devam |
+| `/tsq-admin f1 configure-channel` | Bildirim kanalı (bu sunucudan; eksik izinler uyarılır, başka kanala otomatik geçiş yok) |
+| `/tsq-admin f1 configure-notifications` | Antrenman/sprint/yarış başlangıç ve sonuç, puan durumu; sıralama türleri (vars. kapalı) |
+| `/tsq-admin f1 configure-role` | İsteğe bağlı ping rolü (`ping_role`; asla @everyone), başlangıç/sonuç ping anahtarları, `clear` |
+| `/tsq-admin f1 configure-spoilers` | Spoiler modu |
+| `/tsq-admin f1 preview` · `status` · `doctor` · `pause` · `resume` | TEST/DEMO pingsiz önizleme · ayarlar · tanı · duraklat/devam |
 
 Ayrıntı: [FORMULA1.md](FORMULA1.md).
 
@@ -51,8 +89,8 @@ Ayrıntı: [FORMULA1.md](FORMULA1.md).
 |---|---|
 | `/volleyball next` | Sıradaki (veya sağlayıcıya göre süren) maç: rakip, saat, turnuva, salon, güncellik |
 | `/volleyball schedule` | Yaklaşan maçlar ve son sonuçlar |
-| `/volleyball-admin configure channel \| notifications \| role` | Yönetici (ManageGuild + `Authorize.Require`): kanal; `match_reminder_15m`, `match_started`, `set_finished`, `match_finished`, `match_postponed_cancelled`; isteğe bağlı `ping_role` (asla @everyone) |
-| `/volleyball-admin preview` · `status` · `doctor` · `pause` · `resume` | TEST/DEMO pingsiz önizleme · ayarlar · tanı · duraklat/devam |
+| `/tsq-admin volleyball configure-channel \| configure-notifications \| configure-role` | Yönetici (ManageGuild + `Authorize.Require`): kanal; `match_reminder_15m`, `match_started`, `set_finished`, `match_finished`, `match_postponed_cancelled`; isteğe bağlı `ping_role` (asla @everyone) |
+| `/tsq-admin volleyball preview` · `status` · `doctor` · `pause` · `resume` | TEST/DEMO pingsiz önizleme · ayarlar · tanı · duraklat/devam |
 
 Başka takım seçtiren komut yoktur. Ayrıntı: [volleyball/VOLLEYBALL.md](volleyball/VOLLEYBALL.md).
 
@@ -60,7 +98,7 @@ Başka takım seçtiren komut yoktur. Ayrıntı: [volleyball/VOLLEYBALL.md](voll
 
 | Komut | Ne yapar |
 |---|---|
-| `/live-admin doctor` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): `Live:Enabled`, modül kapısı, duyuru kanalı ve izinleri (Mention Everyone dahil), Twitch/Kick yetkilendirme ve son başarılı uzlaştırma, yayıncı durumları ve duyuru mesajları. Sağlayıcıya istek atmaz, secret göstermez |
+| `/tsq-admin live doctor` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): `Live:Enabled`, modül kapısı, duyuru kanalı ve izinleri (Mention Everyone dahil), Twitch/Kick yetkilendirme ve son başarılı uzlaştırma, yayıncı durumları ve duyuru mesajları. Sağlayıcıya istek atmaz, secret göstermez |
 
 Duyuru gönderen, yayıncı ekleyen veya ping atan komut yoktur (yayıncılar ve kanal yapılandırmadır). Ayrıntı:
 [live/TSQ_LIVE.md](live/TSQ_LIVE.md).
@@ -76,8 +114,8 @@ Duyuru gönderen, yayıncı ekleyen veya ping atan komut yoktur (yayıncılar ve
 | Buton `İlanı Kapat` (`tsq:lfg:close:<id>`) → `Evet, kapat` / `Vazgeç` | Yalnızca ilan sahibi veya **Manage Messages** (ya da Administrator) yetkili moderatör (`Authorize.Require`); ephemeral onay |
 | Buton `🔊 Ses Odası` / `🔊 Ses Odasına Katıl` (`tsq:lfg:voice:<id>`, kart ve bildirimlerde) | Yalnızca Joined oyuncu; zaten seste olanı bot Move Members + Connect ile taşır, aksi hâlde kanal + "Ses kanalını aç" link butonu (sese otomatik bağlama yok — Discord API'si izin vermez) |
 | Etkinlik bildirimleri (isteğe bağlı) | Başlangıçtan 30 dk önce / başlangıçta **yalnızca Joined oyuncuları** etiketleyen yeni mesajlar (outbox; tekrarsız, geç gönderilmez) |
-| `/lfg-admin channel [channel]` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): `/ekip`'i tek kanala kısıtlar; boş = her kanal |
-| `/lfg-admin status` | Yönetici: modül durumu, kanal, aktif ilan sayıları, sınırlar, bekleyen kart düzenlemeleri |
+| `/tsq-admin lfg channel [channel]` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): `/ekip`'i tek kanala kısıtlar; boş = her kanal |
+| `/tsq-admin lfg status` | Yönetici: modül durumu, kanal, aktif ilan sayıları, sınırlar, bekleyen kart düzenlemeleri |
 
 Bot izinleri (ilan kanalı): `ViewChannel`, `SendMessages`, `EmbedLinks` (süre dolumu/kapatma düzenlemesi); isteğe bağlı
 `ReadMessageHistory` (silinen kartın erken fark edilmesi); ses kanalında `MoveMembers` + `Connect` (seste olanı tek tıkla
@@ -189,14 +227,14 @@ gönderiminde, önizleme onayında ve her bileşen tıklamasında sunucu tarafı
 kanalı View Channel, Send Messages, Embed Links, Read Message History; komut kanalı View Channel, Send Messages, Embed Links.
 Add Reactions ve Administrator gerekmez. Ayrıntı: [predictions/TSQ_PREDICTIONS.md](predictions/TSQ_PREDICTIONS.md).
 
-## TSQ Haber — Aurora · HLTV (`/news-admin`, ManageGuild + sunucu tarafı `Authorize.Require`)
+## TSQ Haber — Aurora · HLTV (`/tsq-admin news`, ManageGuild + sunucu tarafı `Authorize.Require`)
 
 | Komut | Ne yapar |
 |---|---|
-| `/news-admin configure channel:` | Haber kanalı (View Channel + Send Messages + Embed Links; yalnızca bundan sonra yayımlanan haberler) |
-| `/news-admin pause` / `resume` | Gönderimi duraklatır / sürdürür (duraklatma dönemi telafi edilmez) |
-| `/news-admin preview` | Son eşleşen gerçek haberin veya açıkça sentetik örneğin kartını yalnızca yöneticiye gösterir |
-| `/news-admin status` · `doctor` | Mod, modül, kanal/izinler, akış sonucu ve sonraki kontrol, baseline, kadro güncelliği, kapsam |
+| `/tsq-admin news configure channel:` | Haber kanalı (View Channel + Send Messages + Embed Links; yalnızca bundan sonra yayımlanan haberler) |
+| `/tsq-admin news pause` / `resume` | Gönderimi duraklatır / sürdürür (duraklatma dönemi telafi edilmez) |
+| `/tsq-admin news preview` | Son eşleşen gerçek haberin veya açıkça sentetik örneğin kartını yalnızca yöneticiye gösterir |
+| `/tsq-admin news status` · `doctor` | Mod, modül, kanal/izinler, akış sonucu ve sonraki kontrol, baseline, kadro güncelliği, kapsam |
 
 Tüm cevaplar ephemeral. Komutlar modül kapalıyken de çalışır. Elle haber/bağlantı komutu yoktur. Ayrıntı:
 [news/TSQ_NEWS.md](news/TSQ_NEWS.md).
@@ -206,10 +244,10 @@ Tüm cevaplar ephemeral. Komutlar modül kapalıyken de çalışır. Elle haber/
 | Komut | Ne yapar |
 |---|---|
 | `/birthday set <tarih>` · `show` · `remove` | Herkes, yalnızca **kendi** kaydı: gün + ay (`14.03`, `14/03`, `14-03`; yıl yok). Başkasının kaydına erişen komut veya liste yok |
-| `/birthday-admin set member:@üye date:14.03` | **Yalnızca Administrator veya sunucu sahibi** (etkin izinlerden, sunucu tarafında; Manage Server yetmez): başka bir üyenin gün + ayını oluşturur/günceller; ephemeral, ping'siz cevap |
-| `/birthday-admin show member:@üye` | **Yalnızca Administrator veya sunucu sahibi** (etkin izinlerden, DB okunmadan önce; Manage Server yetmez): tek bir üyenin kayıtlı gün + ayını gösterir; ephemeral, ping'siz; denetim logu (tarih yok). Liste komutu yok |
-| `/birthday-admin configure channel:` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): duyuru kanalı |
-| `/birthday-admin status` · `doctor` | Yönetici: ayarlar, bugünün durumu, zamanlayıcı; kanal/rol hiyerarşisi/izin/veritabanı kontrolü |
+| `/tsq-admin birthday set member:@üye date:14.03` | **Yalnızca Administrator veya sunucu sahibi** (etkin izinlerden, sunucu tarafında; Manage Server yetmez): başka bir üyenin gün + ayını oluşturur/günceller; ephemeral, ping'siz cevap |
+| `/tsq-admin birthday show member:@üye` | **Yalnızca Administrator veya sunucu sahibi** (etkin izinlerden, DB okunmadan önce; Manage Server yetmez): tek bir üyenin kayıtlı gün + ayını gösterir; ephemeral, ping'siz; denetim logu (tarih yok). Liste komutu yok |
+| `/tsq-admin birthday configure channel:` | Yönetici (ManageGuild + `Authorize.Require`; modül kapalıyken de çalışır): duyuru kanalı |
+| `/tsq-admin birthday status` · `doctor` | Yönetici: ayarlar, bugünün durumu, zamanlayıcı; kanal/rol hiyerarşisi/izin/veritabanı kontrolü |
 
 Bot izinleri: duyuru kanalında `ViewChannel` + `SendMessages` (düz mesaj; yalnızca o günün kutlananlarını pingler, @everyone/rol asla); Doğum Günü rolü için sunucuda
 `Manage Roles` ve botun en yüksek rolü bu rolün **üstünde**. Ek gateway intent'i gerekmez (üye rolleri REST ile okunur).
@@ -231,13 +269,13 @@ Ayrıntı: [birthday/TSQ_BIRTHDAY.md](birthday/TSQ_BIRTHDAY.md).
 
 | Komut | Not |
 |---|---|
-| `/esports-admin configure` | `channel` (kanal seçici), `reminders`, `reminder_minutes` 1–120, `results`, `spoilers`. Kanal bu sunucuda ve metin kanalı olmalı; eksik bot izinleri uyarılır |
-| `/esports-admin filters show \| team \| tournament \| tier \| vrs \| clear` | Kural: aynı tür VEYA, farklı türler VE; VRS verisi yoksa filtre durdurur |
-| `/esports-admin roles list \| map \| unmap \| selfservice` | `map`: mevcut rolü ping hedefi yapar (managed/@everyone reddedilir; bahsedilemez rol için yöneticinin de Herkesten Bahset izni olmalı). `selfservice`: ayrı onay, güvenlik denetimi, onaylayan rolden yukarıda olmalı |
-| `/esports-admin panel` | Herkese açık takip düğmeleri (durumsuz custom id → yeniden başlatmada çalışır; modül kapalıysa reddedilir) |
-| `/esports-admin preview` | Ping atmayan önizleme; pinglenecek rolleri metin olarak listeler |
-| `/esports-admin pause` / `resume` | Resume, watermark'ı ileri alır: kaçanlar topluca gönderilmez |
-| `/esports-admin doctor` | Kanal izinleri tek tek, rol ping'i/self-service güvenliği, sağlayıcı modu/durumu, VRS, 24 saatlik gönderim istatistiği |
+| `/tsq-admin esports configure` | `channel` (kanal seçici), `reminders`, `reminder_minutes` 1–120, `results`, `spoilers`. Kanal bu sunucuda ve metin kanalı olmalı; eksik bot izinleri uyarılır |
+| `/tsq-admin esports filters-show \| filters-team \| filters-tournament \| filters-tier \| filters-vrs \| filters-clear` | Kural: aynı tür VEYA, farklı türler VE; VRS verisi yoksa filtre durdurur |
+| `/tsq-admin esports roles-list \| roles-map \| roles-unmap \| roles-selfservice` | `roles-map`: mevcut rolü ping hedefi yapar (managed/@everyone reddedilir; bahsedilemez rol için yöneticinin de Herkesten Bahset izni olmalı). `roles-selfservice`: ayrı onay, güvenlik denetimi, onaylayan rolden yukarıda olmalı |
+| `/tsq-admin esports panel` | Herkese açık takip düğmeleri (durumsuz custom id → yeniden başlatmada çalışır; modül kapalıysa reddedilir) |
+| `/tsq-admin esports preview` | Ping atmayan önizleme; pinglenecek rolleri metin olarak listeler |
+| `/tsq-admin esports pause` / `resume` | Resume, watermark'ı ileri alır: kaçanlar topluca gönderilmez |
+| `/tsq-admin esports doctor` | Kanal izinleri tek tek, rol ping'i/self-service güvenliği, sağlayıcı modu/durumu, VRS, 24 saatlik gönderim istatistiği |
 
 Yönetici esports yapılandırması modül kapalıyken de yapılabilir (etkinleştirmeden önce kurulum için); kullanıcı komutları,
 panel, autocomplete ve bildirimler modül kapalıyken çalışmaz.

@@ -137,7 +137,7 @@ port, başka yol reddedilir; sorgu ve parça atılır). Bağlantı varlığını
 - **Düzeltme:** aynı kimlikte başlık/bağlantı değişirse aynı outbox anahtarıyla yeniden planlanır → aynı mesaj **sessizce
   düzenlenir** (içerik aynıysa düzenleme yok). Moderatörün sildiği kart yeniden oluşturulmaz. Daha önce eşleşmemiş bir haberin
   akıştaki içeriği değişirse yeniden değerlendirilir (baseline'dakiler baseline kalır).
-- **İlk aktivasyon / devam:** kanal ilk kez ayarlandığında veya `/news-admin resume` sonrasında yalnızca o andan sonra
+- **İlk aktivasyon / devam:** kanal ilk kez ayarlandığında veya `/tsq-admin news resume` sonrasında yalnızca o andan sonra
   **görülen ve yayımlanan** haberler gönderilir; duraklatma dönemi telafi edilmez.
 - **Kesinti sonrası:** yalnızca son `News:CatchUpHours` (6 saat) içinde yayımlanmış haberler, tur başına en fazla
   `News:MaxCardsPerRound` (3) kart; kalanlar sonraki turlarda. Akıştan düşmüş haberler RSS ile geri getirilemez; son başarılı
@@ -178,11 +178,11 @@ hatırlatılır).
 
 | Komut | Ne yapar |
 |---|---|
-| `/news-admin configure channel:` | Haber kanalı (bu sunucuda, botun görebildiği metin/duyuru kanalı; View + Send + Embed Links denetlenir) |
-| `/news-admin pause` / `resume` | Gönderimi duraklatır / sürdürür (duraklatma dönemi telafi edilmez) |
-| `/news-admin preview` | En son eşleşen gerçek haberin veya açıkça **sentetik** bir örneğin kartını yalnızca yöneticiye gösterir; kanala gönderilmez |
-| `/news-admin status` | Mod, modül, kanal, son akış sonucu, son kart, kadro kaynağı/güncelliği, kapsam |
-| `/news-admin doctor` | Mod, modül, kanal ve izinler, akış (son başarı, HTTP, ardışık hata, sonraki kontrol), baseline, kapsama boşluğu, kadro, kapsam, koşullar |
+| `/tsq-admin news configure channel:` | Haber kanalı (bu sunucuda, botun görebildiği metin/duyuru kanalı; View + Send + Embed Links denetlenir) |
+| `/tsq-admin news pause` / `resume` | Gönderimi duraklatır / sürdürür (duraklatma dönemi telafi edilmez) |
+| `/tsq-admin news preview` | En son eşleşen gerçek haberin veya açıkça **sentetik** bir örneğin kartını yalnızca yöneticiye gösterir; kanala gönderilmez |
+| `/tsq-admin news status` | Mod, modül, kanal, son akış sonucu, son kart, kadro kaynağı/güncelliği, kapsam |
+| `/tsq-admin news doctor` | Mod, modül, kanal ve izinler, akış (son başarı, HTTP, ardışık hata, sonraki kontrol), baseline, kapsama boşluğu, kadro, kapsam, koşullar |
 
 Elle haber/bağlantı ekleme, silme veya kanal dışı hedef komutu **yoktur**. Komutlar modül kapalıyken de çalışır (önce kanal ve
 doctor, sonra etkinleştirme). Salt-okuma CLI: `dotnet run --project src/ToroSquad.Bot -- news check [--roster]` — gerçek akışı
@@ -196,14 +196,14 @@ gönderim değildir, ama ilk canlı açılışta istenmez. Bu yüzden ilk canlı
 `resume` başlangıç zamanlarını yeniler, `NewsModeTransitionTests` bunu doğrular):
 
 1. PR'ı merge et (Railway deploy eder; `News:Mode=Off` olduğu için hiçbir şey değişmez).
-2. `scripts/Sync-Commands.ps1` ile `/news-admin`'i ana sunucuya senkronla (önce dry-run).
-3. `/news-admin configure channel:#haber` → `/modules enable news` → `/news-admin doctor`.
-4. İsteğe bağlı simülasyon: `TOROSQUAD_News__Mode=DryRun` (restart) → loglarda `[DRY-RUN]` kartlarını ve `/news-admin doctor`'ı izle.
-5. `/news-admin pause`.
+2. `scripts/Sync-Commands.ps1` ile `/tsq-admin news`'i ana sunucuya senkronla (önce dry-run).
+3. `/tsq-admin news configure channel:#haber` → `/modules enable news` → `/tsq-admin news doctor`.
+4. İsteğe bağlı simülasyon: `TOROSQUAD_News__Mode=DryRun` (restart) → loglarda `[DRY-RUN]` kartlarını ve `/tsq-admin news doctor`'ı izle.
+5. `/tsq-admin news pause`.
 6. `TOROSQUAD_News__Mode=Live` (restart). Duraklatılmış tek sunucu varken akış isteği de yapılmaz.
-7. `/news-admin resume` → yalnızca bu andan sonra yayımlanan haberler canlıya gider; DryRun dönemindeki haberler atlanır.
+7. `/tsq-admin news resume` → yalnızca bu andan sonra yayımlanan haberler canlıya gider; DryRun dönemindeki haberler atlanır.
 
-Geri alma: `/news-admin pause`, `/modules disable news` veya `TOROSQUAD_News__Mode=Off`.
+Geri alma: `/tsq-admin news pause`, `/modules disable news` veya `TOROSQUAD_News__Mode=Off`.
 
 ## Doğrulama durumu
 

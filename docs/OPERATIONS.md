@@ -53,7 +53,7 @@ tutulurken (bot çalışıyorsa) reddeder. Yedekler kullanıcı verisi içerir: 
 - Loglar konsola, secret maskelemeli özel formatla. Önemli satırlar: `Esports poll: …`, `Outbox recovery`,
   `delivery unknown`, `Command manifest OK/problem`.
 - Kullanıcıya hata yerine takip kodu gösterilir (`TS-XXXXXXXX`); loglarda aynı kodla aranır.
-- Sunucu yöneticisi: `/esports-admin doctor`. İşletmeci: `.\scripts\Doctor.ps1`.
+- Sunucu yöneticisi: `/tsq-admin esports doctor`. İşletmeci: `.\scripts\Doctor.ps1`.
 
 ## Sürüm kontrol listesi
 1. `git status` temiz; `.\scripts\Test.ps1 -Repeat 3` yeşil.
