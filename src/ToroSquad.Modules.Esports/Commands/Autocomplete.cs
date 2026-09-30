@@ -7,8 +7,6 @@ using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Modules;
-using ToroSquad.Core.Security;
-using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Esports.Application;
 using ToroSquad.Modules.Esports.Domain;
@@ -31,9 +29,6 @@ public abstract class EsportsAutocompleteBase : AutocompleteHandler
         var gate = services.GetRequiredService<IModuleGate>();
         if (!await gate.IsEnabledAsync(guild, EsportsModule.ModuleIdTyped, CancellationToken.None) && !AllowWhenDisabled)
             return AutocompletionResult.FromSuccess();
-        // Discord only hides admin commands; a crafted autocomplete request must not read this server's settings either.
-        if (RequiresServerSettings && ActorFactory.From(context)?.Has(Authorize.ServerSettings) != true)
-            return AutocompletionResult.FromSuccess();
         var typed = TeamRankingResolver.Fold(autocompleteInteraction.Data.Current.Value?.ToString() ?? "");
         var results = await SuggestAsync(guild, new UserId(context.User.Id), typed, services);
         return AutocompletionResult.FromSuccess(results
@@ -42,9 +37,6 @@ public abstract class EsportsAutocompleteBase : AutocompleteHandler
     }
 
     protected virtual bool AllowWhenDisabled => false;
-
-    /// <summary>For suggestions that reveal server settings: only callers who may run the admin command get any.</summary>
-    protected virtual bool RequiresServerSettings => false;
 
     protected abstract Task<IEnumerable<(string Name, object Value)>> SuggestAsync(GuildId guild, UserId user, string typed, IServiceProvider services);
 
@@ -62,15 +54,6 @@ public sealed class TeamAutocomplete : EsportsAutocompleteBase
         (await services.GetRequiredService<TeamDirectory>().SuggestAsync(typed, CancellationToken.None))
             .Where(s => s.Key.Length <= 100)
             .Select(s => (s.Display, (object)s.Key));
-}
-
-/// <summary>Admin variant (works while the module is still disabled, e.g. configuring filters before enabling).</summary>
-public sealed class AdminTeamAutocomplete : EsportsAutocompleteBase
-{
-    protected override bool AllowWhenDisabled => true;
-
-    protected override Task<IEnumerable<(string Name, object Value)>> SuggestAsync(GuildId guild, UserId user, string typed, IServiceProvider services) =>
-        TeamAutocomplete.Suggest(typed, services);
 }
 
 /// <summary>Teams to follow, plus "all matches" when the server offers an all-matches self-service role.</summary>
@@ -104,39 +87,36 @@ public sealed class TournamentAutocomplete : EsportsAutocompleteBase
 {
     protected override bool AllowWhenDisabled => true;
 
-    protected override Task<IEnumerable<(string Name, object Value)>> SuggestAsync(GuildId guild, UserId user, string typed, IServiceProvider services)
+    protected override Task<IEnumerable<(string Name, object Value)>> SuggestAsync(GuildId guild, UserId user, string typed, IServiceProvider services) =>
+        Task.FromResult(Search(services.GetRequiredService<EsportsCache>(), typed).Select(t => (t.Name, (object)t.Key)));
+
+    /// <summary>Tournaments of the cached events and matches (no provider call), one per series, matching the folded text.</summary>
+    internal static IEnumerable<(string Name, string Key)> Search(EsportsCache cache, string typed)
     {
-        var cache = services.GetRequiredService<EsportsCache>();
         var fromEvents = (cache.Events.Data ?? []).Select(e => e.Tournament);
         var fromMatches = (cache.Matches.Data ?? []).Select(m => m.Tournament);
-        return Task.FromResult(fromEvents.Concat(fromMatches)
+        return fromEvents.Concat(fromMatches)
             .GroupBy(t => t.ParentKey ?? t.Key)
             .Select(g => g.First())
             .Where(t => Matches(typed, t.Name) && (t.ParentKey ?? t.Key).Length <= 100)
-            .Select(t => (t.Name, (object)(t.ParentKey ?? t.Key))));
+            .Select(t => (t.Name, t.ParentKey ?? t.Key));
     }
 }
 
-public sealed class MappingAutocomplete : EsportsAutocompleteBase
+/// <summary>How an admin sees a role mapping: "#id @role → team [self-service]" (role names from the cached role snapshot).</summary>
+public static class MappingLabels
 {
-    protected override bool AllowWhenDisabled => true;
-
-    protected override bool RequiresServerSettings => true;
-
-    protected override async Task<IEnumerable<(string Name, object Value)>> SuggestAsync(GuildId guild, UserId user, string typed, IServiceProvider services)
+    public static async Task<IReadOnlyList<(long Id, string Label)>> BuildAsync(GuildId guild, IReadOnlyList<RoleMappingView> rows, IServiceProvider services)
     {
-        var db = services.GetRequiredService<ToroDbContext>();
-        var rows = await db.Set<RoleMappingEntity>().AsNoTracking().Where(m => m.GuildId == guild.Value).OrderBy(m => m.Id).ToListAsync();
         var roleNames = new Dictionary<ulong, string>();
-        var gateway = services.GetRequiredService<ToroSquad.Core.Roles.IGuildGateway>();
-        var snapshot = await gateway.GetRoleSnapshotAsync(guild, CancellationToken.None);
+        var snapshot = await services.GetRequiredService<ToroSquad.Core.Roles.IGuildGateway>().GetRoleSnapshotAsync(guild, CancellationToken.None);
         foreach (var role in snapshot?.Roles ?? [])
             roleNames[role.Id.Value] = role.Name;
         return rows.Select(m =>
         {
             var role = roleNames.GetValueOrDefault(m.RoleId, m.RoleId.ToString(System.Globalization.CultureInfo.InvariantCulture));
             var scope = m.TeamKey.Length == 0 ? "*" : m.TeamName ?? m.TeamKey;
-            return ($"#{m.Id} @{role} → {scope}{(m.SelfService ? " [self-service]" : "")}", (object)m.Id);
-        }).Where(r => Matches(typed, r.Item1));
+            return (m.Id, DiscordText.UntrustedPlain($"#{m.Id} @{role} → {scope}{(m.SelfService ? " [self-service]" : "")}", 100));
+        }).ToList();
     }
 }

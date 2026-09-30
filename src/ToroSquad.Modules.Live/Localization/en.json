@@ -63,6 +63,6 @@
   "live.health.not_configured": "no credentials (NOT_CONFIGURED)",
   "live.health.no_data_yet": "no successful reconciliation yet",
   "live.health.data_age": "last successful reconciliation {0}",
-  "cmd.tsq-admin.live": "TSQ Live stream announcements (admins)",
-  "cmd.tsq-admin.live.doctor": "Diagnose Twitch/Kick tracking, Discord target and announcements"
+  "admin.live": "Live streams",
+  "admin.live.doctor": "Diagnose Twitch/Kick tracking, Discord target and announcements"
 }

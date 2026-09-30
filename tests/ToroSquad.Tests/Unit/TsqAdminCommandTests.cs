@@ -1,31 +1,30 @@
+using System.Collections;
 using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Discord;
 using Discord.Interactions;
-using Discord.Rest;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core;
 using ToroSquad.Core.Localization;
-using ToroSquad.Core.Modules;
+using ToroSquad.Core.Messaging;
+using ToroSquad.Core.Roles;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Discord.Commands.Manifest;
+using ToroSquad.Discord.Guilds;
 using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Birthday.Application;
-using ToroSquad.Modules.Birthday.Commands;
 using ToroSquad.Modules.Esports.Application;
 using ToroSquad.Modules.Esports.Commands;
+using ToroSquad.Modules.Esports.Domain;
 using ToroSquad.Modules.Esports.Persistence;
 using ToroSquad.Modules.Formula1.Application;
 using ToroSquad.Modules.Formula1.Commands;
 using ToroSquad.Modules.Lfg.Application;
-using ToroSquad.Modules.Lfg.Commands;
-using ToroSquad.Modules.Live.Application;
-using ToroSquad.Modules.Live.Commands;
 using ToroSquad.Modules.News.Application;
-using ToroSquad.Modules.News.Commands;
-using ToroSquad.Modules.Volleyball.Application;
 using ToroSquad.Modules.Volleyball.Commands;
 using ToroSquad.Tests.Support;
 using ActorContext = ToroSquad.Core.Security.ActorContext;
@@ -34,421 +33,614 @@ using CorePermission = ToroSquad.Core.Security.GuildPermission;
 namespace ToroSquad.Tests.Unit;
 
 /// <summary>
-/// The former top-level "*-admin" commands merged into ONE /tsq-admin root (one subcommand group per module). The inventory
-/// and the "before" payloads come from the manifest committed before the merge (Fixtures/commands/manifest-before-tsq-admin.json),
-/// never from class names. Dispatch runs through the real Discord.Net InteractionService the bot uses. Offline only: nothing
-/// here talks to Discord.
+/// <c>/tsq-admin</c> is ONE flat slash command: <c>modul</c> + <c>islem</c> (string, autocomplete) + <c>kanal</c>/<c>uye</c>/<c>rol</c>/<c>tarih</c>,
+/// no subcommand and no subcommand group. The 47 former "-admin" operations are routed by <see cref="AdminRouter"/> to their
+/// modules and run here against the real services (SQLite, fake Discord) through a recording <see cref="IAdminResponder"/>.
+/// The "before" payloads come from committed manifests (before the merge, and the grouped /tsq-admin now on main).
 /// </summary>
 public sealed class TsqAdminCommandTests
 {
     private static readonly GuildId Guild = new(42);
+    private static readonly ChannelId Channel = new(500);
+    private const ulong Role = 77;
 
     /// <summary>
-    /// The migration table: every executable path of every former "*-admin" root → its /tsq-admin path and the handler that
-    /// ran it before (unchanged class and method). Sub-groups are flattened to "&lt;subgroup&gt;-&lt;operation&gt;".
+    /// Every former operation → its module and operation id, the shared options it reads (the former channel/member/date/role
+    /// options) and the former options that now come from the operation's own form.
     /// </summary>
-    public static readonly (string Old, string New, Type Handler, string Method)[] Moves =
+    public static readonly (string Old, string Module, string Op, AdminFields Accepts, string[] Form)[] Moves =
     [
-        ("birthday-admin set", "tsq-admin birthday set", typeof(BirthdayTsqAdmin.BirthdayAdminCommands), "SetAsync"),
-        ("birthday-admin show", "tsq-admin birthday show", typeof(BirthdayTsqAdmin.BirthdayAdminCommands), "ShowAsync"),
-        ("birthday-admin configure", "tsq-admin birthday configure", typeof(BirthdayTsqAdmin.BirthdayAdminCommands), "ConfigureAsync"),
-        ("birthday-admin status", "tsq-admin birthday status", typeof(BirthdayTsqAdmin.BirthdayAdminCommands), "StatusAsync"),
-        ("birthday-admin doctor", "tsq-admin birthday doctor", typeof(BirthdayTsqAdmin.BirthdayAdminCommands), "DoctorAsync"),
-        ("esports-admin configure", "tsq-admin esports configure", typeof(EsportsTsqAdmin.EsportsAdminCommands), "ConfigureAsync"),
-        ("esports-admin panel", "tsq-admin esports panel", typeof(EsportsTsqAdmin.EsportsAdminCommands), "PanelAsync"),
-        ("esports-admin preview", "tsq-admin esports preview", typeof(EsportsTsqAdmin.EsportsAdminCommands), "PreviewAsync"),
-        ("esports-admin pause", "tsq-admin esports pause", typeof(EsportsTsqAdmin.EsportsAdminCommands), "PauseAsync"),
-        ("esports-admin resume", "tsq-admin esports resume", typeof(EsportsTsqAdmin.EsportsAdminCommands), "ResumeAsync"),
-        ("esports-admin doctor", "tsq-admin esports doctor", typeof(EsportsTsqAdmin.EsportsAdminCommands), "DoctorAsync"),
-        ("esports-admin filters show", "tsq-admin esports filters-show", typeof(EsportsTsqAdmin.EsportsAdminCommands.FilterCommands), "ShowAsync"),
-        ("esports-admin filters team", "tsq-admin esports filters-team", typeof(EsportsTsqAdmin.EsportsAdminCommands.FilterCommands), "TeamAsync"),
-        ("esports-admin filters tournament", "tsq-admin esports filters-tournament", typeof(EsportsTsqAdmin.EsportsAdminCommands.FilterCommands), "TournamentAsync"),
-        ("esports-admin filters tier", "tsq-admin esports filters-tier", typeof(EsportsTsqAdmin.EsportsAdminCommands.FilterCommands), "TierAsync"),
-        ("esports-admin filters vrs", "tsq-admin esports filters-vrs", typeof(EsportsTsqAdmin.EsportsAdminCommands.FilterCommands), "VrsAsync"),
-        ("esports-admin filters clear", "tsq-admin esports filters-clear", typeof(EsportsTsqAdmin.EsportsAdminCommands.FilterCommands), "ClearAsync"),
-        ("esports-admin roles list", "tsq-admin esports roles-list", typeof(EsportsTsqAdmin.EsportsAdminCommands.RoleCommands), "ListAsync"),
-        ("esports-admin roles map", "tsq-admin esports roles-map", typeof(EsportsTsqAdmin.EsportsAdminCommands.RoleCommands), "MapAsync"),
-        ("esports-admin roles unmap", "tsq-admin esports roles-unmap", typeof(EsportsTsqAdmin.EsportsAdminCommands.RoleCommands), "UnmapAsync"),
-        ("esports-admin roles selfservice", "tsq-admin esports roles-selfservice", typeof(EsportsTsqAdmin.EsportsAdminCommands.RoleCommands), "SelfServiceAsync"),
-        ("f1-admin preview", "tsq-admin f1 preview", typeof(Formula1TsqAdmin.Formula1AdminCommands), "PreviewAsync"),
-        ("f1-admin status", "tsq-admin f1 status", typeof(Formula1TsqAdmin.Formula1AdminCommands), "StatusAsync"),
-        ("f1-admin doctor", "tsq-admin f1 doctor", typeof(Formula1TsqAdmin.Formula1AdminCommands), "DoctorAsync"),
-        ("f1-admin pause", "tsq-admin f1 pause", typeof(Formula1TsqAdmin.Formula1AdminCommands), "PauseAsync"),
-        ("f1-admin resume", "tsq-admin f1 resume", typeof(Formula1TsqAdmin.Formula1AdminCommands), "ResumeAsync"),
-        ("f1-admin configure channel", "tsq-admin f1 configure-channel", typeof(Formula1TsqAdmin.Formula1AdminCommands.ConfigureCommands), "ChannelAsync"),
-        ("f1-admin configure notifications", "tsq-admin f1 configure-notifications", typeof(Formula1TsqAdmin.Formula1AdminCommands.ConfigureCommands), "NotificationsAsync"),
-        ("f1-admin configure role", "tsq-admin f1 configure-role", typeof(Formula1TsqAdmin.Formula1AdminCommands.ConfigureCommands), "RoleAsync"),
-        ("f1-admin configure spoilers", "tsq-admin f1 configure-spoilers", typeof(Formula1TsqAdmin.Formula1AdminCommands.ConfigureCommands), "SpoilersAsync"),
-        ("lfg-admin channel", "tsq-admin lfg channel", typeof(LfgTsqAdmin.LfgAdminCommands), "ChannelAsync"),
-        ("lfg-admin status", "tsq-admin lfg status", typeof(LfgTsqAdmin.LfgAdminCommands), "StatusAsync"),
-        ("live-admin doctor", "tsq-admin live doctor", typeof(LiveTsqAdmin.LiveAdminCommands), "DoctorAsync"),
-        ("news-admin configure", "tsq-admin news configure", typeof(NewsTsqAdmin.NewsAdminCommands), "ConfigureAsync"),
-        ("news-admin pause", "tsq-admin news pause", typeof(NewsTsqAdmin.NewsAdminCommands), "PauseAsync"),
-        ("news-admin resume", "tsq-admin news resume", typeof(NewsTsqAdmin.NewsAdminCommands), "ResumeAsync"),
-        ("news-admin preview", "tsq-admin news preview", typeof(NewsTsqAdmin.NewsAdminCommands), "PreviewAsync"),
-        ("news-admin status", "tsq-admin news status", typeof(NewsTsqAdmin.NewsAdminCommands), "StatusAsync"),
-        ("news-admin doctor", "tsq-admin news doctor", typeof(NewsTsqAdmin.NewsAdminCommands), "DoctorAsync"),
-        ("volleyball-admin preview", "tsq-admin volleyball preview", typeof(VolleyballTsqAdmin.VolleyballAdminCommands), "PreviewAsync"),
-        ("volleyball-admin status", "tsq-admin volleyball status", typeof(VolleyballTsqAdmin.VolleyballAdminCommands), "StatusAsync"),
-        ("volleyball-admin doctor", "tsq-admin volleyball doctor", typeof(VolleyballTsqAdmin.VolleyballAdminCommands), "DoctorAsync"),
-        ("volleyball-admin pause", "tsq-admin volleyball pause", typeof(VolleyballTsqAdmin.VolleyballAdminCommands), "PauseAsync"),
-        ("volleyball-admin resume", "tsq-admin volleyball resume", typeof(VolleyballTsqAdmin.VolleyballAdminCommands), "ResumeAsync"),
-        ("volleyball-admin configure channel", "tsq-admin volleyball configure-channel", typeof(VolleyballTsqAdmin.VolleyballAdminCommands.ConfigureCommands), "ChannelAsync"),
-        ("volleyball-admin configure notifications", "tsq-admin volleyball configure-notifications", typeof(VolleyballTsqAdmin.VolleyballAdminCommands.ConfigureCommands), "NotificationsAsync"),
-        ("volleyball-admin configure role", "tsq-admin volleyball configure-role", typeof(VolleyballTsqAdmin.VolleyballAdminCommands.ConfigureCommands), "RoleAsync"),
+        ("birthday-admin set", "birthday", "set", AdminFields.User | AdminFields.Date, []),
+        ("birthday-admin show", "birthday", "show", AdminFields.User, []),
+        ("birthday-admin configure", "birthday", "configure", AdminFields.Channel, []),
+        ("birthday-admin status", "birthday", "status", AdminFields.None, []),
+        ("birthday-admin doctor", "birthday", "doctor", AdminFields.None, []),
+        ("esports-admin configure", "esports", "configure", AdminFields.Channel, ["reminders", "reminder_minutes", "results", "spoilers"]),
+        ("esports-admin panel", "esports", "panel", AdminFields.None, []),
+        ("esports-admin preview", "esports", "preview", AdminFields.None, []),
+        ("esports-admin pause", "esports", "pause", AdminFields.None, []),
+        ("esports-admin resume", "esports", "resume", AdminFields.None, []),
+        ("esports-admin doctor", "esports", "doctor", AdminFields.None, []),
+        ("esports-admin filters show", "esports", "filters-show", AdminFields.None, []),
+        ("esports-admin filters team", "esports", "filters-team", AdminFields.None, ["action", "team"]),
+        ("esports-admin filters tournament", "esports", "filters-tournament", AdminFields.None, ["action", "tournament"]),
+        ("esports-admin filters tier", "esports", "filters-tier", AdminFields.None, ["action", "tier"]),
+        ("esports-admin filters vrs", "esports", "filters-vrs", AdminFields.None, ["top"]),
+        ("esports-admin filters clear", "esports", "filters-clear", AdminFields.None, []),
+        ("esports-admin roles list", "esports", "roles-list", AdminFields.None, []),
+        ("esports-admin roles map", "esports", "roles-map", AdminFields.Role, ["team", "ping_reminder", "ping_result"]),
+        ("esports-admin roles unmap", "esports", "roles-unmap", AdminFields.None, ["mapping"]),
+        ("esports-admin roles selfservice", "esports", "roles-selfservice", AdminFields.None, ["mapping", "enabled"]),
+        ("f1-admin preview", "f1", "preview", AdminFields.None, ["card"]),
+        ("f1-admin status", "f1", "status", AdminFields.None, []),
+        ("f1-admin doctor", "f1", "doctor", AdminFields.None, []),
+        ("f1-admin pause", "f1", "pause", AdminFields.None, []),
+        ("f1-admin resume", "f1", "resume", AdminFields.None, []),
+        ("f1-admin configure channel", "f1", "configure-channel", AdminFields.Channel, []),
+        ("f1-admin configure notifications", "f1", "configure-notifications", AdminFields.None,
+            ["practice_start", "practice_results", "sprint_start", "sprint_results", "race_start", "race_results", "standings", "qualifying_start", "qualifying_results",
+             "sprint_qualifying_start", "sprint_qualifying_results", "weekend_schedule", "race_reminder", "disqualification", "safety_car", "red_flag"]),
+        ("f1-admin configure role", "f1", "configure-role", AdminFields.Role, ["ping_starts", "ping_results", "clear"]),
+        ("f1-admin configure spoilers", "f1", "configure-spoilers", AdminFields.None, ["enabled"]),
+        ("lfg-admin channel", "lfg", "channel", AdminFields.Channel, []),
+        ("lfg-admin status", "lfg", "status", AdminFields.None, []),
+        ("live-admin doctor", "live", "doctor", AdminFields.None, []),
+        ("news-admin configure", "news", "configure", AdminFields.Channel, []),
+        ("news-admin pause", "news", "pause", AdminFields.None, []),
+        ("news-admin resume", "news", "resume", AdminFields.None, []),
+        ("news-admin preview", "news", "preview", AdminFields.None, []),
+        ("news-admin status", "news", "status", AdminFields.None, []),
+        ("news-admin doctor", "news", "doctor", AdminFields.None, []),
+        ("volleyball-admin preview", "volleyball", "preview", AdminFields.None, ["card"]),
+        ("volleyball-admin status", "volleyball", "status", AdminFields.None, []),
+        ("volleyball-admin doctor", "volleyball", "doctor", AdminFields.None, []),
+        ("volleyball-admin pause", "volleyball", "pause", AdminFields.None, []),
+        ("volleyball-admin resume", "volleyball", "resume", AdminFields.None, []),
+        ("volleyball-admin configure channel", "volleyball", "configure-channel", AdminFields.Channel, []),
+        ("volleyball-admin configure notifications", "volleyball", "configure-notifications", AdminFields.None,
+            ["match_reminder_15m", "match_started", "set_finished", "match_finished", "match_postponed_cancelled"]),
+        ("volleyball-admin configure role", "volleyball", "configure-role", AdminFields.Role, ["ping_reminder", "ping_final", "clear"]),
     ];
 
-    /// <summary>Group → owning module id (the module whose [ToroModule] gates and whose services authorize the group).</summary>
-    private static readonly Dictionary<string, string> GroupOwners = new()
-    {
-        ["birthday"] = "birthday",
-        ["esports"] = "esports",
-        ["f1"] = "formula1",
-        ["lfg"] = "lfg",
-        ["live"] = "live",
-        ["news"] = "news",
-        ["volleyball"] = "volleyball",
-    };
-
-    // ------------------------------------------------------------------ A. scope and completeness
+    // ================================================================== A. command shape
 
     [Fact]
-    public void Inventory_comes_from_the_real_pre_merge_payload_and_the_table_covers_every_executable_path()
-    {
-        var before = Before();
-        var roots = before.Where(c => (int)c.Payload["type"]! == 1 && c.Name.EndsWith("-admin", StringComparison.Ordinal)).Select(c => c.Name).ToList();
-        roots.Should().BeEquivalentTo("birthday-admin", "esports-admin", "f1-admin", "lfg-admin", "live-admin", "news-admin", "volleyball-admin");
-
-        var paths = new List<string>();
-        foreach (var root in roots)
-        {
-            foreach (var option in before.Single(c => c.Name == root).Payload["options"]!.AsArray().Select(o => o!))
-            {
-                if ((int)option["type"]! == 1)
-                    paths.Add(root + " " + option["name"]);
-                else
-                    paths.AddRange(option["options"]!.AsArray().Select(s => $"{root} {option["name"]} {s!["name"]}"));
-            }
-        }
-
-        paths.Should().HaveCount(47);
-        Moves.Select(m => m.Old).Should().BeEquivalentTo(paths, "every former admin operation has exactly one new path");
-        Moves.Select(m => m.New).Should().OnlyHaveUniqueItems();
-        foreach (var move in Moves)
-        {
-            var (oldRoot, newGroup) = (move.Old.Split(' ')[0], move.New.Split(' ')[1]);
-            newGroup.Should().Be(oldRoot[..^"-admin".Length], "the group is the former command's prefix (f1 stays f1)");
-            var oldOperation = string.Join('-', move.Old.Split(' ')[1..]);
-            move.New.Split(' ')[2].Should().Be(oldOperation, "direct operations keep their name; sub-group operations become <subgroup>-<operation>");
-        }
-    }
-
-    [Fact]
-    public async Task Every_moved_operation_keeps_its_description_options_types_order_choices_and_translations()
-    {
-        var before = Before();
-        var after = await AfterAsync();
-        var root = after.Single(c => c.Name == TsqAdminRoot.Name).Payload;
-        foreach (var move in Moves)
-        {
-            var old = move.Old.Split(' ');
-            var oldNode = before.Single(c => c.Name == old[0]).Payload["options"]!.AsArray().Single(o => (string)o!["name"]! == old[1])!;
-            if (old.Length == 3)
-                oldNode = oldNode["options"]!.AsArray().Single(o => (string)o!["name"]! == old[2])!;
-            var parts = move.New.Split(' ');
-            var newNode = root["options"]!.AsArray().Single(g => (string)g!["name"]! == parts[1])!["options"]!.AsArray().Single(o => (string)o!["name"]! == parts[2])!;
-
-            var expected = oldNode.DeepClone().AsObject();
-            var actual = newNode.DeepClone().AsObject();
-            expected.Remove("name");
-            actual.Remove("name");
-            JsonNode.DeepEquals(expected, actual).Should().BeTrue($"/{move.New} must be /{move.Old} unchanged (description, tr, options, choices, bounds): {actual.ToJsonString()}");
-        }
-    }
-
-    [Fact]
-    public async Task There_is_exactly_one_admin_root_with_one_group_per_module_and_no_moved_root_left()
-    {
-        var after = await AfterAsync();
-        after.Where(c => c.Name.EndsWith("-admin", StringComparison.Ordinal)).Select(c => c.Name).Should().Equal(TsqAdminRoot.Name);
-        var root = after.Single(c => c.Name == TsqAdminRoot.Name);
-        root.Module.Should().Be("core", "the shared root is core's");
-        root.Payload["default_member_permissions"]!.GetValue<string>().Should().Be("32", "every former admin root used Manage Server");
-        var groups = root.Payload["options"]!.AsArray().Select(g => g!).ToList();
-        groups.Should().OnlyContain(g => (int)g["type"]! == 2);
-        groups.Select(g => (string)g["name"]!).Should().Equal("birthday", "esports", "f1", "lfg", "live", "news", "volleyball");
-        groups.Should().NotContain(g => ((string)g["name"]!).StartsWith("tsq", StringComparison.Ordinal), "the root is never wrapped into itself");
-        groups.SelectMany(g => g["options"]!.AsArray()).Should().OnlyContain(s => (int)s!["type"]! == 1, "no third level");
-        root.GroupModules.Should().BeEquivalentTo(GroupOwners);
-    }
-
-    [Fact]
-    public async Task Merged_payload_respects_discords_documented_limits()
+    public async Task Tsq_admin_is_one_flat_chat_input_command_with_zero_subcommands_and_zero_groups()
     {
         var (manifest, admin) = await BuildAsync();
         CommandManifestValidator.Validate(manifest, admin).Should().BeEmpty();
-        var root = manifest.Find(TsqAdminRoot.Name)!;
-        root.Options.Count.Should().BeLessThanOrEqualTo(CommandManifestValidator.MaxOptions);
-        root.Options.Should().OnlyContain(g => g.Options.Count <= CommandManifestValidator.MaxOptions);
-        root.Options.SelectMany(g => g.Options).Should().OnlyContain(s => s.Options.Count <= CommandManifestValidator.MaxOptions);
-        root.Options.Single(g => g.Name == "esports").Options.Should().HaveCount(16, "the largest group");
-        root.Options.Single(g => g.Name == "f1").Options.Single(s => s.Name == "configure-notifications").Options.Should().HaveCount(16, "the widest subcommand");
+        manifest.Commands.Where(c => c.Name == AdminCatalog.Name).Should().ContainSingle();
+        var command = manifest.Find(AdminCatalog.Name)!;
 
-        var characters = CommandManifestValidator.CountCharacters(root);
-        characters.Should().BeLessThanOrEqualTo(CommandManifestValidator.MaxCommandCharacters, "Discord's 8000-character budget per command");
-        characters.Should().Be(5787, "measured budget of the merged payload (update deliberately when admin texts change)");
+        // The command TYPE is CHAT_INPUT (1); the forbidden things are OPTIONS of type SUB_COMMAND (1) / SUB_COMMAND_GROUP (2).
+        command.Type.Should().Be(CommandKind.ChatInput);
+        var options = Flatten(command.Options).ToList();
+        options.Count(o => o.Type == OptionType.SubCommand).Should().Be(0);
+        options.Count(o => o.Type == OptionType.SubCommandGroup).Should().Be(0);
+        command.Options.Should().OnlyContain(o => o.Options.Count == 0, "every option is a plain parameter");
+
+        command.Options.Select(o => (o.Name, o.Type, o.Required, o.Autocomplete)).Should().Equal(
+            ("modul", OptionType.String, true, true),
+            ("islem", OptionType.String, true, true),
+            ("kanal", OptionType.Channel, false, false),
+            ("uye", OptionType.User, false, false),
+            ("rol", OptionType.Role, false, false),
+            ("tarih", OptionType.String, false, false));
+        command.Options.Single(o => o.Name == "kanal").ChannelTypes.Should().Equal(0, 5);
+        command.Options.Should().OnlyContain(o => o.DescriptionLocalizations.ContainsKey("tr"));
+        command.DescriptionLocalizations["tr"].Should().Be("TSQ Bot yönetimi: modül ve işlem seçin");
+        command.DefaultMemberPermissions.Should().Be("32");
+        CommandManifestValidator.CountCharacters(command).Should().BeLessThan(500);
+
+        manifest.Commands.Where(c => c.Name.EndsWith("-admin", StringComparison.Ordinal)).Select(c => c.Name).Should().Equal(AdminCatalog.Name);
+        (await BuildAsync()).Manifest.ToDocumentJson().Should().Be(manifest.ToDocumentJson(), "the same manifest on every run");
     }
 
     [Fact]
-    public void Character_budget_counts_the_longest_localization_not_json_bytes()
-    {
-        var option = new ManifestOption(OptionType.String, "ab", "12345", new Dictionary<string, string> { ["tr"] = "1234567890" }, false,
-            [new ManifestChoice("x", "yy", new Dictionary<string, string> { ["tr"] = "xxxx" })], [], false, null, null, null, null, []);
-        var command = new ManifestCommand("cmd", "d", new Dictionary<string, string> { ["tr"] = "dd" }, [option], null, [0], [0], false, "core");
-        // name 3 + max(1,2) + option name 2 + max(5,10) + choice max(1,4) + value 2
-        CommandManifestValidator.CountCharacters(command).Should().Be(3 + 2 + 2 + 10 + 4 + 2);
-    }
-
-    [Fact]
-    public async Task The_manifest_is_the_same_on_every_run_and_does_not_depend_on_module_registration_order()
-    {
-        var (first, _) = await BuildAsync();
-        var (second, _) = await BuildAsync();
-        second.ToDocumentJson().Should().Be(first.ToDocumentJson());
-
-        await using var host = await TestHost.CreateAsync();
-        var registry = host.Services.GetRequiredService<ModuleRegistry>();
-        using var reversed = new InteractionService(new DiscordRestClient(), InteractionHost.CreateConfig());
-        await using (var scope = host.Scope())
-        {
-            foreach (var type in registry.All.Reverse().SelectMany(m => m.InteractionModuleTypes.Reverse()))
-                await reversed.AddModuleAsync(type, scope.ServiceProvider);
-        }
-
-        var manifest = CommandManifestBuilder.Build(reversed, registry, host.Services.GetRequiredService<ILocalizer>(), []);
-        CommandManifest.CanonicalJson(manifest.Find(TsqAdminRoot.Name)!, true).Should().Be(CommandManifest.CanonicalJson(first.Find(TsqAdminRoot.Name)!, true));
-        manifest.Hash.Should().Be(first.Hash);
-    }
-
-    // ------------------------------------------------------------------ B. out-of-scope commands
-
-    [Fact]
-    public async Task Every_command_that_was_not_an_admin_root_is_byte_for_byte_unchanged()
-    {
-        var before = Before();
-        var after = await AfterAsync();
-        var untouched = before.Where(c => !Moves.Any(m => m.Old.StartsWith(c.Name + " ", StringComparison.Ordinal))).ToList();
-        untouched.Select(c => c.Name).Should().Contain(["giveaway", "ozetle", "setup", "modules", "help", "bot", "privacy", "Quote", "quote", "esports", "f1", "volleyball", "birthday",
-            "ekip", "dolar", "euro", "altın", "çevir", "saat", "zarat", "randomsayi", "sec", "yazitura", "ongoru"]);
-        untouched.Should().HaveCount(24);
-        foreach (var command in untouched)
-        {
-            var now = after.SingleOrDefault(c => c.Name == command.Name);
-            now.Should().NotBeNull($"{command.Name} must still exist");
-            now!.Module.Should().Be(command.Module, command.Name);
-            JsonNode.DeepEquals(command.Payload, now.Payload).Should().BeTrue($"{command.Name}: type, options, choices, permissions, contexts and translations must not change");
-        }
-
-        // Explicit regression targets: admin-looking commands that are NOT "-admin" roots stay where they are.
-        after.Single(c => c.Name == "giveaway").Payload["default_member_permissions"]!.GetValue<string>().Should().Be("32");
-        after.Single(c => c.Name == "Quote").Payload["type"]!.GetValue<int>().Should().Be(3, "Apps → Quote stays a message command");
-        after.Select(c => c.Name).Should().HaveCount(before.Count - 7 + 1);
-    }
-
-    // ------------------------------------------------------------------ C. real dispatch
-
-    [Fact]
-    public async Task Every_new_path_dispatches_to_the_same_handler_method_and_old_paths_no_longer_resolve()
+    public async Task No_grouped_tsq_admin_path_is_registered_for_dispatch_any_more()
     {
         await using var host = await TestHost.CreateAsync();
         var service = await ServiceAsync(host);
+        service.SlashCommands.Where(c => c.Name == AdminCatalog.Name).Should().ContainSingle().Which.Module.IsSlashGroup.Should().BeFalse();
+        service.SlashCommands.Should().NotContain(c => ModuleChainHas(c.Module, AdminCatalog.Name));
+        service.SearchSlashCommand(Slash("tsq-admin news status")).IsSuccess.Should().BeFalse("the grouped path is gone");
+        service.SearchSlashCommand(Slash("news-admin status")).IsSuccess.Should().BeFalse("no alias of the old roots");
+        service.SearchSlashCommand(Slash("tsq-admin")).IsSuccess.Should().BeTrue();
+    }
+
+    // ================================================================== B. completeness
+
+    [Fact]
+    public async Task Every_former_operation_has_exactly_one_module_operation_and_every_former_option_a_place()
+    {
+        var before = Doc("manifest-before-tsq-admin.json");
+        var old = new Dictionary<string, JsonNode>();
+        foreach (var root in before.Where(c => (int)c.Payload["type"]! == 1 && c.Name.EndsWith("-admin", StringComparison.Ordinal)))
+        {
+            foreach (var option in root.Payload["options"]!.AsArray().Select(o => o!))
+            {
+                if ((int)option["type"]! == 1)
+                    old[root.Name + " " + option["name"]] = option;
+                else
+                    foreach (var sub in option["options"]!.AsArray())
+                        old[$"{root.Name} {option["name"]} {sub!["name"]}"] = sub;
+            }
+        }
+
+        old.Keys.Should().BeEquivalentTo(Moves.Select(m => m.Old)).And.HaveCount(47);
+
+        await using var host = await TestHost.CreateAsync();
+        var catalog = host.Services.GetRequiredService<AdminCatalog>();
+        catalog.Modules.SelectMany(m => m.Operations.Select(o => m.Id + " " + o.Id)).Should().BeEquivalentTo(Moves.Select(m => m.Module + " " + m.Op));
+        catalog.Problems(host.Services.GetRequiredService<ToroSquad.Core.Modules.ModuleRegistry>()).Should().BeEmpty();
+
         foreach (var move in Moves)
         {
-            var found = service.SearchSlashCommand(Slash(move.New));
-            found.IsSuccess.Should().BeTrue($"/{move.New} must be registered for dispatch: {found.ErrorReason}");
-            found.Command.MethodName.Should().Be(move.Method, move.New);
-            ModuleChain(found.Command.Module).Should().Equal(TypeChain(move.Handler), $"/{move.New} runs in {move.Handler.Name}");
-
-            service.SearchSlashCommand(Slash(move.Old)).IsSuccess.Should().BeFalse($"/{move.Old} is gone (no public alias)");
+            var operation = catalog.Find(move.Module)!.Find(move.Op)!;
+            operation.Accepts.Should().Be(move.Accepts, move.Old);
+            var formerOptions = (old[move.Old]["options"]?.AsArray() ?? []).Select(o => (string)o!["name"]!).ToList();
+            var shared = formerOptions.Where(o => SharedField(o) is { } f && move.Accepts.HasFlag(f)).ToList();
+            formerOptions.Except(shared).Should().BeEquivalentTo(move.Form, $"{move.Old}: every former option is a shared option or part of the form");
         }
-
-        service.SlashCommands.Count(c => ModuleChain(c.Module)[0].EndsWith("TsqAdmin", StringComparison.Ordinal)).Should().Be(Moves.Length, "nothing else lives under /tsq-admin");
     }
 
-    public static TheoryData<string, string[]> PipelineCases => new()
+    [Fact]
+    public async Task Every_operation_that_needs_more_than_the_shared_options_opens_its_form_and_writes_nothing()
     {
-        { "tsq-admin news doctor", [] },
-        { "tsq-admin birthday show", ["member"] },
-        { "tsq-admin esports roles-map", ["role", "team", "ping_reminder"] },
-        { "tsq-admin esports filters-team", ["action", "team"] },
-        { "tsq-admin f1 configure-channel", ["channel"] },
-        { "tsq-admin volleyball configure-notifications", ["match_started"] },
-        { "tsq-admin lfg status", [] },
-        { "tsq-admin live doctor", [] },
-    };
+        await using var host = await TestHost.CreateAsync();
+        foreach (var move in Moves.Where(m => m.Form.Length > 0 || m.Accepts != AdminFields.None && m.Op != "set"))
+        {
+            // With no shared option filled, every such operation asks privately (a form or a picker) instead of guessing.
+            if (move.Op is "set" or "show" or "status" or "doctor")
+                continue;
+            var respond = await RunAsync(host, Administrator(), move.Module, move.Op);
+            (respond.Modals.Count + respond.Sent.Count(s => s.Components is not null && CustomIds(s.Components).Count > 0)).Should().Be(1, move.Old);
+            respond.AllCustomIds().Should().OnlyContain(id => id.StartsWith(AdminCall.CustomIdPrefix, StringComparison.Ordinal), move.Old);
+        }
+    }
 
-    /// <summary>
-    /// Runs the real InteractionService pipeline (map lookup → preconditions → typed option parsing → DI construction of the
-    /// module). Discord.Net then needs a live SocketInteractionContext to bind the module, which an offline test cannot create;
-    /// reaching exactly that point proves everything before the handler body, and the handler body itself did not change.
-    /// </summary>
-    [Theory]
-    [MemberData(nameof(PipelineCases))]
-    public async Task The_interaction_pipeline_reaches_the_handler_with_typed_options(string path, string[] options)
+    // ================================================================== C. autocomplete and validation
+
+    [Fact]
+    public async Task Module_suggestions_list_only_modules_the_caller_can_administer_and_filter_by_name_or_id()
     {
         await using var host = await TestHost.CreateAsync();
         var service = await ServiceAsync(host);
-        var move = Moves.Single(m => m.New == path);
-        SlashCommandInfo? executed = null;
+        (await SuggestAsync(host, service, "modul", "", null, CorePermission.ManageGuild)).Select(r => r.Value).Should()
+            .Equal("birthday", "esports", "f1", "lfg", "live", "news", "volleyball");
+        var news = await SuggestAsync(host, service, "modul", "haber", null, CorePermission.ManageGuild);
+        news.Should().ContainSingle().Which.Name.Should().Be("Haberler — news");
+        (await SuggestAsync(host, service, "modul", "NEWS", null, CorePermission.ManageGuild)).Select(r => r.Value).Should().Equal("news");
+        (await SuggestAsync(host, service, "modul", "", null, CorePermission.ViewChannel)).Should().BeEmpty("a member can administer nothing");
+        (await SuggestAsync(host, service, "modul", "", null, CorePermission.ManageGuild, inGuild: false)).Should().BeEmpty("no DM suggestions");
+    }
+
+    [Fact]
+    public async Task Operation_suggestions_follow_the_current_module_value_and_the_callers_permissions()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var service = await ServiceAsync(host);
+        (await SuggestAsync(host, service, "islem", "", "news", CorePermission.ManageGuild)).Select(r => r.Value).Should()
+            .Equal("configure", "pause", "resume", "preview", "status", "doctor");
+        (await SuggestAsync(host, service, "islem", "durum", "news", CorePermission.ManageGuild)).Select(r => r.Value).Should().Equal("status");
+        (await SuggestAsync(host, service, "islem", "", null, CorePermission.ManageGuild)).Should().BeEmpty("no module chosen yet: no invented operation");
+        (await SuggestAsync(host, service, "islem", "", "nope", CorePermission.ManageGuild)).Should().BeEmpty();
+
+        // The module changed in the same form: the next request only knows the new value (no remembered state).
+        (await SuggestAsync(host, service, "islem", "", "esports", CorePermission.ManageGuild)).Select(r => r.Value).Should()
+            .Contain("filters-show").And.NotContain("roles-map", "roles need Manage Roles too").And.NotContain("status");
+        (await SuggestAsync(host, service, "islem", "", "esports", CorePermission.ManageGuild | CorePermission.ManageRoles)).Select(r => r.Value).Should().Contain("roles-map");
+        (await SuggestAsync(host, service, "islem", "", "birthday", CorePermission.ManageGuild)).Select(r => r.Value).Should()
+            .Equal(["configure", "status", "doctor"], "set/show need Administrator");
+        (await SuggestAsync(host, service, "islem", "", "birthday", CorePermission.Administrator)).Select(r => r.Value).Should().Contain(["set", "show"]);
+        (await SuggestAsync(host, service, "islem", "", "birthday", CorePermission.ManageGuild)).Should().OnlyContain(r => r.Name.EndsWith(" — " + r.Value, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Unknown_module_foreign_operation_and_unused_options_are_refused_before_anything_runs()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var admin = TestHost.Admin(Guild);
+        (await RunAsync(host, admin, "nope", "status")).Text.Should().Contain("Bilinmeyen modül");
+        (await RunAsync(host, admin, "news", "roles-map")).Text.Should().Contain("`roles-map` işlemi `news` modülünde yok", "no fallback to another module or a default");
+        var withMember = await RunAsync(host, admin, "news", "status", new AdminArgs(null, new AdminMember(5, true), null, null), AdminFields.User);
+        withMember.Text.Should().Contain("`uye`").And.Contain("kullanmaz");
+        withMember.Embeds.Should().BeEmpty("the operation did not run");
+        (await RunAsync(host, admin, "  NEWS ", "Status")).Embeds.Should().ContainSingle("ids are trimmed and case-insensitive");
+    }
+
+    [Fact]
+    public async Task The_slash_pipeline_parses_the_flat_options_and_refuses_dms()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var service = await ServiceAsync(host);
+        await using var scope = host.Scope();
+        var values = new Dictionary<string, object> { ["modul"] = "news", ["islem"] = "configure", ["kanal"] = TextChannel(Channel.Value) };
+        var executed = default(SlashCommandInfo);
         service.SlashCommandExecuted += (info, _, _) =>
         {
             executed = info;
             return Task.CompletedTask;
         };
+        var result = await service.ExecuteCommandAsync(Context(Slash("tsq-admin", values), CorePermission.ManageGuild), scope.ServiceProvider);
+        executed!.Name.Should().Be(AdminCatalog.Name);
+        ((ExecuteResult)result).Exception.Should().BeOfType<InvalidOperationException>().Which.Message.Should().StartWith("Invalid context type",
+            "precondition, the typed options and the module's DI all passed; only the offline context stops before the handler body");
+        (await service.ExecuteCommandAsync(Context(Slash("tsq-admin", values), CorePermission.ManageGuild, inGuild: false), scope.ServiceProvider))
+            .ErrorReason.Should().Be(ToroModuleAttribute.GuildOnlyError);
+    }
 
-        var values = options.ToDictionary(o => o, OptionValue);
-        await using var scope = host.Scope();
-        var context = Context(Slash(path, values), CorePermission.ManageGuild);
-        var result = await service.ExecuteCommandAsync(context, scope.ServiceProvider);
+    // ================================================================== D. running operations
 
-        executed.Should().NotBeNull();
-        executed!.MethodName.Should().Be(move.Method);
-        result.Should().BeOfType<ExecuteResult>();
-        ((ExecuteResult)result).Exception.Should().BeOfType<InvalidOperationException>()
-            .Which.Message.Should().StartWith("Invalid context type", "preconditions passed, options parsed and the module was built; only the offline context stops it");
+    [Fact]
+    public async Task News_status_answers_privately_and_configure_with_kanal_saves_the_channel()
+    {
+        await using var host = await TestHost.CreateAsync();
+        SetChannel(host);
+        var status = await RunAsync(host, TestHost.Admin(Guild), "news", "status");
+        status.Embeds.Should().ContainSingle().Which.Title.Should().Be("TSQ Haber durumu");
+        status.Sent.Should().OnlyContain(s => s.Ephemeral);
 
-        // The typed options bind to the handler's parameters exactly as Discord sends them.
-        foreach (var (name, value) in values)
-        {
-            var parameter = executed.Parameters.Single(p => p.Name == name);
-            var read = await parameter.TypeConverter.ReadAsync(context, Option(name, value), scope.ServiceProvider);
-            read.IsSuccess.Should().BeTrue($"{path} {name}: {read.ErrorReason}");
-            read.Value.Should().Be(Convert(value, parameter.ParameterType), $"{path} {name}");
-        }
+        var configure = await RunAsync(host, TestHost.Admin(Guild), "news", "configure", new AdminArgs(Channel.Value, null, null, null), AdminFields.Channel);
+        configure.Sent.Should().ContainSingle().Which.Components.Should().BeNull("no extra step when the input is complete");
+        (await NewsChannelAsync(host)).Should().Be(Channel.Value);
     }
 
     [Fact]
-    public async Task Autocomplete_on_the_new_path_answers_admins_and_gives_members_and_dms_nothing()
+    public async Task News_configure_without_kanal_opens_a_channel_picker_and_saves_only_the_picked_valid_channel()
+    {
+        await using var host = await TestHost.CreateAsync();
+        SetChannel(host);
+        var open = await RunAsync(host, TestHost.Admin(Guild), "news", "configure");
+        var draft = DraftId(open.AllCustomIds()[0]);
+        (await NewsChannelAsync(host)).Should().BeNull("nothing is saved by opening the form");
+
+        // A channel that Discord did not resolve for this guild is refused (a forged id or another guild's channel).
+        var forged = await FormAsync(host, TestHost.Admin(Guild), draft, AdminForms.ChannelAction, Picked(Channel.Value, TextChannel(Channel.Value, guild: 99)));
+        forged.Text.Should().Contain("metin veya duyuru kanalı");
+        (await NewsChannelAsync(host)).Should().BeNull();
+
+        var saved = await FormAsync(host, TestHost.Admin(Guild), draft, AdminForms.ChannelAction, Picked(Channel.Value, TextChannel(Channel.Value)));
+        saved.Updates.Should().ContainSingle("the form message shows the result and loses its select");
+        (await NewsChannelAsync(host)).Should().Be(Channel.Value);
+        (await FormAsync(host, TestHost.Admin(Guild), draft, AdminForms.ChannelAction, Picked(Channel.Value, TextChannel(Channel.Value))))
+            .Text.Should().Contain("artık geçerli değil", "a second click does not run it again");
+    }
+
+    [Fact]
+    public async Task Birthday_show_and_set_need_administrator_and_set_validates_the_date()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var member = new AdminMember(5, true);
+        var manager = TestHost.Admin(Guild);
+        (await RunAsync(host, manager, "birthday", "show", new AdminArgs(null, member, null, null), AdminFields.User)).Text.Should().Contain("yetki", "Manage Server is not enough");
+        (await RunAsync(host, manager, "birthday", "set", new AdminArgs(null, member, null, "14.03"), AdminFields.User | AdminFields.Date)).Text.Should().Contain("yetki");
+        (await BirthdayAsync(host, 5)).Should().BeNull();
+
+        (await RunAsync(host, Administrator(), "birthday", "set", new AdminArgs(null, member, null, "32.13"), AdminFields.User | AdminFields.Date)).Text
+            .Should().Contain(Localize(host, "birthday.set.invalid"));
+        (await BirthdayAsync(host, 5)).Should().BeNull();
+        (await RunAsync(host, Administrator(), "birthday", "set", new AdminArgs(null, member, null, "14.03"), AdminFields.User | AdminFields.Date)).Text
+            .Should().Contain("<@5>").And.Contain("14 Mart");
+        (await BirthdayAsync(host, 5)).Should().Be((14, 3));
+        (await RunAsync(host, Administrator(), "birthday", "show", new AdminArgs(null, member, null, null), AdminFields.User)).Text.Should().Contain("14 Mart");
+    }
+
+    [Fact]
+    public async Task Birthday_set_without_a_date_opens_the_date_form_and_saves_only_on_submit()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var open = await RunAsync(host, Administrator(), "birthday", "set", new AdminArgs(null, new AdminMember(6, true), null, null), AdminFields.User);
+        open.Modals.Should().ContainSingle();
+        var draft = DraftId(open.Modals[0].CustomId);
+        (await BirthdayAsync(host, 6)).Should().BeNull();
+
+        (await FormAsync(host, Administrator(), draft, "date", Modal(("date", ["01.02"])))).Text.Should().Contain("<@6>");
+        (await BirthdayAsync(host, 6)).Should().Be((1, 2));
+    }
+
+    [Fact]
+    public async Task Esports_tier_filter_is_added_from_its_select_and_role_mapping_is_created_from_its_form()
+    {
+        await using var host = await TestHost.CreateAsync();
+        await host.SetUpEsportsGuildAsync(Guild, Channel, new RoleInfo(new RoleId(Role), "CS", 5, CorePermission.None, false, false, true));
+        var admin = TestHost.Admin(Guild);
+
+        var tiers = await RunAsync(host, admin, "esports", "filters-tier");
+        var tierDraft = DraftId(tiers.AllCustomIds()[0]);
+        await FormAsync(host, admin, tierDraft, "addpick", Selected("1"));
+        (await host.InScopeAsync(sp => sp.GetRequiredService<EsportsConfigService>().GetAsync(Guild, CancellationToken.None))).Filters.Tiers.Should().Equal("1");
+
+        var map = await RunAsync(host, admin, "esports", "roles-map", new AdminArgs(null, null, Role, null), AdminFields.Role);
+        map.Modals.Should().ContainSingle();
+        var mapped = await FormAsync(host, admin, DraftId(map.Modals[0].CustomId), "save",
+            Modal((AdminForms.RoleField, [Role.ToString(System.Globalization.CultureInfo.InvariantCulture)]), ("query", [""]), (AdminForms.SwitchesField, ["ping_reminder"])));
+        mapped.Text.Should().NotContain("geçerli değil");
+        var rows = await host.InScopeAsync(sp => sp.GetRequiredService<RoleMappingService>().ListAsync(Guild, CancellationToken.None));
+        rows.Should().ContainSingle().Which.Should().BeEquivalentTo(new { RoleId = Role, TeamKey = "", PingOnReminder = true, PingOnResult = false });
+    }
+
+    [Fact]
+    public async Task Long_mapping_lists_are_paged_instead_of_cut()
+    {
+        await using var host = await TestHost.CreateAsync();
+        await host.InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<ToroDbContext>();
+            for (var i = 0; i < 30; i++)
+                db.Set<RoleMappingEntity>().Add(new RoleMappingEntity { GuildId = Guild.Value, RoleId = 1000UL + (ulong)i, CreatedAt = TestHost.T0 });
+            await db.SaveChangesAsync();
+        });
+        var admin = Administrator();
+        var first = await RunAsync(host, admin, "esports", "roles-unmap");
+        first.Text.Should().Contain("Sayfa 1/2");
+        first.SelectValues().Should().HaveCount(25);
+        var draft = DraftId(first.AllCustomIds()[0]);
+        first.AllCustomIds().Should().Contain(AdminCall.CustomIdPrefix + draft + ":page-1");
+
+        var second = await FormAsync(host, admin, draft, "page-1", AdminInput.None);
+        second.Updates.Should().ContainSingle();
+        second.SelectValues().Should().HaveCount(5).And.Contain("30");
+    }
+
+    [Fact]
+    public async Task F1_notifications_form_writes_only_the_switches_changed_and_keeps_a_concurrent_change()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var open = await RunAsync(host, TestHost.Admin(Guild), "f1", "configure-notifications");
+        var draft = DraftId(open.Modals.Single().CustomId);
+        SelectOptions(open.Modals[0]).Where(o => o.IsDefault == true).Select(o => o.Value).Should().BeEquivalentTo(
+            ["practice_start", "practice_results", "sprint_start", "sprint_results", "race_start", "race_results", "standings"], "the current (default) values are shown");
+
+        // Another admin turns qualifying starts on while the form is open.
+        await host.InScopeAsync(async sp => (await sp.GetRequiredService<Formula1ConfigService>().SetNotificationsAsync(TestHost.Admin(Guild, 9),
+            new F1NotificationChanges(QualifyingStart: true), CancellationToken.None)).Succeeded.Should().BeTrue());
+
+        // The form turns practice starts off and leaves everything else as it was shown.
+        await FormAsync(host, TestHost.Admin(Guild), draft, "save", Modal((AdminForms.SwitchesField,
+            ["practice_results", "sprint_start", "sprint_results", "race_start", "race_results", "standings"])));
+        var stored = (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None)))!;
+        stored.NotifyPracticeStart.Should().BeFalse();
+        stored.NotifyQualifyingStart.Should().BeTrue("a switch the form did not change is not overwritten with the form's stale value");
+        stored.NotifyRaceStart.Should().BeTrue();
+
+        (await FormAsync(host, TestHost.Admin(Guild), draft, "save", Modal((AdminForms.SwitchesField, [])))).Text.Should().Contain("artık geçerli değil",
+            "a double submit writes once");
+        (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None)))!.NotifyRaceStart.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task F1_role_form_keeps_the_role_when_left_empty_and_removes_it_only_when_asked()
+    {
+        await using var host = await TestHost.CreateAsync();
+        host.Guilds.SetSnapshot(FakeGuildGateway.DemoSnapshot(Guild, new RoleInfo(new RoleId(Role), "F1", 5, CorePermission.None, false, false, true)));
+        var admin = TestHost.Admin(Guild);
+        await host.InScopeAsync(async sp => (await sp.GetRequiredService<Formula1ConfigService>().SetRoleAsync(admin, Role, true, false, CancellationToken.None))
+            .Succeeded.Should().BeTrue());
+
+        var keep = await RunAsync(host, admin, "f1", "configure-role");
+        await FormAsync(host, admin, DraftId(keep.Modals.Single().CustomId), "save", Modal((AdminForms.SwitchesField, [])));
+        var stored = (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None)))!;
+        stored.PingRoleId.Should().Be(Role, "an empty role select keeps the role");
+        stored.PingOnStarts.Should().BeFalse("the ping switch was unticked");
+
+        var clear = await RunAsync(host, admin, "f1", "configure-role");
+        await FormAsync(host, admin, DraftId(clear.Modals.Single().CustomId), "save", Modal((AdminForms.ClearField, [AdminForms.ClearField]), (AdminForms.SwitchesField, [])));
+        (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None)))!.PingRoleId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Lfg_channel_restriction_is_removed_only_by_the_explicit_button()
+    {
+        await using var host = await TestHost.CreateAsync();
+        SetChannel(host);
+        var admin = TestHost.Admin(Guild);
+        await RunAsync(host, admin, "lfg", "channel", new AdminArgs(Channel.Value, null, null, null), AdminFields.Channel);
+        (await LfgChannelAsync(host)).Should().Be(Channel.Value);
+
+        var open = await RunAsync(host, admin, "lfg", "channel");
+        (await LfgChannelAsync(host)).Should().Be(Channel.Value, "an empty kanal does not remove the restriction by itself");
+        await FormAsync(host, admin, DraftId(open.AllCustomIds()[0]), AdminForms.ClearAction, AdminInput.None);
+        (await LfgChannelAsync(host)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Roles_list_needs_manage_server_and_every_mapping_change_needs_manage_roles_too()
     {
         await using var host = await TestHost.CreateAsync();
         var service = await ServiceAsync(host);
         await host.InScopeAsync(async sp =>
         {
             var db = sp.GetRequiredService<ToroDbContext>();
-            db.Set<RoleMappingEntity>().Add(new RoleMappingEntity { GuildId = Guild.Value, RoleId = 77, CreatedAt = TestHost.T0 });
+            db.Set<RoleMappingEntity>().Add(new RoleMappingEntity { GuildId = Guild.Value, RoleId = Role, CreatedAt = TestHost.T0 });
             await db.SaveChangesAsync();
         });
+        var manageOnly = new ActorContext(Guild, new UserId(1), CorePermission.ManageGuild, [], false, 50);
+        var roles = TestHost.Admin(Guild); // Manage Server + Manage Roles
 
-        async Task<IReadOnlyList<AutocompleteResult>> AskAsync(CorePermission permissions, bool inGuild = true)
+        // Suggestions: Manage Server alone sees roles-list, not the three operations that change mappings.
+        var suggested = (await SuggestAsync(host, service, "islem", "roles", "esports", CorePermission.ManageGuild)).Select(r => r.Value).ToList();
+        suggested.Should().Equal("roles-list");
+        (await SuggestAsync(host, service, "islem", "roles", "esports", CorePermission.ManageGuild | CorePermission.ManageRoles)).Select(r => r.Value).Should()
+            .Equal("roles-list", "roles-map", "roles-unmap", "roles-selfservice");
+
+        (await RunAsync(host, manageOnly, "esports", "roles-list")).Embeds.Should().ContainSingle("Manage Server is enough to read the mappings, as before");
+        foreach (var change in new[] { "roles-map", "roles-unmap", "roles-selfservice" })
         {
-            var interaction = Recorder.Create<IAutocompleteInteraction>(out var recorder, new()
+            var refused = await RunAsync(host, manageOnly, "esports", change);
+            refused.Text.Should().Contain("yetki", change);
+            refused.Modals.Should().BeEmpty(change);
+            refused.AllCustomIds().Should().BeEmpty($"{change}: not even the mapping picker opens without Manage Roles");
+        }
+
+        var member = await RunAsync(host, TestHost.Member(Guild), "esports", "roles-list");
+        member.Embeds.Should().BeEmpty("a member reads no admin data");
+        member.Text.Should().Contain("yetki");
+
+        // The picker belongs to the change operation: losing Manage Roles after opening it stops the change.
+        var picker = await RunAsync(host, roles, "esports", "roles-unmap");
+        var draft = DraftId(picker.AllCustomIds()[0]);
+        (await FormAsync(host, manageOnly, draft, "mapping", Selected("1"))).Text.Should().Contain("yetki");
+        (await host.InScopeAsync(sp => sp.GetRequiredService<RoleMappingService>().ListAsync(Guild, CancellationToken.None))).Should().ContainSingle();
+
+        // Administrator and the guild owner keep full access.
+        (await RunAsync(host, Administrator(), "esports", "roles-unmap")).AllCustomIds().Should().NotBeEmpty();
+        var owner = new ActorContext(Guild, new UserId(1), CorePermission.None, [], true, 0);
+        (await RunAsync(host, owner, "esports", "roles-map")).Modals.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// The JSON Discord.Net 3.20.1 itself sends for each modal (its internal component → API model mapping and serializer, as
+    /// in <c>RespondWithModalAsync</c>), measured against Discord's documented limits (components reference, 2026-09-29):
+    /// 1-5 top-level components, each a Label (type 18, text ≤ 45) wrapping one input; Checkbox Group ≤ 10 options; String
+    /// Select ≤ 25 options; custom ids 1-100 and unique; no <c>disabled</c> in a modal; an empty choice needs required=false and
+    /// min_values=0.
+    /// </summary>
+    [Fact]
+    public async Task Every_admin_modal_payload_respects_discords_modal_limits_and_allows_an_empty_choice()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var admin = Administrator();
+        var modals = new List<(string Name, Modal Modal, string Shape)>();
+        async Task AddAsync(string module, string op, AdminArgs? args = null, AdminFields provided = AdminFields.None, string shape = "")
+        {
+            var respond = await RunAsync(host, admin, module, op, args, provided);
+            modals.Add((module + " " + op, respond.Modals.Single(), shape));
+        }
+
+        await AddAsync("f1", "configure-notifications", shape: "18>3[16]");
+        await AddAsync("volleyball", "configure-notifications", shape: "18>3[5]");
+        await AddAsync("f1", "configure-role", shape: "18>6 | 18>22[2] | 18>22[1]");
+        await AddAsync("volleyball", "configure-role", shape: "18>6 | 18>22[2] | 18>22[1]");
+        await AddAsync("esports", "configure", shape: "18>8 | 18>22[3] | 18>4");
+        await AddAsync("esports", "roles-map", shape: "18>6 | 18>4 | 18>22[2]");
+        await AddAsync("esports", "filters-vrs", shape: "18>4");
+        await AddAsync("birthday", "set", new AdminArgs(null, new AdminMember(5, true), null, null), AdminFields.User, "18>4");
+        var menu = await RunAsync(host, admin, "esports", "filters-team");
+        var search = await FormAsync(host, admin, DraftId(menu.AllCustomIds()[0]), "add", AdminInput.None);
+        modals.Add(("esports filters-team search", search.Modals.Single(), "18>4"));
+
+        foreach (var (name, modal, shape) in modals)
+        {
+            modal.Title.Length.Should().BeInRange(1, 45, name);
+            modal.CustomId.Length.Should().BeInRange(1, 100, name);
+            var top = DiscordPayload(modal);
+            top.Count.Should().BeInRange(1, 5, name);
+            string.Join(" | ", top.Select(t => Shape(t!))).Should().Be(shape, name);
+            payloadText(top).Should().NotContain("\"disabled\":true", name);
+
+            var inputs = top.Select(t => t!["component"]!).ToList();
+            inputs.Select(i => (string)i["custom_id"]!).Should().OnlyHaveUniqueItems(name).And.OnlyContain(id => id.Length >= 1 && id.Length <= 100);
+            foreach (var label in top)
+                ((string)label!["label"]!).Length.Should().BeInRange(1, 45, name);
+            foreach (var group in inputs.Where(i => (int)i["type"]! == 22))
             {
-                ["Data"] = InterfaceFake.Create<IAutocompleteInteractionData>(new()
-                {
-                    ["CommandName"] = TsqAdminRoot.Name,
-                    ["Options"] = (IReadOnlyCollection<AutocompleteOption>)
-                    [
-                        AutocompleteOption(ApplicationCommandOptionType.SubCommandGroup, "esports", null, false),
-                        AutocompleteOption(ApplicationCommandOptionType.SubCommand, "roles-unmap", null, false),
-                        AutocompleteOption(ApplicationCommandOptionType.Integer, "mapping", "", true),
-                    ],
-                    ["Current"] = AutocompleteOption(ApplicationCommandOptionType.Integer, "mapping", "", true),
-                }),
-                ["Type"] = InteractionType.ApplicationCommandAutocomplete,
-            });
-            await using var scope = host.Scope();
-            var result = await service.ExecuteCommandAsync(Context(interaction, permissions, inGuild), scope.ServiceProvider);
-            result.IsSuccess.Should().BeTrue(result.ErrorReason);
-            return recorder.Calls.Where(c => c.Method == "RespondAsync").Select(c => ((IEnumerable<AutocompleteResult>?)c.Args[0] ?? []).ToList()).Single();
+                group["options"]!.AsArray().Count.Should().BeInRange(1, 10, name);
+                ((bool)group["required"]!).Should().BeFalse($"{name}: nothing ticked is a valid answer");
+                ((int)group["min_values"]!).Should().Be(0, name);
+            }
+
+            foreach (var select in inputs.Where(i => (int)i["type"]! == 3))
+            {
+                select["options"]!.AsArray().Count.Should().BeInRange(1, 25, name);
+                ((bool)select["required"]!).Should().BeFalse($"{name}: every notification can be switched off");
+                ((int)select["min_values"]!).Should().Be(0, name);
+                ((int)select["max_values"]!).Should().Be(select["options"]!.AsArray().Count, name);
+            }
         }
 
-        var forAdmin = await AskAsync(CorePermission.ManageGuild);
-        forAdmin.Should().ContainSingle().Which.Value.Should().Be(1L);
-        forAdmin[0].Name.Should().StartWith("#1 @").And.Contain("77", "the mapping as the admin knew it (text is neutralized against mentions)");
-        (await AskAsync(CorePermission.ViewChannel | CorePermission.SendMessages)).Should().BeEmpty("a member who cannot run the command sees no server settings");
-        (await AskAsync(CorePermission.ManageGuild, inGuild: false)).Should().BeEmpty("no guild, no suggestions");
-    }
+        // F1: the 16 switches are ONE string select (not a checkbox group, whose limit is 10), pre-selected as stored.
+        var f1 = DiscordPayload(modals[0].Modal)[0]!["component"]!;
+        f1["options"]!.AsArray().Where(o => (bool?)o!["default"] == true).Select(o => (string)o!["value"]!).Should().BeEquivalentTo(
+            ["practice_start", "practice_results", "sprint_start", "sprint_results", "race_start", "race_results", "standings"]);
 
-    // ------------------------------------------------------------------ D. authorization and module gates
-
-    [Fact]
-    public async Task Each_operation_is_gated_only_by_its_own_module_and_the_root_adds_no_precondition()
-    {
-        await using var host = await TestHost.CreateAsync();
-        var service = await ServiceAsync(host);
-        await using var scope = host.Scope();
-        foreach (var move in Moves)
-        {
-            var command = service.SearchSlashCommand(Slash(move.New)).Command;
-            var owner = GroupOwners[move.New.Split(' ')[1]];
-            var gates = command.Module.Preconditions.Concat(command.Preconditions).ToList();
-            gates.Should().NotBeEmpty().And.AllBeOfType<ToroModuleAttribute>();
-            gates.Cast<ToroModuleAttribute>().Should().OnlyContain(g => g.ModuleId == owner && g.AllowWhenDisabled,
-                $"/{move.New}: like /{move.Old}, only its own module's setup gate (usable while the module is off)");
-
-            // Every module is still disabled in this fresh database: admin setup keeps working, as before the merge.
-            (await command.CheckPreconditionsAsync(Context(Slash(move.New), CorePermission.ManageGuild), scope.ServiceProvider)).IsSuccess.Should().BeTrue(move.New);
-            (await command.CheckPreconditionsAsync(Context(Slash(move.New), CorePermission.ManageGuild, inGuild: false), scope.ServiceProvider))
-                .ErrorReason.Should().Be(ToroModuleAttribute.GuildOnlyError, $"/{move.New} refuses DMs server-side");
-        }
-
-        var roots = service.Modules.Where(m => m.Parent is null && m.SlashGroupName == TsqAdminRoot.Name).ToList();
-        roots.Should().HaveCount(7);
-        roots.Should().OnlyContain(r => r.Preconditions.Count == 0 && r.SlashCommands.Count == 0, "the core root neither gates nor bypasses a module");
-        typeof(TsqAdminRoot).GetCustomAttribute<DefaultMemberPermissionsAttribute>()!.Permissions.Should().Be(global::Discord.GuildPermission.ManageGuild);
-        foreach (var type in Moves.Select(m => m.Handler).Distinct())
-            type.GetCustomAttribute<DefaultMemberPermissionsAttribute>(inherit: false).Should().BeNull($"{type.Name}: Discord has no per-group permission; the root carries it");
+        static string payloadText(JsonArray top) => top.ToJsonString();
     }
 
     [Fact]
-    public async Task Server_side_authorization_is_unchanged_member_refused_manage_server_allowed_birthday_member_data_needs_administrator()
+    public void A_submitted_modal_is_read_by_custom_id_and_an_empty_choice_is_not_a_missing_field()
     {
-        await using var host = await TestHost.CreateAsync();
-        var member = TestHost.Member(Guild);
-        var manager = new ActorContext(Guild, new UserId(1), CorePermission.ManageGuild, [], false, 50);
-        var administrator = new ActorContext(Guild, new UserId(1), CorePermission.Administrator, [], false, 50);
-        await host.InScopeAsync(async sp =>
+        IComponentInteractionData Field(string id, string? value, string[]? values) =>
+            InterfaceFake.Create<IComponentInteractionData>(new() { ["CustomId"] = id, ["Value"] = value, ["Values"] = (IReadOnlyCollection<string>?)values });
+        var data = InterfaceFake.Create<IModalInteractionData>(new()
         {
-            async Task<OperationResult[]> AllAsync(ActorContext actor) =>
+            ["Components"] = (IReadOnlyCollection<IComponentInteractionData>)
             [
-                (await sp.GetRequiredService<NewsConfigService>().DoctorAsync(actor, CancellationToken.None)).Auth,
-                (await sp.GetRequiredService<EsportsDoctor>().RunAsync(actor, CancellationToken.None)).Auth,
-                (await sp.GetRequiredService<Formula1Doctor>().RunAsync(actor, CancellationToken.None)).Auth,
-                (await sp.GetRequiredService<VolleyballDoctor>().RunAsync(actor, CancellationToken.None)).Auth,
-                (await sp.GetRequiredService<LiveDoctor>().RunAsync(actor, CancellationToken.None)).Auth,
-                (await sp.GetRequiredService<LfgConfigService>().StatusAsync(actor, CancellationToken.None)).Auth,
-                (await sp.GetRequiredService<BirthdayDoctor>().RunAsync(actor, CancellationToken.None)).Auth,
-            ];
-
-            (await AllAsync(member)).Should().OnlyContain(r => !r.Succeeded && r.Error == OperationError.Forbidden, "a member is refused by every module");
-            (await AllAsync(manager)).Should().OnlyContain(r => r.Succeeded, "Manage Server is still enough for the module settings");
-
-            var birthdays = sp.GetRequiredService<BirthdayService>();
-            (await birthdays.GetForMemberAsync(manager, new UserId(5), true, CancellationToken.None)).Result.Error.Should().Be(OperationError.Forbidden,
-                "/tsq-admin birthday show still needs Administrator, not just Manage Server");
-            (await birthdays.GetForMemberAsync(administrator, new UserId(5), true, CancellationToken.None)).Result.Succeeded.Should().BeTrue();
+                Field(AdminForms.SwitchesField, null, []),
+                Field("query", "aurora", null),
+                Field(AdminForms.RoleField, null, ["77"]),
+            ],
         });
+        var input = AdminInput.FromModal(data);
+        input.Fields.Should().ContainKey(AdminForms.SwitchesField).WhoseValue.Should().BeEmpty("nothing ticked");
+        input.Text("query").Should().Be("aurora");
+        input.Id(AdminForms.RoleField).Should().Be(77);
+        input.Fields.Should().NotContainKey(AdminForms.ClearField, "a field Discord did not send stays absent");
     }
 
-    // ------------------------------------------------------------------ E. components, modals and custom ids
+    [Fact]
+    public async Task F1_notifications_can_all_be_switched_off_and_an_incomplete_submission_writes_nothing()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var admin = TestHost.Admin(Guild);
+        var open = await RunAsync(host, admin, "f1", "configure-notifications");
+        var draft = DraftId(open.Modals.Single().CustomId);
+        (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None))).Should().BeNull("opening the form writes nothing");
+
+        (await FormAsync(host, admin, draft, "save", Modal(("unrelated", ["x"])))).Text.Should().Contain("eksik");
+        (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None))).Should().BeNull(
+            "a submission without the switches field is not 'everything off'");
+
+        await FormAsync(host, admin, draft, "save", Modal((AdminForms.SwitchesField, [])));
+        var stored = (await host.InScopeAsync(sp => sp.GetRequiredService<Formula1ConfigService>().GetAsync(Guild, CancellationToken.None)))!;
+        new[]
+        {
+            stored.NotifyPracticeStart, stored.NotifyPracticeResults, stored.NotifySprintStart, stored.NotifySprintResults, stored.NotifyRaceStart,
+            stored.NotifyRaceResults, stored.NotifyStandings, stored.NotifyQualifyingStart, stored.NotifyQualifyingResults, stored.NotifySprintQualifyingStart,
+            stored.NotifySprintQualifyingResults, stored.NotifyWeekendSchedule, stored.NotifyRaceReminder, stored.NotifyDisqualification, stored.NotifySafetyCar,
+            stored.NotifyRedFlag,
+        }.Should().OnlyContain(on => !on, "an empty selection switches every notification off");
+    }
+
+    // ================================================================== E. form safety
 
     [Fact]
-    public async Task Buttons_and_modals_keep_their_custom_ids_and_none_is_prefixed_by_the_new_groups()
+    public async Task A_form_answers_only_its_owner_in_its_guild_while_valid_and_permitted()
+    {
+        await using var host = await TestHost.CreateAsync();
+        SetChannel(host);
+        var owner = TestHost.Admin(Guild);
+        var draft = DraftId((await RunAsync(host, owner, "news", "configure")).AllCustomIds()[0]);
+        var pick = Picked(Channel.Value, TextChannel(Channel.Value));
+
+        (await FormAsync(host, TestHost.Admin(Guild, 3), draft, AdminForms.ChannelAction, pick)).Text.Should().Contain("başka bir yöneticiye");
+        (await FormAsync(host, owner with { GuildId = new GuildId(43) }, draft, AdminForms.ChannelAction, pick)).Text.Should().Contain("başka bir yöneticiye");
+        (await FormAsync(host, TestHost.Member(Guild, 1), draft, AdminForms.ChannelAction, pick)).Text.Should().Contain("yetki", "a lost permission stops the save");
+        (await FormAsync(host, owner, "0000000000000000", AdminForms.ChannelAction, pick)).Text.Should().Contain("artık geçerli değil", "an unknown (forged) draft");
+        (await NewsChannelAsync(host)).Should().BeNull();
+
+        (await FormAsync(host, owner, draft, AdminRouter.CancelAction, AdminInput.None)).Updates.Should().ContainSingle().Which.Text.Should().Contain("İptal edildi");
+        (await FormAsync(host, owner, draft, AdminForms.ChannelAction, pick)).Text.Should().Contain("artık geçerli değil");
+        (await NewsChannelAsync(host)).Should().BeNull("a cancelled form writes nothing");
+
+        var late = DraftId((await RunAsync(host, owner, "news", "configure")).AllCustomIds()[0]);
+        host.Clock.Advance(AdminDrafts.Lifetime + TimeSpan.FromSeconds(1));
+        (await FormAsync(host, owner, late, AdminForms.ChannelAction, pick)).Text.Should().Contain("artık geçerli değil", "expired (or lost in a restart)");
+        (await NewsChannelAsync(host)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Admin_forms_keep_their_own_custom_ids_and_existing_buttons_still_reach_their_handlers()
     {
         await using var host = await TestHost.CreateAsync();
         var service = await ServiceAsync(host);
-        var handlers = service.ComponentCommands.Cast<ICommandInfo>().Concat(service.ModalCommands).ToList();
-        handlers.Should().NotBeEmpty();
-        handlers.Should().OnlyContain(h => h.IgnoreGroupNames || ModuleChain(h.Module).All(n => !n.EndsWith("TsqAdmin", StringComparison.Ordinal)));
-        handlers.Should().NotContain(h => ModuleChain(h.Module)[0].EndsWith("TsqAdmin", StringComparison.Ordinal), "admin groups own no buttons or modals");
-
-        // Buttons already posted in Discord (the /tsq-admin esports panel posts the same ones) still reach the same handlers.
         foreach (var (customId, handler) in new[]
                  {
+                     (AdminCall.CustomIdPrefix + "0123456789abcdef:save", "TsqAdminCommands"),
                      (EsportsCommands.PanelPrefix + "5", nameof(EsportsCommands)),
                      (EsportsSetupFlow.ChannelId + "1", nameof(EsportsSetupComponents)),
-                     (Formula1SetupFlow.EnableId + "1", "Formula1SetupComponents"),
-                     (VolleyballSetupFlow.PreviewId + "1", "VolleyballSetupComponents"),
+                     ("tsq:f1:setup:enable:1", "Formula1SetupComponents"),
+                     ("tsq:vb:setup:preview:1", "VolleyballSetupComponents"),
                  })
         {
             var found = service.SearchComponentCommand(InterfaceFake.Create<IComponentInteraction>(new()
@@ -460,146 +652,215 @@ public sealed class TsqAdminCommandTests
         }
     }
 
-    // ------------------------------------------------------------------ F. sync safety
+    // ================================================================== F. out-of-scope commands
 
     [Fact]
-    public async Task Sync_plan_from_the_old_commands_creates_one_root_keeps_everything_else_and_prunes_only_the_moved_roots()
+    public async Task Every_command_other_than_tsq_admin_is_byte_for_byte_the_same_as_before_and_on_main()
+    {
+        var after = Parse((await BuildAsync()).Manifest.ToDocumentJson());
+        foreach (var file in new[] { "manifest-before-tsq-admin.json", "manifest-grouped-tsq-admin.json" })
+        {
+            var before = Doc(file).Where(c => !c.Name.EndsWith("-admin", StringComparison.Ordinal)).ToList();
+            before.Should().HaveCount(24, file);
+            before.Select(c => c.Name).Should().Contain(["giveaway", "ozetle", "setup", "modules", "help", "bot", "privacy", "quote", "Quote", "esports", "f1", "volleyball",
+                "birthday", "ekip", "dolar", "euro", "altın", "çevir", "saat", "zarat", "randomsayi", "sec", "yazitura", "ongoru"]);
+            foreach (var command in before)
+            {
+                var now = after.Single(c => c.Name == command.Name);
+                now.Module.Should().Be(command.Module);
+                JsonNode.DeepEquals(command.Payload, now.Payload).Should().BeTrue($"{file}: {command.Name} must not change");
+            }
+        }
+
+        after.Should().HaveCount(25);
+    }
+
+    // ================================================================== G. sync
+
+    [Fact]
+    public async Task Sync_from_the_grouped_command_is_one_update_and_touches_nothing_else()
     {
         var (manifest, admin) = await BuildAsync();
-
-        // The converter below mirrors what Discord returns for a guild command; prove it on the current commands first.
-        var current = JsonNode.Parse(manifest.ToDocumentJson())!["commands"]!.AsArray();
-        foreach (var command in manifest.Commands)
-            GuildJson(current.Single(c => (string)c!["payload"]!["name"]! == command.Name)!["payload"]!).Should().Be(CommandManifest.CanonicalJson(command, false));
-
-        var before = Before();
-        var remote = before.Select((c, i) => new RemoteCommand((ulong)(1000 + i), c.Name, GuildJson(c.Payload), (CommandKind)(int)c.Payload["type"]!)).ToList();
+        var grouped = Doc("manifest-grouped-tsq-admin.json");
+        var legacy = Doc("manifest-before-tsq-admin.json").Where(c => c.Name.EndsWith("-admin", StringComparison.Ordinal)).ToList();
+        var remote = grouped.Concat(legacy).Select((c, i) => new RemoteCommand((ulong)(1000 + i), c.Name, GuildJson(c.Payload), (CommandKind)(int)c.Payload["type"]!)).ToList();
         var managed = remote.ToDictionary(r => r.Name, r => r.Id);
-        var moved = new[] { "birthday-admin", "esports-admin", "f1-admin", "lfg-admin", "live-admin", "news-admin", "volleyball-admin" };
 
         var plan = CommandSyncPlanner.Plan(manifest, remote, managed, Request(admin, prune: false));
         plan.IsBlocked.Should().BeFalse(string.Join(" | ", plan.BlockingErrors));
-        plan.Items.Where(i => i.Action == SyncAction.Create).Select(i => i.Name).Should().Equal(TsqAdminRoot.Name);
-        plan.Items.Where(i => i.Action == SyncAction.Update).Should().BeEmpty("no command outside the merge changes");
-        plan.Items.Where(i => i.Action == SyncAction.Unchanged).Should().HaveCount(24).And.Contain(i => i.Name == "Quote" && i.Kind == CommandKind.Message);
-        plan.Items.Where(i => i.Action == SyncAction.KeepManagedNotInManifest).Select(i => i.Name).Should().BeEquivalentTo(moved, "without --prune nothing is deleted");
+        plan.Items.Where(i => i.Action == SyncAction.Update).Select(i => i.Name).Should().Equal(AdminCatalog.Name);
+        plan.Items.Where(i => i.Action == SyncAction.Update).Single().RemoteId.Should().Be(managed[AdminCatalog.Name], "the same command id is updated, not re-created");
+        plan.Items.Should().NotContain(i => i.Action == SyncAction.Create || i.Action == SyncAction.DeleteManaged);
+        plan.Items.Count(i => i.Action == SyncAction.Unchanged).Should().Be(24);
+        plan.Items.Where(i => i.Action == SyncAction.KeepManagedNotInManifest).Select(i => i.Name).Should().BeEquivalentTo(legacy.Select(c => c.Name));
 
-        var pruned = CommandSyncPlanner.Plan(manifest, remote, managed, Request(admin, prune: true));
-        pruned.Items.Where(i => i.Action == SyncAction.DeleteManaged).Select(i => i.Name).Should().BeEquivalentTo(moved, "only the moved roots are removed");
-        pruned.Items.Where(i => i.Action == SyncAction.Unchanged).Should().HaveCount(24);
-
-        // After the sync Discord holds exactly the manifest: a second plan has nothing to do.
         var synced = manifest.Commands.Select((c, i) => new RemoteCommand((ulong)(2000 + i), c.Name, CommandManifest.CanonicalJson(c, false), c.Type)).ToList();
-        var again = CommandSyncPlanner.Plan(manifest, synced, synced.ToDictionary(r => r.Name, r => r.Id), Request(admin, prune: true));
-        again.HasChanges.Should().BeFalse();
-        again.Items.Should().OnlyContain(i => i.Action == SyncAction.Unchanged);
+        CommandSyncPlanner.Plan(manifest, synced, synced.ToDictionary(r => r.Name, r => r.Id), Request(admin, prune: false)).HasChanges.Should().BeFalse();
     }
 
     [Fact]
-    public async Task A_missing_or_undeclared_admin_group_blocks_the_sync_so_nothing_is_deleted()
+    public void A_declared_but_unregistered_admin_module_or_an_undeclared_one_is_a_blocking_problem()
     {
-        var (manifest, admin) = await BuildAsync();
-        var root = manifest.Find(TsqAdminRoot.Name)!;
-        var remote = manifest.Commands.Select((c, i) => new RemoteCommand((ulong)(1 + i), c.Name, CommandManifest.CanonicalJson(c, false), c.Type)).ToList();
-        var managed = remote.ToDictionary(r => r.Name, r => r.Id);
-
-        var withoutNews = Replace(manifest, root with { Options = root.Options.Where(o => o.Name != "news").ToList() });
-        var plan = CommandSyncPlanner.Plan(withoutNews, remote, managed, Request(admin, prune: true));
-        plan.IsBlocked.Should().BeTrue();
-        plan.BlockingErrors.Should().Contain("expected admin command '/tsq-admin news' is missing");
-        plan.Items.Should().BeEmpty("a partial root never reaches Discord");
-
-        var rogue = root.Options[0] with { Name = "rogue" };
-        var undeclared = Replace(manifest, root with { Options = [.. root.Options, rogue] });
-        CommandManifestValidator.Validate(undeclared, admin).Should().Contain("/tsq-admin rogue: not declared by any module's AdminCommands");
+        var registry = new ToroSquad.Core.Modules.ModuleRegistry([new ToroSquad.Discord.CoreBotModule(), new ToroSquad.Modules.News.NewsModule()]);
+        new AdminCatalog([]).Problems(registry).Should().ContainSingle().Which.Should().Contain("registered no admin operations");
+        new AdminCatalog([ToroSquad.Modules.News.Commands.NewsAdminOperations.Definition, VolleyballAdminOperations.Definition]).Problems(registry)
+            .Should().ContainSingle().Which.Should().Contain("'volleyball' is registered");
+        var act = () => new AdminCatalog([Formula1AdminOperations.Definition, Formula1AdminOperations.Definition]);
+        act.Should().Throw<InvalidOperationException>();
     }
 
-    [Fact]
-    public async Task The_builder_refuses_group_collisions_root_level_commands_undeclared_groups_and_a_third_level()
+    // ================================================================== helpers
+
+    private static AdminFields? SharedField(string formerOption) => formerOption switch
     {
-        await using var host = await TestHost.CreateAsync();
-        var registry = host.Services.GetRequiredService<ModuleRegistry>();
-        var localizer = host.Services.GetRequiredService<ILocalizer>();
+        "channel" => AdminFields.Channel,
+        "member" => AdminFields.User,
+        "date" => AdminFields.Date,
+        "role" or "ping_role" => AdminFields.Role,
+        _ => null,
+    };
+
+    private static ActorContext Administrator() => new(Guild, new UserId(1), CorePermission.Administrator, [], false, 50);
+
+    private static void SetChannel(TestHost host) =>
+        host.Guilds.SetChannel(Guild, Channel, new BotChannelAccess(true, true, CorePermission.ViewChannel | CorePermission.SendMessages | CorePermission.EmbedLinks));
+
+    private static Task<ulong?> NewsChannelAsync(TestHost host) =>
+        host.InScopeAsync(async sp => (await sp.GetRequiredService<NewsConfigService>().StatusAsync(TestHost.Admin(Guild), CancellationToken.None)).Status?.ChannelId);
+
+    private static Task<ulong?> LfgChannelAsync(TestHost host) =>
+        host.InScopeAsync(async sp => (await sp.GetRequiredService<LfgConfigService>().StatusAsync(TestHost.Admin(Guild), CancellationToken.None)).Status?.ChannelId);
+
+    private static Task<(int Day, int Month)?> BirthdayAsync(TestHost host, ulong member) =>
+        host.InScopeAsync(async sp =>
+        {
+            var (_, date) = await sp.GetRequiredService<BirthdayService>().GetForMemberAsync(Administrator(), new UserId(member), true, CancellationToken.None);
+            return date is { } d ? ((int, int)?)(d.Day, d.Month) : null;
+        });
+
+    private static string Localize(TestHost host, string key) => host.Services.GetRequiredService<ILocalizer>().Get("tr", key);
+
+    private static async Task<RecordingResponder> RunAsync(TestHost host, ActorContext actor, string module, string operation, AdminArgs? args = null,
+        AdminFields provided = AdminFields.None)
+    {
+        var respond = new RecordingResponder(host.Services.GetRequiredService<ILocalizer>());
         await using var scope = host.Scope();
-
-        async Task<IReadOnlyList<string>> ErrorsAsync(params Type[] extra)
-        {
-            using var service = new InteractionService(new DiscordRestClient(), InteractionHost.CreateConfig());
-            await service.AddModuleAsync<NewsTsqAdmin>(scope.ServiceProvider);
-            foreach (var type in extra)
-                await service.AddModuleAsync(type, scope.ServiceProvider);
-            return CommandManifestBuilder.Build(service, registry, localizer, []).LoadErrors;
-        }
-
-        (await ErrorsAsync()).Should().BeEmpty();
-        (await ErrorsAsync(typeof(SecondNewsGroup))).Should().Contain(e => e.Contains("group names must be unique", StringComparison.Ordinal));
-        (await ErrorsAsync(typeof(RootLevelCommand))).Should().Contain(e => e.Contains("adds commands to the root itself", StringComparison.Ordinal));
-        (await ErrorsAsync(typeof(UndeclaredGroup))).Should().Contain(e => e.Contains("does not declare 'tsq-admin rogue'", StringComparison.Ordinal));
-
-        // Discord.Net 3.20 loads /tsq-admin deep deeper x without complaint; Discord would reject it, so the builder must.
-        (await ErrorsAsync(typeof(ThreeLevels))).Should().Contain(e => e.Contains("Discord allows no group inside a group", StringComparison.Ordinal));
+        await host.Services.GetRequiredService<AdminRouter>().RunAsync(new AdminRequest(actor, "tr", module, operation, args ?? AdminArgs.None, provided), respond,
+            scope.ServiceProvider);
+        return respond;
     }
 
-    // ------------------------------------------------------------------ test-only contributors (never registered in the bot)
-
-    public sealed class SecondNewsGroup : TsqAdminRoot
+    private static async Task<RecordingResponder> FormAsync(TestHost host, ActorContext actor, string draft, string action, AdminInput input)
     {
-        [ToroModule("news", AllowWhenDisabled = true)]
-        [Group("news", "Duplicate group")]
-        public sealed class Commands(InteractionServices services) : ToroInteractionModule(services)
-        {
-            [SlashCommand("extra", "Extra")]
-            public Task ExtraAsync() => Task.CompletedTask;
-        }
+        var respond = new RecordingResponder(host.Services.GetRequiredService<ILocalizer>());
+        await using var scope = host.Scope();
+        await host.Services.GetRequiredService<AdminRouter>().FormAsync(actor, "tr", draft, action, input, respond, scope.ServiceProvider);
+        return respond;
     }
 
-    public sealed class RootLevelCommand : TsqAdminRoot
+    private static string DraftId(string customId) => customId[AdminCall.CustomIdPrefix.Length..].Split(':')[0];
+
+    private static AdminInput Picked(ulong id, IChannel channel) =>
+        new([id.ToString(System.Globalization.CultureInfo.InvariantCulture)], new Dictionary<string, IReadOnlyList<string>>(), [], [channel]);
+
+    private static AdminInput Selected(string value) => new([value], new Dictionary<string, IReadOnlyList<string>>(), [], []);
+
+    private static AdminInput Modal(params (string Field, string[] Values)[] fields) =>
+        new([], fields.ToDictionary(f => f.Field, f => (IReadOnlyList<string>)f.Values), [], []);
+
+    private static ITextChannel TextChannel(ulong id, ulong? guild = null) =>
+        InterfaceFake.Create<ITextChannel>(new() { ["Id"] = id, ["GuildId"] = guild ?? Guild.Value });
+
+    /// <summary>
+    /// The modal's top-level components exactly as Discord.Net 3.20.1 serializes them in RespondWithModalAsync
+    /// (<c>modal.Component.Components.Select(x =&gt; x.ToModel())</c>, its internal API models and JSON contract resolver).
+    /// </summary>
+    private static JsonArray DiscordPayload(Modal modal)
     {
-        [SlashCommand("oops", "Directly on the root")]
-        public Task OopsAsync() => Task.CompletedTask;
+        var rest = typeof(global::Discord.Rest.DiscordRestClient).Assembly;
+        var toModel = rest.GetTypes().Single(t => t.Name == "MessageComponentExtension")
+            .GetMethod("ToModel", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, [typeof(IMessageComponent)])!;
+        var resolver = (Newtonsoft.Json.Serialization.IContractResolver)Activator.CreateInstance(rest.GetType("Discord.Net.Converters.DiscordContractResolver")!, nonPublic: true)!;
+        var serializer = new Newtonsoft.Json.JsonSerializer { ContractResolver = resolver };
+        using var writer = new StringWriter(System.Globalization.CultureInfo.InvariantCulture);
+        serializer.Serialize(writer, modal.Component.Components.Select(c => toModel.Invoke(null, [c])).ToArray());
+        return JsonNode.Parse(writer.ToString())!.AsArray();
     }
 
-    public sealed class UndeclaredGroup : TsqAdminRoot
+    /// <summary>"18>3[16]": a label (18) wrapping a string select (3) with 16 options.</summary>
+    private static string Shape(JsonNode label)
     {
-        [ToroModule("news", AllowWhenDisabled = true)]
-        [Group("rogue", "Not declared")]
-        public sealed class Commands(InteractionServices services) : ToroInteractionModule(services)
-        {
-            [SlashCommand("x", "X")]
-            public Task XAsync() => Task.CompletedTask;
-        }
+        var inner = label["component"]!;
+        // Discord.Net sends an empty "options" array for auto-populated (role/channel) selects, as for the LFG voice select.
+        var options = inner["options"] is JsonArray { Count: > 0 } list ? $"[{list.Count}]" : "";
+        return $"{(int)label["type"]!}>{(int)inner["type"]!}{options}";
     }
 
-    public sealed class ThreeLevels : TsqAdminRoot
+    private static List<string> CustomIds(MessageComponent components) =>
+        components.Components.OfType<ActionRowComponent>().SelectMany(r => r.Components)
+            .Select(c => c switch { ButtonComponent b => b.CustomId, SelectMenuComponent m => m.CustomId, _ => null }).OfType<string>().ToList();
+
+    private static List<SelectMenuOption> SelectOptions(object root)
     {
-        [ToroModule("news", AllowWhenDisabled = true)]
-        [Group("deep", "Deep")]
-        public sealed class Outer(InteractionServices services) : ToroInteractionModule(services)
+        var found = new List<SelectMenuOption>();
+        void Walk(object? node, int depth)
         {
-            [Group("deeper", "Deeper")]
-            public sealed class Inner(InteractionServices services) : ToroInteractionModule(services)
+            if (node is null || depth > 8 || node is string)
+                return;
+            if (node is SelectMenuComponent select)
             {
-                [SlashCommand("x", "X")]
-                public Task XAsync() => Task.CompletedTask;
+                found.AddRange(select.Options ?? []);
+                return;
             }
+
+            if (node is IEnumerable list)
+            {
+                foreach (var item in list)
+                    Walk(item, depth + 1);
+                return;
+            }
+
+            foreach (var property in node.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.Name is "Component" or "Components"))
+                Walk(property.GetValue(node), depth + 1);
         }
+
+        Walk(root, 0);
+        return found;
     }
 
-    // ------------------------------------------------------------------ helpers
+    private static async Task<IReadOnlyList<AutocompleteResult>> SuggestAsync(TestHost host, InteractionService service, string field, string typed, string? module,
+        CorePermission permissions, bool inGuild = true)
+    {
+        var options = new List<AutocompleteOption>();
+        if (module is not null)
+            options.Add(AutocompleteOption(ApplicationCommandOptionType.String, "modul", module, field == "modul"));
+        var current = AutocompleteOption(ApplicationCommandOptionType.String, field, typed, true);
+        if (field != "modul" || module is null)
+            options.Add(current);
+        var interaction = Recorder.Create<IAutocompleteInteraction>(out var recorder, new()
+        {
+            ["Data"] = InterfaceFake.Create<IAutocompleteInteractionData>(new()
+            {
+                ["CommandName"] = AdminCatalog.Name,
+                ["Options"] = (IReadOnlyCollection<AutocompleteOption>)options,
+                ["Current"] = current,
+            }),
+            ["Type"] = InteractionType.ApplicationCommandAutocomplete,
+        });
+        await using var scope = host.Scope();
+        var result = await service.ExecuteCommandAsync(Context(interaction, permissions, inGuild), scope.ServiceProvider);
+        result.IsSuccess.Should().BeTrue(result.ErrorReason);
+        return recorder.Calls.Where(c => c.Method == "RespondAsync").Select(c => ((IEnumerable<AutocompleteResult>?)c.Args[0] ?? []).ToList()).Single();
+    }
 
-    private sealed record DocCommand(string Name, string Module, JsonObject Payload, IReadOnlyDictionary<string, string>? GroupModules);
+    private sealed record DocCommand(string Name, string Module, JsonObject Payload);
 
-    private static List<DocCommand> Before() =>
-        Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "commands", "manifest-before-tsq-admin.json")));
-
-    private static async Task<List<DocCommand>> AfterAsync() => Parse((await BuildAsync()).Manifest.ToDocumentJson());
+    private static List<DocCommand> Doc(string file) =>
+        Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "commands", file)));
 
     private static List<DocCommand> Parse(string document) =>
-        JsonNode.Parse(document)!["commands"]!.AsArray().Select(c => new DocCommand(
-            (string)c!["payload"]!["name"]!,
-            (string)c["module"]!,
-            c["payload"]!.AsObject(),
-            c["group_modules"]?.AsObject().ToDictionary(kv => kv.Key, kv => (string)kv.Value!))).ToList();
+        JsonNode.Parse(document)!["commands"]!.AsArray()
+            .Select(c => new DocCommand((string)c!["payload"]!["name"]!, (string)c["module"]!, c["payload"]!.AsObject())).ToList();
 
     private static async Task<(CommandManifest Manifest, IReadOnlySet<string> Admin)> BuildAsync()
     {
@@ -615,15 +876,11 @@ public sealed class TsqAdminCommandTests
         return interactions.Service;
     }
 
-    private static CommandManifest Replace(CommandManifest manifest, ManifestCommand command) =>
-        new(manifest.Commands.Select(c => c.Name == command.Name ? command : c).ToList(), manifest.LoadErrors);
-
     private static SyncRequest Request(IReadOnlySet<string> admin, bool prune) =>
         new(new SyncScope.Guild(42), 7, 7, new HashSet<ulong> { 42 }, false, prune, admin);
 
     private static readonly JsonSerializerOptions Compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    /// <summary>A document payload as Discord returns it for a guild command (contexts/integration_types are global-only).</summary>
     private static string GuildJson(JsonNode payload)
     {
         var copy = payload.DeepClone().AsObject();
@@ -632,27 +889,31 @@ public sealed class TsqAdminCommandTests
         return copy.ToJsonString(Compact);
     }
 
-    private static List<string> ModuleChain(ModuleInfo module)
+    private static bool ModuleChainHas(ModuleInfo module, string group)
     {
-        var names = new List<string>();
         for (var m = module; m is not null; m = m.Parent)
-            names.Insert(0, m.Name);
-        return names;
+        {
+            if (m.IsSlashGroup && m.SlashGroupName == group)
+                return true;
+        }
+
+        return false;
     }
 
-    private static List<string> TypeChain(Type type)
-    {
-        var names = new List<string>();
-        for (var t = type; t is not null; t = t.DeclaringType)
-            names.Insert(0, t.Name);
-        return names;
-    }
+    private static IEnumerable<ManifestOption> Flatten(IEnumerable<ManifestOption> options) =>
+        options.SelectMany(o => new[] { o }.Concat(Flatten(o.Options)));
 
-    /// <summary>A slash interaction exactly as Discord nests it: command → group → subcommand → options.</summary>
     private static ISlashCommandInteraction Slash(string path, IReadOnlyDictionary<string, object>? values = null)
     {
         var parts = path.Split(' ');
-        IReadOnlyCollection<IApplicationCommandInteractionDataOption> options = (values ?? new Dictionary<string, object>()).Select(kv => Option(kv.Key, kv.Value)).ToList();
+        IReadOnlyCollection<IApplicationCommandInteractionDataOption> options = (values ?? new Dictionary<string, object>()).Select(kv =>
+            InterfaceFake.Create<IApplicationCommandInteractionDataOption>(new()
+            {
+                ["Name"] = kv.Key,
+                ["Value"] = kv.Value,
+                ["Options"] = (IReadOnlyCollection<IApplicationCommandInteractionDataOption>)[],
+                ["Type"] = kv.Value is string ? ApplicationCommandOptionType.String : ApplicationCommandOptionType.Channel,
+            })).ToList();
         for (var i = parts.Length - 1; i >= 1; i--)
         {
             options =
@@ -670,25 +931,6 @@ public sealed class TsqAdminCommandTests
         return InterfaceFake.Create<ISlashCommandInteraction>(new() { ["Data"] = data, ["Type"] = InteractionType.ApplicationCommand });
     }
 
-    private static IApplicationCommandInteractionDataOption Option(string name, object value) =>
-        InterfaceFake.Create<IApplicationCommandInteractionDataOption>(new() { ["Name"] = name, ["Value"] = value, ["Options"] = (IReadOnlyCollection<IApplicationCommandInteractionDataOption>)[] });
-
-    private static object OptionValue(string name) => name switch
-    {
-        "member" => InterfaceFake.Create<IGuildUser>(new() { ["Id"] = 5UL, ["GuildId"] = Guild.Value }),
-        "role" => InterfaceFake.Create<IRole>(new() { ["Id"] = 77UL }),
-        "channel" => InterfaceFake.Create<ITextChannel>(new() { ["Id"] = 500UL }),
-        "team" => "aurora",
-        "action" => "add",
-        _ => true,
-    };
-
-    private static object Convert(object value, Type type)
-    {
-        var target = Nullable.GetUnderlyingType(type) ?? type;
-        return target.IsInstanceOfType(value) ? value : System.Convert.ChangeType(value, target, System.Globalization.CultureInfo.InvariantCulture);
-    }
-
     private static IInteractionContext Context(IDiscordInteraction interaction, CorePermission permissions, bool inGuild = true)
     {
         var user = InterfaceFake.Create<IGuildUser>(new()
@@ -704,6 +946,46 @@ public sealed class TsqAdminCommandTests
 
     private static AutocompleteOption AutocompleteOption(ApplicationCommandOptionType type, string name, object? value, bool focused) =>
         (AutocompleteOption)Activator.CreateInstance(typeof(AutocompleteOption), BindingFlags.Instance | BindingFlags.NonPublic, null, [type, name, value, focused], null)!;
+
+    /// <summary>Records what an admin operation answered (instead of Discord).</summary>
+    private sealed class RecordingResponder(ILocalizer localizer) : IAdminResponder
+    {
+        public List<(string? Text, MessageEmbed? Embed, MessageComponent? Components, bool Ephemeral)> Sent { get; } = [];
+        public List<(string? Text, MessageComponent? Components)> Updates { get; } = [];
+        public List<Modal> Modals { get; } = [];
+
+        public string Text => string.Join("\n", Sent.Select(s => s.Text).Concat(Updates.Select(u => u.Text)).Where(t => t is not null));
+        public IReadOnlyList<MessageEmbed> Embeds => Sent.Where(s => s.Embed is not null).Select(s => s.Embed!).ToList();
+
+        public List<string> AllCustomIds() =>
+            Sent.Where(s => s.Components is not null).SelectMany(s => CustomIds(s.Components!))
+                .Concat(Updates.Where(u => u.Components is not null).SelectMany(u => CustomIds(u.Components!))).ToList();
+
+        public List<string> SelectValues() =>
+            Sent.Select(s => s.Components).Concat(Updates.Select(u => u.Components)).Where(c => c is not null).SelectMany(c => SelectOptions(c!)).Select(o => o.Value).ToList();
+
+        public Task DeferAsync() => Task.CompletedTask;
+
+        public Task<string> DescribeAsync(OperationResult result) => Task.FromResult(localizer.Get("tr", result.MessageKey, result.Args.ToArray()));
+
+        public Task SendAsync(string? text, MessageEmbed? embed = null, MessageComponent? components = null, bool ephemeral = true)
+        {
+            Sent.Add((text, embed, components, ephemeral));
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(string? text, MessageComponent? components, MessageEmbed? embed = null)
+        {
+            Updates.Add((text, components));
+            return Task.CompletedTask;
+        }
+
+        public Task ModalAsync(Modal modal)
+        {
+            Modals.Add(modal);
+            return Task.CompletedTask;
+        }
+    }
 
     /// <summary>Like <see cref="InterfaceFake"/>, but records method calls and completes Task-returning ones.</summary>
     public class Recorder : DispatchProxy

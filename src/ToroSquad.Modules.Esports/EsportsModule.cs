@@ -7,8 +7,8 @@ using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Discord.Commands.Core;
-using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Esports.Application;
 using ToroSquad.Modules.Esports.Commands;
@@ -25,6 +25,9 @@ namespace ToroSquad.Modules.Esports;
 public sealed class EsportsModule : IToroModule
 {
     public const string ModuleIdValue = "esports";
+
+    /// <summary>The <c>modul</c> value of this module's operations in <c>/tsq-admin</c> (the former <c>/esports-admin</c>).</summary>
+    public const string AdminId = "esports";
     public static readonly ModuleId ModuleIdTyped = new(ModuleIdValue);
 
     public ModuleDescriptor Descriptor { get; } = new(
@@ -36,17 +39,17 @@ public sealed class EsportsModule : IToroModule
         EnabledByDefault: false, // explicit activation after setup + ping-free preview
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks,
         OptionalBotPermissions: GuildPermission.ReadMessageHistory | GuildPermission.ManageRoles | GuildPermission.MentionEveryone,
-        AdminCommands: [TsqAdminRoot.Group("esports")]);
+        AdminCommands: [AdminCatalog.Entry(AdminId)]);
 
     public IReadOnlyList<Type> InteractionModuleTypes { get; } =
     [
         typeof(EsportsCommands),
-        typeof(EsportsTsqAdmin),
         typeof(EsportsSetupComponents),
     ];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddAdminOperations(EsportsAdminOperations.Definition);
         var section = configuration.GetSection(EsportsOptions.Section);
         services.AddOptions<EsportsOptions>().Bind(section);
         services.AddOptions<LiquipediaOptions>().Bind(section.GetSection("Liquipedia"));

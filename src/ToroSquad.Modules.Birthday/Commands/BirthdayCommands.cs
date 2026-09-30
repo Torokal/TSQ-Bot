@@ -8,7 +8,7 @@ namespace ToroSquad.Modules.Birthday.Commands;
 /// <summary>
 /// /birthday set|show|remove — only ever the caller's own birthday in this guild (user and guild come from the interaction).
 /// Every answer is private and pings nobody. There is deliberately no command here that shows or changes another member's
-/// birthday (Administrators: /tsq-admin birthday set), and no list.
+/// birthday (Administrators: /tsq-admin modul:birthday islem:set), and no list.
 /// </summary>
 [ToroModule(BirthdayModule.ModuleIdValue)]
 [Group("birthday", "Your birthday (day and month only)")]

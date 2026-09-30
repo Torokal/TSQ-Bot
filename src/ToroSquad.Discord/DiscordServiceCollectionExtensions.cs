@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Roles;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Discord.Commands.Core;
 using ToroSquad.Discord.Commands.Manifest;
 using ToroSquad.Discord.Guilds;
@@ -24,6 +25,9 @@ public static class DiscordServiceCollectionExtensions
 
         services.AddScoped<InteractionServices>();
         services.AddSingleton<InteractionHost>();
+        services.AddSingleton(sp => new AdminCatalog(sp.GetServices<AdminModule>()));
+        services.AddSingleton<AdminDrafts>();
+        services.AddSingleton<AdminRouter>();
         services.AddScoped<CommandSyncService>();
 
         if (options.Transport == DiscordTransportMode.Gateway)

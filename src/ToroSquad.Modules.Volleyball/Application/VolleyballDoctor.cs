@@ -26,7 +26,7 @@ public enum VbCheckState
 public sealed record VbDoctorCheck(string LabelKey, VbCheckState State, string DetailKey, IReadOnlyList<object> Args);
 
 /// <summary>
-/// /tsq-admin volleyball doctor — actionable diagnostics from cached state only (no provider calls, never a secret): channel and
+/// /tsq-admin modul:volleyball islem:doctor — actionable diagnostics from cached state only (no provider calls, never a secret): channel and
 /// permissions, role, data mode, provider health (fixtures / live), data age, backoff, identity rejections, next match,
 /// delivery statistics.
 /// </summary>

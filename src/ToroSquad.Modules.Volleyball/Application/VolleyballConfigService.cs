@@ -19,7 +19,7 @@ public sealed record VbNotificationChanges(
     bool? PostponedCancelled = null);
 
 /// <summary>
-/// /tsq-admin volleyball configure|pause|resume. Every method authorizes the actor (Manage Server) and only touches the row of
+/// /tsq-admin modul:volleyball islem:configure|pause|resume. Every method authorizes the actor (Manage Server) and only touches the row of
 /// <c>actor.GuildId</c>. Anything that could re-announce history (new channel, a notification type switched on, resume)
 /// moves the guild's watermark to "now".
 /// </summary>

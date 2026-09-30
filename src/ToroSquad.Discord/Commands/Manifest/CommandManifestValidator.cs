@@ -32,7 +32,7 @@ public static partial class CommandManifestValidator
         var errors = new List<string>();
         errors.AddRange(manifest.LoadErrors.Select(e => "load error: " + e));
 
-        // An entry is a top-level command ("setup") or a module's group in a shared root ("tsq-admin news").
+        // An entry is a top-level command ("setup") or a module's operations in the flat admin command ("tsq-admin news").
         var adminRoots = adminCommandNames.Select(n => n.Split(' ')[0]).ToHashSet(StringComparer.Ordinal);
 
         if (manifest.Commands.Count == 0)
@@ -83,24 +83,9 @@ public static partial class CommandManifestValidator
                 errors.Add($"{path}: {chars} characters exceed {MaxCommandCharacters}");
         }
 
-        foreach (var name in adminCommandNames.Order(StringComparer.Ordinal))
-        {
-            var parts = name.Split(' ');
-            var command = manifest.Find(parts[0]);
-            if (command is null || parts.Length == 2 && !command.Options.Any(o => o.Type == OptionType.SubCommandGroup && o.Name == parts[1]) || parts.Length > 2)
-                errors.Add($"expected admin command '/{name}' is missing");
-        }
-
-        // A shared root carries only declared module groups: a group nobody declares, or a declared one that failed to load,
-        // must not reach Discord (a missing group would be deleted from the members' menu).
-        foreach (var root in adminCommandNames.Where(n => n.Contains(' ', StringComparison.Ordinal)).Select(n => n.Split(' ')[0]).Distinct(StringComparer.Ordinal))
-        {
-            foreach (var option in manifest.Find(root)?.Options ?? [])
-            {
-                if (option.Type != OptionType.SubCommandGroup || !adminCommandNames.Contains(root + " " + option.Name))
-                    errors.Add($"/{root} {option.Name}: not declared by any module's AdminCommands");
-            }
-        }
+        // "tsq-admin news" (a module's admin operations, checked against the admin catalog when it loads) needs its root command.
+        foreach (var name in adminRoots.Where(n => manifest.Find(n) is null).Order(StringComparer.Ordinal))
+            errors.Add($"expected admin command '/{name}' is missing");
 
         return errors;
     }

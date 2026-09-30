@@ -53,10 +53,9 @@
   "lfg.privacy.listings": "{0} ekip ilanı (senin açtığın)",
   "lfg.privacy.joined": "{0} ekip ilanındaki katılımın",
   "cmd.ekip": "Oyuncu bul: herhangi bir oyun için ekip ilanı formunu aç",
-  "cmd.tsq-admin.lfg": "TSQ LFG ekip ilanı ayarları (yöneticiler)",
-  "cmd.tsq-admin.lfg.channel": "/ekip ilanlarının açılabileceği kanal (boş: her kanal)",
-  "cmd.tsq-admin.lfg.channel.channel": "İlan kanalı; boş bırakırsan kısıtlama kalkar",
-  "cmd.tsq-admin.lfg.status": "LFG ayarları ve bu sunucudaki aktif ilanlar",
+  "admin.lfg": "Oyuncu bul (LFG)",
+  "admin.lfg.channel": "/ekip ilanlarının açılabileceği kanal (boş: her kanal)",
+  "admin.lfg.status": "LFG ayarları ve bu sunucudaki aktif ilanlar",
   "lfg.card.maybe": "🤔 **Belki**",
   "lfg.card.more": "(+{0})",
   "lfg.card.starts": "🗓️ **Başlangıç:** {0} • {1}",
@@ -163,5 +162,7 @@
   "lfg.join.already_waitlisted": "🎟️ Zaten bekleme listesindesin.\nSıran: **#{0}**",
   "lfg.leave.done_waitlist": "🎟️ Bekleme listesinden çıktın.",
   "lfg.leave.done_maybe": "İlandan ayrıldın.",
-  "lfg.voice.waitlisted": "🎟️ Bekleme listesindesin. Ekipte yer açıldığında otomatik olarak katılacaksın."
+  "lfg.voice.waitlisted": "🎟️ Bekleme listesindesin. Ekipte yer açıldığında otomatik olarak katılacaksın.",
+  "admin.lfg.channel.pick": "/ekip ilanlarının açılabileceği kanalı seçin ya da kısıtlamayı kaldırın.",
+  "admin.lfg.channel.any": "Kısıtlamayı kaldır (her kanal)"
 }

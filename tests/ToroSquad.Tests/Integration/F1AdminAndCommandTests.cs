@@ -60,9 +60,10 @@ public sealed class F1AdminAndCommandTests
     [Fact]
     public void Discord_metadata_hides_admin_commands_and_gates_public_ones()
     {
-        // The shared /tsq-admin root carries the Discord metadata; the module's group carries its gate.
-        typeof(Formula1TsqAdmin).GetCustomAttribute<DefaultMemberPermissionsAttribute>()!.Permissions.Should().Be(global::Discord.GuildPermission.ManageGuild);
-        typeof(Formula1TsqAdmin.Formula1AdminCommands).GetCustomAttribute<ToroModuleAttribute>()!.Should().BeEquivalentTo(new { ModuleId = "formula1", AllowWhenDisabled = true });
+        // The flat /tsq-admin command carries the Discord metadata; F1's operations are owned by the module and need Manage Server.
+        typeof(ToroSquad.Discord.Commands.Core.TsqAdminCommands).GetCustomAttribute<DefaultMemberPermissionsAttribute>()!.Permissions.Should().Be(global::Discord.GuildPermission.ManageGuild);
+        Formula1AdminOperations.Definition.Owner.Value.Should().Be("formula1");
+        Formula1AdminOperations.Definition.Operations.Should().OnlyContain(o => o.Permission == ToroSquad.Core.Security.Authorize.ServerSettings);
         typeof(Formula1Commands).GetCustomAttribute<ToroModuleAttribute>()!.AllowWhenDisabled.Should().BeFalse("public commands honour the module gate");
         typeof(Formula1Commands.StandingsCommands).GetCustomAttribute<ToroModuleAttribute>()!.AllowWhenDisabled.Should().BeFalse();
         typeof(Formula1Commands).GetCustomAttribute<CommandContextTypeAttribute>()!.ContextTypes.Should().Equal(InteractionContextType.Guild);

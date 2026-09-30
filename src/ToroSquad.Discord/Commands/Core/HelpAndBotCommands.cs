@@ -7,6 +7,7 @@ using ToroSquad.Core.Localization;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Security;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Discord.Commands.Manifest;
 using ToroSquad.Discord.Interactions;
 using EmbedField = ToroSquad.Core.Messaging.EmbedField;
@@ -41,7 +42,7 @@ public sealed class GatewayConnectionStatus(DiscordSocketClient client, TimeProv
 [ToroModule("core")]
 [CommandContextType(InteractionContextType.Guild)]
 [IntegrationType(ApplicationIntegrationType.GuildInstall)]
-public sealed class HelpCommands(InteractionServices services, InteractionHost host, ModuleRegistry registry, IModuleGate gate)
+public sealed class HelpCommands(InteractionServices services, InteractionHost host, ModuleRegistry registry, IModuleGate gate, AdminCatalog admin)
     : ToroInteractionModule(services)
 {
     [SlashCommand("help", "Show the commands available to you in this server")]
@@ -55,19 +56,14 @@ public sealed class HelpCommands(InteractionServices services, InteractionHost h
         // Slash commands only: a message command has no description and lives in the message's Apps menu.
         foreach (var command in (host.Manifest?.Commands ?? []).Where(c => c.Type == CommandKind.ChatInput).OrderBy(c => c.Name, StringComparer.Ordinal))
         {
-            if (command.Name == TsqAdminRoot.Name)
+            if (command.Name == AdminCatalog.Name)
             {
-                // One line per module group, listed like a module's own command: only for admins, only for enabled modules.
+                // One flat command: the usage and the modules whose operations this admin can run (they work while a module is off).
                 if (!isAdmin)
                     continue;
-                foreach (var group in command.Options.Where(o => o.OwnerModule is not null))
-                {
-                    if (!registry.TryGet(group.OwnerModule!, out var owner) || !await gate.IsEnabledAsync(actor.GuildId, owner.Descriptor.Id, CancellationToken.None))
-                        continue;
-                    var key = CommandLocalizationKeys.Description(command.Name + "." + group.Name);
-                    lines.Add($"`/{command.Name} {group.Name}` — {(Localizer.HasKey(language, key) ? Localizer.Get(language, key) : group.Description)} 🔒");
-                }
-
+                var modules = admin.Modules.Where(m => m.Operations.Any(o => actor.Has(o.Permission))).Select(m => "`" + m.Id + "`").ToList();
+                if (modules.Count > 0)
+                    lines.Add(Localizer.Get(language, "help.tsq_admin", string.Join(", ", modules)) + " 🔒");
                 continue;
             }
 

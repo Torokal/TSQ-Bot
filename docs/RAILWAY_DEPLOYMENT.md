@@ -103,7 +103,7 @@ Değişkenleri kaydedip **Deploy**'a bas. Loglarda şu görünmeli:
 
 ## 5. Boş başla (A) veya mevcut yerel veritabanını taşı (B)
 
-**A) Boş veritabanı:** 6. adıma geç. Sonra Discord'da `/setup` (kanal + modül), `/tsq-admin esports filters-team` ve istersen rol
+**A) Boş veritabanı:** 6. adıma geç. Sonra Discord'da `/setup` (kanal + modül), `/tsq-admin modul:esports islem:filters-team` ve istersen rol
 eşlemesini yap. İlk canlı tarama "baseline" olur, geçmiş duyurulmaz.
 
 **B) Yerel veritabanını taşı (ayarlar, filtreler, bildirim kayıtları korunur):**
@@ -139,7 +139,7 @@ eşlemesini yap. İlk canlı tarama "baseline" olur, geçmiş duyurulmaz.
 
 ## 7. Doğrulama
 
-- Discord'da `/bot status` (commit Railway'deki SHA olmalı), `/tsq-admin esports filters-show`, `/tsq-admin esports preview`.
+- Discord'da `/bot status` (commit Railway'deki SHA olmalı), `/tsq-admin modul:esports islem:filters-show`, `/tsq-admin modul:esports islem:preview`.
 - **Tek kopya:** yerel `ToroSquad.Bot` süreci yok; Railway'de tek deployment "Active".
 - **Yeniden başlatma testi:** Service → ⋮ → **Restart** → bot yeniden bağlanır; ayarlar/filtreler duruyor; yeni kopya
   mesaj yok (loglarda `new=0`).

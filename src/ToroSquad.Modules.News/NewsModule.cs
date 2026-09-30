@@ -4,7 +4,7 @@ using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Security;
-using ToroSquad.Discord.Interactions;
+using ToroSquad.Discord.Admin;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.News.Application;
 using ToroSquad.Modules.News.Commands;
@@ -17,11 +17,14 @@ namespace ToroSquad.Modules.News;
 /// TSQ News: HLTV news about Aurora's main CS2 team, read from the official HLTV RSS feed only (headline + link, never the
 /// article or its image) and posted once to one configured channel (docs/news/TSQ_NEWS.md). A separate feature module:
 /// depends only on the shared TSQ layers. Inert unless News:Mode is DryRun or Live; also gated per guild like every
-/// optional module (/modules enable news) and needs a channel (/tsq-admin news configure).
+/// optional module (/modules enable news) and needs a channel (/tsq-admin modul:news islem:configure).
 /// </summary>
 public sealed class NewsModule : IToroModule
 {
     public const string ModuleIdValue = "news";
+
+    /// <summary>The <c>modul</c> value of this module's operations in <c>/tsq-admin</c> (the former <c>/news-admin</c>).</summary>
+    public const string AdminId = "news";
     public static readonly ModuleId ModuleIdTyped = new(ModuleIdValue);
 
     public ModuleDescriptor Descriptor { get; } = new(
@@ -30,15 +33,16 @@ public sealed class NewsModule : IToroModule
         "module.news.name",
         "module.news.description",
         IsCore: false,
-        EnabledByDefault: false, // explicit activation: /modules enable news (after /tsq-admin news configure)
+        EnabledByDefault: false, // explicit activation: /modules enable news (after /tsq-admin modul:news islem:configure)
         RequiredBotChannelPermissions: NewsConfigService.RequiredChannelPermissions,
         OptionalBotPermissions: GuildPermission.ReadMessageHistory, // reconciling an uncertain send
-        AdminCommands: [TsqAdminRoot.Group("news")]);
+        AdminCommands: [AdminCatalog.Entry(AdminId)]);
 
-    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(NewsTsqAdmin)];
+    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddAdminOperations(NewsAdminOperations.Definition);
         services.AddOptions<NewsOptions>().Bind(configuration.GetSection(NewsOptions.Section));
         services.AddSingleton(new LocalizationSource(typeof(NewsModule).Assembly, "ToroSquad.Modules.News.Localization"));
         services.AddSingleton<IModelContributor, NewsModelContributor>();

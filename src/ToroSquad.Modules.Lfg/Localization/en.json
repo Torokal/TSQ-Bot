@@ -53,10 +53,9 @@
   "lfg.privacy.listings": "{0} listing(s) you created",
   "lfg.privacy.joined": "{0} listing(s) you joined",
   "cmd.ekip": "Find players: open the group listing form for any game",
-  "cmd.tsq-admin.lfg": "TSQ LFG group finder settings (admins)",
-  "cmd.tsq-admin.lfg.channel": "Channel where /ekip listings can be opened (empty: any channel)",
-  "cmd.tsq-admin.lfg.channel.channel": "Listing channel; leave empty to allow every channel",
-  "cmd.tsq-admin.lfg.status": "LFG settings and active listings in this server",
+  "admin.lfg": "Group finder (LFG)",
+  "admin.lfg.channel": "Channel where /ekip listings can be opened (empty: any channel)",
+  "admin.lfg.status": "LFG settings and active listings in this server",
   "lfg.card.maybe": "🤔 **Maybe**",
   "lfg.card.more": "(+{0})",
   "lfg.card.starts": "🗓️ **Starts:** {0} • {1}",
@@ -163,5 +162,7 @@
   "lfg.join.already_waitlisted": "🎟️ You are already on the waitlist.\nYour place: **#{0}**",
   "lfg.leave.done_waitlist": "🎟️ You left the waitlist.",
   "lfg.leave.done_maybe": "You left the listing.",
-  "lfg.voice.waitlisted": "🎟️ You are on the waitlist. You will join the team automatically when a slot opens."
+  "lfg.voice.waitlisted": "🎟️ You are on the waitlist. You will join the team automatically when a slot opens.",
+  "admin.lfg.channel.pick": "Pick the channel where /ekip listings can be opened, or remove the restriction.",
+  "admin.lfg.channel.any": "Remove the restriction (any channel)"
 }
