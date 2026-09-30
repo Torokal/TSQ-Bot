@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -62,6 +63,8 @@ public sealed class TestHost : IAsyncDisposable
         services.AddSingleton<TimeProvider>(clock);
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Warning));
         ToroHost.AddToroSquad(services, configuration, directory, longRunning: false);
+        // Production only logs this warning; tests fail on it so an unordered Skip/Take never ships again.
+        services.ConfigureDbContext<ToroDbContext>(o => o.ConfigureWarnings(w => w.Throw(CoreEventId.RowLimitingOperationWithoutOrderByWarning)));
         replace?.Invoke(services); // last registration wins (e.g. a failing provider)
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
