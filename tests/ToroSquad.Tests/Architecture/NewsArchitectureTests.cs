@@ -132,7 +132,7 @@ public sealed partial class NewsArchitectureTests
             type.GetCustomAttribute<ToroModuleAttribute>(inherit: true)!.ModuleId.Should().Be("news", type.Name);
         var module = new ToroSquad.Modules.News.NewsModule();
         module.Descriptor.EnabledByDefault.Should().BeFalse();
-        module.Descriptor.AdminCommands.Should().Equal("news-admin");
+        module.Descriptor.AdminCommands.Should().Equal("tsq-admin news");
     }
 
     [Fact]

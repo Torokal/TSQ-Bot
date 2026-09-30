@@ -191,7 +191,7 @@ public sealed partial class LfgArchitectureTests
         var module = new ToroSquad.Modules.Lfg.LfgModule();
         module.Descriptor.EnabledByDefault.Should().BeFalse();
         module.Descriptor.IsCore.Should().BeFalse();
-        module.Descriptor.AdminCommands.Should().Equal("lfg-admin");
+        module.Descriptor.AdminCommands.Should().Equal("tsq-admin lfg");
     }
 
     [Fact]

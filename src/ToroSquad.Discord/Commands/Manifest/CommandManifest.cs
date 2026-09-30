@@ -46,7 +46,8 @@ public sealed record ManifestOption(
     double? MaxValue,
     int? MinLength,
     int? MaxLength,
-    IReadOnlyList<int> ChannelTypes);
+    IReadOnlyList<int> ChannelTypes,
+    string? OwnerModule = null); // metadata only, never sent to Discord: the module that owns a /tsq-admin group
 
 /// <summary>
 /// One top-level application command as it will be registered with Discord: a CHAT_INPUT (slash) command, or a MESSAGE
@@ -75,7 +76,12 @@ public sealed record ManifestCommand(
 /// </summary>
 public sealed record CommandManifest(IReadOnlyList<ManifestCommand> Commands, IReadOnlyList<string> LoadErrors)
 {
-    private static readonly JsonSerializerOptions DocumentOptions = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    private static readonly JsonSerializerOptions DocumentOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
 
     private static readonly JsonWriterOptions WriterOptions = new()
     {
@@ -121,7 +127,10 @@ public sealed record CommandManifest(IReadOnlyList<ManifestCommand> Commands, IR
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>Human-readable manifest file (docs/commands.manifest.json) — includes owner module metadata.</summary>
+    /// <summary>
+    /// Human-readable manifest file (docs/commands.manifest.json) — includes owner module metadata, and for /tsq-admin the
+    /// module that owns each group.
+    /// </summary>
     public string ToDocumentJson()
     {
         var doc = new
@@ -131,6 +140,9 @@ public sealed record CommandManifest(IReadOnlyList<ManifestCommand> Commands, IR
             commands = Commands.OrderBy(c => c.Name, StringComparer.Ordinal).Select(c => new
             {
                 module = c.OwnerModule,
+                group_modules = c.Options.Any(o => o.OwnerModule is not null)
+                    ? c.Options.Where(o => o.OwnerModule is not null).ToDictionary(o => o.Name, o => o.OwnerModule)
+                    : null,
                 payload = JsonDocument.Parse(CanonicalJson(c, includeGlobalOnlyFields: true)).RootElement,
             }),
         };

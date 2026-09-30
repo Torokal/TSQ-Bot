@@ -8,6 +8,7 @@ using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
 using ToroSquad.Discord.Commands.Core;
+using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Esports.Application;
 using ToroSquad.Modules.Esports.Commands;
@@ -35,12 +36,12 @@ public sealed class EsportsModule : IToroModule
         EnabledByDefault: false, // explicit activation after setup + ping-free preview
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks,
         OptionalBotPermissions: GuildPermission.ReadMessageHistory | GuildPermission.ManageRoles | GuildPermission.MentionEveryone,
-        AdminCommands: ["esports-admin"]);
+        AdminCommands: [TsqAdminRoot.Group("esports")]);
 
     public IReadOnlyList<Type> InteractionModuleTypes { get; } =
     [
         typeof(EsportsCommands),
-        typeof(EsportsAdminCommands),
+        typeof(EsportsTsqAdmin),
         typeof(EsportsSetupComponents),
     ];
 

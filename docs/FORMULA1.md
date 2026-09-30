@@ -6,7 +6,7 @@ Kod: [`src/ToroSquad.Modules.Formula1`](../src/ToroSquad.Modules.Formula1). Yaln
 `F1ArchitectureTests` bunu zorlar).
 
 **Temel ilke:** yanlış bir F1 bildirimi, hiç bildirim olmamasından kötüdür. Emin olunamayan her durumda bildirim gönderilmez
-ve durum dürüstçe raporlanır (`/f1-admin doctor`, `/f1 now`).
+ve durum dürüstçe raporlanır (`/tsq-admin f1 doctor`, `/f1 now`).
 
 ## Ne yapar
 
@@ -177,7 +177,7 @@ gerçekten bitene kadar yeni bağlantı açılmaz. Host kapanışı bu yüzden t
 
 Genel (`/f1`, modül açık olmalı; yalnızca önbellekten okunur). `next`, `schedule`, `standings` ve `now` yanıtları **kanalda herkese
 halka açık**; `results` spoiler riski nedeniyle **ephemeral** kalır. "Veri yok" türü hatalar yalnızca çağırana görünür. Kartlarda
-sağlayıcı adı/"Kaynak" gösterilmez, güncellik ("Veri: …") gösterilir; `/f1-admin` komutlarının tümü ephemeral:
+sağlayıcı adı/"Kaynak" gösterilmez, güncellik ("Veri: …") gösterilir; `/tsq-admin f1` komutlarının tümü ephemeral:
 
 | Komut | Ne yapar |
 |---|---|
@@ -187,27 +187,27 @@ sağlayıcı adı/"Kaynak" gösterilmez, güncellik ("Veri: …") gösterilir; `
 | `/f1 now` | Canlı sağlayıcıya göre süren seans; bilinmiyorsa "kullanılamıyor" (tahmin yok) |
 | `/f1 standings drivers` / `/f1 standings constructors` | Sağlayıcının tablosu, "N. yarış sonrası", güncellik, bayatlık uyarısı |
 
-Yönetici (`/f1-admin`, `default_member_permissions = ManageGuild` **ve** her servis çağrısında `Authorize.Require`; modül
+Yönetici (`/tsq-admin f1`, `default_member_permissions = ManageGuild` **ve** her servis çağrısında `Authorize.Require`; modül
 kapalıyken de çalışır):
 
 | Komut | Ne yapar |
 |---|---|
-| `/f1-admin configure channel channel:` | Bildirim kanalı (bu sunucuda olmalı; ViewChannel/SendMessages/EmbedLinks eksikse uyarı; başka kanala asla otomatik geçilmez) |
-| `/f1-admin configure notifications …` | Antrenman/sprint/yarış başlangıç+sonuç, puan durumu; sıralama ve sprint sıralaması (vars. kapalı) |
-| `/f1-admin configure role [ping_role] [ping_starts] [ping_results] [clear]` | İsteğe bağlı bildirim rolü (asla @everyone; yalnızca bu sunucunun rolü) |
-| `/f1-admin configure spoilers enabled:` | Spoiler modu |
-| `/f1-admin preview [card]` | TEST/DEMO sentetik kart, pingsiz (antrenman/yarış başladı, antrenman/yarış sonucu, yarış sonucu + puan durumu) |
-| `/f1-admin status` | Sunucunun F1 ayarları, veri modu, canlı durum |
-| `/f1-admin doctor` | İzinler, rol, her sağlayıcının güncelliği/son sonucu/geri çekilmesi, canlı bağlantı, gönderim istatistikleri |
-| `/f1-admin pause` / `resume` | Duraklat / devam (kaçanlar gönderilmez) |
+| `/tsq-admin f1 configure-channel channel:` | Bildirim kanalı (bu sunucuda olmalı; ViewChannel/SendMessages/EmbedLinks eksikse uyarı; başka kanala asla otomatik geçilmez) |
+| `/tsq-admin f1 configure-notifications …` | Antrenman/sprint/yarış başlangıç+sonuç, puan durumu; sıralama ve sprint sıralaması (vars. kapalı) |
+| `/tsq-admin f1 configure-role [ping_role] [ping_starts] [ping_results] [clear]` | İsteğe bağlı bildirim rolü (asla @everyone; yalnızca bu sunucunun rolü) |
+| `/tsq-admin f1 configure-spoilers enabled:` | Spoiler modu |
+| `/tsq-admin f1 preview [card]` | TEST/DEMO sentetik kart, pingsiz (antrenman/yarış başladı, antrenman/yarış sonucu, yarış sonucu + puan durumu) |
+| `/tsq-admin f1 status` | Sunucunun F1 ayarları, veri modu, canlı durum |
+| `/tsq-admin f1 doctor` | İzinler, rol, her sağlayıcının güncelliği/son sonucu/geri çekilmesi, canlı bağlantı, gönderim istatistikleri |
+| `/tsq-admin f1 pause` / `resume` | Duraklat / devam (kaçanlar gönderilmez) |
 
 Ayrıca `/setup` sihirbazında F1 adımı: kanal → pingsiz önizleme → etkinleştir.
 
 ## Kurulum (yönetici)
 
-1. `/setup` → Formula 1 adımı **veya** `/f1-admin configure channel` → `/f1-admin preview` → `/modules enable formula1`.
-2. İsteğe bağlı: `/f1-admin configure role`, `/f1-admin configure spoilers`, `/f1-admin configure notifications`.
-3. `/f1-admin doctor` ile sağlayıcı ve izin durumunu kontrol edin.
+1. `/setup` → Formula 1 adımı **veya** `/tsq-admin f1 configure-channel` → `/tsq-admin f1 preview` → `/modules enable formula1`.
+2. İsteğe bağlı: `/tsq-admin f1 configure-role`, `/tsq-admin f1 configure-spoilers`, `/tsq-admin f1 configure-notifications`.
+3. `/tsq-admin f1 doctor` ile sağlayıcı ve izin durumunu kontrol edin.
 
 ## Yapılandırma
 
@@ -266,7 +266,7 @@ gönderilmez; modül zaten varsayılan kapalıdır.
 | **OpenF1** (`api.openf1.org`) | Canlı seans yaşam döngüsü (MQTT/REST), sonuçlar | canlı (**ücretli sponsor erişimi**) + tarihsel (2023+, ücretsiz) | Canlı için hesap (kullanıcı adı/parola → OAuth2 token) | Veri **CC BY-NC-SA 4.0**, "eğitim, kişisel proje, araştırma ve **ticari olmayan** hayran etkileşimi" için; resmî değildir, Formula 1 şirketleriyle bağlantısı yoktur. Ücretsiz: 3 istek/sn, 30 istek/dk; sponsor: 6/sn, 60/dk, 10 eşzamanlı MQTT |
 
 - Otomatik bildirim kartları ve önizlemeler sağlayıcı adı/"Kaynak" altbilgisi göstermez (sahip kararı; TEST/DEMO etiketi kalır).
-  Kaynak bilgisi içeride korunur: loglar, sağlayıcı durumu, `/f1-admin doctor`. `/f1` komutları kaynağı ve güncelliği göstermeye
+  Kaynak bilgisi içeride korunur: loglar, sağlayıcı durumu, `/tsq-admin f1 doctor`. `/f1` komutları kaynağı ve güncelliği göstermeye
   devam eder. Bot hiçbir yerde "resmî Formula 1 API" iddiasında bulunmaz. `/bot about` Jolpica F1,
   OpenF1 (CC BY-NC-SA 4.0) ve MQTTnet (MIT) atıflarını listeler.
 - TSQ Bot'un mevcut kullanımı (tek sunuculu, ücretsiz, reklamsız hayran botu) ticari olmayan kullanım olarak
@@ -292,7 +292,7 @@ Kullanıcıya ait veri tutulmaz; sunucu verisi saklama süresi sonunda silinir.
 
 ## Düşük gürültülü V2 bildirimleri
 
-Beş yeni bildirim türü, her biri `/f1-admin configure notifications` içinde ayrı bir anahtarla açılır. **Hepsi varsayılan
+Beş yeni bildirim türü, her biri `/tsq-admin f1 configure-notifications` içinde ayrı bir anahtarla açılır. **Hepsi varsayılan
 olarak KAPALI** (mevcut sunucular yeni mesaj almaz; migration `Formula1LowSpamV2` sütunları `false` ile ekler). Hepsi
 mevcut hattan geçer: sağlayıcı → normalize → workflow/kalıcılık → planner → outbox → Discord. Hiçbiri ping atmaz; teslim
 anında kendi anahtarı kontrol edilir (kapatılırsa bekleyen kart iptal edilir); pause, kanal, watermark ve modül durumu geçerlidir.

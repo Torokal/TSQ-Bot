@@ -109,14 +109,14 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | General | `/help`, `/bot status\|about\|source`, `/privacy export\|delete` | everyone |
 | Admin | `/setup`, `/modules list\|enable\|disable` | Manage Server |
 | Esports | `/esports matches\|results\|events\|rankings\|team\|follow\|unfollow\|subscriptions` | everyone (module on) |
-| Esports admin | `/esports-admin configure\|filters\|roles\|panel\|preview\|pause\|resume\|doctor` | Manage Server (+ Manage Roles for roles) |
+| Esports admin | `/tsq-admin esports configure\|panel\|preview\|pause\|resume\|doctor`, `filters-show\|team\|tournament\|tier\|vrs\|clear`, `roles-list\|map\|unmap\|selfservice` | Manage Server (+ Manage Roles for roles) |
 | Formula 1 | `/f1 next\|schedule\|results\|now`, `/f1 standings drivers\|constructors` | everyone (module on) |
-| Formula 1 admin | `/f1-admin configure channel\|notifications\|role\|spoilers`, `/f1-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
+| Formula 1 admin | `/tsq-admin f1 configure-channel\|configure-notifications\|configure-role\|configure-spoilers`, `/tsq-admin f1 preview\|status\|doctor\|pause\|resume` | Manage Server |
 | Volleyball | `/volleyball next\|schedule` | everyone (module on) |
-| Volleyball admin | `/volleyball-admin configure channel\|notifications\|role`, `/volleyball-admin preview\|status\|doctor\|pause\|resume` | Manage Server |
-| TSQ Live admin | `/live-admin doctor` | Manage Server |
+| Volleyball admin | `/tsq-admin volleyball configure-channel\|configure-notifications\|configure-role`, `/tsq-admin volleyball preview\|status\|doctor\|pause\|resume` | Manage Server |
+| TSQ Live admin | `/tsq-admin live doctor` | Manage Server |
 | TSQ LFG | `/ekip` (opens the listing form; buttons: Katıl (🎟️ Sıraya Gir while full) · Belki · Ayrıl · 🔊 Ses Odası · ✏️ Düzenle (owner only) · İlanı Kapat) | everyone (module on) |
-| TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
+| TSQ LFG admin | `/tsq-admin lfg channel\|status` | Manage Server |
 | TSQ Quote | message → Apps → Quote, or `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
 | TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options), `/çevir miktar kaynak hedef` (TRY ↔ USD/EUR/gram gold); public answer, currency channel only | everyone (module on) |
@@ -124,7 +124,12 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Çekiliş | `/giveaway create` (form → card → 🎉 → automatic draw), `/giveaway end\|cancel\|reroll giveaway:<#number \| message link \| id>` | Manage Server (module on); entering: everyone, with 🎉 |
 | TSQ Özet | `/ozetle` (no options; public summary of this channel's latest messages) | members with any one of the configured roles (module on) |
 | TSQ Öngörü | predictions channel: `/ongoru yarat` + card buttons (🎯 Tahmin Yap, 🔒 Kilitle, ✅ Sonuçlandır, ↩️ İptal / İade); commands channel: `/ongoru cuzdan\|gunluk\|tahminlerim\|liderlik`, `/ongoru turnuva durum\|bitir` | create: the creator role; card management buttons: its creator (with the role) or Administrator/owner; end tournament: Administrator/owner; the rest: everyone (module on) |
-| TSQ Doğum Günü admin | `/birthday-admin configure\|status\|doctor`; `/birthday-admin set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
+| TSQ Doğum Günü admin | `/tsq-admin birthday configure\|status\|doctor`; `/tsq-admin birthday set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
+| TSQ Haber admin | `/tsq-admin news configure\|pause\|resume\|preview\|status\|doctor` | Manage Server |
+
+Every module's admin operations share one command, `/tsq-admin <module> <operation>` (one Discord subcommand group per
+module; until 2026-09-30 these were separate `/<module>-admin` commands — old → new table in
+[docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md)).
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
 [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md). The generated, test-checked schema is

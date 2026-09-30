@@ -93,6 +93,7 @@
   "cmd.modules.disable": "Stop a module in this server (its data is kept)",
   "cmd.modules.disable.module": "Module id",
   "cmd.setup": "Step-by-step server setup for {product}",
+  "cmd.tsq-admin": "{product} module administration (admins)",
   "about.attr.pandascore": "Default CS2 match, result and tournament data. Source: PandaScore.",
   "about.attr.pandascore_terms": "PandaScore terms of use",
   "about.attr.liquipedia": "Optional (legacy) CS2 match/tournament data (via LiquipediaDB API).",

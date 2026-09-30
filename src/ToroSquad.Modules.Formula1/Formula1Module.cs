@@ -7,6 +7,7 @@ using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
 using ToroSquad.Discord.Commands.Core;
+using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Formula1.Application;
 using ToroSquad.Modules.Formula1.Commands;
@@ -39,12 +40,12 @@ public sealed class Formula1Module : IToroModule
         EnabledByDefault: false, // explicit activation after setup + ping-free preview
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks,
         OptionalBotPermissions: GuildPermission.ReadMessageHistory | GuildPermission.MentionEveryone,
-        AdminCommands: ["f1-admin"]);
+        AdminCommands: [TsqAdminRoot.Group("f1")]);
 
     public IReadOnlyList<Type> InteractionModuleTypes { get; } =
     [
         typeof(Formula1Commands),
-        typeof(Formula1AdminCommands),
+        typeof(Formula1TsqAdmin),
         typeof(Formula1SetupComponents),
     ];
 

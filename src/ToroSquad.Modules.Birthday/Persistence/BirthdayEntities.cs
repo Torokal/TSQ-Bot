@@ -31,7 +31,7 @@ public enum BirthdayRoleState
     /// <summary>Not given: the day ended first, the member left, or no role is configured.</summary>
     Skipped = 4,
 
-    /// <summary>Gave up after repeated Discord failures (visible in /birthday-admin doctor).</summary>
+    /// <summary>Gave up after repeated Discord failures (visible in /tsq-admin birthday doctor).</summary>
     Failed = 5,
 }
 

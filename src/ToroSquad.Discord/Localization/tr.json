@@ -93,6 +93,7 @@
   "cmd.modules.disable": "Bir modülü durdurur (veriler korunur)",
   "cmd.modules.disable.module": "Modül kimliği",
   "cmd.setup": "{product} için adım adım sunucu kurulumu",
+  "cmd.tsq-admin": "{product} modül yönetimi (yöneticiler)",
   "about.attr.pandascore": "Varsayılan CS2 maç, sonuç ve turnuva verisi. Kaynak: PandaScore.",
   "about.attr.pandascore_terms": "PandaScore kullanım koşulları",
   "about.attr.liquipedia": "İsteğe bağlı (eski) CS2 maç ve turnuva verisi (LiquipediaDB API üzerinden).",

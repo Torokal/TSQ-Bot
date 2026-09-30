@@ -17,7 +17,7 @@
 | `postponed` | Planlandı → ertelendi (yeni tarih bilinmiyor) | **yok** | "Yeni tarih henüz açıklanmadı." |
 | `cancelled` | Planlandı/ertelendi/oynanıyor → iptal (hükmen değil) | **yok** | Sağlayıcı hatası asla iptal sayılmaz |
 
-Başladı/ertelendi/iptal kartları **hatırlatma anahtarına** bağlıdır (`/esports-admin configure reminders`),
+Başladı/ertelendi/iptal kartları **hatırlatma anahtarına** bağlıdır (`/tsq-admin esports configure reminders`),
 hem planlamada hem gönderimden hemen önce. Bu kartlar yalnızca geçiş **iki bilinen sağlayıcı durumu arasında gözlendiğinde**
 ve `LifecycleFreshMinutes` (vars. 90) içinde gönderilir. `Unknown` durum son bilinen durumu silmez, geçiş üretmez.
 Ayrıntı: [adr/0006-pandascore-lifecycle-and-match-links.md](adr/0006-pandascore-lifecycle-and-match-links.md).
@@ -89,7 +89,7 @@ arka plan yok. Kural: **doğruluk süsten önce gelir** — yanıltabilecek her 
 |---|---|
 | Sonuç (normal) ve hükmen | Sağlayıcının belirttiği **kazananın** logosu. Beraberlik, bilinmeyen kazanan veya kazananın logosu yoksa **yok** (kaybedenin logosu kazanan gibi görünmesin) |
 | Sonuç (spoiler) | Kazanan logosu **asla** (sonucu sızdırır). Yalnızca aşağıdaki "takip edilen takım" kuralı |
-| Hatırlatma, başladı, ertelendi, iptal | Sunucunun takım filtresinde (`/esports-admin filters team`) bu maçtaki **tek** takım varsa onun logosu; hiç yoksa veya iki takım da takipteyse **yok** |
+| Hatırlatma, başladı, ertelendi, iptal | Sunucunun takım filtresinde (`/tsq-admin esports filters-team`) bu maçtaki **tek** takım varsa onun logosu; hiç yoksa veya iki takım da takipteyse **yok** |
 | TEST/DEMO kartları | Yok |
 
 Kaynak yalnızca maç sağlayıcısının kendi takım verisidir: PandaScore `dark_mode_image_url` (Discord çoğunlukla koyu temada
@@ -111,7 +111,7 @@ bir kart, düzeltme penceresi içindeyse bir kez **ping'siz düzenlenebilir** (�
 
 ## Sunucu filtreleri
 
-Takım seçimi (`/esports-admin filters team`, `roles map`, üyeler için `/esports follow`): otomatik tamamlama önce maç
+Takım seçimi (`/tsq-admin esports filters-team`, `roles-map`, üyeler için `/esports follow`): otomatik tamamlama önce maç
 verisinde görülen takımları, **3+ harfte** ayrıca sağlayıcının takım kataloğunu (PandaScore `/teams?search[name]=`) gösterir —
 48 saatlik pencerede maçı olmayan takım da seçilebilir. Aynı adlı takımlar kısaltma ve ülkeyle ayrılır
 ("Aurora Gaming (AUR · RU)" / "AURORA (AUR · IS)"). Arama tek sayfa, 2 sn zaman aşımlı, 1 saat önbellekli (daha kısa bir

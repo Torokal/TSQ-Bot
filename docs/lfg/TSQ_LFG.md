@@ -159,7 +159,7 @@ kapanır; başlangıçtan önce asla expire olmaz. 30 dk hatırlatma `EventAt �
 - Saat dilimi, TSQ Bot'un mevcut sunucu ayarıdır (`/setup` → saat dilimi; `GuildSettings.TimeZoneId`, varsayılan
   **Europe/Istanbul**). LFG ikinci bir saat dilimi ayarı tutmaz, yeni kolon/migration yoktur. Kayıt yalnızca `/setup`
   üzerinden, doğrulanmış IANA kimlikleriyle olur (`GuildTime.TryResolve`; Railway/Linux ve Windows'ta aynı ID'ler);
-  `/lfg-admin status` kullanılan saat dilimini gösterir.
+  `/tsq-admin lfg status` kullanılan saat dilimini gösterir.
 - Ayrıştırma açık ve kültürden bağımsızdır (kendi kurallarıyla: `G.A.YYYY S:DD`, `G.A.YY S:DD`, ISO `YYYY-A-G S:DD`; makine
   yereli ya da `Calendar.TwoDigitYearMax` kullanılmaz). **Kısa yıl**, sunucunun saat dilimindeki bu yıla en yakın yıldır
   (bu yıl − 50 … bu yıl + 49; 2026'da `26` → 2026, `27` → 2027) — 365 gün sınırıyla pratikte yalnızca bu yıl ve gelecek
@@ -390,7 +390,7 @@ outbox'tan gider (yalnızca `LfgNoticePlanner` outbox'a yazar — mimari test). 
 
 ## Kanal ve izinler
 
-İsteğe bağlı: `/lfg-admin channel kanal:#ekip-bul` → `/ekip` yalnızca o kanalda çalışır. `/lfg-admin channel` (boş)
+İsteğe bağlı: `/tsq-admin lfg channel kanal:#ekip-bul` → `/ekip` yalnızca o kanalda çalışır. `/tsq-admin lfg channel` (boş)
 kısıtı kaldırır. İlan kanalında gerekli: `ViewChannel`, `SendMessages` (bildirimler), `EmbedLinks`. İsteğe bağlı:
 `ReadMessageHistory` (silinen kartın erken fark edilmesi), ses kanalında **Move Members** + **Connect** (seste olanı tek
 tıkla taşıma). İsteğe bağlılar olmadan özellikler zarifçe geri çekilir; ek gateway intent'i gerekmez.

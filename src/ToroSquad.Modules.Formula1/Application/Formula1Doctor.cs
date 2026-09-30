@@ -26,7 +26,7 @@ public enum F1CheckState
 public sealed record F1DoctorCheck(string LabelKey, F1CheckState State, string DetailKey, IReadOnlyList<object> Args);
 
 /// <summary>
-/// /f1-admin doctor — actionable diagnostics from cached state only (no provider calls, no secrets): channel and
+/// /tsq-admin f1 doctor — actionable diagnostics from cached state only (no provider calls, no secrets): channel and
 /// permissions, role, each provider's freshness/outcome/backoff, live connection, delivery statistics.
 /// </summary>
 public sealed class Formula1Doctor(

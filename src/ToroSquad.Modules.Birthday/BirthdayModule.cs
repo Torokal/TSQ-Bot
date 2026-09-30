@@ -5,6 +5,7 @@ using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
+using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Birthday.Application;
 using ToroSquad.Modules.Birthday.Commands;
@@ -30,12 +31,12 @@ public sealed class BirthdayModule : IToroModule
         "module.birthday.name",
         "module.birthday.description",
         IsCore: false,
-        EnabledByDefault: false, // explicit activation: /modules enable birthday (after /birthday-admin configure)
+        EnabledByDefault: false, // explicit activation: /modules enable birthday (after /tsq-admin birthday configure)
         RequiredBotChannelPermissions: BirthdayConfigService.RequiredChannelPermissions, // a plain text message
         OptionalBotPermissions: GuildPermission.ManageRoles, // the temporary birthday role
-        AdminCommands: ["birthday-admin"]);
+        AdminCommands: [TsqAdminRoot.Group("birthday")]);
 
-    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(BirthdayCommands), typeof(BirthdayAdminCommands)];
+    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(BirthdayCommands), typeof(BirthdayTsqAdmin)];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {

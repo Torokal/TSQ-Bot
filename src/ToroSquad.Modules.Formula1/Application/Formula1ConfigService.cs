@@ -31,7 +31,7 @@ public sealed record F1NotificationChanges(
     bool? RedFlag = null);
 
 /// <summary>
-/// /f1-admin configure|pause|resume. Every method authorizes the actor (Manage Server) and only touches rows of
+/// /tsq-admin f1 configure|pause|resume. Every method authorizes the actor (Manage Server) and only touches rows of
 /// <c>actor.GuildId</c> — ids supplied by the caller never select the guild. Anything that could re-announce history
 /// (new channel, a notification type switched on, resume) moves the guild's watermark to "now".
 /// </summary>

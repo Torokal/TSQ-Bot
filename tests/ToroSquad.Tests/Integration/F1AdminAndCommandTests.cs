@@ -20,7 +20,7 @@ using CorePermission = ToroSquad.Core.Security.GuildPermission;
 namespace ToroSquad.Tests.Integration;
 
 /// <summary>
-/// /f1-admin authorization (Discord metadata AND server-side), configuration validation, ping-free previews, doctor
+/// /tsq-admin f1 authorization (Discord metadata AND server-side), configuration validation, ping-free previews, doctor
 /// diagnostics, and the cache-only selection logic behind /f1.
 /// </summary>
 public sealed class F1AdminAndCommandTests
@@ -60,13 +60,13 @@ public sealed class F1AdminAndCommandTests
     [Fact]
     public void Discord_metadata_hides_admin_commands_and_gates_public_ones()
     {
-        var admin = typeof(Formula1AdminCommands);
-        admin.GetCustomAttribute<DefaultMemberPermissionsAttribute>()!.Permissions.Should().Be(global::Discord.GuildPermission.ManageGuild);
-        admin.GetCustomAttribute<ToroModuleAttribute>()!.Should().BeEquivalentTo(new { ModuleId = "formula1", AllowWhenDisabled = true });
+        // The shared /tsq-admin root carries the Discord metadata; the module's group carries its gate.
+        typeof(Formula1TsqAdmin).GetCustomAttribute<DefaultMemberPermissionsAttribute>()!.Permissions.Should().Be(global::Discord.GuildPermission.ManageGuild);
+        typeof(Formula1TsqAdmin.Formula1AdminCommands).GetCustomAttribute<ToroModuleAttribute>()!.Should().BeEquivalentTo(new { ModuleId = "formula1", AllowWhenDisabled = true });
         typeof(Formula1Commands).GetCustomAttribute<ToroModuleAttribute>()!.AllowWhenDisabled.Should().BeFalse("public commands honour the module gate");
         typeof(Formula1Commands.StandingsCommands).GetCustomAttribute<ToroModuleAttribute>()!.AllowWhenDisabled.Should().BeFalse();
         typeof(Formula1Commands).GetCustomAttribute<CommandContextTypeAttribute>()!.ContextTypes.Should().Equal(InteractionContextType.Guild);
-        new Formula1Module().Descriptor.Should().BeEquivalentTo(new { EnabledByDefault = false, IsCore = false, AdminCommands = new[] { "f1-admin" } });
+        new Formula1Module().Descriptor.Should().BeEquivalentTo(new { EnabledByDefault = false, IsCore = false, AdminCommands = new[] { "tsq-admin f1" } });
         new Formula1Module().Descriptor.Version.Should().Be(new Version(0, 1, 0));
     }
 

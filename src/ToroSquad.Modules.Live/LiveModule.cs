@@ -7,6 +7,7 @@ using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
 using ToroSquad.Discord;
+using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Live.Application;
 using ToroSquad.Modules.Live.Commands;
@@ -37,9 +38,9 @@ public sealed class LiveModule : IToroModule
         EnabledByDefault: false, // explicit activation: /modules enable live (after Live:* is configured)
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks,
         OptionalBotPermissions: GuildPermission.MentionEveryone | GuildPermission.ReadMessageHistory,
-        AdminCommands: ["live-admin"]);
+        AdminCommands: [TsqAdminRoot.Group("live")]);
 
-    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LiveAdminCommands)];
+    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LiveTsqAdmin)];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {

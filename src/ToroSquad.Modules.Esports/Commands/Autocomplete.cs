@@ -7,6 +7,8 @@ using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Modules;
+using ToroSquad.Core.Security;
+using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Esports.Application;
 using ToroSquad.Modules.Esports.Domain;
@@ -29,6 +31,9 @@ public abstract class EsportsAutocompleteBase : AutocompleteHandler
         var gate = services.GetRequiredService<IModuleGate>();
         if (!await gate.IsEnabledAsync(guild, EsportsModule.ModuleIdTyped, CancellationToken.None) && !AllowWhenDisabled)
             return AutocompletionResult.FromSuccess();
+        // Discord only hides admin commands; a crafted autocomplete request must not read this server's settings either.
+        if (RequiresServerSettings && ActorFactory.From(context)?.Has(Authorize.ServerSettings) != true)
+            return AutocompletionResult.FromSuccess();
         var typed = TeamRankingResolver.Fold(autocompleteInteraction.Data.Current.Value?.ToString() ?? "");
         var results = await SuggestAsync(guild, new UserId(context.User.Id), typed, services);
         return AutocompletionResult.FromSuccess(results
@@ -37,6 +42,9 @@ public abstract class EsportsAutocompleteBase : AutocompleteHandler
     }
 
     protected virtual bool AllowWhenDisabled => false;
+
+    /// <summary>For suggestions that reveal server settings: only callers who may run the admin command get any.</summary>
+    protected virtual bool RequiresServerSettings => false;
 
     protected abstract Task<IEnumerable<(string Name, object Value)>> SuggestAsync(GuildId guild, UserId user, string typed, IServiceProvider services);
 
@@ -112,6 +120,8 @@ public sealed class TournamentAutocomplete : EsportsAutocompleteBase
 public sealed class MappingAutocomplete : EsportsAutocompleteBase
 {
     protected override bool AllowWhenDisabled => true;
+
+    protected override bool RequiresServerSettings => true;
 
     protected override async Task<IEnumerable<(string Name, object Value)>> SuggestAsync(GuildId guild, UserId user, string typed, IServiceProvider services)
     {

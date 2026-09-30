@@ -14,7 +14,7 @@ using ToroSquad.Modules.Birthday.Persistence;
 
 namespace ToroSquad.Modules.Birthday.Application;
 
-/// <summary>What /birthday-admin status shows for one guild (counts only — never who has a birthday when).</summary>
+/// <summary>What /tsq-admin birthday status shows for one guild (counts only — never who has a birthday when).</summary>
 public sealed record BirthdayGuildStatus(
     bool Enabled,
     ulong? ChannelId,
@@ -29,7 +29,7 @@ public sealed record BirthdayGuildStatus(
     int RoleProblems);
 
 /// <summary>
-/// /birthday-admin configure|status. Every method authorizes the actor (Manage Server) and only touches the row of
+/// /tsq-admin birthday configure|status. Every method authorizes the actor (Manage Server) and only touches the row of
 /// <c>actor.GuildId</c>.
 /// </summary>
 public sealed class BirthdayConfigService(ToroDbContext db, IGuildGateway guilds, IModuleGate gate, IOptions<BirthdayOptions> options, TimeProvider clock)

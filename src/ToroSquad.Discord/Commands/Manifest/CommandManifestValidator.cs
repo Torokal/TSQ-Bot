@@ -32,6 +32,9 @@ public static partial class CommandManifestValidator
         var errors = new List<string>();
         errors.AddRange(manifest.LoadErrors.Select(e => "load error: " + e));
 
+        // An entry is a top-level command ("setup") or a module's group in a shared root ("tsq-admin news").
+        var adminRoots = adminCommandNames.Select(n => n.Split(' ')[0]).ToHashSet(StringComparer.Ordinal);
+
         if (manifest.Commands.Count == 0)
             errors.Add("manifest is empty");
         var slashCount = manifest.Commands.Count(c => c.Type == CommandKind.ChatInput);
@@ -67,7 +70,7 @@ public static partial class CommandManifestValidator
             if (!command.IntegrationTypes.SequenceEqual([GuildInstall]))
                 errors.Add($"{path}: must be guild-install only (integration_types=[0])");
 
-            var isAdmin = adminCommandNames.Contains(command.Name);
+            var isAdmin = adminRoots.Contains(command.Name);
             if (isAdmin && (command.DefaultMemberPermissions is null || command.DefaultMemberPermissions == ""))
                 errors.Add($"{path}: admin command must set default_member_permissions");
             if (!isAdmin && command.DefaultMemberPermissions is not null)
@@ -80,8 +83,24 @@ public static partial class CommandManifestValidator
                 errors.Add($"{path}: {chars} characters exceed {MaxCommandCharacters}");
         }
 
-        foreach (var name in adminCommandNames.Where(n => manifest.Find(n) is null))
-            errors.Add($"expected admin command '/{name}' is missing");
+        foreach (var name in adminCommandNames.Order(StringComparer.Ordinal))
+        {
+            var parts = name.Split(' ');
+            var command = manifest.Find(parts[0]);
+            if (command is null || parts.Length == 2 && !command.Options.Any(o => o.Type == OptionType.SubCommandGroup && o.Name == parts[1]) || parts.Length > 2)
+                errors.Add($"expected admin command '/{name}' is missing");
+        }
+
+        // A shared root carries only declared module groups: a group nobody declares, or a declared one that failed to load,
+        // must not reach Discord (a missing group would be deleted from the members' menu).
+        foreach (var root in adminCommandNames.Where(n => n.Contains(' ', StringComparison.Ordinal)).Select(n => n.Split(' ')[0]).Distinct(StringComparer.Ordinal))
+        {
+            foreach (var option in manifest.Find(root)?.Options ?? [])
+            {
+                if (option.Type != OptionType.SubCommandGroup || !adminCommandNames.Contains(root + " " + option.Name))
+                    errors.Add($"/{root} {option.Name}: not declared by any module's AdminCommands");
+            }
+        }
 
         return errors;
     }
@@ -187,11 +206,20 @@ public static partial class CommandManifestValidator
         }
     }
 
-    private static int CountCharacters(ManifestCommand command)
+    /// <summary>
+    /// Discord's size rule (application-commands docs, "Slash commands can have a maximum of 8000 characters…", verified
+    /// 2026-09-30): the names, descriptions and choice values of the command, all its options (subcommands and groups
+    /// included) and choices; where localizations exist only the longest variant of a field (default included) counts.
+    /// Characters, not JSON bytes. TSQ Bot sets no name localizations, so a name counts as itself.
+    /// </summary>
+    public static int CountCharacters(ManifestCommand command)
     {
+        static int Longest(string text, IReadOnlyDictionary<string, string> localizations) =>
+            localizations.Values.Select(v => v.Length).Append(text.Length).Max();
         static int Count(IEnumerable<ManifestOption> options) => options.Sum(o =>
-            o.Name.Length + o.Description.Length + o.Choices.Sum(c => c.Name.Length + c.Value.Length) + Count(o.Options));
-        return command.Name.Length + command.Description.Length + Count(command.Options);
+            o.Name.Length + Longest(o.Description, o.DescriptionLocalizations) +
+            o.Choices.Sum(c => Longest(c.Name, c.NameLocalizations) + c.Value.Length) + Count(o.Options));
+        return command.Name.Length + Longest(command.Description, command.DescriptionLocalizations) + Count(command.Options);
     }
 
     [GeneratedRegex(@"^[-_\p{L}\p{N}\p{IsDevanagari}\p{IsThai}]{1,32}$", RegexOptions.CultureInvariant)]

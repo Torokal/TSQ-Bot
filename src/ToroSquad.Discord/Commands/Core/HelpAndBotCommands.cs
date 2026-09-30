@@ -55,6 +55,22 @@ public sealed class HelpCommands(InteractionServices services, InteractionHost h
         // Slash commands only: a message command has no description and lives in the message's Apps menu.
         foreach (var command in (host.Manifest?.Commands ?? []).Where(c => c.Type == CommandKind.ChatInput).OrderBy(c => c.Name, StringComparer.Ordinal))
         {
+            if (command.Name == TsqAdminRoot.Name)
+            {
+                // One line per module group, listed like a module's own command: only for admins, only for enabled modules.
+                if (!isAdmin)
+                    continue;
+                foreach (var group in command.Options.Where(o => o.OwnerModule is not null))
+                {
+                    if (!registry.TryGet(group.OwnerModule!, out var owner) || !await gate.IsEnabledAsync(actor.GuildId, owner.Descriptor.Id, CancellationToken.None))
+                        continue;
+                    var key = CommandLocalizationKeys.Description(command.Name + "." + group.Name);
+                    lines.Add($"`/{command.Name} {group.Name}` — {(Localizer.HasKey(language, key) ? Localizer.Get(language, key) : group.Description)} 🔒");
+                }
+
+                continue;
+            }
+
             if (!registry.TryGet(command.OwnerModule, out var module))
                 continue;
             if (!await gate.IsEnabledAsync(actor.GuildId, module.Descriptor.Id, CancellationToken.None))

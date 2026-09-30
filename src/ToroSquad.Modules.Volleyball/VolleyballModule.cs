@@ -8,6 +8,7 @@ using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
 using ToroSquad.Discord.Commands.Core;
+using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Volleyball.Application;
 using ToroSquad.Modules.Volleyball.Commands;
@@ -39,12 +40,12 @@ public sealed class VolleyballModule : IToroModule
         EnabledByDefault: false, // explicit activation after setup + ping-free preview
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks,
         OptionalBotPermissions: GuildPermission.MentionEveryone,
-        AdminCommands: ["volleyball-admin"]);
+        AdminCommands: [TsqAdminRoot.Group("volleyball")]);
 
     public IReadOnlyList<Type> InteractionModuleTypes { get; } =
     [
         typeof(VolleyballCommands),
-        typeof(VolleyballAdminCommands),
+        typeof(VolleyballTsqAdmin),
         typeof(VolleyballSetupComponents),
     ];
 

@@ -4,7 +4,7 @@ namespace ToroSquad.Modules.Lfg.Application;
 
 /// <summary>
 /// Section "Lfg" — server-side safety limits only. The module itself is switched on per guild (/modules enable lfg, off by
-/// default) and the optional listing channel is guild data (/lfg-admin channel), not configuration.
+/// default) and the optional listing channel is guild data (/tsq-admin lfg channel), not configuration.
 /// </summary>
 public sealed class LfgOptions
 {
