@@ -105,6 +105,7 @@ Ayrıntı: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md).
 | Komut | Ne yapar |
 |---|---|
 | `/dolar` · `/euro` · `/altın` | Herkes, argümansız, **yalnızca döviz kanalında** (`Currency:ChannelId` = `1242464361855848459`): güncel USD/TRY, EUR/TRY veya gram altın alış/satış fiyatını **herkese açık** bir kartla gösterir (kaynak + sağlayıcının güncelleme zamanı). Yedek kaynak (TCMB gösterge kuru / Trunçgil) ve eski veri kartta açıkça yazılır; veri yoksa takip kodlu kısa bir mesaj. Başka kanalda yalnızca kullanana görünen "Bu komutu yalnızca <#…> kanalında kullanabilirsiniz." — fiyat sorgusu yapılmaz. Ping yok |
+| `/çevir miktar kaynak hedef` | Herkes, **yalnızca döviz kanalında**: TL ↔ USD, TL ↔ EUR, TL ↔ gram altın dönüşümü (varlık → TL: alış kuru; TL → varlık: satış kuru); sonuç herkese açık kart. Yanlış kanal, geçersiz miktar, aynı/çapraz dönüşüm yalnızca kullanana görünen uyarıyla reddedilir, fiyat sorgusu yapılmaz. Ping yok |
 
 Her gün 09:00'da (Türkiye) döviz kanalına tek bir günlük kart gönderilir (outbox; modül kapalıysa gönderilmez). Bu yüzden bot
 döviz kanalında `ViewChannel` + `SendMessages` + `EmbedLinks` ister; komut cevapları için ek izin gerekmez. `/altın` Türkçe `ı` ile kayıtlıdır: Discord komut adlarında her dilden küçük

@@ -112,7 +112,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ LFG admin | `/lfg-admin channel\|status` | Manage Server |
 | TSQ Quote | `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
-| TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options; public answer, currency channel only) | everyone (module on) |
+| TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options), `/çevir miktar kaynak hedef` (TRY ↔ USD/EUR/gram gold); public answer, currency channel only | everyone (module on) |
 | TSQ Randomizer | `/zarat zar:…`, `/randomsayi maksimum:… [minimum:…]`, `/sec seçenekler:…`, `/yazitura` (public answer) | everyone (module on) |
 | TSQ Çekiliş | `/giveaway create` (form → card → 🎉 → automatic draw), `/giveaway end\|cancel\|reroll giveaway:<#number \| message link \| id>` | Manage Server (module on); entering: everyone, with 🎉 |
 | TSQ Özet | `/ozetle` (no options; public summary of this channel's latest messages) | members with any one of the configured roles (module on) |

@@ -166,6 +166,10 @@ invite link and no global command registration. The source code is public under 
   Currency/Gold, TCMB, Trunçgil — all fields present and parsed. Not a Discord observation.
 - **NOT VERIFIED_LIVE**: the commands in Discord (`/altın` registration with the Turkish ı, public defer → card, card
   rendering in clients, the private wrong-channel pointer), the first real 09:00 card and its delivery. `/dolar`, `/euro`, `/altın` are in the manifest but not synced.
+- **`/çevir` IMPLEMENTED / TESTED_OFFLINE (2026-09-30, branch `feat/currency-convert`)**: TRY ↔ USD, TRY ↔ EUR, TRY ↔ gram gold
+  through the same `MarketQuoteService`; asset → lira uses the provider's buy price, lira → asset its sell price; decimal
+  math, display-only rounding; currency channel only; refusals private without a fetch; public card with source/fallback/
+  stale labels. NOT synced, NOT VERIFIED_LIVE.
 
 ## TSQ Randomizer (new, 2026-09-28, branch `feat/randomizer-module`)
 
