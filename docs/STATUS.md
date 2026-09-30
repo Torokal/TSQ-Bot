@@ -200,6 +200,10 @@ invite link and no global command registration. The source code is public under 
   `chicago`, `la`, `utc` and aliases (`pdt`/`pst`/`pt`, `est`/`edt`/`et`, `cst`/`cdt`/`ct`, `gmt`/`bst`, …; case-insensitive,
   zones never offsets); "today" = the source zone's date; wall times skipped or repeated by a DST switch are refused.
   Without the option the card is unchanged.
+- **IMPLEMENTED / TESTED_OFFLINE** (V2, branch `feat/timezone-date-to-now`): optional `date` (`DD.MM[.YYYY]`, year = source
+  zone's current year, DST gap/overlap checks kept), optional single target `to` (shared alias catalog, Asia/Tokyo added as
+  source/target, not on the default board), `time:now` (clock instant; refused with `date`), raw copyable timestamp field.
+  NOT VERIFIED_LIVE, not synced.
 - Linux: the runtime base image (`mcr.microsoft.com/dotnet/runtime:10.0`, Ubuntu Noble) installs `tzdata`; no Dockerfile
   change needed.
 - **NOT VERIFIED_LIVE**: everything in Discord (registration, card rendering, the Linux zone data in the Railway
