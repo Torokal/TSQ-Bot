@@ -26,34 +26,6 @@ public sealed class QuoteFlowTests
     private static readonly UserId Member = new(500000000000000001);
     private const string AvatarUrl = "https://cdn.discordapp.com/avatars/500000000000000002/abc.png?size=1024";
 
-    /// <summary>Records every formatted line, every structured value and every exception (with its message) that is logged.</summary>
-    private sealed class CapturingLoggers
-    {
-        public ConcurrentQueue<string> Lines { get; } = new();
-
-        public ILogger<T> For<T>() => new Logger<T>(this);
-
-        private sealed class Logger<T>(CapturingLoggers owner) : ILogger<T>
-        {
-            public IDisposable? BeginScope<TState>(TState state)
-                where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-            {
-                owner.Lines.Enqueue(formatter(state, exception));
-                if (exception is not null)
-                    owner.Lines.Enqueue(exception.ToString());
-                if (state is IEnumerable<KeyValuePair<string, object?>> values)
-                {
-                    foreach (var (_, value) in values)
-                        owner.Lines.Enqueue(value?.ToString() ?? "");
-                }
-            }
-        }
-    }
-
     private sealed class OneMessage(QuoteFetch fetch) : IQuoteDiscord
     {
         public QuoteChannel? GetChannel(GuildId guild, ChannelId channel) =>

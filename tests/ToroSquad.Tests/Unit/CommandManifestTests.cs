@@ -22,7 +22,7 @@ public sealed class CommandManifestTests
         var (manifest, admin) = await BuildAsync();
         CommandManifestValidator.Validate(manifest, admin).Should().BeEmpty();
         manifest.LoadErrors.Should().BeEmpty();
-        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "esports-admin", "f1", "f1-admin", "volleyball", "volleyball-admin", "live-admin", "ekip", "lfg-admin", "quote", "birthday", "birthday-admin", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "giveaway", "ozetle", "ongoru");
+        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "esports-admin", "f1", "f1-admin", "volleyball", "volleyball-admin", "live-admin", "ekip", "lfg-admin", "quote", "birthday", "birthday-admin", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "giveaway", "ozetle", "ongoru", "Quote");
 
         string[] Sub(string name) => manifest.Find(name)!.Options.Select(o => o.Name).ToArray();
         Sub("bot").Should().BeEquivalentTo("status", "about", "source");
@@ -49,7 +49,7 @@ public sealed class CommandManifestTests
         const string manageGuild = "32"; // 1 << 5
         foreach (var name in new[] { "setup", "modules", "esports-admin", "f1-admin", "volleyball-admin", "live-admin", "lfg-admin", "birthday-admin", "giveaway" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().Be(manageGuild, $"/{name} is admin-only");
-        foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "ozetle", "ongoru" })
+        foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "ozetle", "ongoru", "Quote" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().BeNull($"/{name} is for everyone");
     }
 
@@ -61,6 +61,16 @@ public sealed class CommandManifestTests
         {
             command.Contexts.Should().Equal(0);
             command.IntegrationTypes.Should().Equal(0);
+            if (command.Type == CommandKind.Message)
+            {
+                // Discord: MESSAGE commands have no description (an empty string when fetched) and no options.
+                command.Description.Should().BeEmpty(command.Display);
+                command.DescriptionLocalizations.Should().BeEmpty(command.Display);
+                command.Options.Should().BeEmpty(command.Display);
+                continue;
+            }
+
+            command.Type.Should().Be(CommandKind.ChatInput);
             command.DescriptionLocalizations.Should().ContainKey("tr");
             foreach (var option in Flatten(command.Options))
             {

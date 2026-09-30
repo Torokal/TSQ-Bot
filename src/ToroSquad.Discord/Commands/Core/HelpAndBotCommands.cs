@@ -52,7 +52,8 @@ public sealed class HelpCommands(InteractionServices services, InteractionHost h
         var language = await LangAsync();
         var isAdmin = actor.Has(Authorize.ServerSettings);
         var lines = new List<string>();
-        foreach (var command in (host.Manifest?.Commands ?? []).OrderBy(c => c.Name, StringComparer.Ordinal))
+        // Slash commands only: a message command has no description and lives in the message's Apps menu.
+        foreach (var command in (host.Manifest?.Commands ?? []).Where(c => c.Type == CommandKind.ChatInput).OrderBy(c => c.Name, StringComparer.Ordinal))
         {
             if (!registry.TryGet(command.OwnerModule, out var module))
                 continue;

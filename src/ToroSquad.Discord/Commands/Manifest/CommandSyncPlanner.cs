@@ -16,7 +16,7 @@ public abstract record SyncScope
     public abstract string Key { get; }
 }
 
-public sealed record RemoteCommand(ulong Id, string Name, string CanonicalJson);
+public sealed record RemoteCommand(ulong Id, string Name, string CanonicalJson, CommandKind Kind = CommandKind.ChatInput);
 
 public enum SyncAction
 {
@@ -29,7 +29,10 @@ public enum SyncAction
 }
 
 /// <param name="Detail">For updates: where the local definition first differs from what Discord returned.</param>
-public sealed record SyncPlanItem(SyncAction Action, string Name, ulong? RemoteId, string? Detail = null);
+public sealed record SyncPlanItem(SyncAction Action, string Name, ulong? RemoteId, string? Detail = null, CommandKind Kind = CommandKind.ChatInput)
+{
+    public string Display => Kind == CommandKind.ChatInput ? "/" + Name : $"Apps → {Name} ({Kind.ToString().ToLowerInvariant()} command)";
+}
 
 public sealed record SyncRequest(
     SyncScope Scope,
@@ -92,14 +95,14 @@ public static class CommandSyncPlanner
         {
             if (!remoteByName.TryGetValue(command.Name, out var existing))
             {
-                items.Add(new(SyncAction.Create, command.Name, null));
+                items.Add(new(SyncAction.Create, command.Name, null, Kind: command.Type));
                 continue;
             }
 
             var local = CommandManifest.CanonicalJson(command, includeGlobalFields);
             items.Add(local == existing.CanonicalJson
-                ? new(SyncAction.Unchanged, command.Name, existing.Id)
-                : new(SyncAction.Update, command.Name, existing.Id, DescribeDifference(local, existing.CanonicalJson)));
+                ? new(SyncAction.Unchanged, command.Name, existing.Id, Kind: command.Type)
+                : new(SyncAction.Update, command.Name, existing.Id, DescribeDifference(local, existing.CanonicalJson), command.Type));
         }
 
         foreach (var extra in remote.Where(r => manifest.Find(r.Name) is null).OrderBy(r => r.Name, StringComparer.Ordinal))
@@ -107,9 +110,9 @@ public static class CommandSyncPlanner
             // Managed = created by this tool AND still the same command id (a same-named command re-created by
             // someone else is not ours).
             if (!managed.TryGetValue(extra.Name, out var managedId) || managedId != extra.Id)
-                items.Add(new(SyncAction.KeepUnmanaged, extra.Name, extra.Id));
+                items.Add(new(SyncAction.KeepUnmanaged, extra.Name, extra.Id, Kind: extra.Kind));
             else
-                items.Add(new(request.Prune ? SyncAction.DeleteManaged : SyncAction.KeepManagedNotInManifest, extra.Name, extra.Id));
+                items.Add(new(request.Prune ? SyncAction.DeleteManaged : SyncAction.KeepManagedNotInManifest, extra.Name, extra.Id, Kind: extra.Kind));
         }
 
         return new SyncPlan(items, []);

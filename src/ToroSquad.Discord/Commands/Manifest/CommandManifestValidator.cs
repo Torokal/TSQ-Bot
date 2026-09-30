@@ -10,6 +10,9 @@ namespace ToroSquad.Discord.Commands.Manifest;
 public static partial class CommandManifestValidator
 {
     public const int MaxCommands = 100;
+
+    /// <summary>Discord: 15 MESSAGE commands per scope (application-commands docs, verified 2026-09-30).</summary>
+    public const int MaxMessageCommands = 15;
     public const int MaxOptions = 25;
     public const int MaxChoices = 25;
     public const int MaxCommandCharacters = 8000;
@@ -31,17 +34,33 @@ public static partial class CommandManifestValidator
 
         if (manifest.Commands.Count == 0)
             errors.Add("manifest is empty");
-        if (manifest.Commands.Count > MaxCommands)
-            errors.Add($"too many commands ({manifest.Commands.Count} > {MaxCommands})");
+        var slashCount = manifest.Commands.Count(c => c.Type == CommandKind.ChatInput);
+        if (slashCount > MaxCommands)
+            errors.Add($"too many commands ({slashCount} > {MaxCommands})");
+        var messageCount = manifest.Commands.Count(c => c.Type == CommandKind.Message);
+        if (messageCount > MaxMessageCommands)
+            errors.Add($"too many message commands ({messageCount} > {MaxMessageCommands})");
 
+        // Discord keys commands by (type, name); this pipeline keys them by name, so a name is unique across all types.
         foreach (var dup in manifest.Commands.GroupBy(c => c.Name).Where(g => g.Count() > 1))
             errors.Add($"duplicate command name '{dup.Key}'");
 
         foreach (var command in manifest.Commands)
         {
-            var path = "/" + command.Name;
-            CheckName(errors, path, command.Name);
-            CheckDescription(errors, path, command.Description, command.DescriptionLocalizations);
+            var path = command.Display;
+            switch (command.Type)
+            {
+                case CommandKind.ChatInput:
+                    CheckName(errors, path, command.Name);
+                    CheckDescription(errors, path, command.Description, command.DescriptionLocalizations);
+                    break;
+                case CommandKind.Message:
+                    CheckContextCommand(errors, path, command);
+                    break;
+                default:
+                    errors.Add($"{path}: command type {command.Type} is not supported");
+                    break;
+            }
 
             if (!command.Contexts.SequenceEqual([GuildContext]))
                 errors.Add($"{path}: must be guild-only (contexts=[0])");
@@ -137,6 +156,20 @@ public static partial class CommandManifestValidator
         // such as /altın are therefore valid; spaces, punctuation and uppercase are not.
         if (!NamePattern().IsMatch(name) || name.Any(c => char.GetUnicodeCategory(c) is UnicodeCategory.UppercaseLetter or UnicodeCategory.TitlecaseLetter))
             errors.Add($"{path}: invalid name '{name}' (Discord: 1-32 lowercase letters, digits, '-' or '_')");
+    }
+
+    /// <summary>
+    /// MESSAGE commands (application-commands docs): 1-32 characters, mixed case and spaces allowed; no description (Discord
+    /// refuses one and returns an empty string); no options.
+    /// </summary>
+    private static void CheckContextCommand(List<string> errors, string path, ManifestCommand command)
+    {
+        if (command.Name.Length is < 1 or > 32 || command.Name != command.Name.Trim() || command.Name.Any(char.IsControl))
+            errors.Add($"{path}: invalid name '{command.Name}' (Discord: 1-32 characters, no leading/trailing spaces)");
+        if (command.Description.Length > 0 || command.DescriptionLocalizations.Count > 0)
+            errors.Add($"{path}: message commands have no description");
+        if (command.Options.Count > 0)
+            errors.Add($"{path}: message commands take no options");
     }
 
     private static void CheckDescription(List<string> errors, string path, string description, IReadOnlyDictionary<string, string> localizations)

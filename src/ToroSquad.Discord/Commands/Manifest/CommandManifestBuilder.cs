@@ -35,6 +35,23 @@ public static class CommandManifestBuilder
         var owner = OwnerOf(module, registry);
         var permissions = Or(inheritedPermissions, module.DefaultMemberPermissions);
 
+        // Context-menu commands are always top-level, whatever group their class sits in. Discord.Net's own converter
+        // is internal, so the payload is rebuilt here like the slash commands below.
+        foreach (var context in module.ContextCommands)
+        {
+            commands.Add(new ManifestCommand(
+                context.Name,
+                "",
+                new Dictionary<string, string>(),
+                [],
+                Bitfield(Or(permissions, context.DefaultMemberPermissions)),
+                Contexts(context.ContextTypes),
+                Integrations(context.IntegrationTypes),
+                context.IsNsfw,
+                owner,
+                (CommandKind)(int)context.CommandType));
+        }
+
         if (module.IsSlashGroup)
         {
             var path = module.SlashGroupName;
