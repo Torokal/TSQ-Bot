@@ -18,7 +18,7 @@ public enum NewsMode
 /// <summary>
 /// Section "News". The feed address is not configurable (only the official HLTV RSS news feed is ever requested); the
 /// target team, its excluded look-alikes and the dated starting roster are project data kept here so they can be corrected
-/// without a code change. The channel is guild data (/news-admin configure), not configuration.
+/// without a code change. The channel is guild data (/tsq-admin news configure), not configuration.
 /// </summary>
 public sealed class NewsOptions
 {

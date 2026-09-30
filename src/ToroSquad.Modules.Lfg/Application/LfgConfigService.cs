@@ -10,11 +10,11 @@ using ToroSquad.Modules.Lfg.Persistence;
 
 namespace ToroSquad.Modules.Lfg.Application;
 
-/// <summary>What /lfg-admin status shows for one guild; <see cref="TimeZoneId"/> is the guild setting custom start dates are read in.</summary>
+/// <summary>What /tsq-admin lfg status shows for one guild; <see cref="TimeZoneId"/> is the guild setting custom start dates are read in.</summary>
 public sealed record LfgGuildStatus(ulong? ChannelId, int Open, int Full, int PendingCardUpdates, string TimeZoneId);
 
 /// <summary>
-/// /lfg-admin: the optional listing channel of a guild. Every method authorizes the actor (Manage Server) and only touches
+/// /tsq-admin lfg: the optional listing channel of a guild. Every method authorizes the actor (Manage Server) and only touches
 /// the row of <c>actor.GuildId</c>.
 /// </summary>
 public sealed class LfgConfigService(ToroDbContext db, IGuildGateway guilds, IGuildSettingsStore settings, TimeProvider clock)

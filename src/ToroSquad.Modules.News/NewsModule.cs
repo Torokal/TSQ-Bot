@@ -4,6 +4,7 @@ using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Security;
+using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.News.Application;
 using ToroSquad.Modules.News.Commands;
@@ -16,7 +17,7 @@ namespace ToroSquad.Modules.News;
 /// TSQ News: HLTV news about Aurora's main CS2 team, read from the official HLTV RSS feed only (headline + link, never the
 /// article or its image) and posted once to one configured channel (docs/news/TSQ_NEWS.md). A separate feature module:
 /// depends only on the shared TSQ layers. Inert unless News:Mode is DryRun or Live; also gated per guild like every
-/// optional module (/modules enable news) and needs a channel (/news-admin configure).
+/// optional module (/modules enable news) and needs a channel (/tsq-admin news configure).
 /// </summary>
 public sealed class NewsModule : IToroModule
 {
@@ -29,12 +30,12 @@ public sealed class NewsModule : IToroModule
         "module.news.name",
         "module.news.description",
         IsCore: false,
-        EnabledByDefault: false, // explicit activation: /modules enable news (after /news-admin configure)
+        EnabledByDefault: false, // explicit activation: /modules enable news (after /tsq-admin news configure)
         RequiredBotChannelPermissions: NewsConfigService.RequiredChannelPermissions,
         OptionalBotPermissions: GuildPermission.ReadMessageHistory, // reconciling an uncertain send
-        AdminCommands: ["news-admin"]);
+        AdminCommands: [TsqAdminRoot.Group("news")]);
 
-    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(NewsAdminCommands)];
+    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(NewsTsqAdmin)];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {

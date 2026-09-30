@@ -24,7 +24,7 @@ public enum BirthdayCheckState
 public sealed record BirthdayDoctorCheck(string LabelKey, BirthdayCheckState State, string DetailKey, IReadOnlyList<object> Args);
 
 /// <summary>
-/// /birthday-admin doctor — configuration, announcement channel and permissions, the role (exists, not managed, grants no
+/// /tsq-admin birthday doctor — configuration, announcement channel and permissions, the role (exists, not managed, grants no
 /// extra permission, Manage Roles, and the bot's highest role ABOVE it — Manage Roles alone is not enough), database, the
 /// reconciliation loop and delivery mode. Reads the gateway cache and the database only; sends nothing, changes nothing.
 /// </summary>

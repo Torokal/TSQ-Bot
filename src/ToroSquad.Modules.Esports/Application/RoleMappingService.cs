@@ -10,7 +10,7 @@ namespace ToroSquad.Modules.Esports.Application;
 public sealed record RoleMappingView(long Id, ulong RoleId, string TeamKey, string? TeamName, bool PingOnReminder, bool PingOnResult, bool SelfService);
 
 /// <summary>
-/// /esports-admin roles. Two distinct, separately authorized decisions:
+/// /tsq-admin esports roles. Two distinct, separately authorized decisions:
 /// (1) mapping an existing role as a notification PING target, and
 /// (2) approving that role for member SELF-SERVICE (strict safety evaluation + hierarchy, re-checked at every grant).
 /// The bot never creates roles or changes "mentionable" by itself.

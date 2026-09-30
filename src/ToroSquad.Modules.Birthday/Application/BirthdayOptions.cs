@@ -5,7 +5,7 @@ namespace ToroSquad.Modules.Birthday.Application;
 
 /// <summary>
 /// Section "Birthday". The module itself is switched on per guild (/modules enable birthday, off by default) and the
-/// announcement channel is guild data (/birthday-admin configure), not configuration.
+/// announcement channel is guild data (/tsq-admin birthday configure), not configuration.
 /// </summary>
 public sealed class BirthdayOptions
 {

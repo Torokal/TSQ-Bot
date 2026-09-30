@@ -29,7 +29,7 @@ public sealed record F1StandingsAttachment(F1StandingsSection Section, F1Standin
 /// <summary>
 /// Formula 1 cards in TSQ's compact style. Rules (tested): all provider text is untrusted (mentions, markdown and links
 /// defused); nothing the provider did not state is shown (no invented times, gaps or winners); cards carry no provider
-/// attribution (sources stay internal: logs, /f1-admin doctor, provider state); spoiler mode hides the whole
+/// attribution (sources stay internal: logs, /tsq-admin f1 doctor, provider state); spoiler mode hides the whole
 /// classification and standings in fixed-layout spoilers, and title, colour and thumbnail never depend on the outcome;
 /// demo data is labelled TEST/DEMO and names no real source; everything is sized under Discord's embed limits.
 /// Rendering is a pure function of persisted state, so an unchanged state never causes an edit.

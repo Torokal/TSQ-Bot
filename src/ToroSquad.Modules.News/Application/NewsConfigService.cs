@@ -25,7 +25,7 @@ public enum NewsCheckState
 
 public sealed record NewsCheck(string LabelKey, NewsCheckState State, string DetailKey, IReadOnlyList<object> Args);
 
-/// <summary>What /news-admin status shows (no secrets, no user data).</summary>
+/// <summary>What /tsq-admin news status shows (no secrets, no user data).</summary>
 public sealed record NewsStatus(
     NewsMode Mode,
     bool DryRun,
@@ -41,7 +41,7 @@ public sealed record NewsStatus(
 public sealed record NewsPreview(OutgoingMessage Message, bool Synthetic);
 
 /// <summary>
-/// /news-admin configure|pause|resume|status|preview|doctor. Every method authorizes the actor (Manage Server) and only touches
+/// /tsq-admin news configure|pause|resume|status|preview|doctor. Every method authorizes the actor (Manage Server) and only touches
 /// the row of <c>actor.GuildId</c>. Nothing here requests the feed or sends to a channel.
 /// </summary>
 public sealed class NewsConfigService(

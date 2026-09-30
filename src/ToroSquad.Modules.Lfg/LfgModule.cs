@@ -4,6 +4,7 @@ using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Privacy;
 using ToroSquad.Core.Security;
+using ToroSquad.Discord.Interactions;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Lfg.Application;
 using ToroSquad.Modules.Lfg.Commands;
@@ -39,9 +40,9 @@ public sealed class LfgModule : IToroModule
         EnabledByDefault: false, // explicit activation: /modules enable lfg
         RequiredBotChannelPermissions: GuildPermission.ViewChannel | GuildPermission.SendMessages | GuildPermission.EmbedLinks, // the bot edits its cards on expiry/close
         OptionalBotPermissions: OptionalPermissions,
-        AdminCommands: ["lfg-admin"]);
+        AdminCommands: [TsqAdminRoot.Group("lfg")]);
 
-    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LfgFormCommands), typeof(LfgCommands), typeof(LfgAdminCommands)];
+    public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(LfgFormCommands), typeof(LfgCommands), typeof(LfgTsqAdmin)];
 
     public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {

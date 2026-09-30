@@ -25,7 +25,7 @@ public sealed record EsportsConfigView(
     IReadOnlyDictionary<(FilterDimension, string), string?> FilterLabels);
 
 /// <summary>
-/// /esports-admin configure|filters|pause|resume. Every method authorizes the actor (Manage Server) and only ever
+/// /tsq-admin esports configure|filters|pause|resume. Every method authorizes the actor (Manage Server) and only ever
 /// touches rows of <c>actor.GuildId</c> — IDs supplied by the caller are never trusted to select the guild.
 /// </summary>
 public sealed class EsportsConfigService(ToroDbContext db, IGuildGateway guilds, TimeProvider clock)

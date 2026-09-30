@@ -63,6 +63,6 @@
   "live.health.not_configured": "kimlik bilgileri yok (NOT_CONFIGURED)",
   "live.health.no_data_yet": "henüz başarılı uzlaştırma yok",
   "live.health.data_age": "son başarılı uzlaştırma {0}",
-  "cmd.live-admin": "TSQ Live yayın duyuruları (yöneticiler)",
-  "cmd.live-admin.doctor": "Twitch/Kick takibi, Discord kanalı ve duyuru tanısı"
+  "cmd.tsq-admin.live": "TSQ Live yayın duyuruları (yöneticiler)",
+  "cmd.tsq-admin.live.doctor": "Twitch/Kick takibi, Discord kanalı ve duyuru tanısı"
 }

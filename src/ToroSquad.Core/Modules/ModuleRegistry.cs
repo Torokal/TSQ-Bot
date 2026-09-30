@@ -44,15 +44,21 @@ public sealed class ModuleRegistry
         }
     }
 
-    /// <summary>Which module owns a given interaction module class (used by the module gate precondition).</summary>
+    /// <summary>
+    /// Which module owns a given interaction module class — also a class nested in a registered one (a module's
+    /// <c>/tsq-admin</c> group is nested in the class it registers).
+    /// </summary>
     public ModuleId? OwnerOf(Type interactionModuleType)
     {
-        foreach (var module in _modules.Values)
+        for (var type = interactionModuleType; type is not null; type = type.DeclaringType)
         {
-            foreach (var t in module.InteractionModuleTypes)
+            foreach (var module in _modules.Values)
             {
-                if (t == interactionModuleType || interactionModuleType.IsSubclassOf(t))
-                    return module.Descriptor.Id;
+                foreach (var t in module.InteractionModuleTypes)
+                {
+                    if (t == type || type.IsSubclassOf(t))
+                        return module.Descriptor.Id;
+                }
             }
         }
 

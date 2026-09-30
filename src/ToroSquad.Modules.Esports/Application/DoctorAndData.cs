@@ -24,7 +24,7 @@ public enum CheckState
 public sealed record DoctorCheck(string LabelKey, CheckState State, string DetailKey, IReadOnlyList<object> Args);
 
 /// <summary>
-/// /esports-admin doctor — permissions, provider and delivery diagnosis for admins. No secrets, no stack traces.
+/// /tsq-admin esports doctor — permissions, provider and delivery diagnosis for admins. No secrets, no stack traces.
 /// Each missing Discord permission is listed separately; nothing is "fixed" by widening permissions automatically.
 /// </summary>
 public sealed class EsportsDoctor(

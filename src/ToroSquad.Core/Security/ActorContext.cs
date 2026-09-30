@@ -35,7 +35,7 @@ public sealed record AuthorizationResult(AuthorizationFailure Failure, GuildPerm
 /// <summary>Central authorization rules shared by all modules.</summary>
 public static class Authorize
 {
-    /// <summary>Server configuration (setup, modules, esports-admin) requires Manage Server.</summary>
+    /// <summary>Server configuration (setup, modules, tsq-admin) requires Manage Server.</summary>
     public const GuildPermission ServerSettings = GuildPermission.ManageGuild;
 
     /// <summary>Role mapping / self-service role approval requires Manage Server + Manage Roles.</summary>
