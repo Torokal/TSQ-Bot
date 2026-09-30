@@ -27,6 +27,7 @@ yönetici komutu veya tablo yok). Başlangıçta doğrulanır (geçerli bir Disc
 | `/dolar` | 💵 Amerikan Doları — alış, satış |
 | `/euro` | 💶 Euro — alış, satış |
 | `/altın` | 🪙 Gram Altın — alış, satış |
+| `/çevir miktar kaynak hedef` | 💱 Döviz Çevirici — TL ile dolar, euro veya gram altın arasında dönüşüm (aşağıya bakın) |
 
 Kart: başlık, **Alış** ve **Satış** (`tr-TR`: `48,820 ₺`, `6.439,47 ₺`; sağlayıcının hassasiyeti korunur, 2–4 ondalık),
 **Güncellendi** (sağlayıcının kendi güncelleme zamanı — botun istek zamanı değil — Discord zaman damgasıyla, her
@@ -37,6 +38,41 @@ ve kimseyi etiketlemez. Önbellekteki fiyat anında gönderilir; önbellek boşs
 `/altın` adı Türkçe noktasız **ı** ile kayıtlıdır: Discord komut adlarında her dilden küçük harfe izin verir
 (`^[-_\p{L}\p{N}\p{sc=Deva}\p{sc=Thai}]{1,32}$`, harflerin küçük hâli); Discord.Net 3.20 aynı kuralı kayıttan önce
 doğrular. Manifest doğrulayıcısı da artık bu kuralı uygular (önceden yalnızca ASCII kabul ediyordu).
+
+## `/çevir` — Döviz Çevirici
+
+`/çevir miktar:<sayı> kaynak:<seçim> hedef:<seçim>`. `miktar` bir Discord sayısıdır (0 < miktar ≤ 1.000.000.000; Discord
+0–1.000.000.000 dışını zaten kabul etmez, 0 sunucuda reddedilir). `kaynak` ve `hedef` sabit seçimlerdir (serbest metin yok):
+**Türk Lirası (TRY)**, **Amerikan Doları (USD)**, **Euro (EUR)**, **Gram Altın** (iç değerler `TRY`, `USD`, `EUR`,
+`GRAM_GOLD`). Komut adı Türkçe **ç** ile kayıtlıdır (`/altın` ile aynı ad doğrulaması).
+
+**Desteklenen dönüşümler (V1):** TRY ↔ USD, TRY ↔ EUR, TRY ↔ Gram Altın. Çapraz dönüşümler (USD → EUR, altın → USD vb.)
+ve kaynak = hedef şimdilik reddedilir.
+
+**Alış / satış kuralı** — sağlayıcının kullanıcıya uygulayacağı taraf:
+
+| Yön | Kullanılan taraf | Hesap |
+|---|---|---|
+| USD → TRY, EUR → TRY, Gram Altın → TRY (kullanıcı varlığı satıyor) | **Alış** (`Buy`) | TL = miktar × alış |
+| TRY → USD, TRY → EUR, TRY → Gram Altın (kullanıcı varlığı alıyor) | **Satış** (`Sell`) | varlık = miktar ÷ satış |
+
+Hesap `decimal` ile tam hassasiyette yapılır (erken yuvarlama yok); yalnızca kartta yuvarlanır (banker's rounding,
+`MidpointRounding.ToEven`): TL/USD/EUR 2 ondalık (`122.175,00 ₺`, `50,93 USD`), gram altın en az 2, en fazla 4 ondalık
+(`7,5488 g`, `5,00 g`); kullanılan kur sağlayıcının hassasiyetiyle (`48,870 ₺`).
+
+**Fiyat:** aynı `MarketQuoteService` — `/dolar`, `/euro`, `/altın` ile aynı sağlayıcılar, yedekler, önbellek ve single flight;
+ayrı bir dönüşüm önbelleği yoktur (ör. `/dolar`'dan sonraki `/çevir USD → TRY` sağlayıcıya yeni istek atmaz).
+
+**Görünürlük:**
+- Başarılı dönüşüm **herkese açık** kart: "💱 Döviz Çevirici", verilen miktar ve "≈ sonuç", **Kullanılan kur** (altında
+  **Gram fiyatı**) ve **Kur türü** (Alış/Satış), **Güncellendi** (TCMB'de bülten tarihi), altta **Kaynak**. Yedek kaynakta
+  "Birincil veri kaynağına ulaşılamadı.", TCMB'de gösterge kuru notu, eski veride "⚠️ Son başarılı fiyat kullanılıyor." ve
+  son başarılı sorgu zamanı gösterilir.
+- Yalnızca kullanana görünen (ephemeral) cevaplar — hiçbiri fiyat sorgusu veya sağlayıcı isteği yapmaz, herkese açık onay
+  göndermez: yanlış kanal (diğer komutlarla aynı mesaj), "Miktar 0'dan büyük olmalıdır." / "Miktar en fazla 1.000.000.000
+  olabilir.", "Kaynak ve hedef aynı olamaz.", "Bu dönüşüm şu anda desteklenmiyor." (ikisinde de desteklenen dönüşümler
+  listelenir).
+- Hiçbir kaynaktan fiyat yoksa diğer komutlarla aynı takip kodlu "Döviz/altın verisine şu anda ulaşılamıyor…" mesajı.
 
 ## Sağlayıcılar ve yedek sırası
 
