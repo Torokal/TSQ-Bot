@@ -158,11 +158,11 @@ Komutlar sağlayıcıyı asla çağırmaz (yalnızca önbellek; mimari testli).
 |---|---|---|
 | `/volleyball next` | herkes (modül açık) | Sıradaki (veya sağlayıcıya göre süren) maç: rakip, saat, turnuva, salon, canlı set skoru, güncellik |
 | `/volleyball schedule` | herkes (modül açık) | Yaklaşan maçlar ve son sonuçlar |
-| `/tsq-admin volleyball configure-channel` | Sunucuyu Yönet | Bildirim kanalı |
-| `/tsq-admin volleyball configure-notifications` | Sunucuyu Yönet | `match_reminder_15m`, `match_started`, `set_finished`, `match_finished`, `match_postponed_cancelled` |
-| `/tsq-admin volleyball configure-role` | Sunucuyu Yönet | İsteğe bağlı rol (`ping_role`, asla @everyone), `ping_reminder`, `ping_final`, `clear` |
-| `/tsq-admin volleyball preview [card]` | Sunucuyu Yönet | Pingsiz TEST/DEMO kart (hatırlatma, başladı, set kazanıldı/kaybedildi, sonuç galibiyet/mağlubiyet, ertelendi, iptal) |
-| `/tsq-admin volleyball status` · `doctor` · `pause` · `resume` | Sunucuyu Yönet | Ayarlar · tanı · duraklat/devam (kaçanlar gönderilmez) |
+| `/tsq-admin modul:volleyball islem:configure-channel` | Sunucuyu Yönet | Bildirim kanalı |
+| `/tsq-admin modul:volleyball islem:configure-notifications` | Sunucuyu Yönet | `match_reminder_15m`, `match_started`, `set_finished`, `match_finished`, `match_postponed_cancelled` |
+| `/tsq-admin modul:volleyball islem:configure-role` | Sunucuyu Yönet | İsteğe bağlı rol (`ping_role`, asla @everyone), `ping_reminder`, `ping_final`, `clear` |
+| `/tsq-admin modul:volleyball islem:preview [card]` | Sunucuyu Yönet | Pingsiz TEST/DEMO kart (hatırlatma, başladı, set kazanıldı/kaybedildi, sonuç galibiyet/mağlubiyet, ertelendi, iptal) |
+| `/tsq-admin modul:volleyball islem:status` · `doctor` · `pause` · `resume` | Sunucuyu Yönet | Ayarlar · tanı · duraklat/devam (kaçanlar gönderilmez) |
 
 `/setup` sihirbazında voleybol adımı: kanal → pingsiz önizleme → etkinleştir. `/bot status` voleybol fikstür/canlı sağlığı ve
 sıradaki Türkiye maçını gösterir. `doctor`: modül, kanal/izinler, rol, kapsam, veri modu, sağlayıcı sağlığı (Healthy /

@@ -349,18 +349,18 @@ invite link and no global command registration. The source code is public under 
 - **NOT_VERIFIED:** Railway-network access, an RSS-specific usage permission in HLTV's terms, HLTV team id 11861, a live card.
 - Off by default (`News:Mode=Off`); merge, deploy, command sync, channel and live posting await the owner's approval.
 
-## One admin command: `/tsq-admin` (2026-09-30, branch `feat/tsq-admin-root`)
+## One admin command: `/tsq-admin` (2026-09-30)
 
-- The seven `/<module>-admin` commands (`birthday`, `esports`, `f1`, `lfg`, `live`, `news`, `volleyball`) are one command,
-  `/tsq-admin <module> <operation>`; former sub-groups became `<subgroup>-<operation>` (`roles-map`, `configure-channel`).
-  47 operations, same options, texts, defaults, visibility and server-side authorization; no data or config migration.
+- PR #46 (merged, deployed, registered 2026-09-30) put the seven `/<module>-admin` commands under one root as subcommand
+  groups; the menu still listed every path. Branch `fix/tsq-admin-flat` replaces that with ONE flat command without
+  subcommands: `/tsq-admin modul:<module> islem:<operation> [kanal] [uye] [rol] [tarih]`, module and operation autocompleted,
+  multi-field settings in private forms. 47 operations, same services and server-side authorization; no data/config migration.
   Old → new table: [COMMANDS_AND_PERMISSIONS.md](COMMANDS_AND_PERMISSIONS.md).
-- **IMPLEMENTED / TESTED_OFFLINE**: merged manifest (7 groups, largest 16 operations, 5787 of 8000 characters), dispatch
-  through the real Discord.Net map, preconditions, option binding, autocomplete, custom ids, sync plan (create one, delete
-  only the seven moved roots with `--prune`, everything else unchanged). Entries above that name `/<module>-admin` describe
-  the command as it was then.
-- **NOT VERIFIED_LIVE**: not deployed or synced; the Discord menu, Integrations permissions and each operation in the
-  real server are unchecked.
+- **IMPLEMENTED / TESTED_OFFLINE** (flat): payload shape (0 subcommands, 0 groups), completeness, autocomplete, validation,
+  operations run against the real services, form safety, sync plan (one update of the existing `/tsq-admin`).
+- **NOT VERIFIED_LIVE** (flat): not pushed, deployed or synced; the Discord menu, autocomplete and forms in the real client are
+  unchecked. The seven old roots are still registered (cleanup pending, separate approval). Entries above that name
+  `/<module>-admin` describe the command as it was then.
 
 ## What has been verified against real Discord / real APIs
 

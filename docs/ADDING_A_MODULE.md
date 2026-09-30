@@ -19,9 +19,9 @@ sunucuda yönetici `/modules enable example` diyene kadar kapalıdır. Testler
            IsCore: false, EnabledByDefault: false,
            RequiredBotChannelPermissions: GuildPermission.SendMessages,
            OptionalBotPermissions: GuildPermission.None,
-           AdminCommands: [TsqAdminRoot.Group("polls")]); // "tsq-admin polls": manifest doğrulaması grubu ister
+           AdminCommands: [AdminCatalog.Entry("polls")]); // "tsq-admin polls": kayıtlı yönetim işlemleri
 
-       public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(PollCommands), typeof(PollsTsqAdmin)];
+       public IReadOnlyList<Type> InteractionModuleTypes { get; } = [typeof(PollCommands)];
 
        public void ConfigureServices(IServiceCollection services, IConfiguration configuration)
        {
@@ -37,28 +37,42 @@ sunucuda yönetici `/modules enable example` diyene kadar kapalıdır. Testler
 3. **Komutlar** — `ToroInteractionModule`'dan türeyin ve **mutlaka** `[ToroModule("polls")]` ekleyin (guild bağlamı +
    modül kapısı; mimari test her interaction sınıfında arar). Yanıtlar `ReplyResultAsync`/`ReplyEmbedAsync` ile (ephemeral
    ve ping'siz). Uzun işlerde önce `DeferEphemeralAsync()`.
-   **Yönetici işlemleri** ayrı bir `/polls-admin` kökü açmaz; ortak `/tsq-admin` köküne bir grup olarak eklenir
-   (`/tsq-admin polls <işlem>`). Kökün adı, açıklaması ve `ManageGuild` izni `TsqAdminRoot`'tan miras alınır; grup sınıfı
-   kendi modül kapısını taşır, her işlem servis içinde `Authorize.Require(actor, …)` çağırır:
+   **Yönetici işlemleri** ayrı bir slash komutu açmaz; tek düz `/tsq-admin modul:polls islem:<işlem>` komutuna kayıtlı
+   işlemler olarak eklenir (alt komut yoktur). Bir işlem kaydı öneri listesini, doğrulamayı, yetki ön kontrolünü, yönlendirmeyi,
+   `/help`'i ve eksiksizlik testlerini besler. İş mantığı modülün kendi işleyicisinde kalır; servis yine
+   `Authorize.Require(actor, …)` çağırır:
    ```csharp
-   public sealed class PollsTsqAdmin : TsqAdminRoot
+   public sealed class PollsAdminOperations(PollsConfigService config) : IAdminFormHandler
    {
-       [ToroModule("polls", AllowWhenDisabled = true)]   // kurulum modül açılmadan yapılabilsin
-       [Group("polls", "Poll settings (admins)")]
-       public sealed class PollsAdminCommands(InteractionServices services, PollsConfigService config) : ToroInteractionModule(services)
+       public static readonly AdminModule Definition = AdminModule.For<PollsAdminOperations>("polls", PollsModule.ModuleIdTyped)
+           .Op("configure", (h, c) => h.ConfigureAsync(c), AdminFields.Channel)          // kanal: seçeneğini kullanır
+           .Op("status", (h, c) => h.StatusAsync(c))                                      // izin varsayılanı: Manage Server
+           .Build();
+
+       public async Task ConfigureAsync(AdminCall call)
        {
-           [SlashCommand("configure", "Poll channel")]
-           public async Task ConfigureAsync(IChannel channel) { /* … Authorize.Require servis içinde … */ }
+           if (call.Args.ChannelId is not { } channel)
+           {
+               await AdminForms.PickChannelAsync(call, "admin.polls.configure.pick");   // eksik girdi → özel seçici
+               return;
+           }
+
+           await call.DeferAsync();
+           await call.ReplyResultAsync(await config.SetChannelAsync(call.Actor, channel, CancellationToken.None));
        }
+
+       public async Task OnFormAsync(AdminCall call, string action) { /* seçiciden gelen değeri doğrula, ClaimAsync, FinishAsync */ }
    }
    ```
-   Discord bir komutun altında yalnızca **bir** grup seviyesine izin verir: grubun içinde `[Group]` açmayın. İşlemleri
-   ayrı bir sınıfta toplamak isterseniz `[Group]` **olmadan** iç içe sınıf kullanıp adı `<altgrup>-<işlem>` yapın
-   (`roles-map` gibi). Manifest oluşturucu kökü tek komutta birleştirir; kök seviyesinde komut, aynı grup adını iki modülün
-   kullanması, `AdminCommands`'ta bildirilmemiş grup veya grup içinde grup sync'i engelleyen hatadır.
+   `ConfigureServices` içinde `services.AddAdminOperations(PollsAdminOperations.Definition);`. Ortak seçenekler yalnızca
+   `kanal`, `uye`, `rol`, `tarih`; işlem kullanmadığı bir seçenekle çağrılırsa router reddeder. Başka girdiler işlemin kendi
+   formundan gelir (`AdminForms`: kanal/üye seçici, seçim listesi, düğmeler, modal; çok alanlı ayarlarda yalnızca değişenler
+   yazılır). Formlar kullanıcı + sunucu + modül + işleme bağlı, 15 dakikalık bellek içi taslaklardır; router her tıklamada
+   sahibi, sunucuyu, süreyi ve izni yeniden denetler. Bildirilmiş ama kaydedilmemiş (veya tersi) yönetim modülü manifest
+   hatasıdır ve sync'i engeller.
 4. **Metinler** — `Localization/tr.json` ve `en.json` (aynı anahtarlar ve yer tutucular; test denetler). Komut açıklamaları
-   `cmd.<yol>` anahtarlarıyla (`cmd.polls`, `cmd.polls.create`, `cmd.polls.create.<seçenek>`; yönetici grubu için
-   `cmd.tsq-admin.polls`, `cmd.tsq-admin.polls.configure`, `cmd.tsq-admin.polls.configure.<seçenek>`). csproj'a:
+   `cmd.<yol>` anahtarlarıyla (`cmd.polls`, `cmd.polls.create`, `cmd.polls.create.<seçenek>`; yönetim işlemleri için
+   etiketler `admin.polls` ("Anketler") ve `admin.polls.<işlem>`; öneride "Etiket — id" olarak görünür). csproj'a:
    `<EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Polls.Localization.%(Filename)%(Extension)" />`
 5. **Kayıt** — `src/ToroSquad.Bot/ToroHost.cs` → `Modules()` listesine tek satır. Tablo eklediyseniz
    `DesignTimeDbContextFactory.AllContributors()`'a katkıcınızı ekleyip migration üretin:

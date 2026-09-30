@@ -109,14 +109,14 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | General | `/help`, `/bot status\|about\|source`, `/privacy export\|delete` | everyone |
 | Admin | `/setup`, `/modules list\|enable\|disable` | Manage Server |
 | Esports | `/esports matches\|results\|events\|rankings\|team\|follow\|unfollow\|subscriptions` | everyone (module on) |
-| Esports admin | `/tsq-admin esports configure\|panel\|preview\|pause\|resume\|doctor`, `filters-show\|team\|tournament\|tier\|vrs\|clear`, `roles-list\|map\|unmap\|selfservice` | Manage Server (+ Manage Roles for roles) |
+| Esports admin | `/tsq-admin modul:esports islem:configure\|panel\|preview\|pause\|resume\|doctor`, `filters-show\|team\|tournament\|tier\|vrs\|clear`, `roles-list\|map\|unmap\|selfservice` | Manage Server (+ Manage Roles for roles) |
 | Formula 1 | `/f1 next\|schedule\|results\|now`, `/f1 standings drivers\|constructors` | everyone (module on) |
-| Formula 1 admin | `/tsq-admin f1 configure-channel\|configure-notifications\|configure-role\|configure-spoilers`, `/tsq-admin f1 preview\|status\|doctor\|pause\|resume` | Manage Server |
+| Formula 1 admin | `/tsq-admin modul:f1 islem:configure-channel\|configure-notifications\|configure-role\|configure-spoilers`, `/tsq-admin modul:f1 islem:preview\|status\|doctor\|pause\|resume` | Manage Server |
 | Volleyball | `/volleyball next\|schedule` | everyone (module on) |
-| Volleyball admin | `/tsq-admin volleyball configure-channel\|configure-notifications\|configure-role`, `/tsq-admin volleyball preview\|status\|doctor\|pause\|resume` | Manage Server |
-| TSQ Live admin | `/tsq-admin live doctor` | Manage Server |
+| Volleyball admin | `/tsq-admin modul:volleyball islem:configure-channel\|configure-notifications\|configure-role`, `/tsq-admin modul:volleyball islem:preview\|status\|doctor\|pause\|resume` | Manage Server |
+| TSQ Live admin | `/tsq-admin modul:live islem:doctor` | Manage Server |
 | TSQ LFG | `/ekip` (opens the listing form; buttons: Katıl (🎟️ Sıraya Gir while full) · Belki · Ayrıl · 🔊 Ses Odası · ✏️ Düzenle (owner only) · İlanı Kapat) | everyone (module on) |
-| TSQ LFG admin | `/tsq-admin lfg channel\|status` | Manage Server |
+| TSQ LFG admin | `/tsq-admin modul:lfg islem:channel\|status` | Manage Server |
 | TSQ Quote | message → Apps → Quote, or `/quote message:<message id> [channel]` (or a message link) | everyone (module on; the member must be able to read the quoted message) |
 | TSQ Doğum Günü | `/birthday set\|show\|remove` (own birthday only) | everyone (module on) |
 | TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options), `/çevir miktar kaynak hedef` (TRY ↔ USD/EUR/gram gold); public answer, currency channel only | everyone (module on) |
@@ -124,12 +124,13 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Çekiliş | `/giveaway create` (form → card → 🎉 → automatic draw), `/giveaway end\|cancel\|reroll giveaway:<#number \| message link \| id>` | Manage Server (module on); entering: everyone, with 🎉 |
 | TSQ Özet | `/ozetle` (no options; public summary of this channel's latest messages) | members with any one of the configured roles (module on) |
 | TSQ Öngörü | predictions channel: `/ongoru yarat` + card buttons (🎯 Tahmin Yap, 🔒 Kilitle, ✅ Sonuçlandır, ↩️ İptal / İade); commands channel: `/ongoru cuzdan\|gunluk\|tahminlerim\|liderlik`, `/ongoru turnuva durum\|bitir` | create: the creator role; card management buttons: its creator (with the role) or Administrator/owner; end tournament: Administrator/owner; the rest: everyone (module on) |
-| TSQ Doğum Günü admin | `/tsq-admin birthday configure\|status\|doctor`; `/tsq-admin birthday set\|show member …` | Manage Server; `set`/`show`: Administrator or server owner |
-| TSQ Haber admin | `/tsq-admin news configure\|pause\|resume\|preview\|status\|doctor` | Manage Server |
+| TSQ Doğum Günü admin | `/tsq-admin modul:birthday islem:configure\|status\|doctor`; `/tsq-admin modul:birthday islem:set\|show uye:@member [tarih:14.03]` | Manage Server; `set`/`show`: Administrator or server owner |
+| TSQ Haber admin | `/tsq-admin modul:news islem:configure\|pause\|resume\|preview\|status\|doctor` | Manage Server |
 
-Every module's admin operations share one command, `/tsq-admin <module> <operation>` (one Discord subcommand group per
-module; until 2026-09-30 these were separate `/<module>-admin` commands — old → new table in
-[docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md)).
+Every module's admin operations share ONE flat command without subcommands:
+`/tsq-admin modul:<module> islem:<operation> [kanal] [uye] [rol] [tarih]` — module and operation are autocompleted options
+(e.g. `/tsq-admin modul:news islem:status`); settings with more fields open a private form. Until 2026-09-30 these were
+separate `/<module>-admin` commands — old → new table in [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md).
 
 Commands are registered per server (guild commands) with a dry-run first. Permissions, intents and invite scopes:
 [docs/COMMANDS_AND_PERMISSIONS.md](docs/COMMANDS_AND_PERMISSIONS.md). The generated, test-checked schema is
