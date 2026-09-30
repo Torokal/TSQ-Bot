@@ -119,7 +119,7 @@ public sealed class TimezoneSourceTests
     [Fact]
     public void Source_zones_are_real_iana_zones_with_unique_names()
     {
-        SourceTimeZones.All.Select(z => z.ZoneId).Should().Equal("Europe/Istanbul", "Europe/London", "America/New_York", "America/Chicago", "America/Los_Angeles", "UTC");
+        SourceTimeZones.All.Select(z => z.ZoneId).Should().Equal("Europe/Istanbul", "Europe/London", "America/New_York", "America/Chicago", "America/Los_Angeles", "Asia/Tokyo", "UTC");
         SourceTimeZones.All.SelectMany(z => z.Aliases).Should().OnlyHaveUniqueItems();
         foreach (var zone in SourceTimeZones.All)
         {
@@ -144,7 +144,7 @@ public sealed class TimezoneSourceTests
         foreach (var zone in new[] { "tr", "TR", "turkiye", "istanbul", "", " " })
             Card("21:00", now, zone).Should().BeEquivalentTo(plain, zone);
         plain.Fields[0].Value.Should().Be("`21:00` · Türkiye · 28.09.2026");
-        Stamps(plain).Should().Equal("1790618400", "1790618400");
+        Stamps(plain).Should().Equal("1790618400", "1790618400", "1790618400", "1790618400"); // rendered + raw copy
     }
 
     // ---- the /saat 15:00 timezone:pdt scenario ----
@@ -164,7 +164,8 @@ public sealed class TimezoneSourceTests
             "🇺🇸 New York — `18:00`",
             "🇺🇸 Chicago — `17:00`",
             "🇺🇸 Los Angeles — `15:00`");
-        Stamps(card).Should().Equal(Unix(expected), Unix(expected));
+        Stamps(card).Distinct().Should().Equal(Unix(expected));
+        Stamps(card).Should().HaveCount(4, "rendered t + R and the same two as raw code");
         Unix(expected).Should().Be("1790632800");
         card.Fields[2].Value.Should().Be("<t:1790632800:t> · <t:1790632800:R>");
 
@@ -343,8 +344,8 @@ public sealed class TimezoneSourceTests
     [Fact]
     public void Autocomplete_offers_every_zone_and_filters_by_name_or_alias()
     {
-        Suggest(null).Should().Equal("tr", "uk", "ny", "chicago", "la", "utc");
-        Suggest("").Should().Equal("tr", "uk", "ny", "chicago", "la", "utc");
+        Suggest(null).Should().Equal("tr", "uk", "ny", "chicago", "la", "tokyo", "utc");
+        Suggest("").Should().Equal("tr", "uk", "ny", "chicago", "la", "tokyo", "utc");
         Suggest("pdt").Should().Equal("la");
         Suggest("PD").Should().Equal("la");
         Suggest("est").Should().Equal("ny");

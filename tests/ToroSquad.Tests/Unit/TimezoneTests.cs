@@ -196,7 +196,7 @@ public sealed class TimezoneTests
         card.Title.Should().Be("🕐 Saat Dönüştürücü");
         card.Color.Should().Be(0xE8590C);
         card.Footer.Should().Be("Deniz tarafından istendi");
-        card.Fields.Select(f => f.Name).Should().Equal("Girilen saat", "Saat dilimleri", "Discord zamanı");
+        card.Fields.Select(f => f.Name).Should().Equal("Girilen saat", "Saat dilimleri", "Discord zamanı", "Discord timestamp kodu");
         card.Fields[0].Value.Should().Be("`21:00` · Türkiye · 28.09.2026");
         card.Fields[1].Value.Should().Be(string.Join("\n",
             "🇹🇷 Türkiye — `21:00`",
@@ -205,6 +205,7 @@ public sealed class TimezoneTests
             "🇺🇸 Chicago — `13:00`",
             "🇺🇸 Los Angeles — `11:00`"));
         card.Fields[2].Value.Should().Be("<t:1790618400:t> · <t:1790618400:R>"); // 2026-09-28T18:00:00Z
+        card.Fields[3].Value.Should().Be("`<t:1790618400:t>`\n`<t:1790618400:R>`"); // the same tokens, raw for copying
     }
 
     [Fact]
@@ -213,7 +214,7 @@ public sealed class TimezoneTests
         var card = Card(Cards().Convert("en", "9.05", new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero), "Deniz"));
         card.Title.Should().Be("🕐 Time Converter");
         card.Footer.Should().Be("Requested by Deniz");
-        card.Fields.Select(f => f.Name).Should().Equal("Entered time", "Time zones", "Discord time");
+        card.Fields.Select(f => f.Name).Should().Equal("Entered time", "Time zones", "Discord time", "Discord timestamp code");
         card.Fields[0].Value.Should().Be("`09:05` · Türkiye · 15.07.2026");
         card.Fields[1].Value.Should().Be(string.Join("\n",
             "🇹🇷 Türkiye — `09:05`",
@@ -244,7 +245,7 @@ public sealed class TimezoneTests
         instant.ToUnixTimeSeconds().Should().Be(1784138400); // 2026-07-15T18:00:00Z
 
         var text = string.Join("\n", card.Fields.Select(f => f.Value));
-        System.Text.RegularExpressions.Regex.Matches(text, @"<t:(\d+):").Select(m => m.Groups[1].Value).Should().Equal("1784138400", "1784138400");
+        System.Text.RegularExpressions.Regex.Matches(text, @"<t:(\d+):").Select(m => m.Groups[1].Value).Should().Equal("1784138400", "1784138400", "1784138400", "1784138400"); // rendered + raw copy
         foreach (var zone in TimeZoneBoard.Zones)
             TimeZoneBoard.In(zone, instant, new DateOnly(2026, 7, 15), Zone(zone.ZoneId)).Local.ToUnixTimeSeconds().Should().Be(1784138400, zone.ZoneId);
     }
