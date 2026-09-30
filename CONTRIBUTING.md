@@ -55,7 +55,8 @@ Additional rules:
 Automated tests never call external services: provider behaviour is tested with synthetic fixtures and contract tests.
 Do not add tests that need a real PandaScore, Liquipedia or Discord connection, and never commit real API responses
 that are not allowed to be redistributed. Live checks are manual and read-only (e.g. `esports provider-check`).
-HLTV must never be scraped.
+HLTV must never be scraped. The only HLTV request in the code base is the official RSS news feed read by TSQ Haber
+(`HltvRssClient`, headlines and links only; enforced by an architecture test); match links never fetch HLTV.
 
 ## Secrets
 
