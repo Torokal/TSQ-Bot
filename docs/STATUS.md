@@ -102,7 +102,7 @@ invite link and no global command registration. The source code is public under 
   and the bot's later edit of that card.
 - Off by default (module gate off); commands are registered only by the owner via `scripts/Sync-Commands.ps1`.
 
-## TSQ Quote (new, 2026-09-27, branch `feat/quote`)
+## TSQ Quote (2026-09-27, PR #14, live)
 
 - Scope and rules: [quote/TSQ_QUOTE.md](quote/TSQ_QUOTE.md). Stateless utility module: no table, no migration, no worker.
 - **IMPLEMENTED / TESTED_OFFLINE**: `/quote message:<id or link> [channel]`; reference parsing (snowflake, discord.com /
@@ -117,14 +117,18 @@ invite link and no global command registration. The source code is public under 
   (attachments/embeds/poll, forward, system, own/mentioning message = no text; a completely empty normal message = content
   probably withheld, `quote.content_unavailable`, no claimed certainty); rendering failures log ids + exception type + trace
   code only; tests assert no log line ever contains the message body, names or avatar url. Invite integer 117760.
-- **Owner decision made (2026-09-27)**: Message Content privileged access is used for TSQ Quote. Discord documents it as
-  not tied to any gateway event (REST content fields), so the gateway Identify stays `Guilds`; no message events, no
-  cache, no listener. **Pending (owner)**: toggle MESSAGE CONTENT INTENT in the Developer Portal; grant Attach Files to the
-  bot role (or the channels) in the main guild.
-- **NOT VERIFIED_LIVE**: the whole command in Discord (a normal member's non-mentioning message read by id with content,
-  private defer → public `quote.png` follow-up, Attach Files enforcement, the real Discord CDN download, Discord.Net
-  permission resolution on real overwrites). Live acceptance plan: docs/quote/TSQ_QUOTE.md.
-- Off by default (module gate off); `/quote` is in the manifest but not synced.
+- **Message Content (owner decision 2026-09-27)**: the application's Message Content privileged access is on (Developer
+  Portal toggle by the owner). Discord documents it as not tied to any gateway event (REST content fields), so the gateway
+  Identify stays `Guilds`; no message events, no cache, no listener.
+- **Production**: PR #14 merged (`b1a8084`), Railway deployment healthy (single startup, no migration, manifest OK),
+  `/quote` synced to the main guild (Create only; every other command Unchanged, re-run dry-run zero diff), module
+  enabled by the owner in Discord. Rollback: `/modules disable quote`.
+- **VERIFIED_LIVE (2026-09-27)**: a normal member's message that does not mention the bot, quoted by id in the same
+  channel: text delivered (Message Content over REST), Turkish characters and wrapping correct, greyscale server avatar
+  fading into black, display name + `@username` correct, public `quote.png` follow-up, no pings (owner screenshot).
+  Railway log held only `Quote resolved guild=… channel=… message=…` — no text, names or avatar url.
+- **Owner-reported working (2026-09-30)**: the other paths (`channel:`, message links, refusals). Not observed in the
+  logs here: Railway keeps logs only since the latest deployment and they hold no Quote lines.
 
 ## TSQ Doğum Günü (new, 2026-09-28, branch `feat/birthday`)
 
