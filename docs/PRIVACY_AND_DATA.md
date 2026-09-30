@@ -72,6 +72,11 @@ TSQ Özet tablo kullanmaz; `/privacy export/delete` kapsamında kaydı yoktur. C
 kullanıcı/kanal ID'si ve süreden ibarettir ve yeniden başlatmada silinir. Gönderilen özet normal bir kanal mesajıdır;
 Discord'da silinir.
 
+TSQ Haber kişisel veri tutmaz: `news_guild_config` (sunucu, kanal, duraklatma, zamanlar — kullanıcı ID'si yok), `news_article`
+(HLTV haber kimliği, bağlantı, başlık — başlık 30 gün sonra silinir —, yayın zamanı, eşleşme nedeni; açıklama, makale metni
+veya görsel yok), `news_delivery` (sunucu + haber + kanal, 365 gün) ve `news_feed_state` (akış durumu ve oyuncu adlarından
+oluşan güncel kadro). `/privacy export/delete` kapsamında kaydı yoktur.
+
 Discord ID'leri kayıpsız (64-bit) saklanır.
 
 ## Kullanıcı hakları

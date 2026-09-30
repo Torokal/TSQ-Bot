@@ -337,6 +337,18 @@ invite link and no global command registration. The source code is public under 
   (COVERAGE_INCOMPLETE). Observations refused only for the missing rule are judged again (attempts kept, old odds not
   reused). Nothing deployed; no automatic card in Discord.
 
+## TSQ Haber — Aurora · HLTV (new, 2026-09-30, branch `feat/aurora-hltv-news`)
+
+- **IMPLEMENTED / TESTED_OFFLINE:** official HLTV RSS reader (hardened XML, no redirects, bounded body, 304/403/429/5xx/
+  timeout classification), Aurora matcher (team names, look-alike exclusions, current players in the headline, stale
+  roster), Liquipedia roster sync, baseline, per-guild dedup by article id, silent edit on corrections, dry-run separation,
+  pause/resume, channel change, 6 h / 3-card catch-up, retention with watermark, module gate, persisted backoff, atomic
+  rounds, reconciliation of ambiguous sends, `/news-admin`, `news check` CLI.
+- **Real source (local network, 2026-09-30):** feed read and parsed (10/10 items, ttl 60, no ETag/Last-Modified, no team
+  tags); Liquipedia roster read (5 players). No Aurora item was in the feed, so matching is not verified on a real item.
+- **NOT_VERIFIED:** Railway-network access, an RSS-specific usage permission in HLTV's terms, HLTV team id 11861, a live card.
+- Off by default (`News:Mode=Off`); merge, deploy, command sync, channel and live posting await the owner's approval.
+
 ## What has been verified against real Discord / real APIs
 
 - Gateway connection, guild-only slash commands, minimum permissions, no privileged intents.

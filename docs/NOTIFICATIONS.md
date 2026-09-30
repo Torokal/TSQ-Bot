@@ -65,7 +65,7 @@ Renkler: başladı/hatırlatma mavi, sonuç yeşil (kazanana göre değişmez), 
 Öncelik: **doğrulanmış HLTV** → resmî organizatör sayfası → sağlayıcı sayfası (izinli host) → **hiç** (yer tutucu yok).
 HLTV bağlantısı **tamamen otomatiktir** (elle bağlantı girme yolu yoktur) ve yalnızca Liquipedia editörlerinin girdiği HLTV
 maç kimliğinden gelir: (1) onaylı anahtar varsa LiquipediaDB API, (2) LPDB kullanılamıyorsa ücretsiz Liquipedia **MediaWiki
-API**'si (yalnızca API, HTML yok, HLTV'ye hiç istek yok), (3) ikisi de yoksa bağlantı ve "Maç Sayfası" alanı **yok**.
+API**'si (yalnızca API, HTML yok, HLTV'ye hiç istek yok — TSQ Haber'in resmî RSS okuması bu akıştan ayrıdır), (3) ikisi de yoksa bağlantı ve "Maç Sayfası" alanı **yok**.
 Eşleşme kuralı: iki takım da eşleşmeli (sıra önemsiz, normalize ad veya kısaltma), başlangıç farkı ≤ 90 dk ve **tam olarak
 bir** geçerli sayısal HLTV kimliği; 0 veya 2+ farklı aday → bağlantı yok (yanlış bağlantı hiç olmamasından kötüdür). Adres
 `https://www.hltv.org/matches/<id>/match` olarak kurulur, sayfa indirilmez. MediaWiki yalnızca sunucunun takım filtresindeki

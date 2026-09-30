@@ -189,6 +189,18 @@ gönderiminde, önizleme onayında ve her bileşen tıklamasında sunucu tarafı
 kanalı View Channel, Send Messages, Embed Links, Read Message History; komut kanalı View Channel, Send Messages, Embed Links.
 Add Reactions ve Administrator gerekmez. Ayrıntı: [predictions/TSQ_PREDICTIONS.md](predictions/TSQ_PREDICTIONS.md).
 
+## TSQ Haber — Aurora · HLTV (`/news-admin`, ManageGuild + sunucu tarafı `Authorize.Require`)
+
+| Komut | Ne yapar |
+|---|---|
+| `/news-admin configure channel:` | Haber kanalı (View Channel + Send Messages + Embed Links; yalnızca bundan sonra yayımlanan haberler) |
+| `/news-admin pause` / `resume` | Gönderimi duraklatır / sürdürür (duraklatma dönemi telafi edilmez) |
+| `/news-admin preview` | Son eşleşen gerçek haberin veya açıkça sentetik örneğin kartını yalnızca yöneticiye gösterir |
+| `/news-admin status` · `doctor` | Mod, modül, kanal/izinler, akış sonucu ve sonraki kontrol, baseline, kadro güncelliği, kapsam |
+
+Tüm cevaplar ephemeral. Komutlar modül kapalıyken de çalışır. Elle haber/bağlantı komutu yoktur. Ayrıntı:
+[news/TSQ_NEWS.md](news/TSQ_NEWS.md).
+
 ## TSQ Doğum Günü (modül açıkken)
 
 | Komut | Ne yapar |

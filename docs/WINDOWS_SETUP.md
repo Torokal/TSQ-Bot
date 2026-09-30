@@ -90,7 +90,7 @@ yani herkese açık depo adresi); doğrudan iletişim için e-postanızı ekleme
 gerekir ve `Esports:MatchPollMinutes` ≥ 10 olmalıdır (60 istek/saat bütçesi).
 
 **HLTV maç sayfaları tamamen otomatiktir.** Elle bağlantı girme yolu yoktur; Liquipedia'da HLTV kimliği bulunamazsa kartta
-"Maç Sayfası" alanı olmaz. HLTV kazınmaz ve HLTV'ye hiç istek atılmaz.
+"Maç Sayfası" alanı olmaz. HLTV kazınmaz ve maç bağlantıları için HLTV'ye hiç istek atılmaz (tek istisna: TSQ Haber açıksa resmî RSS haber akışı).
 
 **TEST/DEMO kartları (Discord görünüm testi).** Bot `Start-Dev.ps1` ile çalışırken, **aynı veri klasörüyle**:
 ```powershell

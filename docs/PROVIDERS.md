@@ -29,7 +29,8 @@ Research dates: Liquipedia/Valve 2026-09-24 (Liquipedia terms re-checked 2026-09
 | Valve Regional Standings (GitHub) | Rankings (VRS), independent of the match provider | Fixture | Public, no key | **TESTED_OFFLINE**; live fetch **NOT_RUN** |
 | Liquipedia (MediaWiki API) | **Automatic fallback** HLTV-link source while LiquipediaDB is not usable | — | Free, no key; terms: ≤ 1 request / 2 s, contact User-Agent, gzip, API only | **TESTED_OFFLINE**; one real page read 2026-09-26 (feasibility) |
 | The Odds API (v4) | TSQ Öngörü automatic football odds (Galatasaray / Fenerbahçe / Beşiktaş / Türkiye men's national team; h2h, eu, decimal) — docs/predictions/AUTO_FOOTBALL.md | Disabled by default | Free plan (500 credits/month); owner's key in local user-secrets (2026-09-30) | **TESTED_OFFLINE**; live **read** **PROVIDER_VERIFIED_READ_ONLY** 2026-09-30 for all four targets; market rule approved for **pinnacle only** (Soccer rule 1; onexbet unapproved); coverage incomplete (Italy – Türkiye 05.10 not yet listed) — docs/predictions/PROVIDER_VERIFICATION.md |
-| HLTV | **Not a data provider.** Preferred *external match page* when a verified URL exists | — | No authorized access; **scraping prohibited by design** | Link policy **TESTED_OFFLINE**; data integration **DEFERRED** |
+| HLTV | **Not a match data provider.** Preferred *external match page* when a verified URL exists | — | No authorized access; **scraping prohibited by design** | Link policy **TESTED_OFFLINE**; data integration **DEFERRED** |
+| HLTV RSS (`https://www.hltv.org/rss/news`) | TSQ Haber only: headline, link and publication time of news about Aurora's main CS2 team — [news/TSQ_NEWS.md](news/TSQ_NEWS.md) | `News:Mode=Off` | Official public RSS feed; ToS allows personal limited use and forbids data mining/scraping — an RSS-specific permission could **not** be verified | Read + parse **VERIFIED** locally 2026-09-30 (10 items, ttl 60, no ETag/Last-Modified, no team tags); Railway network **NOT_VERIFIED**; live posting **off** (owner decision) |
 
 A failing live provider **never** falls back to fixture data: the fixture handler is only wired in Fixture mode
 (`src/ToroSquad.Modules.Esports/EsportsModule.cs`).
@@ -83,7 +84,13 @@ All facts below were read on 2026-09-25 at developers.pandascore.co (docs pages 
 - **Not used**: WebSockets/live feed (paid), `/incidents` change feed (available on all plans; not needed at current volume —
   one windowed query per poll already sees reschedules/corrections).
 
-## HLTV — link only, never scraped
+## HLTV — link only, never scraped (one narrow RSS exception)
+
+- **Only exception:** TSQ Haber reads the **official RSS news feed** `https://www.hltv.org/rss/news` (one shared request per
+  interval, at least the feed's `<ttl>`; no redirects, no cookies, bounded body; 403/429 are honoured and never bypassed).
+  It never downloads article, team, player or match pages, never follows the RSS link, never reads OpenGraph or images and
+  never uses unofficial HLTV packages. Only the headline, link and publication time are shown, with "Kaynak: HLTV". The
+  match-link feature below still makes **no** HLTV request. Details and the unverified terms question: [news/TSQ_NEWS.md](news/TSQ_NEWS.md).
 
 - TSQ Bot **does not** scrape HLTV HTML, bypass Cloudflare, automate a browser, use unofficial scraping libraries, call
   undocumented endpoints, guess match ids or construct HLTV URLs. PandaScore data is never presented as HLTV data.

@@ -87,13 +87,17 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   retry, no fallback model; refusals are private. Only members with at least one of the configured roles
   (`Summary:AllowedRoleIds`) may use it; in a channel or thread that already has a TSQ summary, at least 100 new member
   messages are required, and successful summaries of the same channel or thread are at least 2 minutes apart.
+- **TSQ Haber — Aurora · HLTV** (separate module, off by default and `News:Mode=Off`): HLTV news about Aurora's main CS2
+  team from the official HLTV RSS feed only — headline, link and publication time, once per article, to one configured
+  channel; matching by team name and current players in the RSS headline/description (the full article is never read);
+  baseline on first activation, corrections edit the same card, no pings. See [docs/news/TSQ_NEWS.md](docs/news/TSQ_NEWS.md).
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
 - **Opt-in pings**: role mentions only for roles an admin explicitly mapped; `allowed_mentions` is locked down. The only
   `@everyone` is TSQ Live's first announcement of a new stream session (never on edits, replacements or restarts).
 - **Honest data**: provider errors are never shown as "no matches", a passed start time is never "started", and
-  HLTV is never scraped (only verified match-page links are shown).
+  HLTV is never scraped (only verified match-page links are shown; the only HLTV request is TSQ Haber's official RSS feed).
 - **Durable delivery**: persistent outbox with de-duplication, crash recovery and ambiguous-delivery reconciliation.
 - **Privacy**: `/privacy export` and `/privacy delete`, data retention after the bot leaves a server.
 - Turkish by default with English fallback; Europe/Istanbul default time zone.
@@ -133,7 +137,7 @@ Commands are registered per server (guild commands) with a dry-run first. Permis
 | **PandaScore** | Default match data (fixtures, live state, results). A free plan exists; a token is required. |
 | **Valve Regional Standings** | Rankings for `/esports rankings` and VRS filters. |
 | **Liquipedia** | Only used to find the editor-entered HLTV match id for a match page: LiquipediaDB with an approved key, otherwise the free MediaWiki API (API only, rate-limited, cached). |
-| **HLTV** | Never scraped or contacted. A "Maç Sayfası" link appears only when Liquipedia has the match's HLTV id. |
+| **HLTV** | Never scraped; never contacted for match data. A "Maç Sayfası" link appears only when Liquipedia has the match's HLTV id. The only HLTV request is the official RSS news feed, read by TSQ Haber (headlines and links only). |
 
 HLTV links are fully automatic; there is no manual link workflow. Limits, terms and attribution:
 [docs/PROVIDERS.md](docs/PROVIDERS.md).
