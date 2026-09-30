@@ -76,7 +76,7 @@ public sealed partial class BirthdayArchitectureTests
         File.ReadAllText(Path.Combine(Root(), "Application", "BirthdayAnnouncementRenderer.cs"))
             .Should().Contain("new OutgoingMessage(text, null, MentionPolicy.ExplicitUsers(named))");
         // Every command reply stays private and ping-free (the base class sends with MentionPolicy.None).
-        foreach (var file in new[] { "BirthdayCommands.cs", "BirthdayAdminCommands.cs" })
+        foreach (var file in new[] { "BirthdayCommands.cs", "BirthdayAdminOperations.cs" })
             File.ReadAllText(Path.Combine(Root(), "Commands", file)).Should().NotMatchRegex(@"\b(RespondAsync|FollowupAsync)\(", file);
     }
 
@@ -92,22 +92,25 @@ public sealed partial class BirthdayArchitectureTests
     [Fact]
     public void Admin_show_answers_privately_without_pings_and_shares_the_set_authorization_and_member_check()
     {
-        var commands = File.ReadAllText(Path.Combine(Root(), "Commands", "BirthdayAdminCommands.cs"));
-        var start = commands.IndexOf("public async Task ShowAsync(", StringComparison.Ordinal);
+        var commands = File.ReadAllText(Path.Combine(Root(), "Commands", "BirthdayAdminOperations.cs"));
+        var start = commands.IndexOf("private async Task ShowMemberAsync(", StringComparison.Ordinal);
         start.Should().BePositive();
-        var body = commands[start..commands.IndexOf("private bool IsHumanMemberHere", start, StringComparison.Ordinal)];
-        // Only the base class's private, ping-free replies; no public answer, no allowed_mentions of its own.
+        var body = commands[start..commands.IndexOf("private static string Mention", start, StringComparison.Ordinal)];
+        // Only the responder's private default (ephemeral, no pings); no public answer, no allowed_mentions of its own.
         Regex.Matches(body, @"\b(\w+Async)\(").Select(m => m.Groups[1].Value).Distinct()
-            .Should().BeEquivalentTo("ShowAsync", "DeferEphemeralAsync", "GetForMemberAsync", "ReplyResultAsync", "ReplyTextAsync", "DateTextAsync");
+            .Should().BeEquivalentTo("ShowMemberAsync", "GetForMemberAsync", "DescribeAsync", "FinishTextAsync", "SendAsync");
         body.Should().NotContain("ephemeral: false").And.NotContain("AllowedMentions").And.NotContain("MentionPolicy");
-        body.Should().Contain("IsHumanMemberHere(member)");
-        commands.Should().Contain("birthdays.SetForMemberAsync(Actor, new UserId(member.Id), IsHumanMemberHere(member)", "set and show share the member check");
+        body.Should().Contain("birthdays.GetForMemberAsync(call.Actor, new UserId(member.Id), member.IsHumanMemberHere");
+        commands.Should().Contain("birthdays.SetForMemberAsync(call.Actor, new UserId(member.Id), member.IsHumanMemberHere", "set and show share the member check");
+        commands.Should().Contain(".Op(\"show\", (h, c) => h.ShowAsync(c), AdminFields.User, BirthdayService.SetForMemberPermission)", "the router refuses Manage Server alone too");
 
-        // The base class: ReplyTextAsync -> SendEphemeralAsync -> ephemeral, allowed_mentions = none.
+        // The admin responder: private by default and sent through the base class, whose allowed_mentions are none.
+        File.ReadAllText(Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Discord", "Admin", "AdminCall.cs"))
+            .Should().Contain("Task SendAsync(string? text, MessageEmbed? embed = null, MessageComponent? components = null, bool ephemeral = true);");
+        File.ReadAllText(Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Discord", "Commands", "Core", "TsqAdminCommands.cs"))
+            .Should().Contain("SendAsync(text, embed is null ? null : DiscordConversions.ToEmbed(embed), components, ephemeral)");
         var baseClass = File.ReadAllText(Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Discord", "Interactions", "ToroInteractionModule.cs")).ReplaceLineEndings("\n");
-        baseClass.Should().Contain("protected async Task ReplyTextAsync(string key, params object?[] args) =>\n        await SendEphemeralAsync(")
-            .And.Contain("SendAsync(text, embed, components, ephemeral: true)")
-            .And.Contain("var none = DiscordConversions.ToAllowedMentions(MentionPolicy.None);");
+        baseClass.Should().Contain("var none = DiscordConversions.ToAllowedMentions(MentionPolicy.None);");
         var none = ToroSquad.Discord.Transport.DiscordConversions.ToAllowedMentions(ToroSquad.Core.Messaging.MentionPolicy.None);
         none.AllowedTypes.Should().Be(global::Discord.AllowedMentionTypes.None);
         none.UserIds.Should().BeNullOrEmpty();

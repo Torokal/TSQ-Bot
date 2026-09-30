@@ -101,7 +101,7 @@ public sealed partial class F1CommandResponsesTests
     public void Admin_answers_are_never_public_and_only_the_intended_f1_commands_are()
     {
         var root = CommandManifestTests.RepoRoot();
-        var admin = File.ReadAllText(Path.Combine(root, "src", "ToroSquad.Modules.Formula1", "Commands", "Formula1AdminCommands.cs"));
+        var admin = File.ReadAllText(Path.Combine(root, "src", "ToroSquad.Modules.Formula1", "Commands", "Formula1AdminOperations.cs"));
         admin.Should().NotContain("ephemeral: false").And.NotContain("F1CommandReply").And.NotContain("Public(");
 
         var commands = File.ReadAllText(Path.Combine(root, "src", "ToroSquad.Modules.Formula1", "Commands", "Formula1Commands.cs"));
