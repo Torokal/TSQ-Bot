@@ -47,6 +47,12 @@ public sealed class NewsPlanner(
     public const string FeedKey = "hltv-rss";
     public const string ArticleKind = "article";
 
+    /// <summary>
+    /// Kind of a DryRun card. The delivery policy only sees guild, channel and kind (it runs before the outbox looks at
+    /// IsDryRun), so the kind tells it which cards may still be simulated when News:Mode is DryRun.
+    /// </summary>
+    public const string DryRunArticleKind = "article-dry";
+
     public static string SourceKey(long articleId) => NewsArticle.Source + ":" + articleId.ToString(CultureInfo.InvariantCulture);
 
     public bool DryRun => options.Value.Mode == NewsMode.DryRun || delivery.Value.Mode != DeliveryMode.Send;
@@ -218,6 +224,7 @@ public sealed class NewsPlanner(
                 continue;
             var channel = new ChannelId(config.ChannelId!.Value);
             var language = (await guildSettings.GetAsync(guild, ct)).Language;
+            var kind = dryRun ? DryRunArticleKind : ArticleKind;
             DateTimeOffset since;
             if (dryRun)
                 since = config.DryRunSince ??= now;
@@ -244,7 +251,7 @@ public sealed class NewsPlanner(
             foreach (var article in candidates)
             {
                 var message = renderer.Render(article.Url, article.Title!, article.PublishedAt, language, null);
-                var result = await outbox.StageAsync(new NotificationRequest(guild, NewsModule.ModuleIdTyped, SourceKey(article.ArticleId), channel, ArticleKind,
+                var result = await outbox.StageAsync(new NotificationRequest(guild, NewsModule.ModuleIdTyped, SourceKey(article.ArticleId), channel, kind,
                     message, now + TimeSpan.FromHours(o.CatchUpHours), dryRun), ct);
                 deliveries.Add(new NewsDeliveryEntity
                 {
@@ -253,7 +260,7 @@ public sealed class NewsPlanner(
                     ArticleId = article.ArticleId,
                     DryRun = dryRun,
                     ChannelId = channel.Value,
-                    Kind = ArticleKind,
+                    Kind = kind,
                     StagedAt = now,
                 });
                 staged++;

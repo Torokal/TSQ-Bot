@@ -226,13 +226,27 @@ public sealed class NewsConfigService(
     }
 }
 
-/// <summary>Checked by the outbox dispatcher right before each send/edit (the module gate is checked by the dispatcher itself).</summary>
-public sealed class NewsDeliveryPolicy(ToroDbContext db, TimeProvider clock) : IDeliveryPolicy
+/// <summary>
+/// Checked by the outbox dispatcher right before each send, edit and post-reconciliation resend (after the module gate,
+/// BEFORE the dispatcher looks at IsDryRun). News:Mode applies to cards already queued: Off cancels every News card and
+/// drops every queued News edit; DryRun does the same for live cards (kind <see cref="NewsPlanner.ArticleKind"/>) and lets
+/// DryRun cards (kind <see cref="NewsPlanner.DryRunArticleKind"/>) through to the simulation. Cancelled cards are terminal:
+/// they are not sent when the mode is Live again. A message that already reached Discord is never taken back.
+/// </summary>
+public sealed class NewsDeliveryPolicy(ToroDbContext db, IOptions<NewsOptions> options, TimeProvider clock) : IDeliveryPolicy
 {
     public ModuleId Module => NewsModule.ModuleIdTyped;
 
     public async Task<DeliveryDecision> CanDeliverAsync(GuildId guild, ChannelId channel, string kind, CancellationToken cancellationToken)
     {
+        switch (options.Value.Mode)
+        {
+            case NewsMode.Off:
+                return new DeliveryDecision.Cancel("news_mode_off");
+            case NewsMode.DryRun when kind != NewsPlanner.DryRunArticleKind:
+                return new DeliveryDecision.Cancel("news_mode_dry_run");
+        }
+
         var config = await db.Set<NewsGuildConfigEntity>().AsNoTracking().FirstOrDefaultAsync(c => c.GuildId == guild.Value, cancellationToken);
         if (config?.ChannelId is null)
             return new DeliveryDecision.Cancel("not_configured");
