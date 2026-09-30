@@ -174,7 +174,7 @@ public sealed class AutoFootballService(
     {
         var rows = await store.AutoEvents.AsNoTracking().Where(a => a.State == AutoEventState.Publishing && a.PredictionId != null)
             .Join(store.Predictions.AsNoTracking(), a => a.PredictionId, p => (long?)p.Id, (a, p) => new { a.Id, p.Status })
-            .Where(x => x.Status != PredictionStatus.Publishing).Take(Batch).ToListAsync(ct);
+            .Where(x => x.Status != PredictionStatus.Publishing).OrderBy(x => x.Id).Take(Batch).ToListAsync(ct);
         foreach (var row in rows)
         {
             var (state, why) = row.Status == PredictionStatus.Abandoned
