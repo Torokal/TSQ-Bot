@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "9a672cd49ef9c15ce799f9afd5365c445fa4c0a41adbebeca571ae0e0a476304",
+  "hash": "993b008795a13d42ff5578a6cf9ea10e69a1d0ccd03196d4c0af7de4d44a69ba",
   "commands": [
     {
       "module": "quote",
@@ -1737,6 +1737,90 @@
                 "autocomplete": true
               }
             ]
+          }
+        ]
+      }
+    },
+    {
+      "module": "news",
+      "payload": {
+        "type": 1,
+        "name": "news-admin",
+        "description": "Aurora HLTV news (admins)",
+        "description_localizations": {
+          "tr": "Aurora HLTV haberleri (yöneticiler)"
+        },
+        "default_member_permissions": "32",
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 1,
+            "name": "configure",
+            "description": "Channel for the Aurora HLTV news cards",
+            "description_localizations": {
+              "tr": "Aurora HLTV haber kartlarının gönderileceği kanal"
+            },
+            "options": [
+              {
+                "type": 7,
+                "name": "channel",
+                "description": "News channel",
+                "description_localizations": {
+                  "tr": "Haber kanalı"
+                },
+                "required": true,
+                "channel_types": [
+                  0,
+                  5
+                ]
+              }
+            ]
+          },
+          {
+            "type": 1,
+            "name": "pause",
+            "description": "Stop posting news (news of the pause is skipped)",
+            "description_localizations": {
+              "tr": "Haber gönderimini duraklat (duraklatma sırasındaki haberler atlanır)"
+            }
+          },
+          {
+            "type": 1,
+            "name": "resume",
+            "description": "Post news again (only news from now on)",
+            "description_localizations": {
+              "tr": "Haber gönderimini sürdür (yalnızca bundan sonraki haberler)"
+            }
+          },
+          {
+            "type": 1,
+            "name": "preview",
+            "description": "Show a news card privately (nothing is posted)",
+            "description_localizations": {
+              "tr": "Bir haber kartını yalnızca sana göster (kanala gönderilmez)"
+            }
+          },
+          {
+            "type": 1,
+            "name": "status",
+            "description": "News module settings and the feed's state",
+            "description_localizations": {
+              "tr": "Haber modülü ayarları ve akış durumu"
+            }
+          },
+          {
+            "type": 1,
+            "name": "doctor",
+            "description": "Check channel, permissions, feed, roster and coverage",
+            "description_localizations": {
+              "tr": "Kanal, izinler, akış, kadro ve kapsam kontrolü"
+            }
           }
         ]
       }

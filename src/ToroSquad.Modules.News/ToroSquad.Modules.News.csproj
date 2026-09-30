@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TSQ News: forwards HLTV news about Aurora's main CS2 team from the official HLTV RSS feed (headline + link only) to one
+       configured channel. Depends on the shared TSQ layers only (never on another feature module). Domain, Providers,
+       Application and Persistence must not use the Discord SDK (architecture tests); only Commands talks to Discord.Net. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Infrastructure\ToroSquad.Infrastructure.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.News.Localization.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
