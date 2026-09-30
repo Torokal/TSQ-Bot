@@ -1,13 +1,14 @@
 namespace ToroSquad.Modules.Timezone.Application;
 
 /// <summary>
-/// A time zone the entered time can be read in: the value autocomplete sends (<see cref="Key"/>), the IANA id, the
-/// localization key of its label on the card and the names people type for it.
+/// A time zone /saat knows by name — as the source (<c>timezone</c>) or the single target (<c>to</c>): the value autocomplete
+/// sends (<see cref="Key"/>), the IANA id, the localization key of its label, its flag on a target row and the names people
+/// type for it.
 /// </summary>
-public sealed record SourceZone(string Key, string ZoneId, string NameKey, IReadOnlyList<string> Aliases);
+public sealed record SourceZone(string Key, string ZoneId, string NameKey, string Flag, IReadOnlyList<string> Aliases);
 
 /// <summary>
-/// The /saat <c>timezone</c> option. Every alias names a <b>zone</b>, never an offset: <c>pdt</c>, <c>pst</c> and <c>pt</c> all
+/// The one catalog of named zones, used by both the <c>timezone</c> and the <c>to</c> option. Every alias names a <b>zone</b>, never an offset: <c>pdt</c>, <c>pst</c> and <c>pt</c> all
 /// mean America/Los_Angeles, and <see cref="TimeZoneInfo"/> decides whether that date is on PST or PDT (same for EST/EDT,
 /// CST/CDT, GMT/BST). That is also why the card labels a zone by place and region ("Los Angeles (Pacific Time)"), not by an
 /// abbreviation that could be wrong for the date. Matching ignores case and surrounding whitespace; the IANA id itself is
@@ -20,12 +21,13 @@ public static class SourceTimeZones
 
     public static IReadOnlyList<SourceZone> All { get; } =
     [
-        new("tr", "Europe/Istanbul", "timezone.zone.turkey", ["tr", "turkey", "turkiye", "türkiye", "istanbul"]),
-        new("uk", "Europe/London", "timezone.zone.uk", ["uk", "gb", "london", "gmt", "bst"]),
-        new("ny", "America/New_York", "timezone.source.eastern", ["ny", "et", "est", "edt", "eastern", "newyork", "new_york"]),
-        new("chicago", "America/Chicago", "timezone.source.central", ["chicago", "ct", "cst", "cdt", "central"]),
-        new("la", "America/Los_Angeles", "timezone.source.pacific", ["la", "pt", "pst", "pdt", "pacific", "losangeles", "los_angeles"]),
-        new("utc", "UTC", "timezone.source.utc", ["utc"]),
+        new("tr", "Europe/Istanbul", "timezone.zone.turkey", "🇹🇷", ["tr", "turkey", "turkiye", "türkiye", "istanbul"]),
+        new("uk", "Europe/London", "timezone.zone.uk", "🇬🇧", ["uk", "gb", "london", "gmt", "bst"]),
+        new("ny", "America/New_York", "timezone.source.eastern", "🇺🇸", ["ny", "et", "est", "edt", "eastern", "newyork", "new_york"]),
+        new("chicago", "America/Chicago", "timezone.source.central", "🇺🇸", ["chicago", "ct", "cst", "cdt", "central"]),
+        new("la", "America/Los_Angeles", "timezone.source.pacific", "🇺🇸", ["la", "pt", "pst", "pdt", "pacific", "losangeles", "los_angeles"]),
+        new("tokyo", "Asia/Tokyo", "timezone.source.tokyo", "🇯🇵", ["tokyo", "japan", "jp", "jst"]),
+        new("utc", "UTC", "timezone.source.utc", "🌐", ["utc"]),
     ];
 
     public static SourceZone Default => All[0];

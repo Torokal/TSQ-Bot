@@ -11,7 +11,7 @@ using ToroSquad.Modules.Timezone.Application;
 namespace ToroSquad.Modules.Timezone.Commands;
 
 /// <summary>
-/// Suggestions for /saat's <c>timezone</c> option: the six source zones, labelled in the guild's language, filtered by what
+/// Suggestions for /saat's <c>timezone</c> and <c>to</c> options (one catalog, <see cref="SourceTimeZones"/>): the named zones, labelled in the guild's language, filtered by what
 /// was typed (a name or an alias such as <c>pdt</c>). The value sent is the zone's key; any alias typed without picking a
 /// suggestion works too. From memory only — never slow, never deferred; nothing while the module is disabled (as the Esports
 /// autocomplete).

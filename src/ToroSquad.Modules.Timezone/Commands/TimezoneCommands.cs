@@ -21,12 +21,16 @@ public sealed class TimezoneCommands(InteractionServices services, TimezoneCards
 {
     [SlashCommand("saat", "Convert a time to other time zones")]
     public async Task ConvertAsync(
-        [Summary("time", "Time, e.g. 21:00 or 9.30 (today; Türkiye time unless a time zone is given)"), MinLength(1), MaxLength(ClockInput.MaxInputLength)] string time,
+        [Summary("time", "Time or now, e.g. 21:00, 9.30 or now (Türkiye time unless a time zone is given)"), MinLength(1), MaxLength(ClockInput.MaxInputLength)] string time,
         [Summary("timezone", "Time zone of the entered time (default: Türkiye), e.g. tr, pdt, est, uk, utc"), MaxLength(SourceTimeZones.MaxInputLength),
-         Autocomplete(typeof(SourceZoneAutocomplete))] string? timezone = null)
+         Autocomplete(typeof(SourceZoneAutocomplete))] string? timezone = null,
+        [Summary("date", "Date, e.g. 15.11 or 15.11.2026 (default: today in that time zone)"), MaxLength(DateInput.MaxInputLength)] string? dateText = null,
+        [Summary("to", "Convert only to this time zone, e.g. tr, uk, est, pdt, tokyo"), MaxLength(SourceTimeZones.MaxInputLength),
+         Autocomplete(typeof(SourceZoneAutocomplete))] string? target = null)
     {
-        logger.LogDebug("Timezone /saat guild={Guild} user={User} input_length={Length} zone_given={ZoneGiven}", Actor.GuildId, Actor.UserId, time.Length, timezone is not null);
-        await AnswerAsync(cards.Convert(await LangAsync(), time, Services.Clock.GetUtcNow(), DisplayName(), timezone));
+        logger.LogDebug("Timezone /saat guild={Guild} user={User} input_length={Length} zone_given={ZoneGiven} date_given={DateGiven} to_given={ToGiven}",
+            Actor.GuildId, Actor.UserId, time.Length, timezone is not null, dateText is not null, target is not null);
+        await AnswerAsync(cards.Convert(await LangAsync(), time, Services.Clock.GetUtcNow(), DisplayName(), timezone, dateText, target));
     }
 
     private Task AnswerAsync(TimezoneReply reply) =>
