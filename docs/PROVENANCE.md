@@ -69,7 +69,7 @@ technical record, not legal advice.
 | Liquipedia (MediaWiki API) — automatic HLTV-link fallback | API terms: ≤ 1 request / 2 s, contact User-Agent, gzip, no automated HTML access; CC BY-SA 3.0 | Only `action=query` (search + revisions) for followed-team matches, cached; cards with a Liquipedia-sourced link say "Link: Liquipedia" in the footer |
 | HLTV | Not used as a match data source (no scraping, no unofficial endpoints, no requests for match data) | Only match-page URLs built from Liquipedia's editor-entered HLTV match id are linked; pages are never fetched |
 | HLTV (official RSS news feed) — TSQ Haber | HLTV ToS (effective 2025-01-27): personal limited licence, no commercial exploitation, no data mining/scraping; no RSS-specific permission found (**NOT_VERIFIED**) | Headline, link and publication time only, footer "Kaynak: HLTV"; no article text, quotes or images; off by default, live posting is the owner's decision |
-| Liquipedia (MediaWiki API) — TSQ Haber roster | Same API terms as above; CC BY-SA 3.0 | At most one `action=query` request per day for the team's Active squad; names used for matching only, never displayed |
+| Liquipedia (MediaWiki API) — TSQ Haber roster | Same API terms as above; CC BY-SA 3.0 | At most one automatic `action=query` request per 24 h for the team's Active squad (the manual `news check --roster` CLI is separate); names used for matching only, never displayed |
 | Valve regional standings | Public GitHub repo, **no license file**; data credits HLTV.org | Displayed with source, date and attribution only; no bulk redistribution; synthetic fixtures in tests |
 
 ## Contact with the upstream developer
