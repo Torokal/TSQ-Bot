@@ -40,7 +40,8 @@ public sealed record MentionPolicy(
 
     /// <summary>
     /// Exactly these users may be pinged (no roles, no @everyone/@here). Only for TSQ LFG event notices to confirmed players,
-    /// the TSQ Birthday announcement to that day's celebrants and the TSQ Giveaway announcement to that draw's winners.
+    /// the TSQ Birthday announcement to that day's celebrants, the TSQ Giveaway announcement to that draw's winners and the
+    /// TSQ Öngörü settlement announcement to the winners it lists.
     /// </summary>
     public static MentionPolicy ExplicitUsers(IEnumerable<UserId> users)
     {
