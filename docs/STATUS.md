@@ -326,6 +326,11 @@ invite link and no global command registration. The source code is public under 
   (e.g. every prediction cancelled) never blocks it; participants = members with an entry. No schema change.
   **IMPLEMENTED / TESTED_OFFLINE**, deployed with a clean start. **NOT VERIFIED_LIVE**: the private personal-rank note in
   Discord.
+- Settlement announcement + settling with the creator role (branch `feat/predictions-settlement-announcement`, not
+  pushed): any holder of the creator role (or Administrator/owner) may settle any prediction, automatic ones included; lock
+  and cancel are unchanged. A settled prediction posts a public result announcement to the commands channel (winners'
+  net gains, total payout, pings only for the listed winners, "nobody won", up to 5 parts of 15 winners), staged with the
+  settlement in one transaction. No schema change. **IMPLEMENTED / TESTED_OFFLINE**.
 
 ## TSQ Öngörü automatic football (PR #40 merged `82b98d2`, deployed 2026-09-30; `Mode=Live` in production)
 

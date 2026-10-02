@@ -160,8 +160,8 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
 - Otomatik öngörünün insan yaratıcısı yoktur: `Origin = AutoFootball`, `CreatorUserId = 0`. Bota ya da ayarlayan admine
   cüzdan, başlangıç coini veya liderlik uygunluğu verilmez (öngörü oluşturmak kimseye uygunluk vermez). Gerçek oyuncular
   tahminleri sonuçlandığında mevcut kurala göre uygun olur.
-- Yönetim: yalnızca **Administrator veya sunucu sahibi**. Yaratıcı rolü tek başına otomatik kartları yönetemez; manuel
-  kartların kuralları değişmedi.
+- Yönetim: **sonuçlandırma** yaratıcı rolü, Administrator veya sunucu sahibi; **kilitleme ve iptal** yalnızca Administrator
+  veya sunucu sahibi (yaratıcı rolü otomatik kartları kilitleyemez/iptal edemez).
 - Tekillik: `GuildId + Provider + ExternalEventId + MarketKind (+ Mode)` veritabanında benzersiz; turnuva anahtarın
   parçası değildir — yeni turnuva, restart, deploy, iki süreç veya derbi aynı maçı ikinci kez açmaz. Yönetici kartı iptal
   ederse maç yeniden açılmaz. Keşfedilmiş ama açılmamış maç turnuva bitirmeyi engellemez; açılan (Publishing/Open/Locked)
