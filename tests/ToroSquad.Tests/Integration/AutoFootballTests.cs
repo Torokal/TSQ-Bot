@@ -167,6 +167,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         // A real member plays exactly as on a manual card; the automation never appears on the boards.
         (await _kit.EnterAsync(Member(1), view, 3, "100")).Result.MessageKey.Should().Be("predictions.entry.done");
         (await _kit.WalletAsync(1))!.PendingMinor.Should().Be(10_000);
+        (await _kit.SettleAsync(Admin(), view, 3)).Result.Succeeded.Should().BeTrue(); // the boards list members with a settled entry
         var board = await _kit.Economy(e => e.LeaderboardAsync(Member(50), Commands, Ct));
         board.View!.Embed!.Fields[0].Value.Should().Contain("<@1>").And.NotContain("<@0>");
         (await _kit.Db(db => db.Set<PredictionWalletEntity>().CountAsync())).Should().Be(1);

@@ -46,7 +46,7 @@ public sealed class PredictionWeeklyLeaderboardTests : IAsyncLifetime
         return await _kit.Db(db => db.Set<PredictionTournamentEntity>().Where(t => t.Status == PredictionTournamentStatus.Active).Select(t => t.Id).SingleAsync());
     }
 
-    /// <summary>Eligible members (creator route: a cancelled prediction each made) with chosen coins, in the active tournament.</summary>
+    /// <summary>Eligible members (one settled entry each, as the settlement leaves the wallet) with chosen coins, in the active tournament.</summary>
     private async Task SeedAsync(params (ulong User, long Coins)[] members)
     {
         var tournament = await TournamentAsync();
@@ -60,19 +60,9 @@ public sealed class PredictionWeeklyLeaderboardTests : IAsyncLifetime
                     GuildId = Guild.Value,
                     UserId = user,
                     BalanceMinor = coins * 100,
+                    SettledCount = 1,
                     CreatedAt = TestHost.T0,
                     UpdatedAt = TestHost.T0,
-                });
-                db.Add(new PredictionEntity
-                {
-                    GuildId = Guild.Value,
-                    TournamentId = tournament,
-                    ChannelId = Predictions.Value,
-                    CreatorUserId = user,
-                    Title = "Seed",
-                    Status = PredictionStatus.Cancelled,
-                    PublishKey = "seed-" + tournament + "-" + user,
-                    CreatedAt = TestHost.T0,
                 });
             }
 
@@ -217,20 +207,34 @@ public sealed class PredictionWeeklyLeaderboardTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Wallet_or_daily_only_members_are_left_out_and_a_member_who_withdrew_is_listed_like_on_the_manual_board()
+    public async Task The_weekly_post_has_the_manual_boards_rows_with_the_same_eligibility_and_live_wealth()
     {
-        var prediction = await _kit.CreatePredictionAsync();
-        (await _kit.EnterAsync(Member(301), prediction, 1, "100")).Result.Succeeded.Should().BeTrue();
-        (await _kit.WithdrawAsync(Member(301), prediction)).Result.Succeeded.Should().BeTrue();
-        await _kit.Economy(e => e.ClaimDailyAsync(Member(302), Commands, "Üye 302", Ct));
-        (await _kit.CancelAsync(Creator(), prediction)).Result.Succeeded.Should().BeTrue();
+        await _kit.ParticipateAsync(303, 304); // settled entries (each lost 1 coin): eligible, 999
+        var open = await _kit.CreatePredictionAsync(title: "Açık öngörü");
+        (await _kit.EnterAsync(Member(301), open, 1, "100")).Result.Succeeded.Should().BeTrue();
+        (await _kit.WithdrawAsync(Member(301), open)).Result.Succeeded.Should().BeTrue(); // withdrawn only: not listed
+        await _kit.Economy(e => e.ClaimDailyAsync(Member(302), Commands, "Üye 302", Ct)); // daily only: not listed
+        (await _kit.EnterAsync(Member(303), open, 1, "500")).Result.Succeeded.Should().BeTrue(); // 499 available + 500 open = 999 live
 
         _kit.Host.Clock.SetUtcNow(Slot);
         await _kit.TickAsync();
         var weekly = Weekly().Single().Embed!;
         var manual = (await _kit.Economy(e => e.LeaderboardAsync(Member(99), Commands, Ct))).View!.Embed!;
-        weekly.Fields.Select(f => f.Value).Should().Equal(manual.Fields.Select(f => f.Value), "the same query and the same lines");
-        weekly.Fields[0].Value.Should().Contain("<@301>").And.Contain("<@10>").And.NotContain("<@302>");
+        weekly.Fields.Select(f => f.Value).Should().Equal(manual.Fields.Select(f => f.Value), "the same query, order and lines");
+        weekly.Fields[0].Value.Should().Be("🥇 <@303> — **999 TSQ Coin**\n🥈 <@304> — **999 TSQ Coin**");
+        weekly.Fields[0].Value.Should().NotContain("<@301>").And.NotContain("<@302>").And.NotContain("<@10>");
+    }
+
+    [Fact]
+    public async Task The_weekly_post_is_the_public_board_only_no_personal_rank_messages()
+    {
+        await SeedAsync([.. Enumerable.Range(1, 15).Select(i => ((ulong)(2000 + i), 3000L - i))]);
+        _kit.Host.Clock.SetUtcNow(Slot);
+        var sends = _kit.Transport.SendCalls;
+        await _kit.TickAsync();
+        _kit.Transport.SendCalls.Should().Be(sends + 1, "one public card, no message per member outside the Top 10");
+        Weekly().Single().Embed!.Fields.Should().HaveCount(2);
+        (await _kit.Db(db => db.Outbox.CountAsync())).Should().Be(1);
     }
 
     [Fact]
@@ -251,7 +255,7 @@ public sealed class PredictionWeeklyLeaderboardTests : IAsyncLifetime
     [Fact]
     public async Task A_tournament_ending_just_before_20_00_gives_one_post_from_the_new_active_tournament()
     {
-        await SeedAsync((1001, 1000), (1002, 900));
+        await _kit.ParticipateAsync(1001, 1002); // real entries, settled: tournament 1 has something to end
         _kit.Host.Clock.SetUtcNow(Slot - TimeSpan.FromMinutes(2));
         (await _kit.ConfirmEndAsync(Admin(), (await _kit.EndTokenAsync(Admin()))!)).Result.Succeeded.Should().BeTrue();
         await SeedAsync((3001, 1000)); // plays in tournament 2 at 19:59

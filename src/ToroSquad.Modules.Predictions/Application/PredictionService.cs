@@ -17,7 +17,8 @@ namespace ToroSquad.Modules.Predictions.Application;
 /// The answer to one step: a result (its message key is shown when there is no view) and optionally the message to show —
 /// private unless <see cref="Public"/>.
 /// </summary>
-public sealed record PredictionReply(OperationResult Result, OutgoingMessage? View = null, bool Public = false)
+/// <summary>A service answer: the result, its view (private unless <paramref name="Public"/>), and optionally a second, always private note for the member who asked.</summary>
+public sealed record PredictionReply(OperationResult Result, OutgoingMessage? View = null, bool Public = false, OutgoingMessage? Private = null)
 {
     public static implicit operator PredictionReply(OperationResult result) => new(result);
 }

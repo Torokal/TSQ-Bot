@@ -287,7 +287,7 @@ invite link and no global command registration. The source code is public under 
   `bitir` Administrator/owner only). Management lives on the card: 🎯 Tahmin Yap, 🔒 Kilitle, ✅ Sonuçlandır,
   ↩️ İptal / İade (creator with the role, Administrator or owner; checked server-side on every click). Entries: the form
   submit IS the entry (no second confirmation); while the prediction is open the member may ✏️ change outcome and stake
-  (only the difference moves) or ↩️ withdraw (stake back; entry kept as `Withdrawn`, still eligible). The public card no
+  (only the difference moves) or ↩️ withdraw (stake back; entry kept as `Withdrawn`). The public card no
   longer shows the tournament; each leaderboard shows at most 10. No coin reset command; `/privacy delete` keeps the game
   records. Migration `PredictionEntryLifecycle` (additive: `Revision`, `UpdatedAt` on `prediction_entry`). Tables `prediction_tournament`, `prediction_wallet`, `prediction`,
   `prediction_outcome`, `prediction_entry`, `prediction_ledger`, `prediction_daily_claim`, `prediction_standing` (additive
@@ -300,7 +300,7 @@ invite link and no global command registration. The source code is public under 
   math (rounding down, overflow), settle/cancel/no-winner, settle-vs-cancel race, daily reward (bounds, parallel claims,
   Türkiye midnight, no second claim after a tournament reset), tournament close (blocking, two admins, stale and expired
   confirmations, frozen podium, fresh 1000 wallets, announcement retry from the snapshot), leaderboards (tie order,
-  isolation, eligibility: entered or created in the active tournament), card-button authorization (creator lost role,
+  isolation, eligibility), card-button authorization (creator lost role,
   wrong message/channel, unauthorized clicks without side effects), parallel lock/settle/cancel, no coin reset path,
   deleted cards (replacement management card), failing cards, restart, module disable/enable, privacy export/delete,
   health lines.
@@ -315,6 +315,14 @@ invite link and no global command registration. The source code is public under 
   channel (default Sunday 20:00 Europe/Istanbul, 12 h catch-up, Top 10, nothing for an empty board) through the outbox;
   additive migration `PredictionsCardRetentionWeeklyBoard`. **IMPLEMENTED / TESTED_OFFLINE** (fake clock, real SQLite,
   fake Discord). Not deployed.
+- Leaderboard V2 (branch `feat/predictions-leaderboard-v2`, on top of the retention branch, not pushed): only members with
+  at least one settled own entry in the active tournament are ranked (creating, open/locked, withdrawn or refunded entries
+  and daily rewards never count); coins = live wealth (available + principal in unsettled entries); Top 10 per board;
+  `/ongoru liderlik` adds a private note with the asking member's own rank on each board where they are outside the Top 10
+  (counted in SQLite with the board orders) or "not ranked yet"; the weekly post uses the same boards without personal notes.
+  Ending a tournament is a separate rule (nothing unresolved, no pending stake, some activity): an empty leaderboard
+  (e.g. every prediction cancelled) never blocks it; participants = members with an entry. No schema change.
+  **IMPLEMENTED / TESTED_OFFLINE**.
 
 ## TSQ Öngörü automatic football (2026-09-29, local branch `feat/predictions-auto-football`, not pushed)
 

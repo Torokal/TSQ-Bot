@@ -85,7 +85,7 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         await using var second = await PredictionTestKit.CreateAsync(TestHost.T0.AddDays(1), directory: _kit.Host.Directory, transport: _kit.Transport);
         (await second.ClaimDailyAsync(Member(1))).Result.Succeeded.Should().BeTrue();
         (await second.Db(db => db.Set<PredictionLedgerEntity>().CountAsync(l => l.UserId == 1 && l.Kind == PredictionLedgerKind.Initial))).Should().Be(1);
-        (await second.WalletAsync(1))!.BalanceMinor.Should().Be(100_000 + 1_000 + 1_000);
+        (await second.WalletAsync(1))!.BalanceMinor.Should().Be(100_000 - 100 + 1_000 + 1_000); // the participation lost its 1 coin
     }
 
     [Fact]
@@ -270,9 +270,22 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_pending_stake_with_nothing_unresolved_refuses_the_end_instead_of_freezing_a_wrong_podium()
+    {
+        await _kit.ParticipateAsync(1);
+        var token = await _kit.EndTokenAsync(Admin());
+        await _kit.Db(db => db.Set<PredictionWalletEntity>().Where(w => w.UserId == 1).ExecuteUpdateAsync(s => s.SetProperty(w => w.PendingMinor, 5_000L))); // SYNTHETIC corruption
+
+        (await _kit.ConfirmEndAsync(Admin(), token!)).Result.MessageKey.Should().Be("predictions.tournament.pending_stakes");
+        (await _kit.Economy(e => e.PreviewTournamentEndAsync(Admin(), Commands, Ct))).Result.MessageKey.Should().Be("predictions.tournament.pending_stakes");
+        (await _kit.CountAsync<PredictionTournamentEntity>()).Should().Be(1);
+        (await _kit.CountAsync<PredictionStandingEntity>()).Should().Be(0);
+    }
+
+    [Fact]
     public async Task Closing_freezes_both_podiums_with_names_restarts_everyone_at_1000_keeps_the_archive_and_announces_the_frozen_values()
     {
-        var prediction = await _kit.CreatePredictionAsync(); // Creator(10), "Kaan": eligible by creating
+        var prediction = await _kit.CreatePredictionAsync(); // Creator(10), "Kaan": creating makes nobody eligible
         (await _kit.EnterAsync(Member(1), prediction, 1, "100")).Result.Succeeded.Should().BeTrue(); // wins 10
         (await _kit.EnterAsync(Member(2), prediction, 2, "50")).Result.Succeeded.Should().BeTrue(); // loses 50
         _kit.Random.Next.Enqueue(10);
@@ -284,9 +297,9 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         var fields = preview.View!.Embed!.Fields;
         preview.View.Embed.Title.Should().Be("🏁 Turnuva 1 bitirilsin mi?");
         preview.View.Embed.Description.Should().Contain("**1000 TSQ Coin**");
-        fields.Select(f => (f.Name, f.Value)).Skip(1).Take(3).Should().Equal(("Katılımcı", "3"), ("Öngörü", "1"), ("Sonuçlandırılmış", "1"));
-        fields[4].Value.Should().Be("🥇 <@1> — **1010 TSQ Coin**\n🥈 <@10> — **1000 TSQ Coin**\n🥉 <@2> — **950 TSQ Coin**");
-        fields[5].Value.Should().Be("🥇 <@1> — **1** doğru / 1 sonuçlanan (%100)\n🥈 <@2> — **0** doğru / 1 sonuçlanan (%0)\n🥉 <@10> — 0 doğru · Henüz sonuçlanmış tahmini yok");
+        fields.Select(f => (f.Name, f.Value)).Skip(1).Take(3).Should().Equal(("Katılımcı", "2"), ("Öngörü", "1"), ("Sonuçlandırılmış", "1"));
+        fields[4].Value.Should().Be("🥇 <@1> — **1010 TSQ Coin**\n🥈 <@2> — **950 TSQ Coin**");
+        fields[5].Value.Should().Be("🥇 <@1> — **1** doğru / 1 sonuçlanan (%100)\n🥈 <@2> — **0** doğru / 1 sonuçlanan (%0)");
         preview.View.Buttons!.Select(b => b.Label).Should().Equal("🏁 Turnuvayı Bitir", "Vazgeç");
 
         _kit.Transport.ScriptSend(() => new SendOutcome.Transient("503")); // the first delivery attempt fails
@@ -297,11 +310,11 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
 
         (await _kit.Db(db => db.Set<PredictionStandingEntity>().OrderBy(s => s.Board).ThenBy(s => s.Rank).ToListAsync()))
             .Select(s => (s.Board, s.Rank, s.UserId, s.DisplayName, s.BalanceMinor, s.CorrectCount)).Should().Equal(
-                (PredictionBoard.Coins, 1, 1UL, "Üye 1", 101_000L, 1), (PredictionBoard.Coins, 2, 10UL, "Kaan", 100_000L, 0), (PredictionBoard.Coins, 3, 2UL, "Üye 2", 95_000L, 0),
-                (PredictionBoard.Correct, 1, 1UL, "Üye 1", 101_000L, 1), (PredictionBoard.Correct, 2, 2UL, "Üye 2", 95_000L, 0), (PredictionBoard.Correct, 3, 10UL, "Kaan", 100_000L, 0));
+                (PredictionBoard.Coins, 1, 1UL, "Üye 1", 101_000L, 1), (PredictionBoard.Coins, 2, 2UL, "Üye 2", 95_000L, 0),
+                (PredictionBoard.Correct, 1, 1UL, "Üye 1", 101_000L, 1), (PredictionBoard.Correct, 2, 2UL, "Üye 2", 95_000L, 0));
         (await _kit.WalletAsync(1, oldTournament))!.BalanceMinor.Should().Be(101_000, "the old tournament's wallets stay as its archive");
         var closed = await _kit.Db(db => db.Set<PredictionTournamentEntity>().SingleAsync(t => t.Id == oldTournament));
-        (closed.Status, closed.FinalParticipantCount, closed.FinalPredictionCount, closed.ClosedByUserId).Should().Be((PredictionTournamentStatus.Closed, 3, 1, 20UL));
+        (closed.Status, closed.FinalParticipantCount, closed.FinalPredictionCount, closed.ClosedByUserId).Should().Be((PredictionTournamentStatus.Closed, 2, 1, 20UL));
 
         // The new tournament: everyone starts again at 1000 and plays; the announcement retry still shows the frozen values.
         var next = await _kit.CreatePredictionAsync(title: "Yeni turnuvanın ilk öngörüsü");
@@ -314,7 +327,7 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         var embed = announcement.Message.Embed!;
         embed.Title.Should().Be("🏁 TSQ Öngörü · Turnuva 1 Sona Erdi");
         embed.Fields.Select(f => f.Name).Should().Equal("💰 En Çok TSQ Coin", "🎯 En Çok Doğru Tahmin", "🔄 Yeni Turnuva Başladı");
-        embed.Fields[0].Value.Should().Be("🥇 **Üye 1** — **1010 TSQ Coin**\n🥈 **Kaan** — **1000 TSQ Coin**\n🥉 **Üye 2** — **950 TSQ Coin**");
+        embed.Fields[0].Value.Should().Be("🥇 **Üye 1** — **1010 TSQ Coin**\n🥈 **Üye 2** — **950 TSQ Coin**");
         embed.Fields[1].Value.Should().StartWith("🥇 **Üye 1** — **1** doğru / 1 sonuçlanan (%100)");
         embed.Fields[2].Value.Should().Be("Herkes yeni turnuvaya 1000 TSQ Coin ile başlar.");
         string.Join("", embed.Fields.Select(f => f.Value)).Should().NotContain("<@", "no mention in the announcement");
@@ -330,10 +343,11 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         var prediction = await _kit.CreatePredictionAsync();
         (await _kit.OpenEntryAsync(Member(1), prediction)).Form.Should().NotBeNull();
         (await _kit.CancelAsync(Creator(), prediction)).Result.Succeeded.Should().BeTrue();
+        await _kit.ParticipateAsync(5); // someone with a settled entry to end the tournament for
         (await _kit.ConfirmEndAsync(Admin(), (await _kit.EndTokenAsync(Admin()))!)).Result.Succeeded.Should().BeTrue();
 
         (await _kit.SubmitEntryAsync(Member(1), prediction, 1, "100")).Result.MessageKey.Should().Be("predictions.entry.closed");
-        (await _kit.CountAsync<PredictionEntryEntity>()).Should().Be(0);
+        (await _kit.Db(db => db.Set<PredictionEntryEntity>().CountAsync(e => e.UserId == 1))).Should().Be(0);
         (await _kit.WalletAsync(1)).Should().BeNull();
     }
 
@@ -352,9 +366,9 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         var frozen = await _kit.Db(db => db.Set<PredictionStandingEntity>().SingleAsync(s => s.Board == PredictionBoard.Coins && s.UserId == 1));
         frozen.BalanceMinor.Should().Be(archived.BalanceMinor + archived.PendingMinor, "the frozen value is the archived one");
         if (claim.TournamentId == old.Id)
-            archived.BalanceMinor.Should().Be(101_000);
+            archived.BalanceMinor.Should().Be(100_900); // 1000 - the lost 1 coin + the 10-coin claim
         else
-            ((await _kit.WalletAsync(1, tournaments[1].Id))!.BalanceMinor, archived.BalanceMinor).Should().Be((101_000L, 100_000L));
+            ((await _kit.WalletAsync(1, tournaments[1].Id))!.BalanceMinor, archived.BalanceMinor).Should().Be((101_000L, 99_900L));
     }
 
     [Fact]
@@ -387,12 +401,16 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
     private async Task<long> ActiveTournamentAsync() =>
         await _kit.Db(db => db.Set<PredictionTournamentEntity>().Where(t => t.Status == PredictionTournamentStatus.Active).Select(t => t.Id).SingleAsync());
 
-    /// <summary>Wallets with chosen numbers; eligible ones also get a cancelled prediction they created (the creator route).</summary>
+    /// <summary>
+    /// Wallets with chosen numbers (SYNTHETIC counters, as the settlement would leave them): eligible = at least one settled
+    /// entry, so the data must say so — an eligible wallet has Settled ≥ 1, an ineligible one Settled 0.
+    /// </summary>
     private async Task SeedAsync(long tournamentId, params (ulong User, long Balance, long Pending, int Correct, int Settled, bool Eligible)[] wallets) =>
         await _kit.Db(async db =>
         {
             foreach (var w in wallets)
             {
+                (w.Settled > 0).Should().Be(w.Eligible, "eligibility is a settled entry (user {0})", w.User);
                 db.Add(new PredictionWalletEntity
                 {
                     TournamentId = tournamentId,
@@ -406,20 +424,6 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
                     CreatedAt = TestHost.T0,
                     UpdatedAt = TestHost.T0,
                 });
-                if (w.Eligible)
-                {
-                    db.Add(new PredictionEntity
-                    {
-                        GuildId = Guild.Value,
-                        TournamentId = tournamentId,
-                        ChannelId = Predictions.Value,
-                        CreatorUserId = w.User,
-                        Title = "Seed",
-                        Status = PredictionStatus.Cancelled,
-                        PublishKey = "seed-" + tournamentId + "-" + w.User,
-                        CreatedAt = TestHost.T0,
-                    });
-                }
             }
 
             return await db.SaveChangesAsync();
@@ -430,23 +434,35 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
 
     private static List<string> Order(string field) => field.Split('\n').Select(l => l.Split(' ')[1]).ToList();
 
+    private const string Empty = "Henüz bu turnuvada tahmini sonuçlanmış kimse yok.";
+
     [Fact]
-    public async Task Wallet_only_and_daily_only_members_are_not_on_the_boards_an_entry_or_a_created_prediction_is()
+    public async Task Only_members_with_a_settled_own_entry_are_on_the_boards_won_or_lost()
     {
         await _kit.OpenFormAsync(); // tournament 1
-        await SeedAsync(await ActiveTournamentAsync(), (5, 5000, 0, 0, 0, false)); // 1: a wallet without prediction activity (even 5000 coins)
-        (await ClaimAsync(6)).Result.Succeeded.Should().BeTrue(); // 2: daily only
-        var empty = (await BoardsAsync())[0];
-        empty.Fields.Select(f => f.Value).Should().Equal("Henüz bu turnuvada tahmin yapan veya öngörü oluşturan yok.", "Henüz bu turnuvada tahmin yapan veya öngörü oluşturan yok."); // 10
+        await SeedAsync(await ActiveTournamentAsync(), (5, 5000, 0, 0, 0, false)); // A: a wallet only (even 5000 coins)
+        (await ClaimAsync(6)).Result.Succeeded.Should().BeTrue(); // B: daily only
+        var open = await _kit.CreatePredictionAsync(creator: Creator(7)); // C: creator only
+        (await _kit.EnterAsync(Member(8), open, 1, "100")).Result.Succeeded.Should().BeTrue(); // D: an open entry
+        var locked = await _kit.CreatePredictionAsync(title: "Kilitlenecek öngörü");
+        (await _kit.EnterAsync(Member(9), locked, 1, "100")).Result.Succeeded.Should().BeTrue();
+        (await _kit.LockAsync(Creator(), locked)).Succeeded.Should().BeTrue(); // E: a locked, unresolved entry
+        (await _kit.EnterAsync(Member(11), open, 2, "50")).Result.Succeeded.Should().BeTrue();
+        (await _kit.WithdrawAsync(Member(11), open)).Result.Succeeded.Should().BeTrue(); // F: withdrawn only
+        var cancelled = await _kit.CreatePredictionAsync(title: "İptal edilecek öngörü");
+        (await _kit.EnterAsync(Member(12), cancelled, 1, "100")).Result.Succeeded.Should().BeTrue();
+        (await _kit.CancelAsync(Creator(), cancelled)).Result.Succeeded.Should().BeTrue(); // G: refunded only
+        (await BoardsAsync())[0].Fields.Select(f => f.Value).Should().Equal(Empty, Empty);
+        (await _kit.Economy(e => e.TournamentStatusAsync(Member(1), Commands, Ct))).View!.Embed!.Fields.Single(f => f.Name == "Katılımcı").Value
+            .Should().Be("4", "participants are members with an entry (8, 9, 11, 12), not the leaderboard");
 
-        var prediction = await _kit.CreatePredictionAsync(creator: Creator(7)); // 4: creator, no entry
-        (await _kit.EnterAsync(Member(8), prediction, 1, "100")).Result.Succeeded.Should().BeTrue(); // 3: one entry
+        var settled = await _kit.CreatePredictionAsync(title: "Sonuçlanacak öngörü");
+        (await _kit.EnterAsync(Member(13), settled, 1, "100")).Result.Succeeded.Should().BeTrue(); // I: wins
+        (await _kit.EnterAsync(Member(14), settled, 2, "100")).Result.Succeeded.Should().BeTrue(); // H: loses
+        (await _kit.SettleAsync(Creator(), settled, 1)).Result.Succeeded.Should().BeTrue();
         var boards = (await BoardsAsync())[0];
-        Order(boards.Fields[0].Value).Should().Equal("<@7>", "<@8>"); // 9: exactly the two eligible, no invented third
-        Order(boards.Fields[1].Value).Should().BeEquivalentTo("<@7>", "<@8>");
-        boards.Fields[1].Value.Should().Contain("<@7> — 0 doğru · Henüz sonuçlanmış tahmini yok").And.Contain("<@8> — 0 doğru · Henüz sonuçlanmış tahmini yok");
-        boards.Fields[0].Value.Should().NotContain("<@5>").And.NotContain("<@6>");
-        boards.Fields[1].Value.Should().NotContain("%0", "no misleading rate without a settled prediction");
+        Order(boards.Fields[0].Value).Should().Equal("<@13>", "<@14>"); // exactly the two settled ones, no invented third
+        boards.Fields[1].Value.Should().Be("🥇 <@13> — **1** doğru / 1 sonuçlanan (%100)\n🥈 <@14> — **0** doğru / 1 sonuçlanan (%0)", "0% is meaningful once something is settled");
     }
 
     [Fact]
@@ -461,16 +477,17 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Activity_in_an_earlier_tournament_does_not_carry_over_the_first_entry_in_the_new_one_does()
+    public async Task A_settled_entry_in_an_earlier_tournament_does_not_carry_over_the_first_settled_one_in_the_new_one_does()
     {
-        await _kit.ParticipateAsync(5);
+        await _kit.ParticipateAsync(5); // settled in tournament 1
         (await _kit.ConfirmEndAsync(Admin(), (await _kit.EndTokenAsync(Admin()))!)).Result.Succeeded.Should().BeTrue();
-        (await ClaimAsync(5)).Result.Succeeded.Should().BeTrue(); // a wallet in tournament 2, but no prediction activity
-        (await BoardsAsync())[0].Fields[0].Value.Should().Be("Henüz bu turnuvada tahmin yapan veya öngörü oluşturan yok.");
-
+        (await ClaimAsync(5)).Result.Succeeded.Should().BeTrue();
         var prediction = await _kit.CreatePredictionAsync(title: "İkinci turnuvanın öngörüsü");
-        (await _kit.EnterAsync(Member(5), prediction, 1, "10")).Result.Succeeded.Should().BeTrue();
-        Order((await BoardsAsync())[0].Fields[0].Value).Should().Contain("<@5>");
+        (await _kit.EnterAsync(Member(5), prediction, 1, "10")).Result.Succeeded.Should().BeTrue(); // J: only open in tournament 2
+        (await BoardsAsync())[0].Fields[0].Value.Should().Be(Empty);
+
+        (await _kit.SettleAsync(Creator(), prediction, 1)).Result.Succeeded.Should().BeTrue(); // K: the first settled one
+        Order((await BoardsAsync())[0].Fields[0].Value).Should().Equal("<@5>");
     }
 
     [Theory]
@@ -484,13 +501,13 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
     {
         await _kit.OpenFormAsync(); // tournament 1
         var active = await ActiveTournamentAsync();
-        await SeedAsync(active, Enumerable.Range(1, eligible).Select(i => ((ulong)(1000 + i), 1000L, 0L, 0, 0, true)).ToArray()); // all tied: the user id decides
-        await SeedAsync(active, (5, 9000, 0, 9, 9, false)); // the best numbers without prediction activity: never listed
+        await SeedAsync(active, Enumerable.Range(1, eligible).Select(i => ((ulong)(1000 + i), 1000L, 0L, 0, 1, true)).ToArray()); // all tied: the user id decides
+        await SeedAsync(active, (5, 9000, 0, 0, 0, false)); // the most coins, but nothing settled: never listed
 
         var fields = (await _kit.Economy(e => e.LeaderboardAsync(Member(50), Commands, Ct))).View!.Embed!.Fields;
         if (eligible == 0)
         {
-            fields.Select(f => f.Value).Should().Equal("Henüz bu turnuvada tahmin yapan veya öngörü oluşturan yok.", "Henüz bu turnuvada tahmin yapan veya öngörü oluşturan yok.");
+            fields.Select(f => f.Value).Should().Equal(Empty, Empty);
             return;
         }
 
@@ -514,15 +531,15 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         });
         await SeedAsync(old, (99, 1_000_000, 0, 50, 50, true));
         await SeedAsync(active,
-            (1, 1000, 500, 0, 0, true), // 1500, 0 correct, nothing settled
+            (1, 1000, 500, 0, 1, true), // 1500 live (500 in open predictions), 0 of 1
             (3, 1500, 0, 2, 4, true), // 1500, 2 of 4 (50%)
             (2, 1400, 100, 2, 2, true), // 1500, 2 of 2 (100%)
-            (4, 2000, 0, 0, 0, true),
+            (4, 2000, 0, 0, 2, true), // 2000, 0 of 2
             (5, 900, 0, 1, 1, true), // 1 correct, 100%, 900
             (6, 1200, 0, 1, 1, true), // 1 correct, 100%, 1200
             (7, 1000, 0, 0, 3, true), // 0 of 3
-            (8, 9000, 0, 9, 9, false)); // the best numbers, but no prediction activity: never listed
-        await SeedAsync(active, Enumerable.Range(0, 18).Select(i => ((ulong)(100 + i), 100L + i, 0L, 0, 0, true)).ToArray()); // 25 eligible in total
+            (8, 9000, 0, 0, 0, false)); // the most coins, but nothing settled: never listed
+        await SeedAsync(active, Enumerable.Range(0, 18).Select(i => ((ulong)(100 + i), 100L + i, 0L, 0, 1, true)).ToArray()); // 25 eligible in total
         var wallets = await _kit.CountAsync<PredictionWalletEntity>();
 
         var board = await _kit.Economy(e => e.LeaderboardAsync(Member(50), Commands, Ct));
@@ -530,33 +547,78 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         board.View!.Mentions.Should().Be(MentionPolicy.None);
         var fields = board.View.Embed!.Fields;
         Order(fields[0].Value).Should().Equal("<@4>", "<@2>", "<@3>", "<@1>", "<@6>", "<@7>", "<@5>", "<@117>", "<@116>", "<@115>");
-        Order(fields[1].Value).Should().Equal("<@2>", "<@3>", "<@6>", "<@5>", "<@7>", "<@4>", "<@1>", "<@117>", "<@116>", "<@115>");
+        Order(fields[1].Value).Should().Equal("<@2>", "<@3>", "<@6>", "<@5>", "<@4>", "<@1>", "<@7>", "<@117>", "<@116>", "<@115>");
+        fields[0].Value.Split('\n')[3].Should().Be("`4.` <@1> — **1500 TSQ Coin**", "live wealth: available + principal in open predictions");
         fields[1].Value.Split('\n')[1].Should().Be("🥈 <@3> — **2** doğru / 4 sonuçlanan (%50)");
-        fields[1].Value.Split('\n')[4].Should().Be("`5.` <@7> — **0** doğru / 3 sonuçlanan (%0)");
-        fields[1].Value.Split('\n')[5].Should().Be("`6.` <@4> — 0 doğru · Henüz sonuçlanmış tahmini yok");
+        fields[1].Value.Split('\n')[4].Should().Be("`5.` <@4> — **0** doğru / 2 sonuçlanan (%0)", "with 0 correct every rate is 0%: live wealth decides");
         string.Join("", fields.Select(f => f.Value)).Should().NotContain("<@99>", "another tournament never mixes in").And.NotContain("<@8>");
         (await _kit.CountAsync<PredictionWalletEntity>()).Should().Be(wallets, "reading creates no wallet");
 
         var again = await _kit.Economy(e => e.LeaderboardAsync(Member(51), Commands, Ct));
         again.View!.Embed!.Fields.Select(f => f.Value).Should().Equal(fields.Select(f => f.Value), "deterministic");
         var status = await _kit.Economy(e => e.TournamentStatusAsync(Member(1), Commands, Ct));
-        status.View!.Embed!.Fields.Single(f => f.Name == "Katılımcı").Value.Should().Be("25", "the same eligibility rule");
+        status.View!.Embed!.Fields.Single(f => f.Name == "Katılımcı").Value.Should().Be("0", "participants count entries (these wallets are synthetic, without any): not the 25 ranked");
     }
 
     [Fact]
-    public async Task Pending_stakes_count_at_principal_and_one_prediction_gives_at_most_one_correct()
+    public async Task Live_wealth_counts_open_and_locked_principal_once_and_never_a_possible_payout()
     {
+        await _kit.ParticipateAsync(1); // eligible, 999 available
         var prediction = await _kit.CreatePredictionAsync();
-        (await _kit.EnterAsync(Member(1), prediction, 3, "100")).Result.Succeeded.Should().BeTrue(); // 3.10: a possible 310
-        var board = (await BoardsAsync())[0];
-        board.Fields[0].Value.Should().Contain("<@1> — **1000 TSQ Coin**");
+        (await _kit.EnterAsync(Member(1), prediction, 3, "200")).Result.Succeeded.Should().BeTrue(); // 3.10: a possible 620
+        async Task<string> CoinsAsync() => (await BoardsAsync())[0].Fields[0].Value;
+        (await CoinsAsync()).Should().Be("🥇 <@1> — **999 TSQ Coin**", "L: 799 available + 200 open");
+        (await _kit.LockAsync(Creator(), prediction)).Succeeded.Should().BeTrue();
+        (await CoinsAsync()).Should().Be("🥇 <@1> — **999 TSQ Coin**", "M: 799 available + 200 locked");
 
         (await _kit.SettleAsync(Admin(), prediction, 3)).Result.Succeeded.Should().BeTrue();
         (await _kit.EnterAsync(Member(1), prediction, 3, "100")).Result.MessageKey.Should().Be("predictions.entry.closed");
         var wallet = (await _kit.WalletAsync(1))!;
-        (wallet.BalanceMinor, wallet.CorrectCount, wallet.SettledCount).Should().Be((121_000L, 1, 1));
+        (wallet.BalanceMinor, wallet.PendingMinor, wallet.CorrectCount, wallet.SettledCount).Should().Be((141_900L, 0L, 1, 2));
+        (await CoinsAsync()).Should().Be("🥇 <@1> — **1419 TSQ Coin**", "O: after the win the old stake is not counted again (not 1619)");
         var mine = await _kit.Economy(e => e.MyEntriesAsync(Member(1), Commands, 0, Ct));
-        mine.View!.Embed!.Description.Should().Contain("✅ Kazandı (+310 TSQ Coin)");
+        mine.View!.Embed!.Description.Should().Contain("✅ Kazandı (+620 TSQ Coin)");
+    }
+
+    [Fact]
+    public async Task Changing_or_withdrawing_a_stake_moves_coins_between_available_and_pending_without_changing_live_wealth()
+    {
+        await _kit.ParticipateAsync(1); // 999
+        var prediction = await _kit.CreatePredictionAsync();
+        (await _kit.EnterAsync(Member(1), prediction, 1, "100")).Result.Succeeded.Should().BeTrue();
+        async Task<(long Available, long Pending, string Board)> StateAsync()
+        {
+            var w = (await _kit.WalletAsync(1))!;
+            return (w.BalanceMinor, w.PendingMinor, (await BoardsAsync())[0].Fields[0].Value);
+        }
+
+        const string Board = "🥇 <@1> — **999 TSQ Coin**";
+        (await StateAsync()).Should().Be((89_900L, 10_000L, Board));
+        (await _kit.ChangeAsync(Member(1), prediction, 1, "200")).Result.Succeeded.Should().BeTrue();
+        (await StateAsync()).Should().Be((79_900L, 20_000L, Board), "P: 100 → 200");
+        (await _kit.ChangeAsync(Member(1), prediction, 2, "50")).Result.Succeeded.Should().BeTrue();
+        (await StateAsync()).Should().Be((94_900L, 5_000L, Board), "200 → 50 on another outcome");
+        (await _kit.WithdrawAsync(Member(1), prediction)).Result.Succeeded.Should().BeTrue();
+        (await StateAsync()).Should().Be((99_900L, 0L, Board), "N: the withdrawn stake is back in the balance, not counted twice");
+    }
+
+    [Fact]
+    public async Task A_daily_reward_adds_to_an_eligible_members_live_wealth_but_never_makes_anyone_eligible()
+    {
+        await _kit.ParticipateAsync(1); // 999
+        _kit.Random.Next.Enqueue(47);
+        (await ClaimAsync(1)).Result.Succeeded.Should().BeTrue();
+        (await BoardsAsync())[0].Fields[0].Value.Should().Be("🥇 <@1> — **1046 TSQ Coin**", "Q: +47");
+
+        for (var day = 0; day < 3; day++)
+        {
+            _kit.Random.Next.Enqueue(100);
+            _kit.Host.Clock.Advance(TimeSpan.FromDays(1));
+            (await ClaimAsync(2)).Result.Succeeded.Should().BeTrue();
+        }
+
+        (await _kit.WalletAsync(2))!.BalanceMinor.Should().Be(130_000);
+        (await BoardsAsync())[0].Fields[0].Value.Should().NotContain("<@2>", "R: daily rewards alone (1300 coins) are no settled prediction");
     }
 
     [Fact]
