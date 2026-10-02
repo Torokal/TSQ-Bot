@@ -320,7 +320,9 @@ invite link and no global command registration. The source code is public under 
   and daily rewards never count); coins = live wealth (available + principal in unsettled entries); Top 10 per board;
   `/ongoru liderlik` adds a private note with the asking member's own rank on each board where they are outside the Top 10
   (counted in SQLite with the board orders) or "not ranked yet"; the weekly post uses the same boards without personal notes.
-  No schema change. **IMPLEMENTED / TESTED_OFFLINE**.
+  Ending a tournament is a separate rule (nothing unresolved, no pending stake, some activity): an empty leaderboard
+  (e.g. every prediction cancelled) never blocks it; participants = members with an entry. No schema change.
+  **IMPLEMENTED / TESTED_OFFLINE**.
 
 ## TSQ Öngörü automatic football (2026-09-29, local branch `feat/predictions-auto-football`, not pushed)
 

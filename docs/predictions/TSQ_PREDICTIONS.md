@@ -247,14 +247,20 @@ Sunucu başına tek aktif turnuva (kısmi benzersiz indeks). İlk kullanımda Tu
 1. Terminal olmayan (Publishing, Open, Locked) öngörü varsa: "Turnuvayı bitirmeden önce sonuçlanmamış öngörüleri
    sonuçlandırmalı veya iptal etmelisiniz." + `#12 · Galatasaray - Fenerbahçe · Kilitli — <kart bağlantısı>` listesi (özel).
    Turnuva kapanmaz, yeni turnuva açılmaz, cüzdan başlangıcı/snapshot/duyuru oluşmaz.
-2. Uygun katılımcı yoksa kapatılmaz.
-3. Özel önizleme: turnuva numarası, başlangıç tarihi, uygun katılımcı sayısı, öngörü sayısı, sonuçlandırılmış öngörü sayısı,
-   En Çok TSQ Coin ilk 3, En Çok Doğru Tahmin ilk 3, yeni turnuvanın 1000 TSQ Coin ile başlayacağı; `[🏁 Turnuvayı Bitir] [Vazgeç]`.
-4. Onay bu **yöneticiye**, bu **turnuva ID'sine** bağlı, 5 dk ömürlü, tek kullanımlık. Onayda her şey yeniden denetlenir;
+2. Bir cüzdanda hâlâ bekleyen tutar varsa (sonuçlanmamış öngörü olmadığı hâlde) bu bir tutarsızlıktır: kapatılmaz, loglanır.
+3. Turnuvada hiçbir şey olmadıysa (hiç tahmin girişi ve yayımlanmış manuel öngörü yok; günlük ödül veya cüzdan sayılmaz)
+   "bitirmeye gerek yok" denir. **Liderlik boş olması kapanışı engellemez:** öngörüleri hepsi iptal/iade edilmiş veya
+   tahminleri hepsi geri çekilmiş bir turnuva kapatılabilir.
+4. Özel önizleme: turnuva numarası, başlangıç tarihi, katılımcı sayısı (turnuvada en az bir tahmin girişi yapmış benzersiz
+   üye; geri çekilen veya iade edilen girişler dahil — liderlikteki üye sayısı değildir), öngörü sayısı, sonuçlandırılmış öngörü
+   sayısı, En Çok TSQ Coin ilk 3, En Çok Doğru Tahmin ilk 3 (yalnız sonuçlanmış tahmini olanlar; 0–3 kişi), yeni turnuvanın
+   1000 TSQ Coin ile başlayacağı; `[🏁 Turnuvayı Bitir] [Vazgeç]`. Sonuçlanmış tahmini olan kimse yoksa iki tablo yerine tek
+   satır: "📊 Liderlik — Bu turnuvada sonuçlanmış tahmini olan oyuncu bulunmadı."
+5. Onay bu **yöneticiye**, bu **turnuva ID'sine** bağlı, 5 dk ömürlü, tek kullanımlık. Onayda her şey yeniden denetlenir;
    önizlemeden sonra açılan öngörü kapanışı engeller; başka yönetici önce kapattıysa eski onay yeni turnuvayı kapatmaz.
-5. Tek atomik işlem: iki ilk 3 (coin ve doğru) görünen adlarla `prediction_standing`'e dondurulur, eski turnuva kapanır
+6. Tek atomik işlem: iki ilk 3 (coin ve doğru) görünen adlarla `prediction_standing`'e dondurulur, eski turnuva kapanır
    (final sayılar), yeni turnuva **bir kez** açılır, duyuru outbox'a yazılır. Eşzamanlı iki onaydan yalnızca biri kapatır.
-6. Duyuru komut kanalına herkese açık, **mention'sız**:
+7. Duyuru komut kanalına herkese açık, **mention'sız** (liderlik boşsa iki tablo yerine "📊 Liderlik" satırı):
    ```
    🏁 TSQ Öngörü · Turnuva 3 Sona Erdi
    💰 En Çok TSQ Coin: 🥇 Toro — 2840 TSQ Coin …
@@ -322,8 +328,9 @@ yanlış olması fark etmez. **Uygunluk vermez:** yalnızca öngörü oluşturma
 veya kilitli (henüz sonuçlanmamış) tahmin, geri çekilen tahmin, iptal/iade edilen öngörüdeki tahmin, günlük ödül veya
 yalnızca cüzdan sahibi olmak — coin miktarı ne olursa olsun. İlk tahmini sonuçlandığı anda üye listeye girer (sonradan açık
 tahminleri olsa da kalır). Yeni turnuvada uygunluk sıfırdan hesaplanır. Aynı tanım `/ongoru liderlik`, kişisel sıra, haftalık
-paylaşım, `/ongoru turnuva durum` (katılımcı sayısı), turnuva sonu önizlemesi, dondurulan ilk 3 ve kapanış duyurusu tarafından
-kullanılır; turnuvada hiç sonuçlanmış tahmini olmayan üye final ilk 3'e giremez (uygun kimse yoksa turnuva bitirilemez).
+paylaşım, dondurulan ilk 3 ve kapanış duyurusundaki tablolar tarafından kullanılır; turnuvada hiç sonuçlanmış tahmini
+olmayan üye final ilk 3'e giremez. Turnuvanın bitirilip bitirilemeyeceğini ve `/ongoru turnuva durum`'daki katılımcı sayısını
+bu kural **belirlemez** (yukarıdaki "Turnuva" bölümü).
 
 - **💰 En Çok TSQ Coin = canlı servet:** kullanılabilir TSQ Coin + halen sonuçlanmamış (açık veya kilitli) aktif tahminlere
   yatırılmış **ana para**. Olası kazanç, net kâr, geri çekilen, iade edilen, sonuçlanmış veya eski turnuvadaki tutarlar
