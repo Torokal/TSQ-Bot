@@ -158,8 +158,8 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
 ## Yetki, ekonomi, tekillik
 
 - Otomatik öngörünün insan yaratıcısı yoktur: `Origin = AutoFootball`, `CreatorUserId = 0`. Bota ya da ayarlayan admine
-  cüzdan, başlangıç coini veya liderlik uygunluğu verilmez (uygunluk kuralındaki "öngörü yayımlamış" yolu yalnızca manuel
-  öngörüler içindir). Gerçek oyuncular tahmin yaparak mevcut kurala göre uygun olur.
+  cüzdan, başlangıç coini veya liderlik uygunluğu verilmez (öngörü oluşturmak kimseye uygunluk vermez). Gerçek oyuncular
+  tahminleri sonuçlandığında mevcut kurala göre uygun olur.
 - Yönetim: yalnızca **Administrator veya sunucu sahibi**. Yaratıcı rolü tek başına otomatik kartları yönetemez; manuel
   kartların kuralları değişmedi.
 - Tekillik: `GuildId + Provider + ExternalEventId + MarketKind (+ Mode)` veritabanında benzersiz; turnuva anahtarın

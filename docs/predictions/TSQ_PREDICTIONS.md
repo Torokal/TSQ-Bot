@@ -294,8 +294,9 @@ güncellemesi süreyi yeniden başlatmaz.
 Aktif turnuvanın liderliği **haftada bir** komut kanalına (`Predictions:CommandsChannelId`, `/ongoru liderlik`'in kanalı)
 otomatik gönderilir; varsayılan **her Pazar 20:00 (Europe/Istanbul)**.
 
-- `/ongoru liderlik` ile **aynı sorgular ve aynı görünüm**: aynı uygunluk (bu turnuvada en az bir katılım veya bir öngörü;
-  yalnız cüzdan veya günlük ödül yetmez), 💰 En Çok TSQ Coin ve 🎯 En Çok Doğru Tahmin, her biri **en fazla ilk 10**. Başlık
+- `/ongoru liderlik` ile **aynı sorgular ve aynı görünüm**: aynı uygunluk (bu turnuvada en az bir kişisel tahmini
+  sonuçlanmış üye), aynı canlı servet ve sıralama, 💰 En Çok TSQ Coin ve 🎯 En Çok Doğru Tahmin, her biri **en fazla ilk 10**.
+  Haftalık paylaşımda **kişisel sıra mesajı yoktur** (belirli bir komut kullanıcısı yok; DM veya üye başına mesaj gönderilmez). Başlık
   "🏆 TSQ Öngörü · Haftalık Liderlik", açıklama "Güncel aktif turnuva sıralaması (Turnuva N)". Tek kompakt mesaj; üyeler embed
   mention'ı olarak görünür, **ping yok** (`allowed_mentions` boş).
 - **Her sunucu ve hafta için en fazla bir otomatik paylaşım:** hafta anahtarı, slotun yerel tarihinin ISO haftasıdır
@@ -314,19 +315,39 @@ otomatik gönderilir; varsayılan **her Pazar 20:00 (Europe/Istanbul)**.
 
 ## Liderlik ve uygunluk
 
-Tek tanım (`PredictionStore.EligibleWallets`): aktif turnuvada **en az bir katılım** yapmış **veya en az bir öngörü
-yayımlamış** (açık, kilitli, sonuçlanmış ya da iptal) üye. Yalnızca cüzdanı görüntülemek, günlük ödül almak veya tembel
-oluşturulan cüzdan uygunluk sağlamaz; önceki turnuvadaki aktivite yeni turnuvaya taşınmaz. Aynı tanım `/ongoru liderlik`,
-`/ongoru turnuva durum` (katılımcı sayısı), turnuva sonu önizlemesi, dondurulan ilk 3 ve kapanış duyurusu tarafından kullanılır.
+**Liderlik tablolarında yalnızca aktif turnuvada en az bir kişisel tahmini sonuçlanmış üyeler yer alır.** Tek tanım
+(`PredictionRanking`, `PredictionStore.EligibleWallets` üzerinden): üyenin bu turnuvadaki kendi katılımlarından en az biri
+sonuçlandırmada kazandı veya kaybetti (cüzdanın sonuçlanan sayısı ≥ 1; aynı sonuçlandırma işleminde güncellenir). Doğru ya da
+yanlış olması fark etmez. **Uygunluk vermez:** yalnızca öngörü oluşturmak (otomatik futbol kartları zaten kimseye vermez), açık
+veya kilitli (henüz sonuçlanmamış) tahmin, geri çekilen tahmin, iptal/iade edilen öngörüdeki tahmin, günlük ödül veya
+yalnızca cüzdan sahibi olmak — coin miktarı ne olursa olsun. İlk tahmini sonuçlandığı anda üye listeye girer (sonradan açık
+tahminleri olsa da kalır). Yeni turnuvada uygunluk sıfırdan hesaplanır. Aynı tanım `/ongoru liderlik`, kişisel sıra, haftalık
+paylaşım, `/ongoru turnuva durum` (katılımcı sayısı), turnuva sonu önizlemesi, dondurulan ilk 3 ve kapanış duyurusu tarafından
+kullanılır; turnuvada hiç sonuçlanmış tahmini olmayan üye final ilk 3'e giremez (uygun kimse yoksa turnuva bitirilemez).
 
-- **💰 En Çok TSQ Coin** = kullanılabilir + bekleyen ana para (olası kazanç sayılmaz). Eşitlik: toplam coin → doğru sayısı →
-  kullanıcı ID.
-- **🎯 En Çok Doğru Tahmin** = doğru sonuçlanan benzersiz öngörü sayısı (yaratmak puan vermez). Gösterim "12 doğru / 15
-  sonuçlanan (%80)"; hiç sonuçlanmış tahmini olmayan (ör. yalnızca öngörü yaratan) "0 doğru · Henüz sonuçlanmış tahmini yok"
-  (yanıltıcı %0 yok). Eşitlik: doğru sayısı → başarı yüzdesi (sonuçlanmışı olmayan en sonda) → toplam coin → kullanıcı ID.
+- **💰 En Çok TSQ Coin = canlı servet:** kullanılabilir TSQ Coin + halen sonuçlanmamış (açık veya kilitli) aktif tahminlere
+  yatırılmış **ana para**. Olası kazanç, net kâr, geri çekilen, iade edilen, sonuçlanmış veya eski turnuvadaki tutarlar
+  eklenmez; sonuçlandırmadan sonra eski tutar tekrar sayılmaz (kazanç cüzdana zaten yazıldı). Tutar değiştirme veya geri çekme
+  coin'i kullanılabilir ile bekleyen arasında taşır, canlı serveti değiştirmez; günlük ödül canlı servete eklenir. Ekonomi
+  değişmedi: canlı servet cüzdanın kullanılabilir + bekleyen tutarıdır (bekleyen tutar her katılım, değişiklik, geri çekme,
+  sonuçlandırma ve iadeyle aynı işlemde güncellenir). Eşitlik: canlı servet → doğru sayısı → kullanıcı ID.
+- **🎯 En Çok Doğru Tahmin** = doğru sonuçlanan benzersiz öngörü sayısı / sonuçlanan tahmin sayısı ve başarı yüzdesi ("12 doğru
+  / 15 sonuçlanan (%80)"; listedeki herkesin en az bir sonuçlanmış tahmini olduğundan %0 anlamlıdır). Geri çekilen, iptal
+  edilen, açık ve kilitli tahminler paydaya girmez. Eşitlik: doğru sayısı → (en az bir doğruda) daha az sonuçlanan, yani daha
+  yüksek başarı → canlı servet → kullanıcı ID.
 - Her sıralamada **en fazla ilk 10** (sayfa yok); az kişi varsa yalnızca olanlar, kimse yoksa boş durum. Sıralama SQLite'ta
-  `ORDER BY … LIMIT 10` ile yapılır; okumak cüzdan oluşturmaz. Geri çekilen tahmin uygunluğu korur ama coin'e (yalnız aktif
-  ana para bekleyen sayılır) ve doğru/sonuçlanan sayısına girmez. Turnuva kapanışındaki ilk 3 değişmedi. Liderlikte üyeler embed mention'ı olarak gösterilir (ping yok); kapanış duyurusu mention kullanmaz.
+  `ORDER BY … LIMIT 10` ile yapılır; okumak cüzdan oluşturmaz. Sıralar sıralıdır (eşitlikte kullanıcı ID ayırır; 14-14-16 yok).
+  Liderlikte üyeler embed mention'ı olarak gösterilir (ping yok); kapanış duyurusu mention kullanmaz.
+- **Kişisel sıra (yalnız `/ongoru liderlik`):** herkese açık ilk 10 kartı normal gönderilir; ardından **yalnızca komutu
+  kullanana görünen** bir not gelir. Üye bir tabloda ilk 10'un dışındaysa o tablodaki kendi sırası gösterilir ("📊 Senin
+  Sıralaman" · "💰 TSQ Coin #17 · 1.284 TSQ Coin" / "🎯 Doğru Tahmin #23 · 4 doğru / 9 sonuçlanan (%44)"); iki tablo
+  bağımsızdır, ikisinde de ilk 10'daysa not gönderilmez. Henüz sonuçlanmış tahmini yoksa sıra numarası üretilmez: "Henüz
+  liderlik sıralamasında değilsin. Sıralamaya girmek için aktif turnuvada en az bir tahmininin sonuçlanması gerekiyor."
+  Sıra, tablodaki sıralamanın **aynı** koşullarıyla SQLite'ta "benden önce kaç uygun üye var + 1" olarak sayılır (üyenin tek
+  satırı ve tablo başına bir COUNT; turnuvanın tamamı belleğe çekilmez), canlı serveti kullanır; böylece kart ile kişisel sıra
+  hiçbir zaman çelişmez.
+- **Turnuva sonu güvencesi:** sonuçlanmamış öngörü yokken hiçbir cüzdanda bekleyen tutar olamaz; varsa bu bir tutarsızlıktır,
+  turnuva bitirme yanlış bir final sıralaması dondurmak yerine reddedilir ve loglanır.
 
 ## Kalıcılık ve eşzamanlılık
 
