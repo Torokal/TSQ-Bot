@@ -81,7 +81,7 @@ public sealed partial class LfgArchitectureTests
     }
 
     [Fact]
-    public void Explicit_user_pings_exist_only_in_the_lfg_notice_renderer_the_birthday_announcement_and_the_giveaway_winners()
+    public void Explicit_user_pings_exist_only_in_the_lfg_notice_renderer_the_birthday_announcement_and_the_giveaway_and_prediction_winners()
     {
         var src = Path.Combine(CommandManifestTests.RepoRoot(), "src");
         var allowed = new[]
@@ -91,6 +91,7 @@ public sealed partial class LfgArchitectureTests
             Path.Combine("ToroSquad.Modules.Lfg", "Application", "LfgNoticeRenderer.cs"), // producer: the Joined players
             Path.Combine("ToroSquad.Modules.Birthday", "Application", "BirthdayAnnouncementRenderer.cs"), // producer: the day's celebrants
             Path.Combine("ToroSquad.Modules.Giveaway", "Application", "GiveawayAnnouncementRenderer.cs"), // producer: the winners of one draw
+            Path.Combine("ToroSquad.Modules.Predictions", "Application", "PredictionSettlementRenderer.cs"), // producer: the winners of one settlement
         };
         foreach (var file in Directory.GetFiles(src, "*.cs", SearchOption.AllDirectories)
                      .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(p => p is "bin" or "obj")))
@@ -136,10 +137,15 @@ public sealed partial class LfgArchitectureTests
         birthday.Should().Contain("MentionPolicy.ExplicitUsers(named)");
         UserPingOptIn().Matches(birthday).Should().ContainSingle();
 
-        // The third (and last) producer: the winners of one giveaway draw, the same ids the text mentions.
+        // The third producer: the winners of one giveaway draw, the same ids the text mentions.
         var giveaway = File.ReadAllText(Path.Combine(src, allowed[4]));
         giveaway.Should().Contain("MentionPolicy.ExplicitUsers(winners)");
         UserPingOptIn().Matches(giveaway).Should().ContainSingle();
+
+        // The fourth (and last) producer: the winners of one settled prediction listed in that very message.
+        var settlement = File.ReadAllText(Path.Combine(src, allowed[5]));
+        settlement.Should().Contain("MentionPolicy.ExplicitUsers(winners)");
+        UserPingOptIn().Matches(settlement).Should().ContainSingle();
     }
 
     [Fact]
