@@ -157,6 +157,36 @@ public sealed class DiscordMessageTransport(DiscordSocketClient client, ILogger<
         }
     }
 
+    public async Task<SendOutcome> DeleteAsync(ChannelId channel, MessageId message, CancellationToken cancellationToken)
+    {
+        if (client.LoginState != LoginState.LoggedIn)
+            return new SendOutcome.Transient("discord client not logged in yet");
+
+        try
+        {
+            var target = await ResolveAsync(channel);
+            if (target is null)
+                return new SendOutcome.Permanent(PermanentFailureKind.UnknownChannel, "channel not found");
+            // DELETE /channels/{channel}/messages/{message}: the bot's own message needs no Manage Messages.
+            await target.DeleteMessageAsync(message.Value, new RequestOptions { CancelToken = cancellationToken });
+            return new SendOutcome.Sent(message);
+        }
+        catch (HttpException ex)
+        {
+            return Classify(ex, isCreate: false);
+        }
+        catch (RateLimitedException)
+        {
+            return new SendOutcome.RateLimited(TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex) when (ex is TimeoutException or TaskCanceledException or HttpRequestException or IOException)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                throw;
+            return new SendOutcome.Transient(ex.GetType().Name); // a repeated delete answers Unknown Message: safe to retry
+        }
+    }
+
     /// <summary>The <see cref="MessageFingerprint"/> of a message as Discord returned it (first embed only; we send one).</summary>
     public static string Fingerprint(IMessage message) => Fingerprint(message.Content, message.Embeds.FirstOrDefault());
 
