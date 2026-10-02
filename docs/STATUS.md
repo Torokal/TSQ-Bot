@@ -309,6 +309,12 @@ invite link and no global command registration. The source code is public under 
 - **VERIFIED_LIVE (technical only)**: deploy with the additive migration and clean start, guild command registration of
   `/ongoru`. **NOT VERIFIED_LIVE**: every member interaction in Discord (both modals, the select, the card buttons, edits,
   the announcement).
+- Terminal card retention + weekly leaderboard (branch `feat/predictions-card-retention-weekly-board`, not pushed):
+  settled/cancelled cards are removed from the channel 12 h after the settlement/cancellation commit (only the Discord
+  message; history kept; never replaced), and the active tournament's leaderboard is posted once a week to the commands
+  channel (default Sunday 20:00 Europe/Istanbul, 12 h catch-up, Top 10, nothing for an empty board) through the outbox;
+  additive migration `PredictionsCardRetentionWeeklyBoard`. **IMPLEMENTED / TESTED_OFFLINE** (fake clock, real SQLite,
+  fake Discord). Not deployed.
 
 ## TSQ Öngörü automatic football (2026-09-29, local branch `feat/predictions-auto-football`, not pushed)
 
