@@ -105,6 +105,17 @@ public sealed class PredictionEntity
     /// <summary>Searches for a card whose post was uncertain.</summary>
     public int PublishChecks { get; set; }
 
+    /// <summary>
+    /// The retention cleanup removed the card of this settled/cancelled prediction (or found it already gone): its Discord
+    /// message is archived for good — no edit, no replacement card. Only the message; the prediction and its history stay.
+    /// </summary>
+    public DateTimeOffset? CardRemovedAt { get; set; }
+
+    /// <summary>Failed removal attempts (429/5xx/timeouts/permissions), bounded; the next one not before <see cref="CardRemovalNextAt"/>.</summary>
+    public int CardRemovalAttempts { get; set; }
+
+    public DateTimeOffset? CardRemovalNextAt { get; set; }
+
     /// <summary>Optimistic concurrency token, incremented by every state change (backstop behind the write transaction).</summary>
     public long Version { get; set; }
 }
@@ -273,6 +284,38 @@ public sealed class PredictionAutoProviderEntity
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+public enum WeeklyBoardStatus
+{
+    /// <summary>The leaderboard was staged in the outbox (delivery, retries and expiry are the outbox's).</summary>
+    Staged = 0,
+
+    /// <summary>Nobody was eligible in the active tournament (or none was active): no message, the week is done.</summary>
+    SkippedNoParticipants = 1,
+}
+
+/// <summary>
+/// One automatic weekly leaderboard decision per guild and week (unique): the week was evaluated once — staged or skipped —
+/// and is never evaluated again, whatever tournament is active, restarts, two processes or a manual /ongoru liderlik.
+/// The message itself lives in the outbox (pruned after delivery); this row is the lasting dedup.
+/// </summary>
+public sealed class PredictionWeeklyBoardEntity
+{
+    public long Id { get; set; }
+    public ulong GuildId { get; set; }
+
+    /// <summary>yyyyww of the slot's local date (<see cref="WeeklySchedule.WeekKey"/>).</summary>
+    public int WeekKey { get; set; }
+
+    public DateTimeOffset ScheduledAt { get; set; }
+    public DateTimeOffset EvaluatedAt { get; set; }
+    public WeeklyBoardStatus Status { get; set; }
+
+    /// <summary>The tournament active at evaluation (null: none) and its eligible participants then.</summary>
+    public long? TournamentId { get; set; }
+
+    public int Participants { get; set; }
+}
+
 /// <summary>The two boards of a tournament podium.</summary>
 public enum PredictionBoard
 {
@@ -359,6 +402,7 @@ public sealed class PredictionsModelContributor : IModelContributor
             e.HasIndex(x => new { x.GuildId, x.MessageId }); // target by message link / id
             e.HasIndex(x => new { x.Status, x.LockAt }); // lock sweep
             e.HasIndex(x => x.CardStale).HasFilter("\"CardStale\" = 1"); // pending card edits only
+            e.HasIndex(x => new { x.Status, x.CardRemovedAt }); // terminal card cleanup sweep
             e.HasOne<PredictionTournamentEntity>().WithMany().HasForeignKey(x => x.TournamentId).OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -465,6 +509,15 @@ public sealed class PredictionsModelContributor : IModelContributor
             e.Property(x => x.PauseReason).HasMaxLength(64);
             e.Property(x => x.LastError).HasMaxLength(64);
             e.Property(x => x.ActiveCompetitions).HasMaxLength(512);
+        });
+
+        modelBuilder.Entity<PredictionWeeklyBoardEntity>(e =>
+        {
+            e.ToTable("prediction_weekly_board");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedOnAdd();
+            e.Property(x => x.Status).HasConversion<int>();
+            e.HasIndex(x => new { x.GuildId, x.WeekKey }).IsUnique(); // at most one automatic weekly leaderboard per guild and week
         });
 
         modelBuilder.Entity<PredictionStandingEntity>(e =>

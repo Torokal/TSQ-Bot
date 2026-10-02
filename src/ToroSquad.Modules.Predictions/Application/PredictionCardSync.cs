@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using ToroSquad.Core;
 using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Messaging;
@@ -35,7 +36,9 @@ public sealed class PredictionCardGate
 /// picks the rest up), and the worker edits every card still stale. A card Discord reports as DELETED (Unknown Message /
 /// Unknown Channel) is marked missing and, if still open, locked — stakes stay, the prediction can still be settled or
 /// cancelled by number. Permission loss, 429 and 5xx/timeouts are never taken for deletion: they are retried a bounded
-/// number of times, then left with a warning (the doctor shows them).
+/// number of times, then left with a warning (the doctor shows them). A settled or cancelled prediction's card is removed
+/// <see cref="PredictionsOptions.TerminalCardRetentionHours"/> after the settlement/cancellation was committed
+/// (<see cref="RemoveExpiredCardsAsync"/>); a removed card is archived: never edited or replaced again.
 /// </summary>
 public sealed class PredictionCardSync(
     PredictionStore store,
@@ -44,12 +47,122 @@ public sealed class PredictionCardSync(
     IGuildSettingsStore settings,
     DeploymentPolicy deployment,
     PredictionCardGate cardGate,
+    IOptions<PredictionsOptions> options,
     TimeProvider clock,
     ILogger<PredictionCardSync> logger)
 {
     public const int MaxAttempts = 8;
     public static readonly TimeSpan CoalesceWindow = TimeSpan.FromSeconds(10);
     private const int Batch = 25;
+
+    /// <summary>Failed removals of one card (429, 5xx, timeouts, missing permissions) before it is left for the doctor.</summary>
+    public const int MaxRemovalAttempts = 6;
+
+    private const int RemovalBatch = 10;
+
+    /// <summary>The wait after the n-th failed removal: 1 min, 5 min, 15 min, 1 h, then 6 h — never a fast loop.</summary>
+    public static TimeSpan RemovalBackoff(int attempts) => attempts switch
+    {
+        <= 1 => TimeSpan.FromMinutes(1),
+        2 => TimeSpan.FromMinutes(5),
+        3 => TimeSpan.FromMinutes(15),
+        4 => TimeSpan.FromHours(1),
+        _ => TimeSpan.FromHours(6),
+    };
+
+    /// <summary>The one authoritative terminal instant: when the settlement or the cancellation was committed (never a card edit time).</summary>
+    public static DateTimeOffset? TerminalAt(PredictionEntity p) => p.Status switch
+    {
+        PredictionStatus.Settled => p.SettledAt,
+        PredictionStatus.Cancelled => p.CancelledAt,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Removes the public cards of settled/cancelled predictions whose retention has passed, read from the database every
+    /// pass (restart-safe, no timer per card). Only the Discord message: the prediction, outcomes, entries, ledger, wallets,
+    /// statistics, tournament and automation links are untouched. Deleted or already gone (404) = archived for good; 429,
+    /// 5xx, timeouts and permission problems are retried with a growing pause, then left for the doctor.
+    /// </summary>
+    public async Task<int> RemoveExpiredCardsAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var cutoff = now - options.Value.TerminalCardRetention;
+        var ids = await store.Predictions.AsNoTracking()
+            .Where(p => (p.Status == PredictionStatus.Settled || p.Status == PredictionStatus.Cancelled) && p.CardRemovedAt == null && p.MessageId != null &&
+                        p.CardRemovalAttempts < MaxRemovalAttempts && (p.CardRemovalNextAt == null || p.CardRemovalNextAt <= now) &&
+                        (p.Status == PredictionStatus.Settled ? p.SettledAt : p.CancelledAt) <= cutoff)
+            .OrderBy(p => p.Id).Select(p => p.Id).Take(RemovalBatch).ToListAsync(ct);
+        var removed = 0;
+        foreach (var id in ids)
+        {
+            try
+            {
+                if (await RemoveAsync(id, now, ct))
+                    removed++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Prediction {Prediction}: removing its card threw", id);
+                store.Db.ChangeTracker.Clear();
+                await FailRemovalAsync(id, now, ct);
+            }
+        }
+
+        return removed;
+    }
+
+    private async Task<bool> RemoveAsync(long id, DateTimeOffset now, CancellationToken ct)
+    {
+        await cardGate.Gate.WaitAsync(ct);
+        try
+        {
+            store.Db.ChangeTracker.Clear();
+            // Checked again right before the call: still terminal, retention passed, not removed yet — and the message id read
+            // here is the one recorded as removed below (never a replacement card's id).
+            var p = await store.Predictions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+            if (p is null || p.CardRemovedAt is not null || p.MessageId is not { } messageId || TerminalAt(p) is not { } terminalAt ||
+                now - terminalAt < options.Value.TerminalCardRetention || !deployment.IsGuildAllowed(new GuildId(p.GuildId)))
+                return false;
+
+            var outcome = p.CardMissing
+                ? new SendOutcome.Permanent(PermanentFailureKind.UnknownMessage, "already reported gone")
+                : await transport.DeleteAsync(new ChannelId(p.ChannelId), new MessageId(messageId), ct);
+            if (outcome is SendOutcome.Sent or SendOutcome.Permanent { Kind: PermanentFailureKind.UnknownMessage or PermanentFailureKind.UnknownChannel })
+            {
+                var archived = await store.Predictions.Where(x => x.Id == id && x.MessageId == messageId && x.CardRemovedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.CardRemovedAt, now).SetProperty(x => x.CardStale, false)
+                        .SetProperty(x => x.CardRemovalNextAt, (DateTimeOffset?)null).SetProperty(x => x.Version, x => x.Version + 1), ct);
+                logger.LogInformation("Prediction {Prediction}: its {Status} card was removed after the retention ({Result})", id, p.Status,
+                    outcome is SendOutcome.Sent ? "deleted" : "already gone");
+                return archived > 0;
+            }
+
+            var detail = outcome switch
+            {
+                SendOutcome.Permanent f => f.Kind + ": " + f.Reason,
+                SendOutcome.Transient t => "transient: " + t.Reason,
+                SendOutcome.RateLimited => "rate limited",
+                _ => outcome.GetType().Name,
+            };
+            var attempts = await FailRemovalAsync(id, now, ct);
+            logger.LogWarning("Prediction {Prediction}: removing its card failed ({Detail}); {Next}", id, detail,
+                attempts >= MaxRemovalAttempts ? "giving up (doctor shows it)" : "retrying later");
+            return false;
+        }
+        finally
+        {
+            cardGate.Gate.Release();
+        }
+    }
+
+    private async Task<int> FailRemovalAsync(long id, DateTimeOffset now, CancellationToken ct)
+    {
+        var attempts = await store.Predictions.AsNoTracking().Where(x => x.Id == id).Select(x => x.CardRemovalAttempts).FirstOrDefaultAsync(ct) + 1;
+        await store.Predictions.Where(x => x.Id == id && x.CardRemovedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.CardRemovalAttempts, attempts).SetProperty(x => x.CardRemovalNextAt, now + RemovalBackoff(attempts)), ct);
+        return attempts;
+    }
 
     public async Task<int> SyncStaleAsync(CancellationToken ct)
     {
@@ -118,7 +231,7 @@ public sealed class PredictionCardSync(
         var prediction = await store.Predictions.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (prediction is null || !prediction.CardStale)
             return PredictionCardSyncOutcome.NothingToDo;
-        if (prediction.MessageId is not { } messageId || prediction.CardMissing || !deployment.IsGuildAllowed(new GuildId(prediction.GuildId)))
+        if (prediction.MessageId is not { } messageId || prediction.CardMissing || prediction.CardRemovedAt is not null || !deployment.IsGuildAllowed(new GuildId(prediction.GuildId)))
         {
             prediction.CardStale = false;
             await SaveAsync(ct);

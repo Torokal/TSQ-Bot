@@ -38,6 +38,16 @@ public sealed class PredictionsOptions
 
     public int MaxOutcomes { get; set; } = PredictionRules.HardMaxOutcomes;
 
+    /// <summary>
+    /// How long a settled or cancelled prediction's public card stays in the channel after the settlement/cancellation was
+    /// committed; then only the Discord message is removed (the prediction, its entries, coins and statistics stay).
+    /// </summary>
+    public int TerminalCardRetentionHours { get; set; } = 12;
+
+    public WeeklyLeaderboardOptions WeeklyLeaderboard { get; set; } = new();
+
+    public TimeSpan TerminalCardRetention => TimeSpan.FromHours(TerminalCardRetentionHours);
+
     public long InitialBalanceMinor => InitialBalanceCoins * Coins.MinorPerCoin;
 
     /// <summary>The default odds as the ×100 integer every calculation uses (validated: exact, in range).</summary>
@@ -60,6 +70,52 @@ public sealed class PredictionsOptions
             errors.Add($"{Section}:DefaultOdds must be {Odds.Format(Odds.MinX100)}-{Odds.Format(Odds.MaxX100)} with at most two decimals (got {DefaultOdds})");
         if (MaxOutcomes is < PredictionRules.MinOutcomes or > PredictionRules.HardMaxOutcomes)
             errors.Add($"{Section}:MaxOutcomes must be {PredictionRules.MinOutcomes}-{PredictionRules.HardMaxOutcomes} (got {MaxOutcomes})");
+        if (TerminalCardRetentionHours is < 1 or > 168)
+            errors.Add($"{Section}:TerminalCardRetentionHours must be 1-168 (got {TerminalCardRetentionHours})");
+        errors.AddRange(WeeklyLeaderboard.Validate());
+        return errors;
+    }
+}
+
+/// <summary>
+/// Section "Predictions:WeeklyLeaderboard" — the automatic weekly post of the active tournament's leaderboard in the
+/// commands channel: one day and local time per week in one time zone (default Sunday 20:00 Europe/Istanbul), delivered
+/// at most once per guild and week, late by at most <see cref="CatchUpHours"/> (a bot that was down longer skips that week).
+/// Strings (not enums/TimeOnly) so a typo is a clear CONFIG line instead of a binder exception.
+/// </summary>
+public sealed class WeeklyLeaderboardOptions
+{
+    public const string Section = PredictionsOptions.Section + ":WeeklyLeaderboard";
+
+    public bool Enabled { get; set; } = true;
+    public string DayOfWeek { get; set; } = nameof(System.DayOfWeek.Sunday);
+    public string LocalTime { get; set; } = "20:00";
+    public string TimeZone { get; set; } = TurkeyCalendar.TimeZoneId;
+    public int CatchUpHours { get; set; } = 12;
+
+    /// <summary>The schedule, or null when a setting is invalid (<see cref="Validate"/> names it).</summary>
+    public WeeklySchedule? Schedule()
+    {
+        if (!Enum.TryParse<DayOfWeek>(DayOfWeek, ignoreCase: true, out var day) || !Enum.IsDefined(day) || int.TryParse(DayOfWeek, out _))
+            return null;
+        if (!TimeOnly.TryParseExact(LocalTime, "HH:mm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var time))
+            return null;
+        if (!ToroSquad.Core.Guilds.GuildTime.TryResolve(TimeZone, out var zone))
+            return null;
+        return CatchUpHours is < 1 or > 72 ? null : new WeeklySchedule(day, time, zone, TimeSpan.FromHours(CatchUpHours));
+    }
+
+    public IReadOnlyList<string> Validate()
+    {
+        var errors = new List<string>();
+        if (!Enum.TryParse<DayOfWeek>(DayOfWeek, ignoreCase: true, out var day) || !Enum.IsDefined(day) || int.TryParse(DayOfWeek, out _))
+            errors.Add($"{Section}:DayOfWeek must be Monday-Sunday (got {DayOfWeek})");
+        if (!TimeOnly.TryParseExact(LocalTime, "HH:mm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _))
+            errors.Add($"{Section}:LocalTime must be HH:mm (got {LocalTime})");
+        if (!ToroSquad.Core.Guilds.GuildTime.TryResolve(TimeZone, out _))
+            errors.Add($"{Section}:TimeZone must be an IANA time zone (got {TimeZone})");
+        if (CatchUpHours is < 1 or > 72)
+            errors.Add($"{Section}:CatchUpHours must be 1-72 (got {CatchUpHours})");
         return errors;
     }
 }

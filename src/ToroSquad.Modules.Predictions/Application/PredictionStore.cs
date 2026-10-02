@@ -27,6 +27,7 @@ public sealed class PredictionStore(ToroDbContext db, IOptions<PredictionsOption
     public DbSet<PredictionStandingEntity> Standings => db.Set<PredictionStandingEntity>();
     public DbSet<PredictionAutoEventEntity> AutoEvents => db.Set<PredictionAutoEventEntity>();
     public DbSet<PredictionAutoProviderEntity> AutoProviders => db.Set<PredictionAutoProviderEntity>();
+    public DbSet<PredictionWeeklyBoardEntity> WeeklyBoards => db.Set<PredictionWeeklyBoardEntity>();
 
     public ToroDbContext Db => db;
 

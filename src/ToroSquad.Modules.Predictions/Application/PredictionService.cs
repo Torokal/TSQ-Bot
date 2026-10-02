@@ -1145,13 +1145,16 @@ public sealed class PredictionService(
     /// its channel: locked (entries stopped when the card vanished), with ✅ Sonuçlandır and ↩️ İptal / İade — otherwise it
     /// could never be settled or cancelled and would block the tournament forever. At most one attempt per
     /// <see cref="RepostBackoff"/>; an uncertain post is looked for among the latest messages first — never a blind second card.
+    /// A settled/cancelled prediction never gets one (nothing left to manage), and a card the retention cleanup removed on
+    /// purpose (<see cref="PredictionEntity.CardRemovedAt"/>) is archived, never replaced.
     /// </summary>
     public async Task<int> RepostMissingCardsAsync(CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         var due = now - RepostBackoff;
         var rows = await store.Predictions.AsNoTracking()
-            .Where(p => p.CardMissing && (p.Status == PredictionStatus.Open || p.Status == PredictionStatus.Locked) && (p.CardEditedAt == null || p.CardEditedAt < due))
+            .Where(p => p.CardMissing && p.CardRemovedAt == null && (p.Status == PredictionStatus.Open || p.Status == PredictionStatus.Locked) &&
+                        (p.CardEditedAt == null || p.CardEditedAt < due))
             .OrderBy(p => p.Id).Take(SweepBatch).ToListAsync(ct);
         var reposted = 0;
         foreach (var row in rows.Where(r => deployment.IsGuildAllowed(new GuildId(r.GuildId))))

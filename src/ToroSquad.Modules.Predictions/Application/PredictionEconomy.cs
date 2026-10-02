@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using ToroSquad.Core;
 using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Messaging;
+using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Security;
 using ToroSquad.Infrastructure.Delivery;
@@ -63,12 +64,18 @@ public sealed class PredictionEconomy(
     IPredictionRandom random,
     INotificationOutbox outbox,
     IGuildSettingsStore settings,
+    IModuleStateStore modules,
+    DeploymentPolicy deployment,
     IOptions<PredictionsOptions> options,
     IOptions<DeliveryOptions> delivery,
     TimeProvider clock,
     ILogger<PredictionEconomy> logger)
 {
     public const string KindTournamentClosed = "tournament-closed";
+    public const string KindWeeklyLeaderboard = "weekly-leaderboard";
+
+    /// <summary>A staged weekly leaderboard is delivered within this time or dropped (never last week's ranking days later).</summary>
+    public static readonly TimeSpan WeeklyLifetime = TimeSpan.FromHours(6);
 
     /// <summary>The closing announcement is delivered within this time or dropped (never a stale result days later).</summary>
     public static readonly TimeSpan AnnouncementLifetime = TimeSpan.FromHours(12);
@@ -79,6 +86,9 @@ public sealed class PredictionEconomy(
     private PredictionsOptions Options => options.Value;
 
     public static string SourceKey(long tournamentId) => "tournament:" + tournamentId.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>The weekly post's outbox source: the guild's week, never a tournament (a tournament change that week posts no second one).</summary>
+    public static string WeeklySourceKey(int weekKey) => "weekly:" + weekKey.ToString(CultureInfo.InvariantCulture);
 
     // ---- wallet ----
 
@@ -192,6 +202,69 @@ public sealed class PredictionEconomy(
         var coins = tournament is null ? [] : await CoinBoardAsync(tournament.Id, PredictionRules.LeaderboardSize, ct);
         var correct = tournament is null ? [] : await CorrectBoardAsync(tournament.Id, PredictionRules.LeaderboardSize, ct);
         return new PredictionReply(OperationResult.Ok("predictions.leaderboard.title"), messages.Leaderboard(tournament?.Number ?? 1, coins, correct, language), Public: true);
+    }
+
+    /// <summary>
+    /// The automatic weekly leaderboard (worker; no interaction): when the week's slot is due (<see cref="WeeklySchedule.Due"/>),
+    /// every guild with the module enabled is evaluated ONCE for that week — inside one write transaction the week row is
+    /// re-checked, the CURRENT active tournament read (never created), and either the same boards as /ongoru liderlik (same
+    /// queries, Top 10, same renderer) staged in the outbox for the commands channel, or — nobody eligible — nothing posted
+    /// and the week marked skipped. Row and outbox commit together; the unique (guild, week) row and the outbox key make a
+    /// restart, a second process or a retried send post it at most once. A manual /ongoru liderlik neither counts nor blocks.
+    /// </summary>
+    public async Task<int> PublishWeeklyLeaderboardAsync(CancellationToken ct)
+    {
+        var weekly = Options.WeeklyLeaderboard;
+        if (!weekly.Enabled || weekly.Schedule() is not { } schedule)
+            return 0;
+        var now = clock.GetUtcNow();
+        if (schedule.Due(now) is not { } slot)
+            return 0;
+        var week = schedule.WeekKey(slot);
+        var staged = 0;
+        foreach (var guild in await modules.GetGuildsWithModuleEnabledAsync(PredictionsModule.ModuleIdTyped, ct))
+        {
+            if (!deployment.IsGuildAllowed(guild) || await store.WeeklyBoards.AsNoTracking().AnyAsync(w => w.GuildId == guild.Value && w.WeekKey == week, ct))
+                continue;
+            var language = await LanguageAsync(guild, ct);
+            var decided = await PredictionWrites.RunAsync<PredictionWeeklyBoardEntity?>(store.Db, async () =>
+            {
+                if (await store.WeeklyBoards.AnyAsync(w => w.GuildId == guild.Value && w.WeekKey == week, ct))
+                    return null;
+                var tournament = await store.ActiveTournamentAsync(guild, ct);
+                var participants = tournament is null ? 0 : await store.EligibleWallets(tournament.Id).CountAsync(ct);
+                var row = new PredictionWeeklyBoardEntity
+                {
+                    GuildId = guild.Value,
+                    WeekKey = week,
+                    ScheduledAt = slot,
+                    EvaluatedAt = now,
+                    Status = participants > 0 ? WeeklyBoardStatus.Staged : WeeklyBoardStatus.SkippedNoParticipants,
+                    TournamentId = tournament?.Id,
+                    Participants = participants,
+                };
+                store.WeeklyBoards.Add(row);
+                if (tournament is not null && participants > 0)
+                {
+                    var coins = await CoinBoardAsync(tournament.Id, PredictionRules.LeaderboardSize, ct);
+                    var correct = await CorrectBoardAsync(tournament.Id, PredictionRules.LeaderboardSize, ct);
+                    await outbox.StageAsync(new NotificationRequest(guild, PredictionsModule.ModuleIdTyped, WeeklySourceKey(week), guards.CommandsChannel,
+                        KindWeeklyLeaderboard, messages.Leaderboard(tournament.Number, coins, correct, language, weekly: true), now + WeeklyLifetime,
+                        delivery.Value.Mode != DeliveryMode.Send), ct);
+                }
+
+                await store.Db.SaveChangesAsync(ct);
+                return row;
+            }, ct);
+            if (decided is null)
+                continue;
+            if (decided.Status == WeeklyBoardStatus.Staged)
+                staged++;
+            logger.LogInformation("prediction_weekly_leaderboard guild={Guild} week={Week} status={Status} tournament={Tournament} participants={Participants}",
+                guild, week, decided.Status, decided.TournamentId, decided.Participants);
+        }
+
+        return staged;
     }
 
     public async Task<IReadOnlyList<StandingRow>> CoinBoardAsync(long tournamentId, int take, CancellationToken ct)
