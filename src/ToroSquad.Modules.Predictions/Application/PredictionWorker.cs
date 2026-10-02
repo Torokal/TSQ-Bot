@@ -8,8 +8,9 @@ namespace ToroSquad.Modules.Predictions.Application;
 /// One loop for all predictions (no timer per prediction), about every <see cref="Interval"/>: locks every open prediction
 /// whose lock time has come — on the first pass after a restart or deploy that includes everything that passed while the
 /// bot was down —, looks for cards whose post was uncertain, and edits the cards still marked stale (which also coalesces
-/// bursts of entries into one edit). Now and then it checks that open cards still exist and prunes delivered
-/// announcements. Entry safety never depends on this loop: every entry compares the current time with the lock time
+/// bursts of entries into one edit). It removes settled/cancelled cards whose retention has passed and stages the weekly
+/// leaderboard when its slot is due (both decided from the database, so a restart loses nothing). Now and then it checks
+/// that open cards still exist and prunes delivered announcements. Entry safety never depends on this loop: every entry compares the current time with the lock time
 /// inside its own transaction. Locking runs even while the module is disabled in a guild (a promised deadline is kept);
 /// it changes no coins.
 /// </summary>
@@ -30,7 +31,10 @@ public sealed class PredictionWorker(IServiceScopeFactory scopes, TimeProvider c
         var predictions = scope.ServiceProvider.GetRequiredService<PredictionService>();
         await predictions.LockDueAsync(cancellationToken);
         await predictions.ReconcilePublishingAsync(cancellationToken);
-        await scope.ServiceProvider.GetRequiredService<PredictionCardSync>().SyncStaleAsync(cancellationToken);
+        var cardSync = scope.ServiceProvider.GetRequiredService<PredictionCardSync>();
+        await cardSync.SyncStaleAsync(cancellationToken);
+        await cardSync.RemoveExpiredCardsAsync(cancellationToken);
+        await scope.ServiceProvider.GetRequiredService<PredictionEconomy>().PublishWeeklyLeaderboardAsync(cancellationToken);
 
         var now = clock.GetUtcNow();
         if (now - _lastMaintenance >= MaintenanceInterval)

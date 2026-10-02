@@ -63,6 +63,16 @@ public sealed class PredictionHealthCheck(IServiceScopeFactory scopes, IGuildGat
             ? new HealthEntry("predictions.health.cards", HealthState.Healthy, "predictions.health.cards_ok")
             : new HealthEntry("predictions.health.cards", HealthState.Degraded, "predictions.health.cards_problem", [publishing, missingCards, stuck]));
 
+        // Settled/cancelled cards whose removal after the retention failed (retrying, or given up: permissions/config).
+        var cleanup = await store.Predictions.AsNoTracking().Where(p => p.CardRemovedAt == null && p.CardRemovalAttempts > 0)
+            .Select(p => p.CardRemovalAttempts).ToListAsync(cancellationToken);
+        if (cleanup.Count > 0)
+        {
+            var givenUp = cleanup.Count(a => a >= PredictionCardSync.MaxRemovalAttempts);
+            entries.Add(new HealthEntry("predictions.health.card_cleanup", givenUp > 0 ? HealthState.Degraded : HealthState.Healthy,
+                "predictions.health.card_cleanup_value", [cleanup.Count - givenUp, givenUp]));
+        }
+
         var outbox = await store.Db.Outbox.AsNoTracking().Where(o => o.ModuleId == PredictionsModule.ModuleIdValue)
             .GroupBy(o => o.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(cancellationToken);
         var waiting = outbox.Where(o => o.Key is OutboxStatus.Pending or OutboxStatus.InFlight or OutboxStatus.DeliveryUnknown).Sum(o => o.Count);

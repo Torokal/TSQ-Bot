@@ -238,9 +238,14 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         _ => L(language, row.PredictionStatus == PredictionStatus.Locked ? "predictions.mine.pending_locked" : "predictions.mine.pending", Coin(row.PotentialPayoutMinor, language)),
     };
 
-    public OutgoingMessage Leaderboard(int tournament, IReadOnlyList<StandingRow> coins, IReadOnlyList<StandingRow> correct, string language)
+    /// <summary>
+    /// /ongoru liderlik and the automatic weekly post (<paramref name="weekly"/>: its own title and a one-line note; same
+    /// boards, same lines, same footer). Members are embed mentions: shown with their current name, never pinged.
+    /// </summary>
+    public OutgoingMessage Leaderboard(int tournament, IReadOnlyList<StandingRow> coins, IReadOnlyList<StandingRow> correct, string language, bool weekly = false)
     {
-        var embed = new MessageEmbed(L(language, "predictions.leaderboard.title", tournament), L(language, "predictions.leaderboard.note"), null,
+        var embed = new MessageEmbed(weekly ? L(language, "predictions.leaderboard.weekly_title") : L(language, "predictions.leaderboard.title", tournament),
+            weekly ? L(language, "predictions.leaderboard.weekly_note", tournament) : L(language, "predictions.leaderboard.note"), null,
         [
             new(L(language, "predictions.leaderboard.coins"), CoinLines(coins, r => Mention(r.User), language)),
             new(L(language, "predictions.leaderboard.correct"), CorrectLines(correct, r => Mention(r.User), language)),

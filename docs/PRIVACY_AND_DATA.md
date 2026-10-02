@@ -49,6 +49,8 @@ sayılar, token kullanımı, süre ve sonuç bulunur ([summary/TSQ_SUMMARY.md](s
 | `prediction_auto_provider` | Sağlayıcının bildirdiği kredi kullanımı, duraklama ve son hata sınıfı | yok | kalıcı işletim verisi |
 | `prediction_standing` | Kapanmış turnuvanın ilk 3'ü (coin ve doğru tablosu): kullanıcı ID, o anki görünen ad, final değerler | kullanıcı | `/privacy delete` yalnızca görünen adı temizler; sunucu verisiyle birlikte silinir |
 | `outbox` (Öngörü turnuva duyurusu) | Duyuru: ilk 3'ün görünen adları (mention yok) ve final değerleri | kullanıcı | teslimden/bitişten 2 gün sonra |
+| `outbox` (Öngörü haftalık liderlik) | Haftalık liderlik mesajı: ilk 10 üyenin kullanıcı ID'si (embed mention'ı, ping yok) ve coin/doğru değerleri | kullanıcı | teslimden/bitişten 2 gün sonra |
+| `prediction_weekly_board` | Haftalık otomatik liderlik kararı: sunucu, hafta anahtarı, planlanan/değerlendirme zamanı, durum (gönderildi/atlandı), turnuva ID'si, katılımcı sayısı | yok (kullanıcı verisi içermez) | sunucu verisiyle birlikte silinir |
 | *(bellek, tablo değil)* Öngörü taslak ve onayları | Oluşturma formu değerleri, iptal gerekçesi, turnuva bitirme onayı; kullanıcı ve sunucu ID'si (tahmin formu bellekte hiçbir şey tutmaz) | kullanıcı | **veritabanına hiç yazılmaz**; 5–30 dk sonra, kullanımda veya restart'ta silinir |
 
 TSQ Döviz & Altın kendi tablosunu kullanmaz ve kullanıcı verisi tutmaz: fiyatlar yalnızca bellekte kısa süre önbelleklenir,
@@ -63,7 +65,9 @@ günlük ödül ve derece kayıtları ortak bir yarışmanın oyun kayıtlarıd�
 silinmeleri "kaybet → sil → yeniden 1000 al" açığını açardı; bu yüzden korunur, önizlemede ve silme sonrası uyarıda "silinmedi"
 olarak bildirilir. Yalnızca kayıtlı görünen adlar (cüzdan, derece, oluşturulan öngörü) kaldırılır. Oyun dışı gerçek bir silme
 talebi operatör tarafından ayrıca ele alınır (sahip/hukuki karar). Bot sunucudan ayrılınca modülün o sunucudaki tüm verisi
-silinir. Ayrıntı: [predictions/TSQ_PREDICTIONS.md](predictions/TSQ_PREDICTIONS.md).
+silinir. Sonuçlanmış/iptal edilmiş öngörü kartının 12 saat sonra Discord kanalından kaldırılması bir veri silme işlemi
+**değildir**: yalnızca herkese açık mesaj gider; öngörü, katılımlar, coin hareketleri ve istatistikler veritabanında aynen kalır
+(yukarıdaki saklama kuralları geçerlidir). Ayrıntı: [predictions/TSQ_PREDICTIONS.md](predictions/TSQ_PREDICTIONS.md).
 
 TSQ Quote tablo kullanmaz; `/privacy export/delete` kapsamında kaydı yoktur (gönderilen alıntı görseli normal bir kanal
 mesajıdır; kanaldan Discord'da silinir).

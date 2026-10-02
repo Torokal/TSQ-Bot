@@ -849,6 +849,33 @@ public sealed class AutoFootballTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Removing_a_settled_automatic_card_after_its_retention_never_reopens_the_match()
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff));
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr,
+            new Dictionary<string, string?> { ["Predictions:TerminalCardRetentionHours"] = "1" });
+        await kit.PassAsync();
+        var prediction = (await kit.AutoPredictionsAsync()).Single();
+        var view = (await kit.Service(s => s.GetAsync(prediction.Id, Ct)))!;
+        (await kit.SettleAsync(Admin(), view, 1)).Result.Succeeded.Should().BeTrue(); // settled early by an admin, the match is still to come
+
+        await kit.TickAsync(TimeSpan.FromHours(1));
+        (await kit.RowAsync(prediction.Id)).CardRemovedAt.Should().NotBeNull();
+        kit.Transport.Messages.Should().NotContain(m => m.Id == view.Message, "the card is removed");
+        for (var i = 0; i < 3; i++)
+        {
+            kit.Host.Clock.Advance(TimeSpan.FromMinutes(20));
+            await kit.PassAsync();
+            await kit.TickAsync();
+        }
+
+        (await kit.AutoPredictionsAsync()).Should().ContainSingle("the match key is kept: no second automatic prediction");
+        (await kit.AutoRowsAsync()).Single().Should().Match<PredictionAutoEventEntity>(r => r.State == AutoEventState.Published && r.PredictionId == prediction.Id);
+        kit.Transport.Messages.Should().BeEmpty("no new card, no replacement");
+    }
+
+    [Fact]
     public async Task A_planned_match_does_not_block_ending_the_tournament_a_published_one_does()
     {
         await _kit.ParticipateAsync(1);

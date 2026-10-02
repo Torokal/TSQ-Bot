@@ -66,6 +66,13 @@ public interface IMessageTransport
     /// message gateway intents (the bot only uses the Guilds intent).
     /// </summary>
     Task<MessagePresence> GetPresenceAsync(ChannelId channel, MessageId message, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes one of the bot's own messages (no Manage Messages needed for that). <see cref="SendOutcome.Sent"/> = deleted;
+    /// <see cref="PermanentFailureKind.UnknownMessage"/> / <see cref="PermanentFailureKind.UnknownChannel"/> = already gone.
+    /// Idempotent: a repeated delete of the same message answers "already gone".
+    /// </summary>
+    Task<SendOutcome> DeleteAsync(ChannelId channel, MessageId message, CancellationToken cancellationToken);
 }
 
 /// <summary>

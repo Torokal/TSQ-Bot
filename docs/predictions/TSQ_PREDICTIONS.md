@@ -42,6 +42,15 @@ başlangıçta doğrulanır, hatalı değer botu açık bir CONFIG satırıyla d
 | `Predictions:DailyMinCoins` / `DailyMaxCoins` | `10` / `100` | Günlük ödül aralığı (iki uç dahil) |
 | `Predictions:DefaultOdds` | `2.00` | Oranı yazılmayan seçeneğin oranı (1.01–1000.00, en fazla iki ondalık) |
 | `Predictions:MaxOutcomes` | `25` | Öngörü başına en fazla seçenek (2–25) |
+| `Predictions:TerminalCardRetentionHours` | `12` | Sonuçlanmış/iptal edilmiş öngörünün kartı bu kadar saat sonra kanaldan kaldırılır (1–168; yalnız Discord mesajı) |
+| `Predictions:WeeklyLeaderboard:Enabled` | `true` | Haftalık otomatik liderlik paylaşımı |
+| `Predictions:WeeklyLeaderboard:DayOfWeek` | `Sunday` | Gün (`Monday`–`Sunday`) |
+| `Predictions:WeeklyLeaderboard:LocalTime` | `20:00` | Yerel saat (`HH:mm`) |
+| `Predictions:WeeklyLeaderboard:TimeZone` | `Europe/Istanbul` | IANA saat dilimi (sunucunun saat dilimi kullanılmaz) |
+| `Predictions:WeeklyLeaderboard:CatchUpHours` | `12` | Bot o anda kapalıysa en fazla bu kadar saat geç gönderilir (1–72) |
+
+Örnek (Railway ortam değişkeni): `TOROSQUAD_Predictions__WeeklyLeaderboard__LocalTime=21:00`,
+`TOROSQUAD_Predictions__TerminalCardRetentionHours=12`. Saat/gün değişikliği için yeni komut veya yönetim ekranı yoktur.
 
 Kanal kuralları **yöneticiler için de** geçerlidir ve kanal ID'si **birebir** eşleşmelidir: DM, başka sunucu, başka kanal ve
 izinli kanalın thread'leri reddedilir. Yanlış kanal cevabı yalnızca kullanana görünür, ör. "Bu komutu yalnızca
@@ -258,6 +267,51 @@ Sunucu başına tek aktif turnuva (kısmi benzersiz indeks). İlk kullanımda Tu
 Eski cüzdanlar **UPDATE ile 1000'e çekilmez**: yeni turnuvada cüzdan yoktur, herkes ilk kullanımda 1000 ile başlar; eski
 turnuvanın cüzdanları, katılımları, sıralaması arşiv olarak değişmeden kalır.
 
+## Sonuçlanmış/iptal kartların kaldırılması
+
+Sonuçlanmış (`Settled`) veya iptal edilmiş (`Cancelled`) bir öngörünün herkese açık kartı, sonuçlandırma/iptal işleminin
+**commit edildiği andan** (`SettledAt` / `CancelledAt`; kart düzenleme zamanı değil) **12 saat** sonra kanaldan kaldırılır —
+ör. 10:30'da sonuçlanan kart 22:30'da veya worker'ın sonraki ilk turunda (≈10 sn). Açık, kilitli veya yayımlanmakta olan
+öngörünün kartı **kaldırılmaz**. Yeniden denenen sonuçlandırma (ikinci ödeme zaten reddedilir) veya geç biten kart
+güncellemesi süreyi yeniden başlatmaz.
+
+- **Yalnızca Discord mesajı kaldırılır.** Öngörü, sonuçlar, katılımlar, coin hareketleri, cüzdanlar, doğru/yanlış
+  istatistikleri, turnuva ilişkisi, liderlik uygunluğu, otomatik futbol maç bağlantısı ve denetim alanları **kalır**;
+  `/ongoru tahminlerim`, `/ongoru liderlik`, `/ongoru turnuva durum` ve `/ongoru turnuva bitir` aynen çalışır.
+- Worker her turda veritabanından "terminal + kartı duruyor + süresi dolmuş" kayıtları bulur (kart başına zamanlayıcı yok):
+  restart, deploy veya çökme süreyi kaybettirmez; 15 saat önce sonuçlanmış kart ilk turda kaldırılır. Bir turda en fazla 10.
+- Silme Discord işlem dışındadır ve hemen önce durum yeniden denetlenir (hâlâ terminal, süre dolmuş, aynı mesaj ID'si).
+  Başarılı silme veya "mesaj zaten yok" (404) → `CardRemovedAt` yazılır, bir daha denenmez. 429/5xx/zaman aşımı ve izin
+  sorunu → artan bekleme (1 dk, 5 dk, 15 dk, 1 sa, 6 sa), en fazla 6 deneme; sonra `/bot status` "kart temizliği" satırında
+  görünür. Bot kendi mesajını sildiği için Manage Messages gerekmez.
+- **Kaldırılan kart arşivlenmiştir:** bir daha düzenlenmez ve **yedek kart gönderilmez**. Yedek kart yalnızca açık/kilitli
+  öngörünün kartı beklenmedik şekilde silinince gönderilir (değişmedi). Sonuçlanmış kart 12 saat dolmadan elle silinirse de
+  yedek gönderilmez (bugünkü davranış); 12 saatte temizlik bunu "zaten yok" olarak kapatır.
+- Kart kaldırılınca otomatik futbol maç anahtarı korunur: aynı maç için ikinci otomatik öngörü açılmaz.
+
+## Haftalık otomatik liderlik
+
+Aktif turnuvanın liderliği **haftada bir** komut kanalına (`Predictions:CommandsChannelId`, `/ongoru liderlik`'in kanalı)
+otomatik gönderilir; varsayılan **her Pazar 20:00 (Europe/Istanbul)**.
+
+- `/ongoru liderlik` ile **aynı sorgular ve aynı görünüm**: aynı uygunluk (bu turnuvada en az bir katılım veya bir öngörü;
+  yalnız cüzdan veya günlük ödül yetmez), 💰 En Çok TSQ Coin ve 🎯 En Çok Doğru Tahmin, her biri **en fazla ilk 10**. Başlık
+  "🏆 TSQ Öngörü · Haftalık Liderlik", açıklama "Güncel aktif turnuva sıralaması (Turnuva N)". Tek kompakt mesaj; üyeler embed
+  mention'ı olarak görünür, **ping yok** (`allowed_mentions` boş).
+- **Her sunucu ve hafta için en fazla bir otomatik paylaşım:** hafta anahtarı, slotun yerel tarihinin ISO haftasıdır
+  (`yyyyww`); `prediction_weekly_board(GuildId, WeekKey)` benzersizdir ve outbox anahtarı da haftaya bağlıdır (turnuvaya
+  değil). Plan satırı ve outbox kaydı aynı işlemde commit olur; restart, iki worker veya Discord zaman aşımı ikinci kart
+  üretmez; teslim, yeniden deneme ve 6 saatlik geçerlilik outbox'ındır.
+- **Geç gönderim:** bot slot anında kapalıysa en fazla `CatchUpHours` (12) saat içinde bir kez gönderilir (Pazar 23:00'te açılan
+  bot gönderir; Pazartesi 08:00'den sonra veya Salı açılan bot geçen Pazar'ı göndermez, sonraki Pazar'ı bekler). Eski
+  haftalar topluca gönderilmez.
+- **Boş liderlik:** uygun kimse yoksa (veya aktif turnuva yoksa) mesaj gönderilmez, hafta "atlandı" olarak işaretlenir; o hafta
+  sonradan oynayan biri için geç kart gönderilmez.
+- Her çalışmada **o anki** aktif turnuva kullanılır: turnuva 19:59'da biterse 20:00 kartı yeni turnuvadandır (tek kart).
+- Modül kapalıysa veya `WeeklyLeaderboard:Enabled=false` ise gönderilmez; modül pencere içinde yeniden açılırsa o hafta bir kez
+  gönderilebilir. Kanal/izin sorunu ekonomiye dokunmaz; outbox'ın sınırlı yeniden denemesi ve `/bot status` duyuru satırı geçerlidir.
+- Elle `/ongoru liderlik` bağımsızdır: haftalık paylaşımı atlatmaz, haftalık paylaşım onu engellemez.
+
 ## Liderlik ve uygunluk
 
 Tek tanım (`PredictionStore.EligibleWallets`): aktif turnuvada **en az bir katılım** yapmış **veya en az bir öngörü
@@ -278,7 +332,8 @@ oluşturulan cüzdan uygunluk sağlamaz; önceki turnuvadaki aktivite yeni turnu
 
 Tablolar (additive migration `PredictionsModule`): `prediction_tournament`, `prediction_wallet` (görünen ad anlık görüntüsü
 dahil), `prediction`, `prediction_outcome`, `prediction_entry`, `prediction_ledger`, `prediction_daily_claim`,
-`prediction_standing` (tablo türü: coin/doğru).
+`prediction_standing` (tablo türü: coin/doğru); additive migration `PredictionsCardRetentionWeeklyBoard`: `prediction`
+kart temizliği sütunları (`CardRemovedAt`, `CardRemovalAttempts`, `CardRemovalNextAt`) ve `prediction_weekly_board`.
 
 | Garanti | Nasıl |
 |---|---|
@@ -288,6 +343,7 @@ dahil), `prediction`, `prediction_outcome`, `prediction_entry`, `prediction_ledg
 | Sunucu/kullanıcı/yerel gün başına tek günlük hak | `prediction_daily_claim(GuildId, UserId, LocalDay)` benzersiz |
 | Ekonomik işlem başına tek hareket | `prediction_ledger(OperationKey)` benzersiz |
 | Tek taslaktan tek öngörü | `prediction(PublishKey)` benzersiz |
+| Sunucu/hafta başına tek otomatik haftalık liderlik | `prediction_weekly_board(GuildId, WeekKey)` benzersiz |
 | Katılımın sonucu kendi öngörüsüne, öngörüsü ve cüzdanı aynı turnuvaya ait | bileşik yabancı anahtarlar |
 | Negatif bakiye yok, geçerli tutar/oran | CHECK kısıtları |
 
@@ -317,16 +373,18 @@ ortak bir yarışmanın oyun kayıtlarıdır (diğer üyelerin sıralaması onla
 al" açığını doğururdu. Bu kayıtlar korunur ve üyeye önizlemede ve silme sonrasında açıkça söylenir; kayıtlı görünen ad anlık
 görüntüleri (cüzdan, derece, oluşturulan öngörü) kaldırılır, kartta oluşturan "—" görünür. Gerçek bir yasal silme talebi
 operatör tarafından oyun dışında ele alınmalıdır (ürün/hukuk kararı). Bot sunucudan çıkarıldığında modülün o sunucudaki tüm
-verisi diğer modüllerle birlikte silinir. Kapanış duyurusu satırları teslimden 2 gün sonra outbox'tan silinir; taslak ve onay
-token'ları yalnızca bellektedir.
+verisi diğer modüllerle birlikte silinir. Kapanış duyurusu ve haftalık liderlik satırları teslimden 2 gün sonra outbox'tan
+silinir; taslak ve onay token'ları yalnızca bellektedir. Sonuçlanmış/iptal kartın 12 saat sonra kanaldan kaldırılması
+**veri silme değildir**: yalnızca Discord mesajı gider, öngörü geçmişi veritabanında kalır.
 
 ## Operasyon ve denetim izi
 
 Loglar yalnızca ID, sayı ve tutar içerir: `prediction_published`, `prediction_entry`, `prediction_entry_changed`,
 `prediction_entry_withdrawn`, `prediction_locked`,
 `prediction_settled` (kim, hangi öngörü, hangi sonuç, kazanan sayısı, ödeme), `prediction_cancelled`, `prediction_daily`,
-`tournament_closed` (kim, hangi turnuva). `/bot status`: iki kanalın bot izinleri, yaratıcı rolü, doğrulanmayı bekleyen /
-silinmiş / güncellenemeyen kart sayıları, bekleyen/gönderilemeyen duyurular, bekleyen coin tutarlılık denetimi ve otomatik
+`tournament_closed` (kim, hangi turnuva), `prediction_weekly_leaderboard` (hafta, durum, turnuva, katılımcı sayısı), kart
+kaldırma satırları. `/bot status`: iki kanalın bot izinleri, yaratıcı rolü, doğrulanmayı bekleyen / silinmiş / güncellenemeyen
+kart sayıları, kaldırılamayan sonuçlanmış/iptal kartlar, bekleyen/gönderilemeyen duyurular, bekleyen coin tutarlılık denetimi ve otomatik
 futbol durumu (mod, keşif, bugünkü maçlar, kredi, son hata, inceleme).
 
 ## Otomatik futbol öngörüleri

@@ -114,6 +114,30 @@ public sealed class FakeMessageTransport(ILogger<FakeMessageTransport>? logger =
             return Task.FromResult(_messages.Any(m => m.Id == message && m.Channel == channel) ? MessagePresence.Present : MessagePresence.Missing);
     }
 
+    private readonly ConcurrentQueue<Func<SendOutcome>> _scriptedDeletes = new();
+
+    public int DeleteCalls { get; private set; }
+
+    public void ScriptDelete(Func<SendOutcome> outcome) => _scriptedDeletes.Enqueue(outcome);
+
+    public Task<SendOutcome> DeleteAsync(ChannelId channel, MessageId message, CancellationToken cancellationToken)
+    {
+        DeleteCalls++;
+        if (_scriptedDeletes.TryDequeue(out var scripted))
+        {
+            var outcome = scripted();
+            if (outcome is not SendOutcome.Sent)
+                return Task.FromResult(outcome);
+        }
+
+        lock (_gate)
+        {
+            return Task.FromResult<SendOutcome>(_messages.RemoveAll(m => m.Id == message && m.Channel == channel) > 0
+                ? new SendOutcome.Sent(message)
+                : new SendOutcome.Permanent(PermanentFailureKind.UnknownMessage, "Unknown Message"));
+        }
+    }
+
     /// <summary>Test helper: delete a message as a moderator would.</summary>
     public void DeleteMessage(MessageId id)
     {
