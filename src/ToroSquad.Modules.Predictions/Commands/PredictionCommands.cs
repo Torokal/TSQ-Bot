@@ -101,7 +101,7 @@ public abstract class PredictionInteractionModule(InteractionServices services) 
         return true;
     }
 
-    /// <summary>The reply's view (private unless it is marked public), or its result text; never pings.</summary>
+    /// <summary>The reply's view (private unless it is marked public) and its private note, or its result text; never pings.</summary>
     protected async Task ReplyViewAsync(PredictionReply reply)
     {
         if (reply.View is not { } view)
@@ -111,5 +111,7 @@ public abstract class PredictionInteractionModule(InteractionServices services) 
         }
 
         await SendAsync(view.Content, DiscordConversions.ToEmbed(view.Embed), DiscordConversions.ToComponents(view), ephemeral: !reply.Public);
+        if (reply.Private is { } note) // e.g. the member's own leaderboard rank: a follow-up only they can see
+            await SendAsync(note.Content, DiscordConversions.ToEmbed(note.Embed), DiscordConversions.ToComponents(note), ephemeral: true);
     }
 }

@@ -187,11 +187,10 @@ public sealed class PredictionEconomy(
     // ---- leaderboard / status ----
 
     /// <summary>
-    /// Both boards of THIS guild's active tournament, eligible members only (<see cref="PredictionStore.EligibleWallets"/>),
-    /// computed by SQLite (ORDER BY … LIMIT, never the whole table in memory). Coins = spendable + pending stakes (never a
-    /// possible win); ties: correct predictions, then user id. Correct = settled correct predictions (one per prediction at
-    /// most — one entry per prediction; creating one earns nothing); ties: success rate (a member with nothing settled yet
-    /// comes after every rate, 0% included), then total coins, then user id.
+    /// Both boards of THIS guild's active tournament, Top 10 each (<see cref="PredictionRanking"/>: eligible = at least one
+    /// settled own entry; coins = live wealth; ordered and limited by SQLite), as the public card — plus, for the member who
+    /// asked, a private note: their own rank on each board where they are NOT in the Top 10 (nothing when they are on both),
+    /// or that they are not ranked yet (no invented rank). The weekly post uses the same boards without any personal note.
     /// </summary>
     public async Task<PredictionReply> LeaderboardAsync(ActorContext actor, ChannelId here, CancellationToken ct)
     {
@@ -201,7 +200,13 @@ public sealed class PredictionEconomy(
         var tournament = await store.Tournaments.AsNoTracking().FirstOrDefaultAsync(t => t.GuildId == actor.GuildId.Value && t.Status == PredictionTournamentStatus.Active, ct);
         var coins = tournament is null ? [] : await CoinBoardAsync(tournament.Id, PredictionRules.LeaderboardSize, ct);
         var correct = tournament is null ? [] : await CorrectBoardAsync(tournament.Id, PredictionRules.LeaderboardSize, ct);
-        return new PredictionReply(OperationResult.Ok("predictions.leaderboard.title"), messages.Leaderboard(tournament?.Number ?? 1, coins, correct, language), Public: true);
+        var mine = tournament is null ? null : await PersonalRankAsync(tournament.Id, actor.UserId, ct);
+        var note = mine is null
+            ? messages.NotRanked(language)
+            : messages.PersonalRank(mine.Coin.Rank > PredictionRules.LeaderboardSize ? mine.Coin : null,
+                mine.Correct.Rank > PredictionRules.LeaderboardSize ? mine.Correct : null, language);
+        return new PredictionReply(OperationResult.Ok("predictions.leaderboard.title"), messages.Leaderboard(tournament?.Number ?? 1, coins, correct, language), Public: true,
+            Private: note);
     }
 
     /// <summary>
@@ -267,23 +272,36 @@ public sealed class PredictionEconomy(
         return staged;
     }
 
-    public async Task<IReadOnlyList<StandingRow>> CoinBoardAsync(long tournamentId, int take, CancellationToken ct)
+    /// <summary>The coin board's first <paramref name="take"/> rows (<see cref="PredictionRanking.CoinOrder"/>, LIMIT in SQLite).</summary>
+    public Task<IReadOnlyList<StandingRow>> CoinBoardAsync(long tournamentId, int take, CancellationToken ct) =>
+        BoardAsync(PredictionRanking.CoinOrder(store.EligibleWallets(tournamentId).AsNoTracking()), take, ct);
+
+    /// <summary>The correct board's first <paramref name="take"/> rows (<see cref="PredictionRanking.CorrectOrder"/>, LIMIT in SQLite).</summary>
+    public Task<IReadOnlyList<StandingRow>> CorrectBoardAsync(long tournamentId, int take, CancellationToken ct) =>
+        BoardAsync(PredictionRanking.CorrectOrder(store.EligibleWallets(tournamentId).AsNoTracking()), take, ct);
+
+    private static async Task<IReadOnlyList<StandingRow>> BoardAsync(IOrderedQueryable<PredictionWalletEntity> ordered, int take, CancellationToken ct)
     {
-        var rows = await store.EligibleWallets(tournamentId).AsNoTracking()
-            .OrderByDescending(w => w.BalanceMinor + w.PendingMinor).ThenByDescending(w => w.CorrectCount).ThenBy(w => w.UserId)
-            .Take(take).Select(w => new { w.UserId, Total = w.BalanceMinor + w.PendingMinor, w.CorrectCount, w.SettledCount, w.DisplayName }).ToListAsync(ct);
+        var rows = await ordered.Take(take).Select(w => new { w.UserId, Total = w.BalanceMinor + w.PendingMinor, w.CorrectCount, w.SettledCount, w.DisplayName }).ToListAsync(ct);
         return rows.Select((r, i) => new StandingRow(i + 1, new UserId(r.UserId), r.Total, r.CorrectCount, r.SettledCount, r.DisplayName)).ToList();
     }
 
-    public async Task<IReadOnlyList<StandingRow>> CorrectBoardAsync(long tournamentId, int take, CancellationToken ct)
+    /// <summary>
+    /// The member's own place on both boards in <paramref name="tournamentId"/>, or null when not eligible: one row read for
+    /// the member, then per board ONE count of the eligible members before them (the same predicates as the board orders) —
+    /// never the whole tournament in memory.
+    /// </summary>
+    public async Task<PersonalRank?> PersonalRankAsync(long tournamentId, UserId user, CancellationToken ct)
     {
-        // Equal correct counts (> 0): the smaller settled count is the higher success rate (identical to comparing the rates);
-        // with 0 correct every rate is 0%, so the settled count no longer matters — but nothing settled at all comes last.
-        var rows = await store.EligibleWallets(tournamentId).AsNoTracking()
-            .OrderByDescending(w => w.CorrectCount).ThenBy(w => w.SettledCount == 0 ? 1 : 0).ThenBy(w => w.CorrectCount == 0 ? 0 : w.SettledCount)
-            .ThenByDescending(w => w.BalanceMinor + w.PendingMinor).ThenBy(w => w.UserId)
-            .Take(take).Select(w => new { w.UserId, Total = w.BalanceMinor + w.PendingMinor, w.CorrectCount, w.SettledCount, w.DisplayName }).ToListAsync(ct);
-        return rows.Select((r, i) => new StandingRow(i + 1, new UserId(r.UserId), r.Total, r.CorrectCount, r.SettledCount, r.DisplayName)).ToList();
+        var eligible = store.EligibleWallets(tournamentId).AsNoTracking();
+        var me = await eligible.Where(w => w.UserId == user.Value)
+            .Select(w => new PredictionRanking.Standing(w.UserId, w.BalanceMinor + w.PendingMinor, w.CorrectCount, w.SettledCount, w.DisplayName)).FirstOrDefaultAsync(ct);
+        if (me is null)
+            return null;
+        var coin = await eligible.CountAsync(PredictionRanking.CoinAbove(me), ct) + 1;
+        var correct = await eligible.CountAsync(PredictionRanking.CorrectAbove(me), ct) + 1;
+        return new PersonalRank(new StandingRow(coin, user, me.WealthMinor, me.CorrectCount, me.SettledCount, me.DisplayName),
+            new StandingRow(correct, user, me.WealthMinor, me.CorrectCount, me.SettledCount, me.DisplayName));
     }
 
     public async Task<PredictionReply> TournamentStatusAsync(ActorContext actor, ChannelId here, CancellationToken ct)
@@ -323,6 +341,8 @@ public sealed class PredictionEconomy(
             return OperationResult.Fail(OperationError.Conflict, "predictions.tournament.nothing_to_end");
         if (await UnresolvedAsync(tournament.Id, ct) is { Count: > 0 } open)
             return new PredictionReply(OperationResult.Fail(OperationError.Conflict, "predictions.tournament.unresolved"), messages.Unresolved(open, language));
+        if (await PendingStakesAsync(tournament.Id, ct))
+            return OperationResult.Fail(OperationError.Conflict, "predictions.tournament.pending_stakes");
         var summary = await SummaryAsync(tournament, ct);
         if (summary.Participants == 0)
             return OperationResult.Fail(OperationError.Conflict, "predictions.tournament.no_participants");
@@ -348,6 +368,8 @@ public sealed class PredictionEconomy(
                 return ("predictions.tournament.stale", [], null);
             if (await UnresolvedAsync(tournament.Id, ct) is { Count: > 0 } open)
                 return ("predictions.tournament.unresolved", open, null);
+            if (await PendingStakesAsync(tournament.Id, ct))
+                return ("predictions.tournament.pending_stakes", [], null);
             var summary = await SummaryAsync(tournament, ct);
             if (summary.Participants == 0)
                 return ("predictions.tournament.no_participants", [], null);
@@ -408,6 +430,18 @@ public sealed class PredictionEconomy(
         var settled = await store.Predictions.CountAsync(p => p.TournamentId == tournament.Id && p.Status == PredictionStatus.Settled, ct);
         return new TournamentEndSummary(tournament.Number, tournament.StartedAt, participants, predictions, settled,
             await CoinBoardAsync(tournament.Id, PredictionRules.PodiumSize, ct), await CorrectBoardAsync(tournament.Id, PredictionRules.PodiumSize, ct));
+    }
+
+    /// <summary>
+    /// With nothing unresolved, no wallet can still hold a stake: the frozen podium is live wealth = balance. A pending stake
+    /// here breaks that invariant — the end is refused (never a silently wrong final ranking) and logged for the doctor.
+    /// </summary>
+    private async Task<bool> PendingStakesAsync(long tournamentId, CancellationToken ct)
+    {
+        var count = await store.Wallets.CountAsync(w => w.TournamentId == tournamentId && w.PendingMinor != 0, ct);
+        if (count > 0)
+            logger.LogError("TSQ Öngörü tournament {Tournament}: {Count} wallet(s) still hold pending stakes with nothing unresolved; end refused", tournamentId, count);
+        return count > 0;
     }
 
     public sealed record UnresolvedPrediction(long Id, string Title, PredictionStatus Status, GuildId Guild, ChannelId Channel, MessageId? Message);

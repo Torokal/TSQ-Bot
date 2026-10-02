@@ -253,6 +253,25 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         return new OutgoingMessage(null, embed, MentionPolicy.None);
     }
 
+    /// <summary>
+    /// The private note after /ongoru liderlik: the member's own rank on each board where they are NOT in the public Top 10
+    /// (null when they are on both — they already see themselves). Same values and wording as the board lines.
+    /// </summary>
+    public OutgoingMessage? PersonalRank(StandingRow? coin, StandingRow? correct, string language)
+    {
+        if (coin is null && correct is null)
+            return null;
+        var fields = new List<EmbedField>();
+        if (coin is { } c)
+            fields.Add(new(L(language, "predictions.leaderboard.mine_coins"), "#" + Number(c.Rank) + " · **" + Coin(c.TotalMinor, language) + "**"));
+        if (correct is { } r)
+            fields.Add(new(L(language, "predictions.leaderboard.mine_correct"), "#" + Number(r.Rank) + " · " + CorrectValue(r, language)));
+        return new OutgoingMessage(null, new MessageEmbed(L(language, "predictions.leaderboard.mine_title"), null, null, fields, null, null, BrandColor), MentionPolicy.None);
+    }
+
+    /// <summary>The private note for a member with nothing settled in the active tournament: no rank number at all.</summary>
+    public OutgoingMessage NotRanked(string language) => new(L(language, "predictions.leaderboard.not_ranked"), null, MentionPolicy.None);
+
     public OutgoingMessage TournamentStatus(int number, DateTimeOffset startedAt, int participants, int predictions, int unresolved, string language) =>
         new(null, new MessageEmbed(L(language, "predictions.tournament.title", number), null, null,
         [
@@ -322,9 +341,11 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
     /// <summary>"12 doğru / 15 sonuçlanan (%80)"; with nothing settled yet "0 doğru · Henüz sonuçlanmış tahmini yok" — never a misleading %0.</summary>
     private string CorrectLines(IReadOnlyList<StandingRow> rows, Func<StandingRow, string> who, string language) => rows.Count == 0
         ? L(language, "predictions.leaderboard.empty")
-        : string.Join("\n", rows.Select(r => Place(r.Rank) + " " + who(r) + " — " + (r.SettledCount == 0
-            ? L(language, "predictions.leaderboard.correct_none", Number(r.CorrectCount))
-            : L(language, "predictions.leaderboard.correct_value", Number(r.CorrectCount), Number(r.SettledCount), Percent(r.CorrectCount, r.SettledCount)))));
+        : string.Join("\n", rows.Select(r => Place(r.Rank) + " " + who(r) + " — " + CorrectValue(r, language)));
+
+    private string CorrectValue(StandingRow r, string language) => r.SettledCount == 0
+        ? L(language, "predictions.leaderboard.correct_none", Number(r.CorrectCount))
+        : L(language, "predictions.leaderboard.correct_value", Number(r.CorrectCount), Number(r.SettledCount), Percent(r.CorrectCount, r.SettledCount));
 
     private string Name(StandingRow row, string language) =>
         string.IsNullOrWhiteSpace(row.DisplayName) ? L(language, "predictions.card.creator_unknown") : "**" + DiscordText.Untrusted(row.DisplayName, 200) + "**";
