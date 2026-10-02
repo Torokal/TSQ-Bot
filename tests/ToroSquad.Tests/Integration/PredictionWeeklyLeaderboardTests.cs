@@ -255,7 +255,7 @@ public sealed class PredictionWeeklyLeaderboardTests : IAsyncLifetime
     [Fact]
     public async Task A_tournament_ending_just_before_20_00_gives_one_post_from_the_new_active_tournament()
     {
-        await SeedAsync((1001, 1000), (1002, 900));
+        await _kit.ParticipateAsync(1001, 1002); // real entries, settled: tournament 1 has something to end
         _kit.Host.Clock.SetUtcNow(Slot - TimeSpan.FromMinutes(2));
         (await _kit.ConfirmEndAsync(Admin(), (await _kit.EndTokenAsync(Admin()))!)).Result.Succeeded.Should().BeTrue();
         await SeedAsync((3001, 1000)); // plays in tournament 2 at 19:59

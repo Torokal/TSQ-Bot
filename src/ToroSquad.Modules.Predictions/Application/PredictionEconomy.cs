@@ -39,7 +39,7 @@ public sealed record MyEntryRow(long PredictionId, string Title, string OutcomeL
 /// </summary>
 public sealed record TournamentClosing(int Number, int NextNumber, int Participants, int Predictions, IReadOnlyList<StandingRow> Coins, IReadOnlyList<StandingRow> Correct);
 
-/// <summary>What the end preview shows (eligible participants and the two current podiums).</summary>
+/// <summary>What the end preview shows (participants = members with an entry; the two current podiums of leaderboard-eligible members).</summary>
 public sealed record TournamentEndSummary(int Number, DateTimeOffset StartedAt, int Participants, int Predictions, int Settled, IReadOnlyList<StandingRow> Coins,
     IReadOnlyList<StandingRow> Correct);
 
@@ -49,8 +49,9 @@ public sealed record TournamentEndSummary(int Number, DateTimeOffset StartedAt, 
 /// with the starting balance exactly once; nothing here lets a member reset their own coins. The daily reward is one claim
 /// per guild + member + Türkiye calendar day (not per tournament): the claim row, the amount, the credit and the ledger
 /// row commit together, so a double click, two parallel commands or a retried interaction pay once and show the same
-/// amount. Leaderboards, the tournament status, the end preview and the frozen podiums all start from ONE eligibility rule
-/// (<see cref="PredictionStore.EligibleWallets"/>). Closing a tournament (/ongoru turnuva bitir) is one transaction: every
+/// amount. The boards, the member's own rank, the weekly post and the frozen podiums start from ONE eligibility rule
+/// (<see cref="PredictionStore.EligibleWallets"/>); whether a tournament can be ended is a separate rule
+/// (<see cref="CloseBlockAsync"/>). Closing a tournament (/ongoru turnuva bitir) is one transaction: every
 /// condition is re-checked (the confirmation names ONE tournament id and admin), both podiums are frozen, the tournament
 /// closed, the next one opened and the announcement staged in the outbox from the frozen values. New balances are not
 /// written over the old wallets: the next tournament simply has no wallets yet, so everyone starts again at the starting
@@ -312,7 +313,7 @@ public sealed class PredictionEconomy(
         var tournament = await store.Tournaments.AsNoTracking().FirstOrDefaultAsync(t => t.GuildId == actor.GuildId.Value && t.Status == PredictionTournamentStatus.Active, ct);
         if (tournament is null)
             return new PredictionReply(OperationResult.Ok("predictions.tournament.not_started"), messages.TournamentNotStarted(language), Public: true);
-        var participants = await store.EligibleWallets(tournament.Id).CountAsync(ct);
+        var participants = await store.ParticipantCountAsync(tournament.Id, ct);
         var predictions = await store.Predictions.AsNoTracking().Where(p => p.TournamentId == tournament.Id && p.Status != PredictionStatus.Abandoned)
             .GroupBy(p => p.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct);
         var total = predictions.Sum(p => p.Count);
@@ -325,9 +326,8 @@ public sealed class PredictionEconomy(
 
     /// <summary>
     /// /ongoru turnuva bitir: administrators (or the owner) only — the creator role is not enough —, in the commands channel
-    /// only. Unresolved predictions (publishing, open or locked) block it and are listed; no eligible participant means
-    /// nothing to end; otherwise the private preview with a confirmation bound to this tournament id and this admin.
-    /// Nothing changes here.
+    /// only. <see cref="CloseBlockAsync"/> decides (unresolved predictions are listed); otherwise the private preview with a
+    /// confirmation bound to this tournament id and this admin. Nothing changes here.
     /// </summary>
     public async Task<PredictionReply> PreviewTournamentEndAsync(ActorContext actor, ChannelId here, CancellationToken ct)
     {
@@ -339,13 +339,11 @@ public sealed class PredictionEconomy(
         var tournament = await store.Tournaments.AsNoTracking().FirstOrDefaultAsync(t => t.GuildId == actor.GuildId.Value && t.Status == PredictionTournamentStatus.Active, ct);
         if (tournament is null)
             return OperationResult.Fail(OperationError.Conflict, "predictions.tournament.nothing_to_end");
-        if (await UnresolvedAsync(tournament.Id, ct) is { Count: > 0 } open)
-            return new PredictionReply(OperationResult.Fail(OperationError.Conflict, "predictions.tournament.unresolved"), messages.Unresolved(open, language));
-        if (await PendingStakesAsync(tournament.Id, ct))
-            return OperationResult.Fail(OperationError.Conflict, "predictions.tournament.pending_stakes");
+        if (await CloseBlockAsync(tournament.Id, ct) is { Error: { } error } block)
+            return block.Open.Count > 0
+                ? new PredictionReply(OperationResult.Fail(OperationError.Conflict, error), messages.Unresolved(block.Open, language))
+                : OperationResult.Fail(OperationError.Conflict, error);
         var summary = await SummaryAsync(tournament, ct);
-        if (summary.Participants == 0)
-            return OperationResult.Fail(OperationError.Conflict, "predictions.tournament.no_participants");
         var token = tokens.Create(actor, new TournamentEndStep(tournament.Id), PredictionTokens.TournamentEndLifetime);
         return new PredictionReply(OperationResult.Ok("predictions.tournament.end_preview"), messages.TournamentEndPreview(summary, token, language));
     }
@@ -366,13 +364,9 @@ public sealed class PredictionEconomy(
             var tournament = await store.ActiveTournamentAsync(actor.GuildId, ct);
             if (tournament is null || tournament.Id != step.TournamentId)
                 return ("predictions.tournament.stale", [], null);
-            if (await UnresolvedAsync(tournament.Id, ct) is { Count: > 0 } open)
-                return ("predictions.tournament.unresolved", open, null);
-            if (await PendingStakesAsync(tournament.Id, ct))
-                return ("predictions.tournament.pending_stakes", [], null);
-            var summary = await SummaryAsync(tournament, ct);
-            if (summary.Participants == 0)
-                return ("predictions.tournament.no_participants", [], null);
+            if (await CloseBlockAsync(tournament.Id, ct) is { Error: { } error } block)
+                return (error, block.Open, null);
+            var summary = await SummaryAsync(tournament, ct); // the podium: leaderboard-eligible members only (it may be empty)
 
             foreach (var (board, rows) in new[] { (PredictionBoard.Coins, summary.Coins), (PredictionBoard.Correct, summary.Correct) })
             {
@@ -422,10 +416,30 @@ public sealed class PredictionEconomy(
         return OperationResult.Ok("predictions.tournament.ended", done.Number, done.NextNumber);
     }
 
-    /// <summary>The eligible participants, prediction counts and both podiums of <paramref name="tournament"/> (the preview and the frozen snapshot).</summary>
+    /// <summary>
+    /// THE tournament close rule — separate from the leaderboard eligibility (an empty leaderboard never blocks it): no
+    /// prediction publishing, open or locked (settlement and cancellation are single transactions, so there is no other
+    /// in-between state), no wallet still holding a pending stake (an invariant breach: refused and logged), and something
+    /// to archive (<see cref="PredictionStore.HasActivityAsync"/>; a tournament whose predictions were all cancelled qualifies).
+    /// </summary>
+    private async Task<(string? Error, IReadOnlyList<UnresolvedPrediction> Open)> CloseBlockAsync(long tournamentId, CancellationToken ct)
+    {
+        if (await UnresolvedAsync(tournamentId, ct) is { Count: > 0 } open)
+            return ("predictions.tournament.unresolved", open);
+        if (await PendingStakesAsync(tournamentId, ct))
+            return ("predictions.tournament.pending_stakes", []);
+        if (!await store.HasActivityAsync(tournamentId, ct))
+            return ("predictions.tournament.no_participants", []);
+        return (null, []);
+    }
+
+    /// <summary>
+    /// The participants (members with an entry), prediction counts and both podiums (leaderboard-eligible members only, up
+    /// to 3 each — possibly fewer or none) of <paramref name="tournament"/>: the preview and the frozen snapshot.
+    /// </summary>
     private async Task<TournamentEndSummary> SummaryAsync(PredictionTournamentEntity tournament, CancellationToken ct)
     {
-        var participants = await store.EligibleWallets(tournament.Id).CountAsync(ct);
+        var participants = await store.ParticipantCountAsync(tournament.Id, ct);
         var predictions = await store.Predictions.CountAsync(p => p.TournamentId == tournament.Id && p.Status != PredictionStatus.Abandoned, ct);
         var settled = await store.Predictions.CountAsync(p => p.TournamentId == tournament.Id && p.Status == PredictionStatus.Settled, ct);
         return new TournamentEndSummary(tournament.Number, tournament.StartedAt, participants, predictions, settled,

@@ -308,8 +308,7 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
             new(L(language, "predictions.tournament.participants"), Number(summary.Participants), true),
             new(L(language, "predictions.tournament.predictions"), Number(summary.Predictions), true),
             new(L(language, "predictions.tournament.settled_count"), Number(summary.Settled), true),
-            new(L(language, "predictions.leaderboard.coins"), CoinLines(summary.Coins, r => Mention(r.User), language)),
-            new(L(language, "predictions.leaderboard.correct"), CorrectLines(summary.Correct, r => Mention(r.User), language)),
+            .. Podium(summary.Coins, summary.Correct, r => Mention(r.User), language),
         ], null, null, DangerColor);
         return new OutgoingMessage(null, embed, MentionPolicy.None,
         [
@@ -327,12 +326,20 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         var embed = new MessageEmbed(L(language, "predictions.announce.title", closing.Number), L(language, "predictions.announce.intro", Number(closing.Participants),
                 Number(closing.Predictions)), null,
         [
-            new(L(language, "predictions.leaderboard.coins"), CoinLines(closing.Coins, r => Name(r, language), language)),
-            new(L(language, "predictions.leaderboard.correct"), CorrectLines(closing.Correct, r => Name(r, language), language)),
+            .. Podium(closing.Coins, closing.Correct, r => Name(r, language), language),
             new(L(language, "predictions.announce.next_title"), L(language, "predictions.announce.next", Coins.Format(options.Value.InitialBalanceMinor, language))),
         ], L(language, "predictions.announce.footer", closing.NextNumber), null, SuccessColor);
         return new OutgoingMessage(null, embed, MentionPolicy.None);
     }
+
+    /// <summary>
+    /// The two podium fields of a tournament end — or, when nobody in it had a settled prediction (the tournament can still be
+    /// ended), one plain "📊 Liderlik" line instead of two empty boards.
+    /// </summary>
+    private IReadOnlyList<EmbedField> Podium(IReadOnlyList<StandingRow> coins, IReadOnlyList<StandingRow> correct, Func<StandingRow, string> who, string language) =>
+        coins.Count == 0 && correct.Count == 0
+            ? [new(L(language, "predictions.announce.no_ranking_title"), L(language, "predictions.announce.no_ranking"))]
+            : [new(L(language, "predictions.leaderboard.coins"), CoinLines(coins, who, language)), new(L(language, "predictions.leaderboard.correct"), CorrectLines(correct, who, language))];
 
     private string CoinLines(IReadOnlyList<StandingRow> rows, Func<StandingRow, string> who, string language) => rows.Count == 0
         ? L(language, "predictions.leaderboard.empty")

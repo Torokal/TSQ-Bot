@@ -453,7 +453,8 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         (await _kit.EnterAsync(Member(12), cancelled, 1, "100")).Result.Succeeded.Should().BeTrue();
         (await _kit.CancelAsync(Creator(), cancelled)).Result.Succeeded.Should().BeTrue(); // G: refunded only
         (await BoardsAsync())[0].Fields.Select(f => f.Value).Should().Equal(Empty, Empty);
-        (await _kit.Economy(e => e.TournamentStatusAsync(Member(1), Commands, Ct))).View!.Embed!.Fields.Single(f => f.Name == "Katılımcı").Value.Should().Be("0");
+        (await _kit.Economy(e => e.TournamentStatusAsync(Member(1), Commands, Ct))).View!.Embed!.Fields.Single(f => f.Name == "Katılımcı").Value
+            .Should().Be("4", "participants are members with an entry (8, 9, 11, 12), not the leaderboard");
 
         var settled = await _kit.CreatePredictionAsync(title: "Sonuçlanacak öngörü");
         (await _kit.EnterAsync(Member(13), settled, 1, "100")).Result.Succeeded.Should().BeTrue(); // I: wins
@@ -556,7 +557,7 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         var again = await _kit.Economy(e => e.LeaderboardAsync(Member(51), Commands, Ct));
         again.View!.Embed!.Fields.Select(f => f.Value).Should().Equal(fields.Select(f => f.Value), "deterministic");
         var status = await _kit.Economy(e => e.TournamentStatusAsync(Member(1), Commands, Ct));
-        status.View!.Embed!.Fields.Single(f => f.Name == "Katılımcı").Value.Should().Be("25", "the same eligibility rule");
+        status.View!.Embed!.Fields.Single(f => f.Name == "Katılımcı").Value.Should().Be("0", "participants count entries (these wallets are synthetic, without any): not the 25 ranked");
     }
 
     [Fact]

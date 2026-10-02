@@ -95,11 +95,30 @@ public sealed class PredictionStore(ToroDbContext db, IOptions<PredictionsOption
     public const int DisplayNameMax = 64;
 
     /// <summary>
-    /// THE leaderboard eligibility rule (<see cref="PredictionRanking.Eligible"/>; the leaderboards, the member's own rank,
-    /// the weekly post, the tournament status, the end preview and the frozen podium all start from it): a wallet of
-    /// <paramref name="tournamentId"/> with at least one of the member's own entries settled IN THAT tournament.
+    /// THE leaderboard eligibility rule (<see cref="PredictionRanking.Eligible"/>; the boards, the member's own rank, the
+    /// weekly post and the frozen podium start from it): a wallet of <paramref name="tournamentId"/> with at least one of the
+    /// member's own entries settled IN THAT tournament. It never decides whether a tournament can be ended.
     /// </summary>
     public IQueryable<PredictionWalletEntity> EligibleWallets(long tournamentId) => PredictionRanking.Eligible(Wallets, tournamentId);
+
+    /// <summary>
+    /// The tournament's participants (information only: /ongoru turnuva durum, the end preview, the closing announcement):
+    /// distinct members with at least one real entry in it, whatever became of it (settled, pending, withdrawn, refunded).
+    /// Not the leaderboard: a member can take part without being ranked. The automation never enters.
+    /// </summary>
+    public Task<int> ParticipantCountAsync(long tournamentId, CancellationToken ct) =>
+        Entries.Where(e => e.TournamentId == tournamentId).Select(e => e.UserId).Distinct().CountAsync(ct);
+
+    /// <summary>
+    /// Whether anything happened in the tournament that ending it would archive: an entry, or a manual prediction that was
+    /// published (open, locked, settled or cancelled). A tournament with neither is "empty" and is not ended (nothing to end) —
+    /// the rule from before the leaderboard eligibility changed; a tournament whose predictions were all cancelled is not empty.
+    /// </summary>
+    public async Task<bool> HasActivityAsync(long tournamentId, CancellationToken ct) =>
+        await Entries.AnyAsync(e => e.TournamentId == tournamentId, ct) ||
+        await Predictions.AnyAsync(p => p.TournamentId == tournamentId && p.Origin == PredictionOrigin.Manual &&
+                                        (p.Status == PredictionStatus.Open || p.Status == PredictionStatus.Locked ||
+                                         p.Status == PredictionStatus.Settled || p.Status == PredictionStatus.Cancelled), ct);
 
     public void Book(PredictionWalletEntity wallet, PredictionLedgerKind kind, long amount, string operationKey, DateTimeOffset now, long? predictionId = null, long? entryId = null) =>
         Ledger.Add(new PredictionLedgerEntity
