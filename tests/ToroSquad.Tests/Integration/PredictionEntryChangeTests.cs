@@ -276,21 +276,22 @@ public sealed class PredictionEntryChangeTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Withdrawing_keeps_the_member_on_the_boards_and_withdrawn_stakes_are_not_wealth()
+    public async Task A_withdrawn_entry_makes_nobody_eligible_and_withdrawn_stakes_are_not_wealth()
     {
+        await _kit.ParticipateAsync(2); // member 2: one settled entry (lost 1 coin) — eligible, 999
         var p1 = await _kit.CreatePredictionAsync();
         var p2 = await _kit.CreatePredictionAsync(title: "İkinci öngörü başlığı");
         (await _kit.EnterAsync(Member(1), p1, 1, "300")).Result.Succeeded.Should().BeTrue();
         (await _kit.WithdrawAsync(Member(1), p1)).Result.Succeeded.Should().BeTrue();
         (await _kit.EnterAsync(Member(2), p1, 1, "100")).Result.Succeeded.Should().BeTrue();
         (await _kit.WithdrawAsync(Member(2), p1)).Result.Succeeded.Should().BeTrue();
-        (await _kit.EnterAsync(Member(2), p2, 1, "200")).Result.Succeeded.Should().BeTrue(); // available 800 + active 200 (+100 withdrawn history)
+        (await _kit.EnterAsync(Member(2), p2, 1, "200")).Result.Succeeded.Should().BeTrue(); // available 799 + active 200 (+100 withdrawn history)
 
         var board = await _kit.Economy(e => e.LeaderboardAsync(Member(50), Commands, Ct));
         var coins = board.View!.Embed!.Fields[0].Value;
-        coins.Should().Contain("<@1> — **1000 TSQ Coin**", "withdrawing does not remove the member: they took part");
-        coins.Should().Contain("<@2> — **1000 TSQ Coin**", "800 available + 200 active; the withdrawn 100 is not counted twice");
-        board.View.Embed.Fields[1].Value.Should().Contain("<@1> — 0 doğru · Henüz sonuçlanmış tahmini yok");
+        coins.Should().NotContain("<@1>", "a withdrawn entry is no settled prediction");
+        coins.Should().Be("🥇 <@2> — **999 TSQ Coin**", "799 available + 200 active; the withdrawn 100 is not counted twice");
+        (await _kit.Economy(e => e.LeaderboardAsync(Member(1), Commands, Ct))).Private!.Content.Should().StartWith("Henüz liderlik sıralamasında değilsin.");
 
         var mine = await _kit.Economy(e => e.MyEntriesAsync(Member(2), Commands, 0, Ct));
         mine.View!.Embed!.Description.Should().Contain("→ ↩️ Geri çekildi").And.Contain("→ 🟢 Aktif (kazanırsa 220 TSQ Coin)");

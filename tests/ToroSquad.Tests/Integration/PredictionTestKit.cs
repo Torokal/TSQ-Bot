@@ -262,14 +262,15 @@ public sealed class PredictionTestKit : IAsyncDisposable
 
     /// <summary>
     /// Makes <paramref name="users"/> leaderboard-eligible in the active tournament with nothing left unresolved: a prediction
-    /// by <see cref="Creator"/> they each enter with 1 coin, then cancelled (stakes refunded).
+    /// by <see cref="Creator"/> they each enter with 1 coin on the first outcome, then settled on the second (each loses the
+    /// 1 coin: balance 999, 0 correct / 1 settled) — eligibility needs a settled own entry.
     /// </summary>
     public async Task ParticipateAsync(params ulong[] users)
     {
         var prediction = await CreatePredictionAsync(title: "Katılım öngörüsü " + Guid.NewGuid().ToString("N")[..6]);
         foreach (var user in users)
             (await EnterAsync(Member(user), prediction, 1, "1")).Result.Succeeded.Should().BeTrue();
-        (await CancelAsync(Creator(), prediction)).Result.Succeeded.Should().BeTrue();
+        (await SettleAsync(Creator(), prediction, 2)).Result.Succeeded.Should().BeTrue();
     }
 
     // ---- reads ----
