@@ -144,8 +144,10 @@ public sealed partial class PredictionsArchitectureTests
         var service = Source("Application", "PredictionService.cs");
         Regex.Matches(service, @"transport\.SendAsync\(").Should().ContainSingle("only the new card; never a second one");
         Regex.Matches(service, @"transport\.(\w+)\(").Select(m => m.Groups[1].Value).Distinct().Should().BeEquivalentTo("SendAsync", "FindRecentAsync", "GetPresenceAsync");
-        Regex.Matches(Source("Application", "PredictionCardSync.cs"), @"transport\.(\w+)\(").Select(m => m.Groups[1].Value).Distinct().Should().Equal("EditAsync");
-        Regex.Matches(Code("Application"), @"outbox\.StageAsync\(").Should().ContainSingle("the closing announcement only");
+        Regex.Matches(Source("Application", "PredictionCardSync.cs"), @"transport\.(\w+)\(").Select(m => m.Groups[1].Value).Distinct()
+            .Should().BeEquivalentTo(["EditAsync", "DeleteAsync"], "edits, and removing a terminal card after its retention");
+        Regex.Matches(Code("Application"), @"transport\.DeleteAsync\(").Should().ContainSingle("only the terminal card retention deletes a message");
+        Regex.Matches(Code("Application"), @"outbox\.StageAsync\(").Should().HaveCount(2, "the closing announcement and the weekly leaderboard only");
         Code("Commands").Should().NotMatchRegex(@"\bSendMessageAsync\(|IMessageChannel");
     }
 
