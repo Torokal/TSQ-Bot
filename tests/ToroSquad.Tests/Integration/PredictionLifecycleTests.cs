@@ -120,24 +120,33 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
     // ---- managing from the card: who ----
 
     [Fact]
-    public async Task Card_management_is_for_its_creator_with_the_role_or_administrators_and_the_owner_and_a_refusal_changes_nothing()
+    public async Task Lock_and_cancel_are_for_the_creator_with_the_role_or_administrators_settling_also_for_any_role_holder_and_a_refusal_changes_nothing()
     {
         var prediction = await _kit.CreatePredictionAsync(creator: Creator(10));
         (await _kit.EnterAsync(Member(1), prediction, 1, "100")).Result.Succeeded.Should().BeTrue();
         var before = await SnapshotAsync(prediction.Id);
 
+        // Lock and cancel: unchanged — another creator gets nothing new from the settlement rule (H).
         foreach (var outsider in new[] { Creator(11), Member(10), Member(1), TestHost.Admin(Guild) }) // another creator; the creator without the role; a member; Manage Server only
         {
             (await _kit.Service(s => s.PromptLockAsync(outsider, Predictions, prediction.Id, prediction.Message, Ct))).Result.MessageKey.Should().Be("predictions.not_manager");
             (await _kit.Service(s => s.LockAsync(outsider, Predictions, prediction.Id, Ct))).MessageKey.Should().Be("predictions.not_manager");
-            (await _kit.Service(s => s.StartSettleAsync(outsider, Predictions, prediction.Id, prediction.Message, Ct))).Result.MessageKey.Should().Be("predictions.not_manager");
-            (await _kit.Service(s => s.PreviewSettleAsync(outsider, Predictions, prediction.Id, Id(prediction.Outcomes[0].Id), Ct))).Result.MessageKey.Should().Be("predictions.not_manager");
-            (await _kit.ConfirmSettleAsync(outsider, prediction, 1)).Result.MessageKey.Should().Be("predictions.not_manager");
             (await _kit.Service(s => s.StartCancelAsync(outsider, Predictions, prediction.Id, prediction.Message, Ct)))!.MessageKey.Should().Be("predictions.not_manager");
             (await _kit.Service(s => s.PreviewCancelAsync(outsider, Predictions, prediction.Id, "yetkisiz", Ct))).Result.MessageKey.Should().Be("predictions.not_manager");
         }
 
-        (await SnapshotAsync(prediction.Id)).Should().Be(before, "no refused click changed anything");
+        // Settle: anyone without the creator role, Administrator or ownership is refused (D) …
+        foreach (var outsider in new[] { Member(10), Member(1), TestHost.Admin(Guild) })
+        {
+            (await _kit.Service(s => s.StartSettleAsync(outsider, Predictions, prediction.Id, prediction.Message, Ct))).Result.MessageKey.Should().Be("predictions.not_manager");
+            (await _kit.Service(s => s.PreviewSettleAsync(outsider, Predictions, prediction.Id, Id(prediction.Outcomes[0].Id), Ct))).Result.MessageKey.Should().Be("predictions.not_manager");
+            (await _kit.ConfirmSettleAsync(outsider, prediction, 1)).Result.MessageKey.Should().Be("predictions.not_manager");
+        }
+
+        // … while another creator may open the settlement steps of a card they did not create (B; confirmed in the settlement tests).
+        (await _kit.SettlePreviewAsync(Creator(11), prediction, 1)).Confirm.Should().NotBeNull();
+
+        (await SnapshotAsync(prediction.Id)).Should().Be(before, "no refused click or preview changed anything");
         _kit.Host.Services.GetRequiredService<ToroSquad.Core.Localization.ILocalizer>().Get("tr", "predictions.not_manager").Should().Be("Bu öngörüyü yönetme yetkiniz yok.");
 
         (await _kit.LockAsync(Creator(10), prediction)).MessageKey.Should().Be("predictions.lock.done", "the creator locks their own card");
@@ -303,13 +312,13 @@ public sealed class PredictionLifecycleTests : IAsyncLifetime
         var blocked = await _kit.Economy(e => e.PreviewTournamentEndAsync(Admin(), Commands, Ct));
         blocked.Result.MessageKey.Should().Be("predictions.tournament.unresolved");
         blocked.View!.Content.Should().Contain("#" + row.Id + "** · Galatasaray").And.Contain("Yayımlanıyor");
-        var messages = _kit.Transport.Messages.Count;
+        var messages = _kit.Transport.Messages.Count(m => m.Channel == Predictions);
 
         await _kit.TickAsync(TimeSpan.FromMinutes(2));
         (await _kit.RowAsync(row.Id)).Status.Should().Be(PredictionStatus.Publishing);
         await _kit.TickAsync(TimeSpan.FromMinutes(10));
         (await _kit.RowAsync(row.Id)).Status.Should().Be(PredictionStatus.Abandoned);
-        _kit.Transport.Messages.Should().HaveCount(messages, "never posted a second time");
+        _kit.Transport.Messages.Count(m => m.Channel == Predictions).Should().Be(messages, "never posted a second time");
         (await _kit.EndTokenAsync(Admin())).Should().NotBeNull("an abandoned prediction does not block the tournament");
     }
 

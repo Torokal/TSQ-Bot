@@ -873,7 +873,8 @@ public sealed class AutoFootballTests : IAsyncLifetime
 
         (await kit.AutoPredictionsAsync()).Should().ContainSingle("the match key is kept: no second automatic prediction");
         (await kit.AutoRowsAsync()).Single().Should().Match<PredictionAutoEventEntity>(r => r.State == AutoEventState.Published && r.PredictionId == prediction.Id);
-        kit.Transport.Messages.Should().BeEmpty("no new card, no replacement");
+        kit.Transport.Messages.Should().NotContain(m => m.Channel == PredictionTestKit.Predictions, "no new card, no replacement");
+        kit.Transport.Messages.Should().ContainSingle(m => m.Channel == PredictionTestKit.Commands, "only the result announcement, which the card cleanup never touches");
     }
 
     [Fact]

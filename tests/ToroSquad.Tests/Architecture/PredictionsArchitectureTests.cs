@@ -147,14 +147,18 @@ public sealed partial class PredictionsArchitectureTests
         Regex.Matches(Source("Application", "PredictionCardSync.cs"), @"transport\.(\w+)\(").Select(m => m.Groups[1].Value).Distinct()
             .Should().BeEquivalentTo(["EditAsync", "DeleteAsync"], "edits, and removing a terminal card after its retention");
         Regex.Matches(Code("Application"), @"transport\.DeleteAsync\(").Should().ContainSingle("only the terminal card retention deletes a message");
-        Regex.Matches(Code("Application"), @"outbox\.StageAsync\(").Should().HaveCount(2, "the closing announcement and the weekly leaderboard only");
+        Regex.Matches(Code("Application"), @"outbox\.StageAsync\(").Should().HaveCount(3, "the closing announcement, the weekly leaderboard and the settlement announcement only");
         Code("Commands").Should().NotMatchRegex(@"\bSendMessageAsync\(|IMessageChannel");
     }
 
     [Fact]
-    public void Nothing_in_the_module_ever_pings()
+    public void Nothing_in_the_module_ever_pings_except_the_settlement_announcement_to_its_winners()
     {
-        var code = Code();
+        // The one exception: the public result announcement pings exactly the winners it lists (no role, no @everyone/@here).
+        var renderer = Source("Application", "PredictionSettlementRenderer.cs");
+        Regex.Matches(renderer, @"ExplicitUsers\(").Should().ContainSingle();
+        renderer.Should().Contain("new(text, null, MentionPolicy.ExplicitUsers(winners))").And.Contain("chunks[i].Select(w => w.User)");
+        var code = string.Join("\n", SourceFiles().Where(f => Path.GetFileName(f) != "PredictionSettlementRenderer.cs").Select(File.ReadAllText));
         code.Should().NotContain("ExplicitUsers(").And.NotContain("MentionPolicy.EveryoneOnly").And.NotContain("AllowedMentionTypes").And.NotContain("UserIds");
         Regex.Matches(code, @"new OutgoingMessage\([^;]*MentionPolicy\.(\w+)").Select(m => m.Groups[1].Value).Distinct().Should().Equal("None");
         var components = Source("Commands", "PredictionComponents.cs");

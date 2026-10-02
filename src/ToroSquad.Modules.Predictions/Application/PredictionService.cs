@@ -6,8 +6,10 @@ using ToroSquad.Core;
 using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Messaging;
+using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Roles;
 using ToroSquad.Core.Security;
+using ToroSquad.Infrastructure.Delivery;
 using ToroSquad.Modules.Predictions.Domain;
 using ToroSquad.Modules.Predictions.Persistence;
 
@@ -86,14 +88,24 @@ public sealed class PredictionService(
     PredictionCards cards,
     PredictionCardSync cardSync,
     PredictionMessages messages,
+    PredictionSettlementRenderer settlement,
     IMessageTransport transport,
+    INotificationOutbox outbox,
     IGuildGateway guilds,
     IGuildSettingsStore settings,
     DeploymentPolicy deployment,
     IOptions<PredictionsOptions> options,
+    IOptions<DeliveryOptions> delivery,
     TimeProvider clock,
     ILogger<PredictionService> logger)
 {
+    /// <summary>The public result announcement in the commands channel (one or a few messages per settled prediction).</summary>
+    public const string KindSettlement = "settlement";
+
+    /// <summary>The announcement's outbox source per prediction and message part: a settled prediction is final, so it is staged once.</summary>
+    public static string SettlementSourceKey(long predictionId, int part) =>
+        string.Create(CultureInfo.InvariantCulture, $"prediction:{predictionId}:{part}");
+
     /// <summary>A card whose post was uncertain is searched for this long, then the prediction is abandoned (nobody could enter it).</summary>
     public static readonly TimeSpan PublishGrace = TimeSpan.FromMinutes(10);
 
@@ -733,7 +745,7 @@ public sealed class PredictionService(
     /// <summary>✅ Sonuçlandır on the card: the private outcome picker (nothing changes until the confirmation).</summary>
     public async Task<PredictionReply> StartSettleAsync(ActorContext actor, ChannelId here, long predictionId, MessageId? card, CancellationToken ct)
     {
-        var (prediction, refusal) = await ManagedAsync(actor, here, predictionId, card, ct);
+        var (prediction, refusal) = await SettlerAsync(actor, here, predictionId, card, ct);
         if (prediction is null)
             return refusal!;
         if (prediction.Status is not (PredictionStatus.Open or PredictionStatus.Locked))
@@ -745,7 +757,7 @@ public sealed class PredictionService(
     /// <summary>An outcome was picked: the preview (winner, winners/losers, total payout) with the confirmation button.</summary>
     public async Task<PredictionReply> PreviewSettleAsync(ActorContext actor, ChannelId here, long predictionId, string? outcomeValue, CancellationToken ct)
     {
-        var (prediction, refusal) = await ManagedAsync(actor, here, predictionId, null, ct);
+        var (prediction, refusal) = await SettlerAsync(actor, here, predictionId, null, ct);
         if (prediction is null)
             return refusal!;
         if (prediction.Status is not (PredictionStatus.Open or PredictionStatus.Locked))
@@ -767,14 +779,18 @@ public sealed class PredictionService(
     /// the outcome belongs to it, active tournament), then every pending entry is decided: a winner is credited exactly its
     /// stored possible payout (stake × fixed odds, rounded down), a loser gets nothing more (its stake was debited when it
     /// entered); both count towards the member's settled predictions, winners once as correct. Nobody on the winning outcome
-    /// is a valid result (no payout, no refund). The unique payout keys forbid a second payment of any entry.
+    /// is a valid result (no payout, no refund). The unique payout keys forbid a second payment of any entry. The public
+    /// result announcement for the commands channel is staged in the outbox in the SAME transaction (keyed by the
+    /// prediction: a settled prediction is final, so it is never staged twice; delivery and retries are the outbox's — a
+    /// channel problem never undoes the settlement).
     /// </summary>
     public async Task<PredictionReply> ConfirmSettleAsync(ActorContext actor, ChannelId here, long predictionId, long outcomeId, CancellationToken ct)
     {
-        var (managed, refusal) = await ManagedAsync(actor, here, predictionId, null, ct);
+        var (managed, refusal) = await SettlerAsync(actor, here, predictionId, null, ct);
         if (managed is null)
             return refusal!;
 
+        var language = await LanguageAsync(actor.GuildId, ct);
         var now = clock.GetUtcNow();
         var result = await PredictionWrites.RunAsync<(PredictionStatus Status, int Winners, long Payout, int Entries)>(store.Db, async () =>
         {
@@ -794,6 +810,7 @@ public sealed class PredictionService(
             var wallets = await store.Wallets.Where(w => walletIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id, ct);
             var winners = 0;
             var paid = 0L;
+            var won = new List<SettlementWinner>();
             foreach (var entry in entries)
             {
                 var wallet = wallets[entry.WalletId];
@@ -808,6 +825,7 @@ public sealed class PredictionService(
                     wallet.BalanceMinor = Coins.Add(wallet.BalanceMinor, entry.PotentialPayoutMinor);
                     wallet.CorrectCount++;
                     store.Book(wallet, PredictionLedgerKind.Payout, entry.PotentialPayoutMinor, PredictionStore.Key("payout", 'e', entry.Id), now, prediction.Id, entry.Id);
+                    won.Add(new SettlementWinner(new UserId(entry.UserId), entry.StakeMinor, entry.PotentialPayoutMinor));
                     winners++;
                     paid = Coins.Add(paid, entry.PotentialPayoutMinor);
                 }
@@ -826,6 +844,16 @@ public sealed class PredictionService(
             prediction.SettledByUserId = actor.UserId.Value;
             prediction.LockedAt ??= now;
             PredictionStore.Touch(prediction);
+
+            var outcome = await store.Outcomes.AsNoTracking().SingleAsync(o => o.Id == outcomeId, ct);
+            var parts = settlement.Render(new SettlementResult(prediction.Id, prediction.Title, outcome.Label, outcome.OddsX100,
+                [.. won.OrderByDescending(w => w.NetMinor).ThenBy(w => w.User.Value)], paid), language);
+            for (var part = 0; part < parts.Count; part++)
+            {
+                await outbox.StageAsync(new NotificationRequest(actor.GuildId, PredictionsModule.ModuleIdTyped, SettlementSourceKey(prediction.Id, part + 1),
+                    guards.CommandsChannel, KindSettlement, parts[part], now + PredictionEconomy.AnnouncementLifetime, delivery.Value.Mode != DeliveryMode.Send), ct);
+            }
+
             await store.Db.SaveChangesAsync(ct);
             return (PredictionStatus.Open, winners, paid, entries.Count);
         }, ct);
@@ -835,7 +863,6 @@ public sealed class PredictionService(
         logger.LogInformation("prediction_settled {Prediction} guild={Guild} by={User} outcome={Outcome} entries={Entries} winners={Winners} payout={Payout}",
             predictionId, actor.GuildId, actor.UserId, outcomeId, result.Entries, result.Winners, result.Payout);
         await cardSync.SafeSyncAsync(predictionId, ct);
-        var language = await LanguageAsync(actor.GuildId, ct);
         return result.Winners == 0
             ? OperationResult.Ok("predictions.settle.done_nobody", PredictionCards.Number(predictionId), result.Entries)
             : OperationResult.Ok("predictions.settle.done", PredictionCards.Number(predictionId), result.Winners, Coins.Format(result.Payout, language));
@@ -1223,6 +1250,20 @@ public sealed class PredictionService(
         return PredictionAccess.CanManage(actor, guards.CreatorRole, new UserId(prediction.CreatorUserId), prediction.Origin)
             ? (prediction, null)
             : (null, PredictionGuards.NotManager());
+    }
+
+    /// <summary>
+    /// <see cref="LoadInChannelAsync"/>, then the SETTLEMENT rule on THIS interaction's roles and permissions: the creator role,
+    /// Administrator or the server owner — for any prediction, whoever created it (automatic ones included). Lock and cancel
+    /// keep <see cref="ManagedAsync"/>.
+    /// </summary>
+    private async Task<(PredictionEntity? Prediction, OperationResult? Refusal)> SettlerAsync(ActorContext actor, ChannelId here, long id, MessageId? card,
+        CancellationToken ct)
+    {
+        var (prediction, refusal) = await LoadInChannelAsync(actor, here, id, card, ct);
+        if (prediction is null)
+            return (null, refusal);
+        return PredictionAccess.CanSettle(actor, guards.CreatorRole) ? (prediction, null) : (null, PredictionGuards.NotManager());
     }
 
     private async Task<string> LanguageAsync(GuildId guild, CancellationToken ct) => (await settings.GetAsync(guild, ct)).Language;

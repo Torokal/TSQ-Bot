@@ -58,6 +58,7 @@ public sealed class PredictionsModule : IToroModule
         services.AddSingleton<PredictionCardGate>();
         services.AddSingleton<PredictionCards>();
         services.AddSingleton<PredictionMessages>();
+        services.AddSingleton<PredictionSettlementRenderer>();
         services.AddSingleton<PredictionWorker>();
         services.AddScoped<PredictionGuards>();
         services.AddScoped<PredictionStore>();

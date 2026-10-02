@@ -61,14 +61,17 @@ herkese açık mesaj göndermez. Kanal ve rol bağlantıları tıklanabilir ama 
 
 | İşlem | Kim |
 |---|---|
-| Öngörü **yaratma** | Yalnızca yaratıcı rolü. Administrator yetkisi bu rol olmadan yaratma hakkı vermez |
-| Kart butonlarıyla **yönetme** (🔒 ✅ ↩️) | Kendi öngörüsünü: yaratıcı, rolü **hâlâ** varsa. Tüm öngörüleri: Administrator veya sunucu sahibi. Başka yaratıcının öngörüsü: hayır. Sunucuyu Yönet yetmez |
-| **Otomatik futbol** öngörülerini yönetme | Yalnızca Administrator veya sunucu sahibi (insan yaratıcısı yok; yaratıcı rolü yetmez) — [AUTO_FOOTBALL.md](AUTO_FOOTBALL.md) |
+| Öngörü **yaratma** | Yalnızca yaratıcı rolü (`1233057768408350741`, `Predictions:CreatorRoleId`). Administrator yetkisi bu rol olmadan yaratma hakkı vermez |
+| Öngörü **sonuçlandırma** (✅ Sonuçlandır) | Yaratıcı rolü **veya** Administrator **veya** sunucu sahibi — **her** öngörü için (başkasının oluşturduğu ve otomatik futbol öngörüleri dahil). Sunucuyu Yönet yetmez |
+| **Kilitleme / iptal** (🔒 ↩️) | Değişmedi: kendi öngörüsünü yaratıcı, rolü **hâlâ** varsa; tüm öngörüleri Administrator veya sunucu sahibi. Başka yaratıcının öngörüsü: hayır |
+| **Otomatik futbol** öngörülerini kilitleme / iptal | Yalnızca Administrator veya sunucu sahibi (insan yaratıcısı yok) — [AUTO_FOOTBALL.md](AUTO_FOOTBALL.md) |
 | **Turnuva bitirme** (`/ongoru turnuva bitir`) | Yalnızca Administrator veya sunucu sahibi (yaratıcı rolü de, Sunucuyu Yönet de yetmez) |
 | 🎯 Tahmin Yap, cüzdan, günlük ödül, tahminlerim, liderlik, turnuva durumu | Herkes (botlar hariç) |
 
 Kartın butonları herkese görünür (Discord public mesajda bileşenleri kişiye göre gizleyemez); yetkisiz biri yönetim
-butonuna basarsa hiçbir şey değişmez ve yalnızca ona "Bu öngörüyü yönetme yetkiniz yok." yazılır.
+butonuna basarsa hiçbir şey değişmez ve yalnızca ona "Bu öngörüyü yönetme yetkiniz yok." yazılır. Yetki her adımda
+(buton, sonuç seçimi, son onay) o etkileşimin **güncel** rollerinden yeniden denetlenir: rol sonuç ekranı açıldıktan sonra
+alınırsa son onay reddedilir.
 
 ## Kart
 
@@ -209,6 +212,41 @@ listelenir; Düzenle formu tarih ve saat dahil girilen beş değerle yeniden aç
 denetler (eski taslak yeni turnuvaya taşınmaz), satırı `Publishing` olarak kaydeder, yaratıcının bu turnuvadaki cüzdanını
 açar ve kartı gönderir. Kesin reddedilen gönderim satırı siler ve taslağı geri verir; belirsiz gönderim son mesajlarda aranır,
 10 dk içinde bulunamazsa `Abandoned` olur — **asla ikinci kart gönderilmez**. Yayımlanan içerik değiştirilemez.
+
+## Sonuç duyurusu
+
+Bir öngörü sonuçlandırıldığında, prediction kanalındaki kart "✅ Sonuçlandı" olarak düzenlenmeye devam eder; **buna ek
+olarak** komut kanalına (`689814679056547857`, `Predictions:CommandsChannelId`) herkese açık bir sonuç duyurusu gider:
+
+```
+🏆 TSQ Öngörü Sonuçlandı
+### Galatasaray - Fenerbahçe maç sonucu ne olur?
+
+✅ Kazanan Sonuç
+Galatasaray kazanır · 1.85
+
+🎉 Kazananlar (net kazanç)
+@Üye2 — +170 TSQ Coin
+@Üye1 — +85 TSQ Coin
+@Üye3 — +42,50 TSQ Coin
+
+👥 3 kazanan · 🪙 Toplam ödeme (yatırılan dahil): 647,50 TSQ Coin
+TSQ Öngörü #42
+```
+
+- Kazanan satırı **net kazancı** gösterir (ödeme − yatırılan; 100 @ 1.85 → +85). "Toplam ödeme" sonuçlandırmada cüzdanlara
+  yazılan toplam dönüştür (yatırılan ana para dahil; 100 @ 1.85 → 185).
+- Kazananlar Discord mention'ı ile yazılır ve **yalnızca o mesajda listelenen kazananlara** bildirim gider
+  (`allowed_mentions.users` = o kazananlar; rol, @everyone ve @here asla; başlık ve seçenek metni etkisizleştirilir).
+- Kimse kazanmadıysa da duyuru gider: "Bu öngörüde kazanan olmadı." · "👥 0 kazanan · Toplam ödeme 0 TSQ Coin" (ping yok).
+- Çok kazanan: mesaj başına en fazla 15 kazanan, en fazla 5 mesaj ("🎉 Kazananlar · 2/5"); 75'ten fazlası son mesajda
+  "+ N kazanan daha" olarak sayılır, kimse sessizce düşürülmez; her mesaj Discord'un 2000 karakter sınırı içindedir.
+- Duyuru, sonuçlandırma işlemiyle **aynı veritabanı işleminde** outbox'a yazılır (öngörü + parça numarası anahtarıyla):
+  yalnızca gerçekten commit edilen sonuçlandırma duyurulur; ikinci Sonuçlandır (reddedilir), etkileşim tekrarı, restart
+  veya outbox yeniden denemesi ikinci bir duyuru planlamaz. İşlem içinde Discord çağrısı yoktur.
+- Kanal bulunamaz veya izin yoksa sonuçlandırma **geçerli kalır** (ödemeler yapılmıştır); duyuru outbox ile sınırlı
+  yeniden denenir, kalıcı hata `/bot status`'taki duyuru satırında görünür. Duyuru için öngörü tekrar sonuçlandırılmaz.
+- 12 saatlik kart temizliği yalnız prediction kanalındaki kartı kaldırır; sonuç duyurusu kalıcı bir kanal mesajıdır.
 
 ## Coin ve ödeme matematiği
 

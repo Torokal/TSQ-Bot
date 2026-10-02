@@ -201,7 +201,7 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
 
         (await _kit.CountAsync<PredictionTournamentEntity>()).Should().Be(1);
         (await _kit.CountAsync<PredictionStandingEntity>()).Should().Be(0);
-        (await _kit.Db(db => db.Outbox.CountAsync())).Should().Be(0, "no announcement");
+        (await _kit.Db(db => db.Outbox.CountAsync(o => o.Kind == PredictionEconomy.KindTournamentClosed))).Should().Be(0, "no announcement");
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         results.Single(r => !r.Result.Succeeded).Result.MessageKey.Should().Be("predictions.tournament.stale");
         var tournaments = await _kit.Db(db => db.Set<PredictionTournamentEntity>().OrderBy(t => t.Number).ToListAsync());
         tournaments.Select(t => (t.Number, t.Status)).Should().Equal((1, PredictionTournamentStatus.Closed), (2, PredictionTournamentStatus.Active));
-        (await _kit.Db(db => db.Outbox.CountAsync(o => o.ModuleId == "predictions"))).Should().Be(1, "one announcement");
+        (await _kit.Db(db => db.Outbox.CountAsync(o => o.ModuleId == "predictions" && o.Kind == PredictionEconomy.KindTournamentClosed))).Should().Be(1, "one announcement");
         (await _kit.Db(db => db.Set<PredictionStandingEntity>().Select(s => s.TournamentId).Distinct().CountAsync())).Should().Be(1, "one snapshot set");
         (await _kit.CountAsync<PredictionWalletEntity>()).Should().Be(3, "no wallet is created by closing");
     }
@@ -302,11 +302,12 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         fields[5].Value.Should().Be("🥇 <@1> — **1** doğru / 1 sonuçlanan (%100)\n🥈 <@2> — **0** doğru / 1 sonuçlanan (%0)");
         preview.View.Buttons!.Select(b => b.Label).Should().Equal("🏁 Turnuvayı Bitir", "Vazgeç");
 
-        _kit.Transport.ScriptSend(() => new SendOutcome.Transient("503")); // the first delivery attempt fails
+        await _kit.TickAsync(); // the settlement's own result announcement goes out first
+        _kit.Transport.ScriptSend(() => new SendOutcome.Transient("503")); // the closing announcement's first delivery attempt fails
         var token = Token(preview, PredictionMessages.EndConfirmPrefix)!;
         (await _kit.ConfirmEndAsync(Admin(), token)).Result.Args.Should().Equal(1, 2);
         await _kit.TickAsync();
-        _kit.Transport.Messages.Should().NotContain(m => m.Channel == Commands);
+        _kit.Transport.Messages.Should().NotContain(m => m.Channel == Commands && m.Message.Embed != null, "the closing announcement waits for its retry (the result announcement is plain text)");
 
         (await _kit.Db(db => db.Set<PredictionStandingEntity>().OrderBy(s => s.Board).ThenBy(s => s.Rank).ToListAsync()))
             .Select(s => (s.Board, s.Rank, s.UserId, s.DisplayName, s.BalanceMinor, s.CorrectCount)).Should().Equal(
@@ -322,7 +323,7 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(50_000);
 
         await _kit.TickAsync(TimeSpan.FromMinutes(30));
-        var announcement = _kit.Transport.Messages.Should().ContainSingle(m => m.Channel == Commands).Subject;
+        var announcement = _kit.Transport.Messages.Should().ContainSingle(m => m.Channel == Commands && m.Message.Embed != null).Subject;
         announcement.Pinged.Should().BeFalse();
         var embed = announcement.Message.Embed!;
         embed.Title.Should().Be("🏁 TSQ Öngörü · Turnuva 1 Sona Erdi");
