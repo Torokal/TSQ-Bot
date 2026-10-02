@@ -309,22 +309,25 @@ invite link and no global command registration. The source code is public under 
 - **VERIFIED_LIVE (technical only)**: deploy with the additive migration and clean start, guild command registration of
   `/ongoru`. **NOT VERIFIED_LIVE**: every member interaction in Discord (both modals, the select, the card buttons, edits,
   the announcement).
-- Terminal card retention + weekly leaderboard (branch `feat/predictions-card-retention-weekly-board`, not pushed):
+- Terminal card retention + weekly leaderboard (PR #49, merged `3c86d63`, deployed 2026-10-02):
   settled/cancelled cards are removed from the channel 12 h after the settlement/cancellation commit (only the Discord
   message; history kept; never replaced), and the active tournament's leaderboard is posted once a week to the commands
   channel (default Sunday 20:00 Europe/Istanbul, 12 h catch-up, Top 10, nothing for an empty board) through the outbox;
   additive migration `PredictionsCardRetentionWeeklyBoard`. **IMPLEMENTED / TESTED_OFFLINE** (fake clock, real SQLite,
-  fake Discord). Not deployed.
-- Leaderboard V2 (branch `feat/predictions-leaderboard-v2`, on top of the retention branch, not pushed): only members with
+  fake Discord). Deployed: migration applied, clean start; the first cleanup pass closed two old cancelled cards whose
+  messages were already gone (404). **NOT VERIFIED_LIVE**: a real card deletion, the first weekly post (first slot
+  Sunday 04.10.2026 20:00 TR).
+- Leaderboard V2 (PR #50, merged `5be2e07`, deployed 2026-10-02; command sync: nothing to change): only members with
   at least one settled own entry in the active tournament are ranked (creating, open/locked, withdrawn or refunded entries
   and daily rewards never count); coins = live wealth (available + principal in unsettled entries); Top 10 per board;
   `/ongoru liderlik` adds a private note with the asking member's own rank on each board where they are outside the Top 10
   (counted in SQLite with the board orders) or "not ranked yet"; the weekly post uses the same boards without personal notes.
   Ending a tournament is a separate rule (nothing unresolved, no pending stake, some activity): an empty leaderboard
   (e.g. every prediction cancelled) never blocks it; participants = members with an entry. No schema change.
-  **IMPLEMENTED / TESTED_OFFLINE**.
+  **IMPLEMENTED / TESTED_OFFLINE**, deployed with a clean start. **NOT VERIFIED_LIVE**: the private personal-rank note in
+  Discord.
 
-## TSQ Öngörü automatic football (2026-09-29, local branch `feat/predictions-auto-football`, not pushed)
+## TSQ Öngörü automatic football (PR #40 merged `82b98d2`, deployed 2026-09-30; `Mode=Live` in production)
 
 - Opens fixed-odds predictions for Galatasaray / Fenerbahçe / Beşiktaş matches of five allow-listed competitions on the
   match day (09:00 Türkiye time, or 2 h before an early kickoff), locks 2 min before the planned kickoff; results stay
@@ -339,7 +342,7 @@ invite link and no global command registration. The source code is public under 
 - **PROVIDER_VERIFIED_READ_ONLY** (2026-09-30, local read-only check, 3 credits): catalog, events and h2h odds for
   Galatasaray / Fenerbahçe / Beşiktaş in Süper Lig, Champions League and Europa League; exact club names, correct
   home/away, complete fresh 1-X-2 sets. NOT_OBSERVED: h2h regular-time semantics, live/postponed data, error responses.
-  Nothing deployed; no automatic card in Discord.
+  (At that check nothing was deployed yet.)
 - Türkiye men's senior national team added as the fourth target (national competitions: Nations League, Euro
   qualification, Euro, World Cup qualifiers Europe, World Cup; outrights and friendlies excluded). Observed read-only with
   the rotated key (2026-09-30, 1 credit): Nations League in season, provider name "Turkey", Belgium – Turkey on
@@ -349,7 +352,12 @@ invite link and no global command registration. The source code is public under 
   stay unapproved and are never a fallback. Read-only re-check (2026-09-30, 1 credit): Belgium – Turkey Pinnacle set
   ACCEPTED, card preview "Belçika - Türkiye". Italy – Türkiye (05.10, official fixture) is not yet listed by the provider
   (COVERAGE_INCOMPLETE). Observations refused only for the missing rule are judged again (attempts kept, old odds not
-  reused). Nothing deployed; no automatic card in Discord.
+  reused).
+- Production (2026-09-30): PR #40 merged and deployed, Railway variables `Mode=Live` and the API key (value never shown);
+  first discovery logged (catalog + in-season lists, free calls). PR #48 orders the publishing sync batch.
+- First automatic card (log, 2026-10-02 06:00Z = 09:00 TR): one paid odds call (`x-requests-remaining=499` after the
+  monthly renewal), `auto_football_published` prediction #4 (Belgium – Türkiye, lock 21:43 TR). The card's content in
+  Discord, entries on it and the manual settlement are **NOT VERIFIED_LIVE** (no owner observation yet).
 
 ## TSQ Haber — Aurora · HLTV (new, 2026-09-30, branch `feat/aurora-hltv-news`)
 
