@@ -153,9 +153,10 @@ yok).
 > başarılı canlı sonuç genel güvenilirlik kanıtı değildir; o özetin anlamı da kaynakla karşılaştırılmadı. Legacy'e dönüş
 > komutun kullanılabilirliğini geri getirdi; anlam doğruluğu iyileştirmesinin tamamlandığı anlamına gelmez.
 >
-> **Kompakt sözleşme (v2) denemesi (2026-10-03):** Sözleşme kısaltıldı ve hacim sınırı eklendi (aşağıda). İki yeni sentetik
-> 100 mesajlık denemede model sözleşme biçimine uydu ve kesilmedi, ama **iki cevap da hacim sınırını aştığı için reddedildi**
-> (`validation=Limit`). Grounded bu hâliyle üretime hazır değildir ve **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
+> **Sözleşme denemeleri (2026-10-03):** Kompakt sözleşme (v2) iki sentetik 100 mesajlık denemede hacim sınırını aştığı için
+> reddedildi (`validation=Limit`). Düz sözleşme (v3) kaynak güvenliğini gösterim hedefinden ayırır; aynı iki fixture'da, aynı
+> sabit prompt'la iki cevap da doğrulamadan geçti ve kesilmedi (aşağıda). Bu iki deneme genel doğruluk veya kesilmeme kanıtı
+> değildir ve canlı doğrulama değildir. Grounded **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
 
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
 Geri dönüş: `Summary:GenerationMode=Legacy` (ortam değişkeni `TOROSQUAD_Summary__GenerationMode`). Değişiklik yalnızca sonraki
@@ -177,26 +178,43 @@ gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout 
   `"re":"bağlam mevcut değil"` olur; tahmin edilmez. Kod, yanıt verilen kişiyi "hakkında konuşulan kişi" olarak atamaz.
 - **Kırpma:** 1500 karakteri aşan mesaj mümkünse cümle sonunda kesilir ve `"cut":true` ile işaretlenir. Toplam sınır (40.000
   karakter) referans metadata'sını ve bağlamı da kapsar; düşen kayıtların referansı kalmaz.
-- **Çıktı (kompakt sözleşme, `"v":2`):** Tek bir JSON nesnesi, kısa alan adlarıyla:
-  `{"v":2,"main":{"t":"…","e":[["m012","…"]]},"points":[{"topic":"…","claims":[{"t":"…","e":[["m012","…"]]}]}],"plans":[…],"atmosphere":{…}}`.
+- **Çıktı (düz sözleşme, `"v":3`):** Tek bir JSON nesnesi; her point kendi konusunu, metnini ve dayanaklarını taşır (iç içe
+  `claims` yok):
+  `{"v":3,"main":{"t":"…","e":[["m012","…"]]},"points":[{"topic":"…","t":"…","e":[["m012","…"]]}],"plans":[{"t":"…","e":[…]}],"atmosphere":{…}}`.
   `t` görünür metin, `e` dayanak listesi, her dayanak `[kayıt referansı, birebir alıntı]` çiftidir. `s` (spoiler konusu) yalnızca
-  spoiler claim'inde yazılır; boş/`null` alan yazılmaz. Eski biçim (`"version":1`, uzun alan adları) artık kabul edilmez
+  spoiler point'inde yazılır; boş/`null` alan yazılmaz. Eski biçimler (v1 uzun alan adları, v2 iç içe `claims`) kabul edilmez
   (`Contract`); üçüncü bir üretim modu yoktur. `max_tokens` 2000 (yalnızca bu mod; otomatik büyütülmez).
-- **Hacim sınırı (prompt'ta ve doğrulayıcıda aynı):** `points` içindeki claim'ler ile `plans` birlikte **en fazla 8 claim**; konu
-  başına en fazla 2 claim (normalde 1), en fazla 3 plan, en fazla 7 konu (prompt "genellikle 4–6" ister). `main` ve `atmosphere`
-  birer kısa cümle. Görünür metin hedefi 150–250 kelime. Sınır sistem mesajında ve kayıtların ardından sabit bir hatırlatma
-  satırında yazar. Sınırı aşan cevap bütünüyle reddedilir (`Limit`); kod claim atarak ya da kısaltarak onarmaz.
-- **Dayanak:** claim başına normalde 1, en fazla 3. Birden fazlası şu durumlar içindir: sonradan düzeltme, anlamı yanıtlanan
+- **İki ayrı sınır katmanı:**
+  - *Gösterim hedefi (güvenlik kuralı değildir):* en fazla **6 point ve 2 plan** gösterilir; prompt en önemli 4–6 point'i ve
+    en fazla 2 planı önem sırasıyla, toplam yaklaşık 150–250 görünür kelimeyle ister. Model biraz fazlasını yazarsa cevap
+    reddedilmez.
+  - *Güvenlik sınırı:* en fazla **12 aday point ve 4 aday plan**, metin başına 3 dayanak, alan/alıntı uzunlukları, toplam cevap
+    16.000 karakter, render edilmiş özet 3900 karakter. Bunu aşan cevap bütünüyle reddedilir (`Limit`); sınırsız liste kabul
+    edilmez.
+- **Akış:** (1) tam cevap ayrıştırılır; (2) boyut ve sözleşme kontrol edilir; (3) güvenlik sınırı içindeki adayların **tümü** —
+  gösterilmeyecek olanlar dahil — kaynak ve spoiler kontrollerinden geçer; (4) hepsi geçtiyse modelin verdiği sıra korunarak ilk
+  6 point ve ilk 2 plan seçilir; (5) Markdown üretilir. Seçim yalnızca tam ve kontrolden geçmiş maddeler arasındadır: başka bir
+  AI seçmez, metin kısaltılmaz veya yeniden yazılmaz, cümle/alıntı/spoiler ortasından kesilmez. Fazla maddelerden birinde bozuk
+  alıntı veya bilinmeyen kaynak varsa o madde sessizce atılmaz; cevabın tamamı reddedilir.
+- **Tekrarlar:** yalnızca birebir aynı kayıtlar (aynı metin + aynı dayanaklar + aynı spoiler niteliği) bir kez gösterilir; bir
+  point birebir bir planla aynıysa plan kalır. Benzer metinler birleştirilmez; aynı kaynağı paylaşmak iki kaydın aynı bilgi
+  olduğunu göstermez.
+- **Maddelerin bütünlüğü:** prompt her point'in tek konuya ait ve kendi başına anlaşılır olmasını, önceki durum ile sonraki
+  düzeltmenin ("ilk denemede çalışmadı; yeniden başlatınca düzeldi") ve bir görüş ayrılığının iki tarafının aynı point'te
+  durmasını ister; böylece ilk 6'yı seçmek yanlış son durum bırakmaz. Kod bunun anlamsal olarak her zaman uygulandığını
+  kanıtlayamaz; birbirine bağlı bilgileri kod birleştirmez.
+- **Dayanak:** metin başına normalde 1, en fazla 3. Birden fazlası şu durumlar içindir: sonradan düzeltme, anlamı yanıtlanan
   mesaja bağlı yanıt, görüş ayrılığı, konuşmacı / muhatap / hakkında konuşulan ayrımı. Alıntı kaynaktan birebir, en kısa
   kesintisiz parçadır (genellikle 3–12 kelime; "Oldu", "gelmedi" gibi kısa ama anlamlı alıntı geçerlidir; en az 3 karakter).
-  Kod alıntıyı kendiliğinden kırpmaz veya düzeltmez; kaynakta birebir bulunmayan alıntı cevabı reddettirir.
+  Yakın anlamlı ama birebir olmayan alıntı ("savunma tarafında" yerine "savunmada") geçersizdir: bulanık eşleştirme, eş anlam,
+  ek silme veya olumsuzluk normalizasyonu yoktur; kod alıntıyı kırpmaz veya düzeltmez.
 - **Kod tarafı kontrol (`SummaryGroundedAnswer`):** tam ve geçerli JSON mu, sürüm ve alanlar doğru mu, liste/alan sınırları
   uygun mu, her referans bu isteğin kayıtlarında var mı, her alıntı belirtilen kayıtta gerçekten geçiyor mu (yalnızca boşluk
   dizileri birleştirilir; noktalama, ek veya olumsuzluk silinmez), metin yalnızca bağlam kaydına mı dayanıyor, görünür metinde
   kayıt referansı var mı, `finish_reason` `length` mi. Herhangi biri tutmazsa cevabın tamamı reddedilir: ham JSON gönderilmez,
   onarılmaz, yeniden istenmez, Legacy'e düşülmez; kullanıcıya özel "Özet oluşturulamadı" mesajı gider ve yalnızca kısa
   başarısızlık cooldown'u uygulanır.
-- **Spoiler:** Bir claim'in alıntısı spoiler alanından geliyorsa, model ne derse desin claim
+- **Spoiler:** Bir point'in veya planın alıntısı spoiler alanından geliyorsa, model ne derse desin o madde
   `**Spoiler (konu):** ||…||` olarak yayımlanır (konu yoksa `konu belirtilmemiş`). `s` alanının yokluğu "spoiler değil"
   anlamına gelmez: koruma kararı alıntının kaynaktaki konumundan verilir. `main`/`atmosphere` spoiler alanına dayanamaz;
   açık bir metin gizli içeriği birebir tekrar ederse cevap reddedilir. Aynı mesajın spoiler dışındaki bilgileri gizlenmez.
@@ -262,6 +280,45 @@ Sonuç: kısa alan adları ve çift biçimli dayanak çalışıyor; **model topl
 yayımlanabilir özet çıkmadı. Bu iki deneme genel doğruluk veya kesilmeme kanıtı değildir; gerçek kullanımda güvenilirlik
 doğrulanmadı.
 
+**Düz sözleşme (v3): offline kontrol ve iki model denemesi (2026-10-03).**
+
+*Offline (model isteği yok).* Yukarıdaki iki v2 cevabı (eski prompt'un çıktısı) alan alan düz biçime çevrildi; alıntılar
+düzeltilmedi. A hâlâ reddedilir: 12 aday point + 4 plan güvenlik sınırı içindedir, ama değiştirilmiş alıntı `QuoteNotFound`
+verir. B kabul edilir: 8 aday point'in tümü kontrol edilir, ilk 6'sı ve 2 plan gösterilir. Bu, yeni prompt'la üretilmiş model
+çıktısı değildir.
+
+*İki model isteği (yerel harness, aynı iki sentetik fixture ve aynı cevap anahtarları; prompt, sözleşme, okuyucu ve model
+parametreleri ilk istekten önce commit ile sabitlendi ve A ile B arasında değişmedi; retry, Legacy veya hakem isteği yok).*
+
+| | A | B |
+|---|---|---|
+| input / output token | 6162 / 1371 | 6075 / 1313 |
+| reasoning token | 0 | 0 |
+| finish, süre | stop, 8,6 sn | stop, 7,9 sn |
+| ham aday point / plan | 7 / 2 | 6 / 2 |
+| gösterilen point / plan | 6 / 2 | 6 / 2 |
+| dayanak (hepsi kaynakta birebir) | 29 | 25 |
+| ham görünür metin → gösterilen özet | 207 → 189 kelime | 209 → 209 kelime |
+| doğrulama | `None` — yayımlanabilir | `None` — yayımlanabilir |
+| 2000 token sınırından kalan pay | 629 (%31) | 687 (%34) |
+
+Seçilmiş son özetler cevap anahtarıyla karşılaştırıldı. A: sürücü sorunu (geri alma işe yaramadı, temiz kurulum çözdü),
+internet arızası (modem reseti işe yaramadı, sonradan düzeldi ama kalıcılığı belirsiz), kaptan seçimi, geciken kargo, kill
+sayısı düzeltmesi (30 değil 27) ve akşam antrenmanı doğru; yedinci madde (yanıtsız kalan sezon sorusu) seçimde düştü. B:
+buluşma, yarınki maç ve yedek oyuncu, karara bağlanmayan 6. oyuncu anlaşmazlığı, garanti düzeltmesi, fiyat düzeltmesi ve
+söylenti (iddia olarak) doğru; olasılık ("belki halı saha") plan yazılmadı. İki özette de ters çevrilmiş anlam, yanlış kişi
+ataması veya kaçırılmış düzeltme bulunmadı; spoiler sızmadı.
+
+Görülen kusurlar: (1) B'deki iki spoiler konusu özete hiç alınmadı — sızıntı yok ama kapsama eksiği var ve spoiler maddesinin
+gerçek model çıktısıyla yayımlanması bu denemelerde hiç sınanmadı; (2) iki özette de planlar, point'lerde zaten geçen bilgiyi
+tekrar ediyor (birebir kopya olmadığı için kod tekilleştirmez); (3) model her maddeye 2–3 dayanak yazdı ("normalde 1" kuralına
+uyulmadı), bu çıktı token'ını artırır; (4) çıktılar 1200 token'lık optimizasyon hedefinin üstünde. Gösterilmeyen yedinci madde
+de üretilirken token harcadı; seçim sağlayıcı maliyetini azaltmaz.
+
+Sınırlar: iki sentetik örnek genel doğruluk veya kesilmeme garantisi değildir; `stop` ile biten iki cevap daha uzun veya daha
+dağınık sohbetlerde 2000 sınırına takılmayacağını göstermez. Kaynak eşleşmesi anlamın doğru yorumlandığını, spoiler biçim
+kontrolü dolaylı sızıntının olmadığını kanıtlamaz. Canlı doğrulama yapılmadı.
+
 ## Kötüye kullanım koruması
 
 - Kanal/thread cooldown'u **120 sn**. Başarılı bir özet kanala gönderildikten sonra başlar, özeti kim isterse istesin
@@ -321,7 +378,8 @@ Log satırlarında yalnızca şunlar bulunur: izleme kodu, guild/kanal/çağıra
 `truncated_message_count`, `dropped_message_count`, model, `input_tokens`, `output_tokens`, `reasoning_tokens`,
 `finish_reason`, `latency_ms`, `generation_mode`, sonuç ve hata kategorisi (HTTP durumu, sağlayıcı hata tipi, `RegionPolicy`).
 Grounded modunda ayrıca: `validation` (kategori), `source_count`, `reply_count`, `reply_unavailable_count`, `context_count`,
-`evidence_count`, `spoiler_claim_count`. Alıntılar, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
+`evidence_count` (kontrol edilen tüm adaylar), `spoiler_claim_count` (spoiler olarak yayımlanan maddeler),
+`candidate_point_count`, `candidate_plan_count`, `shown_point_count`, `shown_plan_count`. Alıntılar, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
 
 Transcript üçüncü taraf bir işleyiciye gider: OpenCode Go ve üst sağlayıcısı. DeepSeek V4.1 Flash için OpenCode workspace'inde
 **Global** bölgenin açık olması gerekir.

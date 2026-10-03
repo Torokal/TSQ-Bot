@@ -274,6 +274,21 @@ invite link and no global command registration. The source code is public under 
   `finish_reason=stop` but over the volume bound (16 and 10 claims; 1858 and 1341 output tokens) and were refused — NOT
   PASSED.** The second request used a strengthened volume rule; it reduced the volume but not below the bound. Grounded
   stays off in production; re-enabling needs the owner's approval. See `docs/summary/TSQ_SUMMARY.md`.
+- Flat grounded contract (2026-10-03, branch `fix/summary-grounded-flat`): contract `"v":3` — each point carries its own
+  topic, text, evidence pairs and optional spoiler topic (no nested claims); v1/v2 answers are refused. Source safety and the
+  display target are separated: up to 12 candidate points and 4 candidate plans are ALL checked (sources, verbatim quotes,
+  context-only, spoiler provenance, technical references); one error still refuses the whole answer, also in an item that
+  would not be shown. If everything checks out, the first 6 points and 2 plans are shown as whole items in the model's
+  order — a 7th valid point is no longer a `Limit` failure. Only exact copies (same text, evidence and spoiler nature) are
+  shown once; nothing is rewritten, shortened or fuzzily merged. Log line gains candidate/shown counts. Legacy path, model
+  settings, `GroundedMaxOutputTokens` 2000 and all gates unchanged. TESTED_OFFLINE (3223 tests ×3).
+  **Model check with one frozen prompt (2 requests, the same two synthetic 100-message fixtures, local harness): both
+  answers valid, `finish_reason=stop`, `validation=None` — A 6162/1371 tokens (7 candidate points → 6 shown), B 6075/1313
+  (6 → 6); all 54 quotes verbatim; no inverted meaning, wrong attribution or spoiler leak against the answer keys.** Seen
+  defects: B's two spoiler topics were left out (coverage gap; spoiler rendering not exercised by real model output), plans
+  repeat information from points, 2–3 quotes per item, output above the 1200-token optimisation target (about a third of
+  the cap left). Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
   `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
