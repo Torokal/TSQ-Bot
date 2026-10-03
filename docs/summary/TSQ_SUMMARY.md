@@ -152,6 +152,10 @@ yok).
 > (`validation=Truncated`). Kesilen cevaplar tasarlandığı gibi yayımlanmadı, yeniden istenmedi, Legacy'e düşülmedi. Tek bir
 > başarılı canlı sonuç genel güvenilirlik kanıtı değildir; o özetin anlamı da kaynakla karşılaştırılmadı. Legacy'e dönüş
 > komutun kullanılabilirliğini geri getirdi; anlam doğruluğu iyileştirmesinin tamamlandığı anlamına gelmez.
+>
+> **Kompakt sözleşme (v2) denemesi (2026-10-03):** Sözleşme kısaltıldı ve hacim sınırı eklendi (aşağıda). İki yeni sentetik
+> 100 mesajlık denemede model sözleşme biçimine uydu ve kesilmedi, ama **iki cevap da hacim sınırını aştığı için reddedildi**
+> (`validation=Limit`). Grounded bu hâliyle üretime hazır değildir ve **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
 
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
 Geri dönüş: `Summary:GenerationMode=Legacy` (ortam değişkeni `TOROSQUAD_Summary__GenerationMode`). Değişiklik yalnızca sonraki
@@ -173,8 +177,19 @@ gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout 
   `"re":"bağlam mevcut değil"` olur; tahmin edilmez. Kod, yanıt verilen kişiyi "hakkında konuşulan kişi" olarak atamaz.
 - **Kırpma:** 1500 karakteri aşan mesaj mümkünse cümle sonunda kesilir ve `"cut":true` ile işaretlenir. Toplam sınır (40.000
   karakter) referans metadata'sını ve bağlamı da kapsar; düşen kayıtların referansı kalmaz.
-- **Çıktı:** Tek bir JSON nesnesi: `main`, `points[].claims[]`, `plans[]`, `atmosphere`; her görünür metin 1–3 dayanak taşır
-  (`{"message":"m043","quote":"…"}`, alıntı kaynaktan birebir). `max_tokens` 2000 (yalnızca bu mod; otomatik büyütülmez).
+- **Çıktı (kompakt sözleşme, `"v":2`):** Tek bir JSON nesnesi, kısa alan adlarıyla:
+  `{"v":2,"main":{"t":"…","e":[["m012","…"]]},"points":[{"topic":"…","claims":[{"t":"…","e":[["m012","…"]]}]}],"plans":[…],"atmosphere":{…}}`.
+  `t` görünür metin, `e` dayanak listesi, her dayanak `[kayıt referansı, birebir alıntı]` çiftidir. `s` (spoiler konusu) yalnızca
+  spoiler claim'inde yazılır; boş/`null` alan yazılmaz. Eski biçim (`"version":1`, uzun alan adları) artık kabul edilmez
+  (`Contract`); üçüncü bir üretim modu yoktur. `max_tokens` 2000 (yalnızca bu mod; otomatik büyütülmez).
+- **Hacim sınırı (prompt'ta ve doğrulayıcıda aynı):** `points` içindeki claim'ler ile `plans` birlikte **en fazla 8 claim**; konu
+  başına en fazla 2 claim (normalde 1), en fazla 3 plan, en fazla 7 konu (prompt "genellikle 4–6" ister). `main` ve `atmosphere`
+  birer kısa cümle. Görünür metin hedefi 150–250 kelime. Sınır sistem mesajında ve kayıtların ardından sabit bir hatırlatma
+  satırında yazar. Sınırı aşan cevap bütünüyle reddedilir (`Limit`); kod claim atarak ya da kısaltarak onarmaz.
+- **Dayanak:** claim başına normalde 1, en fazla 3. Birden fazlası şu durumlar içindir: sonradan düzeltme, anlamı yanıtlanan
+  mesaja bağlı yanıt, görüş ayrılığı, konuşmacı / muhatap / hakkında konuşulan ayrımı. Alıntı kaynaktan birebir, en kısa
+  kesintisiz parçadır (genellikle 3–12 kelime; "Oldu", "gelmedi" gibi kısa ama anlamlı alıntı geçerlidir; en az 3 karakter).
+  Kod alıntıyı kendiliğinden kırpmaz veya düzeltmez; kaynakta birebir bulunmayan alıntı cevabı reddettirir.
 - **Kod tarafı kontrol (`SummaryGroundedAnswer`):** tam ve geçerli JSON mu, sürüm ve alanlar doğru mu, liste/alan sınırları
   uygun mu, her referans bu isteğin kayıtlarında var mı, her alıntı belirtilen kayıtta gerçekten geçiyor mu (yalnızca boşluk
   dizileri birleştirilir; noktalama, ek veya olumsuzluk silinmez), metin yalnızca bağlam kaydına mı dayanıyor, görünür metinde
@@ -182,7 +197,8 @@ gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout 
   onarılmaz, yeniden istenmez, Legacy'e düşülmez; kullanıcıya özel "Özet oluşturulamadı" mesajı gider ve yalnızca kısa
   başarısızlık cooldown'u uygulanır.
 - **Spoiler:** Bir claim'in alıntısı spoiler alanından geliyorsa, model ne derse desin claim
-  `**Spoiler (konu):** ||…||` olarak yayımlanır (konu yoksa `konu belirtilmemiş`). `main`/`atmosphere` spoiler alanına dayanamaz;
+  `**Spoiler (konu):** ||…||` olarak yayımlanır (konu yoksa `konu belirtilmemiş`). `s` alanının yokluğu "spoiler değil"
+  anlamına gelmez: koruma kararı alıntının kaynaktaki konumundan verilir. `main`/`atmosphere` spoiler alanına dayanamaz;
   açık bir metin gizli içeriği birebir tekrar ederse cevap reddedilir. Aynı mesajın spoiler dışındaki bilgileri gizlenmez.
 - **Görünüm:** Başlıkları ve biçimi uygulama üretir; kullanıcıya görünen Markdown Legacy ile aynıdır. Referanslar, alıntılar
   ve JSON hiçbir zaman gösterilmez.
@@ -207,8 +223,44 @@ Grounded iki sorunu ayrı tuttu ve çözülmeyen sorunu çözülmemiş bıraktı
 (olumsuzluk, anlaşmazlık, belirsiz muhatap, plan ayrımı, spoiler): Legacy bir soruyu olay gibi yazdı ve olasılığı Planlar'a
 koydu; Grounded bunları yapmadı ve muhatabı belirsiz sözde isim uydurmadı. İkisinde de spoiler sızmadı; Grounded asıl spoiler
 bilgisini özete almadı. Grounded çıktısı 2000 sınırının yaklaşık %76'sını kullandı; daha uzun özetlerde kesilme riski vardır
-(kesilen cevap yayımlanmaz, log'da `validation=Truncated` görünür). Çıktının yaklaşık %60'ı dayanak metadata'sıdır; kısaltma
-gerekirse ilk aday alan adlarını kısaltmak ve boş `spoiler_topic` alanlarını atlamaktır.
+(kesilen cevap yayımlanmaz, log'da `validation=Truncated` görünür). Bu karşılaştırma eski (v1) sözleşmeyle yapıldı.
+
+**Kompakt sözleşme: offline kontrol ve iki model denemesi (2026-10-03).**
+
+*Offline (model isteği yok; şema ve ayrıştırıcı kontrolü, modelin yeni prompt'la ürettiği bir şey değildir).* Yukarıdaki iki
+sentetik v1 cevabı alan alan v2 biçimine çevrildi: A 4072 → 3208 karakter (−%21,2), B 4074 → 3137 karakter (−%23,0); JSON alan
+sayısı 115 → 47 ve 117 → 50; alıntı sayısı aynı (30 ve 27). Her claim/plan tek tek v2 okuyucusundan geçti (13/13 ve 14/14),
+görünür metinler v1 çıktısıyla aynı, spoiler claim'i yine spoiler olarak yayımlandı. Cevapların bütünü ise v2 sınırlarında
+reddedilir (13 ve 14 claim > 8): kazancın büyük kısmı alan adlarından değil hacim sınırından gelmek zorundadır. Bu rakamlar
+karakter sayısıdır, ölçülmüş token tasarrufu değildir.
+
+*İki model isteği (yerel harness, sentetik veri, retry yok, Legacy/hakem isteği yok).* Her fixture: 100 üye mesajı + 3 bağlam
+kaydı, 9 katılımcı; cevap anahtarları ilk istekten önce sabitlendi ve modele gönderilmedi.
+
+| | A (26 yanıt bağlantısı) | B (21 yanıt bağlantısı) |
+|---|---|---|
+| prompt | ilk v2 metni | hacim kuralı sertleştirilmiş v2 metni (A'dan sonra) |
+| input / output token | 5756 / 1858 | 6014 / 1341 |
+| reasoning token | 0 (sağlayıcı alanı döndürdü; output'a dahil sayılıp sayılmadığı yanıtta ayrıca belirtilmiyor) | 0 (aynı) |
+| finish, süre | stop, 11,1 sn | stop, 9,0 sn |
+| JSON / sözleşme biçimi | geçerli v2 | geçerli v2 |
+| konu / konu claim'i / plan | 7 / 12 / 4 → **16 claim** | 8 / 8 / 2 → **10 claim** |
+| dayanak, ortalama alıntı | 34, 6,2 kelime | 20, 6,8 kelime |
+| alıntı kaynakta birebir | 33/34 (biri değiştirilmiş) | 20/20 |
+| görünür metin | 272 kelime | 218 kelime |
+| doğrulama | **`Limit` — yayımlanmadı** | **`Limit` — yayımlanmadı** |
+
+A ile B aynı prompt metniyle koşmadı: A hacim sınırını iki katı aşınca kural sertleştirildi (sistem mesajında "kesin kural" +
+kayıtlardan sonra hatırlatma satırı) ve kalan tek istek değiştirilmemiş B fixture'ında bu metinle kullanıldı. Sertleştirme
+hacmi düşürdü ama sınırın altına indirmedi; sertleştirilmiş metin A üzerinde denenmedi. İki çıktı da 1200 token'lık işletme
+hedefinin üstünde, A 2000 sınırının %93'ünde. Reddedilen cevapların anlamı anahtarla karşılaştırıldı: ters çevrilmiş anlam,
+yanlış kişi ataması veya kaçırılmış düzeltme bulunmadı; spoiler sızmadı. B'de iki spoiler konusu özete hiç alınmadı, aynı
+plan hem konu hem plan olarak iki kez yazıldı ve bir konu başlığı içeriğinden genişti. B'de her claim'e iki dayanak yazıldı
+("normalde tek dayanak" kuralına uyulmadı).
+
+Sonuç: kısa alan adları ve çift biçimli dayanak çalışıyor; **model toplam claim sınırına uymuyor**, bu yüzden iki denemede de
+yayımlanabilir özet çıkmadı. Bu iki deneme genel doğruluk veya kesilmeme kanıtı değildir; gerçek kullanımda güvenilirlik
+doğrulanmadı.
 
 ## Kötüye kullanım koruması
 

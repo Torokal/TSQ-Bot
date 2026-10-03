@@ -264,6 +264,16 @@ invite link and no global command registration. The source code is public under 
   live result shows the path works end to end; it is not evidence of general reliability, and its meaning was not checked
   against the source. Going back to Legacy restored the command's availability — it does not mean the meaning-accuracy
   improvement is done: Legacy still has the errors that motivated Grounded (merged conversations, question → event).
+- Compact grounded contract (2026-10-03, branch `fix/summary-grounded-compact`): contract `"v":2` with short keys (`t`,
+  `e` as `[reference, quote]` pairs, optional `s` only on a spoiler claim, no null fields); the earlier shape is refused. Volume
+  bound in the prompt and in the reader: claims of all points plus plans ≤ 8, ≤ 2 claims per point, ≤ 3 plans, ≤ 3 quotes per
+  text (one is the norm), quote ≥ 3 characters; an answer over the bound is refused as a whole (`Limit`), never trimmed.
+  Legacy path, model settings, `GroundedMaxOutputTokens` 2000 and all gates unchanged. TESTED_OFFLINE. Offline rewrite of the
+  two earlier synthetic v1 answers: −21 % / −23 % characters (not measured tokens), same visible text and source matches.
+  **Model check (2 requests, synthetic 100-message fixtures, local harness): both answers were valid v2 JSON with
+  `finish_reason=stop` but over the volume bound (16 and 10 claims; 1858 and 1341 output tokens) and were refused — NOT
+  PASSED.** The second request used a strengthened volume rule; it reduced the volume but not below the bound. Grounded
+  stays off in production; re-enabling needs the owner's approval. See `docs/summary/TSQ_SUMMARY.md`.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
   `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
