@@ -559,6 +559,47 @@ yazdı); denetçinin güncel-durum düzeltmesi gerçek bir örnekle sınanmadı.
 bilgiyi yineliyor. (3) Denetçi alıntıları yeniden seçmek yerine taslaktakileri aynen korudu (hepsi birebir doğrulandı). (4) Tek
 sentetik örnek; iki modelin süre ve reasoning kararlılığı, başka konuşmalardaki davranışı ve canlı güvenilirlik bilinmiyor.
 
+**İki aşamalı hat: A ve B fixture'ları (2026-10-04, son offline karar kapısı).** Aday dondurulmuş hâliyle (PR head'i; prompt'lar,
+sözleşme, okuyucu, parametreler, zaman aşımı ve token sınırları değişmeden) ve fixture'lar ile cevap anahtarları ilk günkü
+hâlleriyle kullanıldı. Fixture başına bir pipeline, toplam 4 istek, retry yok, zaman aşımı olmadı.
+
+| | A üretici (GLM) | A denetçi (DeepSeek) | B üretici (GLM) | B denetçi (DeepSeek) |
+|---|---|---|---|---|
+| input / output / reasoning token | 5996 / 932 / 0 | 8841 / 1087 / 0 | 5946 / 1284 / 0 | 9177 / 1477 / 0 |
+| finish, süre | stop, 6,5 sn | stop, 5,9 sn | stop, 5,8 sn | stop, 7,5 sn |
+| point / spoiler / plan | 5 / 0 / 2 | 5 / 0 / 2 | 5 / 2 / 2 | 5 / 2 / 2 |
+| alıntılar | 22/22 birebir | 22/22 birebir | 29/29 birebir | 29/29 birebir |
+| doğrulama | `None` | `None` | `None` | `None` |
+| 2000 token sınırından kalan pay | 1068 | 913 | 716 | 523 (%26) |
+
+Toplam AI süresi A'da 12,5 sn, B'de 13,3 sn; her aşamada 25 saniyelik zaman aşımına en az 17,5 sn pay kaldı. (Aynı GLM isteği
+fixture C'de 15,6–21,5 sn sürmüştü: süre kararlı değil.) İki son özet de tek Discord mesajına sığıyor (1385 ve 1772 karakter).
+
+*Denetçinin değiştirdikleri.* A: metinlerde hiçbir değişiklik yok (bir alıntı uzatıldı). B: "LAN buluşması" üç yerde "buluşma"
+yapıldı — oysa "LAN" kayıtlarda açıkça geçiyor; yani denetçi desteklenen bir ayrıntıyı gereksiz yere çıkardı (hata değil, küçük
+bir bilgi kaybı). Başka değişiklik yok.
+
+*B, son özet — kritik kontrollerin hepsi temiz.* İki ayrı yapımın spoiler'ı iki ayrı elemanda, gerçek içerikle ve `||…||` içinde;
+zorunlu kapsama 2/2; konu etiketleri ("Dune 2", "The Last of Us 2. sezon") içeriği ele vermiyor; açık metinde sızıntı yok.
+Kesinleşmemiş durumlar kesinleştirilmedi (Zel "belki gelecek"; mouse için "önerdi … kabul etti … karar vermedi"), olasılık
+plan yazılmadı, söylenti söylenti olarak ve karşı çıkanla birlikte aktarıldı, görüş ayrılığı karara bağlanmış gibi yazılmadı
+("karar sonraya bırakıldı"), garanti ve fiyat düzeltmeleri doğru, kişiler doğru. Önceki B denemesindeki kesinlik hatası
+tekrarlanmadı.
+
+*A, son özet.* Ters anlam, yanlış kişi, eski bilginin güncel gibi kalması ve spoiler (fixture'da yok; `spoilers: []`) açısından
+temiz: "geri alma işe yaramadı → temiz kurulum çözdü" ve "ping 200 → 40, kalıcılığı belirsiz" sırasıyla ve doğru. Kritik
+sınıfta iki düşük şiddetli gözlem kaldı ve denetçi ikisine de dokunmadı: (1) "CS2 antrenmanı" — oyun adı kayıtlarda yalnızca
+çökme sorunu için geçiyor; antrenmanın hangi oyun olduğu açıkça yazmıyor (bağlamdan çıkarım); (2) "sorun bozuk kurulumdan çıktı"
+— kaynakta bu "öyle görünüyor / galiba" diye temkinli söylenmişti (kesinlik hafifçe yükseltilmiş). Sonradan düzeltilen sayı
+örneği (kill sayısı) üretici tarafından özete hiç alınmadığı için denetçinin "güncel durum" düzeltmesi yine sınanmadı.
+
+*İkincil.* İki fixture'da da planlar point'lerdeki bilgiyi tekrar ediyor; maddelerin çoğunda 2–3, birkaçında 4–5 dayanak var.
+
+*Karar kapısı.* İşletim ölçütleri (dört aşamada doğrulama, kesilme ve zaman aşımı yok) ve B'nin bütün ölçütleri karşılandı. A,
+"desteklenmeyen çıkarım yok" ve "kesinlik doğru" ölçütlerini sıkı okumayla tam karşılamıyor (yukarıdaki iki gözlem). Denetim
+aşaması bu iki denemede hiçbir hatayı düzeltmedi; C'de bir çıkarımı kaldırmıştı. Üç sentetik örnek genel doğruluk garantisi
+değildir; canlı doğrulama yapılmadı.
+
 ## Kötüye kullanım koruması
 
 - Kanal/thread cooldown'u **120 sn**. Başarılı bir özet kanala gönderildikten sonra başlar, özeti kim isterse istesin

@@ -346,7 +346,15 @@ invite link and no global command registration. The source code is public under 
   `validation=None`; total 23.0 s. The reviewer removed the game name that the records never state and tightened one
   sentence; spoiler section and 3/3 coverage kept; unconfirmed task still unconfirmed; corrections kept — PASSED the agreed
   criteria.** Not exercised: the outdated-count error did not occur in this draft. Not improved: plans still repeat points.
-  One synthetic run; NOT VERIFIED_LIVE. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  One synthetic run; NOT VERIFIED_LIVE.
+  **Fixtures A and B through the frozen pipeline (4 requests, no retry, no timeout): all four stages `stop` and
+  `validation=None`; A 5996/932 + 8841/1087 tokens, 12.5 s total; B 5946/1284 + 9177/1477 tokens, 13.3 s total. B: clean on
+  every critical check — two spoiler items for two productions, 2/2 coverage, real content hidden, no leak; unconfirmed
+  things kept unconfirmed; rumour, disagreement and both corrections right. A: no inversion, wrong person or stale state, but
+  two low-severity findings in the critical classes that the reviewer left untouched — the game name attached to the
+  training although the records name it only for the crash, and a hedged cause ("seems so") written as established.** The
+  reviewer changed nothing in A and removed a supported detail ("LAN") in B. Gate: operation and B met; A not fully under a
+  strict reading — merge NOT recommended by the agent; owner's decision. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request in Legacy (production): OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
