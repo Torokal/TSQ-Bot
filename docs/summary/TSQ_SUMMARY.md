@@ -19,7 +19,8 @@ Türkçe özet çıkarır. Özet kanala herkesin görebileceği normal bir Disco
 3. Geçmiş REST ile yeniden eskiye taranır (aşağıdaki "Önceki özet ve 100 mesaj kuralı"). Thread'de yalnızca thread'in kendisi
    okunur; üst kanalın mesajları ve özetleri karışmaz, aynı şekilde üst kanal hesabına thread mesajları girmez.
 4. Transcript hazırlanır (ayrıntısı aşağıda). İlk özette 5'ten az kullanılabilir mesaj varsa AI isteği yapılmaz.
-5. Model tek istekle çağrılır. Retry yoktur, yedek model yoktur, ikinci bir düzeltme turu yoktur.
+5. Model çağrılır. Legacy modunda (üretim) tek istektir. Retry yoktur, yedek model yoktur; Grounded modunun ikinci isteği
+   (aşağıda) bir yeniden deneme değil, kabul edilmiş taslağın denetimidir.
 6. Cevap deterministik olarak temizlenir: kod bloğu ve giriş cümlesi atılır, ana başlık tam olarak
    `# Son Mesajların Özeti` yapılır, alt başlıklar `##` olur, `@everyone`/`@here` etkisizleştirilir. Spoiler'lar Discord'un
    kendi `||…||` biçiminde tutulur (ayrıntı: "Spoiler koruması").
@@ -159,19 +160,42 @@ yok).
 > değildir ve canlı doğrulama değildir. Ardından yapılan hedefli denemede (C) işletim ve anlam ölçütleri geçti, **spoiler
 > gösterimi geçmedi** (aşağıda). Sonraki iki v3 adımında da spoiler gösterimi gerçek model cevabıyla doğrulanamadı.
 >
-> **Sözleşme v4 (2026-10-04, ayrı `spoilers` listesi; draft PR, birleştirilmedi):** aynı fixture C'de GLM-5.3-Flash ilk kez
-> sözleşmeye uygun, doğrulamadan geçen ve gizli olayı `## Spoilerlar` altında `||…||` içinde gerçekten özetleyen bir cevap verdi.
-> DeepSeek V4.1 Flash isteği 25 saniyelik zaman aşımına uğradı; değerlendirilecek cevap yok. Tek bir sentetik başarı genel
-> doğruluk garantisi değildir ve canlı doğrulama değildir. Grounded **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
+> **Sözleşme v4 ve iki aşamalı hat (2026-10-04; draft PR, birleştirilmedi):** v4 ayrı bir `spoilers` listesi kullanır. Grounded
+> artık en fazla **iki** istek yapar: üretici model (GLM-5.3-Flash) taslağı yazar; taslak doğrulamadan geçerse denetçi model
+> (DeepSeek V4.1 Flash) onu aynı kayıtlarla karşılaştırıp düzeltir ve denetlenmiş cevap aynı doğrulamadan yeniden geçer. Fixture
+> C'de tek bir hat çalıştırması iki aşamada da doğrulamadan geçti; denetçi kayıtlarda geçmeyen oyun adını çıkardı, spoiler
+> bölümü ve kapsama korundu (aşağıda). Tek bir sentetik başarı genel doğruluk garantisi değildir ve canlı doğrulama değildir.
+> Grounded **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
 
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
 Geri dönüş: `Summary:GenerationMode=Legacy` (ortam değişkeni `TOROSQUAD_Summary__GenerationMode`). Değişiklik yalnızca sonraki
 komutları etkiler; eski özetler, sayaçlar ve cooldown'lar değişmez. İki modda da rol, 100 mesaj, cooldown, gönderim, log ve
-gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout aynıdır; bir işlem **en fazla bir** AI isteği yapar.
+gizlilik kuralları aynıdır. İstek sayısı farklıdır: Legacy **tek** AI isteği yapar; Grounded **en fazla iki** (taslak + denetim).
+Legacy isteğinin modeli, thinking ayarı, temperature, top_p, timeout ve `max_tokens` değeri değişmemiştir.
 
 **Legacy:** yukarıda anlatılan `Ad: mesaj` transcript'i ve modelin yazdığı Markdown (hafif temizleme). `max_tokens` 1200.
 
-**Grounded:** aynı mesajlar, ilişkileriyle birlikte gönderilir ve model kaynak göstererek cevap verir.
+**Grounded:** aynı mesajlar, ilişkileriyle birlikte gönderilir ve model kaynak göstererek cevap verir. İki aşamalıdır:
+
+1. **Üretici** (`GroundedGeneratorModel`, varsayılan `glm-5.3-flash`): kayıtlardan v4 taslağını yazar. İstek `thinking` alanı
+   olmadan ve `reasoning_effort: low` ile gider (bu modelin Go'daki metadata'sı aç/kapa değil, yalnızca efor seviyeleri listeler).
+2. **Doğrulayıcı (kod):** taslak aşağıdaki bütün kontrollerden geçer. Geçmezse hat biter; denetçi çağrılmaz.
+3. **Denetçi** (`GroundedReviewerModel`, varsayılan `deepseek-v4.1-flash`): sıfırdan özet yazmaz. Aynı kayıtları, zorunlu spoiler
+   kaynaklarını ve kabul edilmiş taslağı alır; taslaktaki her bilgiyi kayıtlarla karşılaştırır (olumlu/olumsuz, sonradan düzeltme
+   veya güncelleme, değişen sayı, soru/öneri/görüşün gerçek gibi yazılması, kişi karışıklığı, plan–point çelişkisi) ve kayıtların
+   açıkça desteklemediği spesifik bilgiyi (isim, oyun, ürün, sayı…) çıkarır ya da düzeltir. Yeni konu ekleyemez, üslup için
+   yeniden yazmaz; zorunlu spoiler kapsamasını korur. İstek üretimde doğrulanmış biçimdedir: `thinking: disabled`,
+   `reasoning_effort` yok. Çıktısı yine **tam** v4 JSON'dur; `review`, `issues`, `confidence` gibi alanlar yoktur.
+4. **Aynı doğrulayıcı, baştan:** denetçinin cevabı taslağın yerine geçer ve aynı kontrollerden sıfırdan geçer; "taslakta böyle
+   yazıyordu" kanıt değildir. Geçerse Markdown üretilir ve gönderilir.
+
+Herhangi bir aşama başarısız olursa (üretici isteği, taslağın doğrulaması, denetçi isteği, denetlenmiş cevabın doğrulaması)
+**herkese açık özet gönderilmez**. Üçüncü istek, yeniden deneme, başka denetçi veya Legacy'e düşme yoktur; kabul edilmiş taslak
+denetim olmadan yayımlanmaz. Başarılı özet cooldown'u yalnızca son Markdown Discord'a gönderilince başlar; diğer durumlarda kısa
+başarısızlık cooldown'u uygulanır. Her isteğin kendi 25 saniyelik zaman aşımı vardır. Denetim bir modelin yaptığı kontroldür,
+doğruluk kanıtı değildir.
+
+Kayıtların ve çıktının biçimi iki aşamada da aynıdır:
 
 - **Girdi:** Her mesaj tek satırlık güvenli bir JSON kaydıdır: `{"m":"m042","u":"Toro","re":"m041","t":"…"}`. `m` yalnızca bu
   isteğe özel bir referanstır (Discord ID'leri modele gitmez). `u` görünen addır; aynı ada sahip iki farklı kişi birleştirilmez
@@ -503,6 +527,38 @@ söylemez. Yeniden istek atılmadı. Sonuç: v4 sözleşmesi bir modelle, bir se
 örnek genel doğruluk veya kesilmeme garantisi değildir; DeepSeek'in v4 davranışı, GLM'nin A ve B'deki davranışı ve GLM'nin süre
 ve reasoning kararlılığı bilinmiyor. Canlı doğrulama yapılmadı.
 
+**İki aşamalı hat: tek pipeline denemesi (2026-10-04, fixture C).** v4 GLM cevabında doğrulayıcının yakalayamadığı iki kaynak
+sadakati hatası kalmıştı (sonradan değişen bir sayı; kayıtlarda geçmeyen bir oyun adı). Bunun üzerine denetim aşaması eklendi.
+Aday ilk istekten önce commit ile sabitlendi; üretici prompt'u, v4 sözleşmesi, okuyucu, fixture C ve cevap anahtarı değişmedi.
+Tek çalıştırma, en fazla iki istek, retry yok. Denetçi prompt'u bu iki hata türünü genel örneklerle (harita adından oyun adı
+çıkarmama; sonradan değişen sayı) adlandırır; yani deneme bu hata türlerine kör değildir.
+
+| | Üretici: GLM-5.3-Flash | Denetçi: DeepSeek V4.1 Flash |
+|---|---|---|
+| input / output / reasoning token | 6138 / 1212 / 0 | 9294 / 1396 / 0 |
+| finish, süre | stop, 15,6 sn | stop, 7,4 sn |
+| point / spoiler / plan | 5 / 1 / 2 | 5 / 1 / 2 |
+| zorunlu kaynak / kapsanan | 3 / 3 | 3 / 3 |
+| alıntılar | 26/26 birebir | 26/26 birebir |
+| doğrulama | `None` | `None` |
+| 2000 token sınırından kalan pay | 788 (%39) | 604 (%30) |
+
+Toplam AI süresi 23,0 sn. Son özet 215 görünür kelime, 1787 karakter (tek Discord mesajı).
+
+Denetçinin taslakta değiştirdikleri: (1) Ana konu'da ve bir planda "CS maçı" → "maç" (kayıtlarda oyun adı geçmiyor); (2) ikinci
+sezon cümlesi kaynağa daha yakın yazıldı ("resmi açıklama yok … iddia edildi" → "resmi açıklama görülmediği … okunduğu ancak
+kesin bir şey olmadığı belirtildi"). Geri kalan metinler ve bütün alıntılar aynı kaldı.
+
+Son özetin cevap anahtarıyla karşılaştırması: spoiler bölümü korundu (güvenli konu, gizli olayların gerçek özeti `||…||` içinde,
+3/3 kapsama, açık metinde sızıntı yok); kesinleşmemiş iş kesinleştirilmedi ("getirmeyi düşünüyor ama henüz kesinleşmedi");
+olumsuz → olumlu düzeltme ve fiyat düzeltmesi korundu; konuşmacılar doğru; kayıtlarda olmayan oyun adı kalmadı; beş açık konu
+kapsandı. Bu ölçütlerle pipeline denemesi **geçti**.
+
+Sınırlar ve gözlenen eksikler: (1) "7 kişi" sayı hatası bu taslakta hiç oluşmadı (üretici bu kez "beden listesi tamamlandı"
+yazdı); denetçinin güncel-durum düzeltmesi gerçek bir örnekle sınanmadı. (2) Plan tekrarı azalmadı: iki plan yine point'lerdeki
+bilgiyi yineliyor. (3) Denetçi alıntıları yeniden seçmek yerine taslaktakileri aynen korudu (hepsi birebir doğrulandı). (4) Tek
+sentetik örnek; iki modelin süre ve reasoning kararlılığı, başka konuşmalardaki davranışı ve canlı güvenilirlik bilinmiyor.
+
 ## Kötüye kullanım koruması
 
 - Kanal/thread cooldown'u **120 sn**. Başarılı bir özet kanala gönderildikten sonra başlar, özeti kim isterse istesin
@@ -533,7 +589,10 @@ ve reasoning kararlılığı bilinmiyor. Canlı doğrulama yapılmadı.
 | `RequestTimeoutSeconds` | `25` |
 | `MaxOutputTokens` | `1200` (Legacy isteği) |
 | `GenerationMode` | `Legacy` (`Legacy` \| `Grounded`) |
-| `GroundedMaxOutputTokens` | `2000` (yalnızca Grounded isteği) |
+| `GroundedMaxOutputTokens` | `2000` (Grounded'in iki isteğinin her biri için) |
+| `GroundedGeneratorModel` | `glm-5.3-flash` (yalnızca Grounded; `thinking` alanı gönderilmez) |
+| `GroundedGeneratorReasoningEffort` | `low` |
+| `GroundedReviewerModel` | `deepseek-v4.1-flash` (yalnızca Grounded; `thinking: disabled`) |
 | `ReasoningEffort` | `low` |
 | `DisableThinking` | `true` |
 | `Temperature` | `0.3` |
@@ -564,7 +623,17 @@ Log satırlarında yalnızca şunlar bulunur: izleme kodu, guild/kanal/çağıra
 Grounded modunda ayrıca: `validation` (kategori), `source_count`, `reply_count`, `reply_unavailable_count`, `context_count`,
 `evidence_count` (kontrol edilen tüm adaylar), `spoiler_claim_count` (spoiler olarak yayımlanan maddeler),
 `candidate_point_count`, `candidate_plan_count`, `shown_point_count`, `shown_plan_count`. `validation` kategorileri arasında
-`MissingRequiredSpoiler` de vardır; `spoiler_claim_count` yayımlanan spoiler elemanlarının sayısıdır. Alıntılar, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
+`MissingRequiredSpoiler` de vardır; `spoiler_claim_count` yayımlanan spoiler elemanlarının sayısıdır. Grounded doğrulama satırı
+`stage` (generator \| reviewer) taşır ve ayrı bir satırda iki aşamanın kullanımı loglanır: `inference_count`, `draft_accepted`,
+`generator_model`, `generator_input_tokens`, `generator_output_tokens`, `generator_reasoning_tokens`, `generator_latency_ms`,
+`reviewer_model`, `reviewer_input_tokens`, `reviewer_output_tokens`, `reviewer_reasoning_tokens`, `reviewer_latency_ms`,
+`total_ai_latency_ms`. Sağlayıcının döndürmediği bir sayı `unknown` yazılır (uydurma sıfır değil); denetçi çağrılmadıysa
+`not_called`. Alıntılar, taslak, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
+
+**Grounded'de ikinci gönderim.** Grounded modu doğrulamadan geçen bir ilk taslak ürettiğinde, aynı geçici Discord transcript'i
+(aynı kayıtlar) taslakla birlikte ikinci, denetim isteğinde de AI sağlayıcısına gönderilir. Bu veri de veritabanına yazılmaz,
+dosyaya kaydedilmez, loglanmaz; ham JSON ve yanıt loglanmaz; işlem bitince bellekte tutulmaz. Legacy hâlâ tek istektir; üretim
+Legacy modunda olduğu sürece bu ikinci gönderim gerçekleşmez.
 
 Transcript üçüncü taraf bir işleyiciye gider: OpenCode Go ve üst sağlayıcısı. DeepSeek V4.1 Flash için OpenCode workspace'inde
 **Global** bölgenin açık olması gerekir.
