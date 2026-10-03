@@ -59,8 +59,13 @@ public sealed record SummaryGroundedResult(SummaryGroundedFailure Failure, strin
 public static partial class SummaryGroundedAnswer
 {
     public const int MaxPoints = 7;
-    public const int MaxClaimsPerPoint = 3;
-    public const int MaxPlans = 5;
+    public const int MaxClaimsPerPoint = 2;
+    public const int MaxPlans = 3;
+
+    /// <summary>Claims of all points and plans together: the answer's volume is bounded as a whole, not only per list.</summary>
+    public const int MaxTotalClaims = 8;
+
+    /// <summary>One quote is the norm; up to three stay possible for a correction, a reply, a disagreement or a who-about-whom relation.</summary>
     public const int MaxEvidence = 3;
     public const int MaxTextChars = 500;
     public const int MaxTopicChars = 80;
@@ -90,7 +95,8 @@ public static partial class SummaryGroundedAnswer
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.NotJson);
-            if (!root.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.Number ||
+            // Only the current compact contract is read: an answer in the earlier shape ("version": 1, long field names) is refused.
+            if (!root.TryGetProperty("v", out var version) || version.ValueKind != JsonValueKind.Number ||
                 !version.TryGetInt32(out var number) || number != SummaryGroundedPrompt.ContractVersion)
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.Contract);
 
@@ -113,6 +119,8 @@ public static partial class SummaryGroundedAnswer
                     .Select(c => reader.Claim(c, "")).ToList()
                 : [];
             var atmosphere = reader.OpenText(Required(root, "atmosphere", JsonValueKind.Object));
+            if (points.Sum(p => p.Claims.Count) + plans.Count > MaxTotalClaims)
+                return SummaryGroundedResult.Failed(SummaryGroundedFailure.Limit);
 
             // Nothing shown openly may repeat hidden content or carry a technical reference.
             var open = new[] { main, atmosphere }.Concat(points.Select(p => p.Topic))
@@ -211,10 +219,13 @@ public static partial class SummaryGroundedAnswer
         return SummaryGrounded.CollapseWhitespace(text).TrimStart('#', '-', ' ');
     }
 
-    /// <summary>The element's optional <c>spoiler_topic</c> as a label: one line, no brackets or markup; "" when absent.</summary>
+    /// <summary>
+    /// The element's optional spoiler topic <c>s</c> as a label: one line, no brackets or markup; "" when absent. Its absence
+    /// never means "not a spoiler": protection is decided from where the quotes come from.
+    /// </summary>
     private static string Label(JsonElement element)
     {
-        if (!element.TryGetProperty("spoiler_topic", out var topic) || topic.ValueKind == JsonValueKind.Null)
+        if (!element.TryGetProperty("s", out var topic) || topic.ValueKind == JsonValueKind.Null)
             return "";
         if (topic.ValueKind != JsonValueKind.String)
             throw new Refused(SummaryGroundedFailure.Contract);
@@ -240,7 +251,7 @@ public static partial class SummaryGroundedAnswer
         /// <summary>main / atmosphere: shown openly, so their evidence must not come from a hidden span.</summary>
         public string OpenText(JsonElement element)
         {
-            var text = Text(element, "text", MaxTextChars);
+            var text = Text(element, "t", MaxTextChars);
             return Evidence(element) ? throw new Refused(SummaryGroundedFailure.SpoilerInOpenText) : text;
         }
 
@@ -252,7 +263,7 @@ public static partial class SummaryGroundedAnswer
         {
             if (element.ValueKind != JsonValueKind.Object)
                 throw new Refused(SummaryGroundedFailure.Contract);
-            var text = Text(element, "text", MaxTextChars);
+            var text = Text(element, "t", MaxTextChars);
             var fromHidden = Evidence(element);
             var label = Label(element);
             var isProtected = fromHidden || label.Length > 0;
@@ -261,17 +272,20 @@ public static partial class SummaryGroundedAnswer
             return new Claim(text, isProtected, label);
         }
 
-        /// <summary>Checks the element's evidence list; true when any quote lies (partly) inside a spoiler span.</summary>
+        /// <summary>
+        /// Checks the element's evidence list <c>e</c> — pairs of [record reference, verbatim quote]; true when any quote lies
+        /// (partly) inside a spoiler span.
+        /// </summary>
         private bool Evidence(JsonElement element)
         {
             var fromHidden = false;
             var onlyContext = true;
-            foreach (var item in Items(Required(element, "evidence", JsonValueKind.Array), 1, MaxEvidence))
+            foreach (var item in Items(Required(element, "e", JsonValueKind.Array), 1, MaxEvidence))
             {
-                if (item.ValueKind != JsonValueKind.Object ||
-                    !item.TryGetProperty("message", out var reference) || reference.ValueKind != JsonValueKind.String ||
-                    !item.TryGetProperty("quote", out var quoted) || quoted.ValueKind != JsonValueKind.String)
+                if (item.ValueKind != JsonValueKind.Array || item.GetArrayLength() != 2 ||
+                    item[0].ValueKind != JsonValueKind.String || item[1].ValueKind != JsonValueKind.String)
                     throw new Refused(SummaryGroundedFailure.Contract);
+                var (reference, quoted) = (item[0], item[1]);
                 if (!input.Records.TryGetValue(reference.GetString()!.Trim(), out var record))
                     throw new Refused(SummaryGroundedFailure.UnknownSource);
 
