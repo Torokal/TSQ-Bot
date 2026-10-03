@@ -19,6 +19,23 @@ public sealed class SummaryDiscordFilterTests
             ["Author"] = InterfaceFake.Create<IUser>(new() { ["IsBot"] = bot, ["IsWebhook"] = webhook }),
         });
 
+    private static IMessage Referencing(MessageType type, MessageReference? reference) =>
+        InterfaceFake.Create<IMessage>(new() { ["Type"] = type, ["Reference"] = reference });
+
+    [Fact]
+    public void A_reply_link_is_a_real_reply_inside_the_same_channel_only()
+    {
+        const ulong channel = 1200000000000000001, other = 1200000000000000002;
+
+        DiscordSummarySource.ReplyTargetId(Referencing(MessageType.Reply, new MessageReference(41, channel)), channel).Should().Be(41UL);
+        DiscordSummarySource.ReplyTargetId(Referencing(MessageType.Reply, new MessageReference(41)), channel).Should().Be(41UL, "no channel given: this channel");
+        DiscordSummarySource.ReplyTargetId(Referencing(MessageType.Reply, new MessageReference(41, other)), channel).Should().BeNull("another channel's message is not context here");
+        DiscordSummarySource.ReplyTargetId(Referencing(MessageType.Default, new MessageReference(41, channel)), channel).Should().BeNull("not a reply");
+        DiscordSummarySource.ReplyTargetId(Referencing(MessageType.Reply, null), channel).Should().BeNull();
+        DiscordSummarySource.ReplyTargetId(Referencing(MessageType.Reply, new MessageReference(41, channel, referenceType: MessageReferenceType.Forward)), channel)
+            .Should().BeNull("a forward is not a reply");
+    }
+
     [Theory]
     [InlineData(MessageSource.User, MessageType.Default, false, false, SummaryAuthorKind.Member)]
     [InlineData(MessageSource.User, MessageType.Reply, false, false, SummaryAuthorKind.Member)]

@@ -167,6 +167,21 @@ public sealed partial class SummaryArchitectureTests
     }
 
     [Fact]
+    public void Generation_mode_defaults_to_legacy_binds_from_configuration_and_is_validated()
+    {
+        new SummaryOptions().GenerationMode.Should().Be(SummaryGenerationMode.Legacy);
+        var grounded = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Summary:GenerationMode"] = "Grounded" })
+            .Build().GetSection(SummaryOptions.Section).Get<SummaryOptions>()!;
+        grounded.GenerationMode.Should().Be(SummaryGenerationMode.Grounded);
+        grounded.Validate().Should().BeEmpty();
+        (grounded.MaxOutputTokens, grounded.RequestTimeoutSeconds, grounded.Temperature, grounded.TopP, grounded.DisableThinking)
+            .Should().Be((1200, 25, 0.3, 0.9, true), "switching the mode changes no other AI setting");
+
+        new SummaryOptions { GenerationMode = (SummaryGenerationMode)7 }.Validate().Should().ContainSingle(e => e.Contains("GenerationMode", StringComparison.Ordinal));
+        new SummaryOptions { GroundedMaxOutputTokens = 100 }.Validate().Should().ContainSingle(e => e.Contains("GroundedMaxOutputTokens", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Allowed_roles_live_in_one_place_and_bind_from_configuration()
     {
         foreach (var id in SummaryOptions.DefaultAllowedRoleIds)
