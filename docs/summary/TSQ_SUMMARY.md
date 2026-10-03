@@ -306,14 +306,20 @@ Seçilmiş son özetler cevap anahtarıyla karşılaştırıldı. A: sürücü s
 internet arızası (modem reseti işe yaramadı, sonradan düzeldi ama kalıcılığı belirsiz), kaptan seçimi, geciken kargo, kill
 sayısı düzeltmesi (30 değil 27) ve akşam antrenmanı doğru; yedinci madde (yanıtsız kalan sezon sorusu) seçimde düştü. B:
 buluşma, yarınki maç ve yedek oyuncu, karara bağlanmayan 6. oyuncu anlaşmazlığı, garanti düzeltmesi, fiyat düzeltmesi ve
-söylenti (iddia olarak) doğru; olasılık ("belki halı saha") plan yazılmadı. İki özette de ters çevrilmiş anlam, yanlış kişi
-ataması veya kaçırılmış düzeltme bulunmadı; spoiler sızmadı.
+söylenti (iddia olarak) aktarıldı; olasılık ("belki halı saha") plan yazılmadı.
 
-Görülen kusurlar: (1) B'deki iki spoiler konusu özete hiç alınmadı — sızıntı yok ama kapsama eksiği var ve spoiler maddesinin
-gerçek model çıktısıyla yayımlanması bu denemelerde hiç sınanmadı; (2) iki özette de planlar, point'lerde zaten geçen bilgiyi
-tekrar ediyor (birebir kopya olmadığı için kod tekilleştirmez); (3) model her maddeye 2–3 dayanak yazdı ("normalde 1" kuralına
-uyulmadı), bu çıktı token'ını artırır; (4) çıktılar 1200 token'lık optimizasyon hedefinin üstünde. Gösterilmeyen yedinci madde
-de üretilirken token harcadı; seçim sağlayıcı maliyetini azaltmaz.
+Değerlendirme: bu iki örnekte anlam tersine çevirme ve yanlış kişi ataması görülmedi. **Bir kesinlik hatası görüldü.**
+Spoiler içerikleri seçilmediği için gerçek model cevabıyla spoiler gösterimi doğrulanmadı; açık metne spoiler sızmadı.
+
+Görülen kusurlar, önem sırasıyla: (1) **kesinlik/modalite hatası (doğruluk sorunu)** — B'de kaynakta kesinleşmemiş bir iş
+kesinleşmiş gibi yazıldı: KEŞKE mouse getirmeyi önermiş, sonra "o zaman ben getirmeyeyim" demiş, Monfy "sen de getir" diye
+yanıtlamış ve KEŞKE bunu yeniden onaylamamıştı; özet "KEŞKE de cumartesi kendi mouse'unu getirecek" dedi. Kaynak kontrolü bunu
+yakalayamaz: alıntılar birebirdi; (2) B'deki iki spoiler konusu özete hiç alınmadı — kapsama eksiği, ve spoiler maddesinin
+gerçek model çıktısıyla yayımlanması bu denemelerde hiç sınanmadı; (3) iki özette de planlar, point'lerde zaten geçen bilgiyi
+tekrar ediyor (birebir kopya olmadığı için kod tekilleştirmez; sunum sorunu, doğruluk sorunu değil); (4) model her maddeye 2–3
+dayanak yazdı ("normalde 1" kuralına uyulmadı), bu çıktı token'ını artırır; (5) çıktılar 1200 token'lık optimizasyon hedefinin
+üstünde. Gösterilmeyen yedinci madde de üretilirken token harcadı; seçim sağlayıcı maliyetini azaltmaz. Bu çıktılar sonradan
+değiştirilmedi; yukarıdaki sonuç modelin ilk ve tek cevabına aittir.
 
 Sınırlar: iki sentetik örnek genel doğruluk veya kesilmeme garantisi değildir; `stop` ile biten iki cevap daha uzun veya daha
 dağınık sohbetlerde 2000 sınırına takılmayacağını göstermez. Kaynak eşleşmesi anlamın doğru yorumlandığını, spoiler biçim

@@ -284,10 +284,11 @@ invite link and no global command registration. The source code is public under 
   settings, `GroundedMaxOutputTokens` 2000 and all gates unchanged. TESTED_OFFLINE (3223 tests ×3).
   **Model check with one frozen prompt (2 requests, the same two synthetic 100-message fixtures, local harness): both
   answers valid, `finish_reason=stop`, `validation=None` — A 6162/1371 tokens (7 candidate points → 6 shown), B 6075/1313
-  (6 → 6); all 54 quotes verbatim; no inverted meaning, wrong attribution or spoiler leak against the answer keys.** Seen
-  defects: B's two spoiler topics were left out (coverage gap; spoiler rendering not exercised by real model output), plans
-  repeat information from points, 2–3 quotes per item, output above the 1200-token optimisation target (about a third of
-  the cap left). Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  (6 → 6); all 54 quotes verbatim.** Against the answer keys: no inverted meaning and no wrong attribution in these two
+  examples; **one certainty error** (B wrote an unconfirmed item — a member bringing a mouse — as settled; verbatim quotes
+  cannot catch that); spoiler display was NOT verified with a real model answer because the spoiler topics were not
+  selected (no leak into open text either). Lower-priority defects: plans repeat information from points, 2–3 quotes per
+  item, output above the 1200-token optimisation target (about a third of the cap left). Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
