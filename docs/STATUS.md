@@ -315,7 +315,23 @@ invite link and no global command registration. The source code is public under 
   GLM 6106/1543 (145 reasoning) — summarised the hidden events correctly but under a new top-level field outside the
   contract; both refused with `MissingRequiredSpoiler` — NOT PASSED.** The coverage check worked as a guard; it did not make
   either model write a contract-conforming spoiler point. Spoiler display with a real, conforming model answer is still
-  unverified. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  unverified.
+- Grounded contract v4 (2026-10-04, branch `fix/summary-grounded-v4-spoilers`, draft PR, NOT merged; supersedes the v3
+  spoiler approach of PR #57 if accepted): hidden information is a top-level `spoilers` array (always present, `[]` when
+  nothing is hidden) instead of specially labelled points; the `s` field is gone; v1/v2/v3 answers are refused. `main`,
+  `points`, `plans`, `atmosphere` are open — a quote from a hidden span there refuses the answer; hidden evidence is valid
+  only inside `spoilers`. Every required spoiler source must be quoted from its hidden part by a `spoilers` item
+  (`MissingRequiredSpoiler`). Rendering: `## Spoilerlar` with `- **topic:** ||text||`, only when there is an item. Points
+  and spoilers do not compete for places; the v3 reservation rules and `SpoilerPointLimit` are removed. Bounds: 8 candidate
+  points (6 shown), 4 spoiler items, 4 candidate plans (2 shown), 5 quotes per text. Input metadata (`"sp":true`, required
+  sources line) kept. Legacy path, model settings, `GroundedMaxOutputTokens` 2000 and all gates unchanged. TESTED_OFFLINE
+  (3242 tests ×3). **Model check on fixture C, one frozen candidate, 2 requests: GLM-5.3-Flash PASSED the agreed criteria —
+  6138/1311 tokens, `stop`, 16.1 s, `validation=None`, 3/3 required sources covered, the hidden events really summarised and
+  rendered as `||…||` under `## Spoilerlar`, safe topic, no leak, unconfirmed task kept unconfirmed, correction kept.
+  DeepSeek V4.1 Flash: the request timed out at 25 s — no answer to evaluate (not retried).** Seen in the GLM answer: one
+  probably wrong count ("7 people"), an inferred "CS", plans repeating points, 3 quotes on most texts, summary over 2000
+  characters (two messages). One synthetic success is not a guarantee of accuracy; NOT VERIFIED_LIVE. Grounded stays off in
+  production; which model, a short supervised live window and closing PR #57 are the owner's decisions. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
