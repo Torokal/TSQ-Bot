@@ -156,7 +156,8 @@ yok).
 > **Sözleşme denemeleri (2026-10-03):** Kompakt sözleşme (v2) iki sentetik 100 mesajlık denemede hacim sınırını aştığı için
 > reddedildi (`validation=Limit`). Düz sözleşme (v3) kaynak güvenliğini gösterim hedefinden ayırır; aynı iki fixture'da, aynı
 > sabit prompt'la iki cevap da doğrulamadan geçti ve kesilmedi (aşağıda). Bu iki deneme genel doğruluk veya kesilmeme kanıtı
-> değildir ve canlı doğrulama değildir. Grounded **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
+> değildir ve canlı doğrulama değildir. Ardından yapılan hedefli denemede (C) işletim ve anlam ölçütleri geçti, **spoiler
+> gösterimi geçmedi** (aşağıda). Grounded **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
 
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
 Geri dönüş: `Summary:GenerationMode=Legacy` (ortam değişkeni `TOROSQUAD_Summary__GenerationMode`). Değişiklik yalnızca sonraki
@@ -324,6 +325,37 @@ değiştirilmedi; yukarıdaki sonuç modelin ilk ve tek cevabına aittir.
 Sınırlar: iki sentetik örnek genel doğruluk veya kesilmeme garantisi değildir; `stop` ile biten iki cevap daha uzun veya daha
 dağınık sohbetlerde 2000 sınırına takılmayacağını göstermez. Kaynak eşleşmesi anlamın doğru yorumlandığını, spoiler biçim
 kontrolü dolaylı sızıntının olmadığını kanıtlamaz. Canlı doğrulama yapılmadı.
+
+**Hedefli deneme C (2026-10-03, PR #56 birleştikten sonra; tek istek, aynı prompt, aynı sözleşme, aynı parametreler).**
+Yeni sentetik fixture: 100 üye mesajı + 3 bağlam kaydı, 24 yanıt bağlantısı, 9 katılımcı; ana konulardan biri tamamen uydurma
+bir dizinin finali (üç gizli alan), önerilmiş ama kesinleşmemiş bir iş (yedek mouse) ve açık bir olumsuz → olumlu düzeltme.
+Fixture ve cevap anahtarı istekten önce sabitlendi; retry, Legacy veya hakem isteği yok.
+
+| | C |
+|---|---|
+| input / output / reasoning token | 6284 / 1510 / 0 |
+| finish, süre | stop, 10,8 sn |
+| ham aday point / plan → gösterilen | 8 / 2 → 6 / 2 |
+| dayanak (hepsi kaynakta birebir) | 30 |
+| doğrulama | `None` — yayımlanabilir |
+| 2000 token sınırından kalan pay | 490 (%24,5) |
+
+- **İşletim: geçti.** Cevap tamamlandı, kesilmedi, kaynak ve alıntı kontrolü geçti. Kalan token payı A/B'den dar.
+- **Anlam: geçti.** Kesinleşmemiş iş kesinleşmiş yazılmadı ("getirebileceğini, kesin olmadığını söyledi"; Planlar'a alınmadı).
+  Düzeltme korundu (oyun açılmadı → dosya doğrulama işe yaramadı → yeniden başlatınca açıldı). Fiyat düzeltmesi (450 → 480)
+  doğru. Konuşmacı ve muhatap doğru. İkinci sezon sorusu gerçek gibi yazılmadı.
+- **Spoiler: GEÇMEDİ (gösterim doğrulanmadı).** Model iki spoiler point'i yazdı ve doğru etiketledi, ama (1) ikisini de en sona
+  (7. ve 8. sıra) koydu; seçim ilk 6'yı gösterdiği için son özette spoiler maddesi yok, `||…||` hiç oluşmadı; (2) metinleri
+  gizli bilgiyi özetlemiyordu — yalnızca "spoiler içeren ayrıntılar paylaşıldı" diyordu. Dizinin açık yönleri (finali beğenen
+  ve aceleye geldiğini düşünen, izlemeyenler) iki point'te gösterildi. Açık metne, başlığa veya etikete sızıntı olmadı. Yani
+  hata yönü güvenlidir (sızıntı değil, eksik bilgi), ama önemli spoiler içeriğinin gizli biçimde özete girdiği gerçek model
+  cevabıyla hâlâ gösterilemedi.
+- **Kullanılabilirlik:** isimler doğal; iki plan, point'lerde geçen bilgiyi yine tekrar ediyor (sunum sorunu); gösterilmeyen
+  iki point de üretilirken token harcadı.
+
+Üç deneme (A, B, C) birlikte: anlam tersine çevirme ve yanlış kişi ataması görülmedi; bir kesinlik hatası (B) görüldü; spoiler
+sızıntısı görülmedi; spoiler gösterimi gerçek model cevabıyla hiçbirinde doğrulanmadı. Üç sentetik örnek genel doğruluk veya
+kesilmeme garantisi değildir.
 
 ## Kötüye kullanım koruması
 

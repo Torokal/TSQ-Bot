@@ -274,7 +274,7 @@ invite link and no global command registration. The source code is public under 
   `finish_reason=stop` but over the volume bound (16 and 10 claims; 1858 and 1341 output tokens) and were refused — NOT
   PASSED.** The second request used a strengthened volume rule; it reduced the volume but not below the bound. Grounded
   stays off in production; re-enabling needs the owner's approval. See `docs/summary/TSQ_SUMMARY.md`.
-- Flat grounded contract (2026-10-03, branch `fix/summary-grounded-flat`): contract `"v":3` — each point carries its own
+- Flat grounded contract (2026-10-03, PR #56 merged `ac55c45`, deployed; production stays Legacy): contract `"v":3` — each point carries its own
   topic, text, evidence pairs and optional spoiler topic (no nested claims); v1/v2 answers are refused. Source safety and the
   display target are separated: up to 12 candidate points and 4 candidate plans are ALL checked (sources, verbatim quotes,
   context-only, spoiler provenance, technical references); one error still refuses the whole answer, also in an item that
@@ -288,7 +288,13 @@ invite link and no global command registration. The source code is public under 
   examples; **one certainty error** (B wrote an unconfirmed item — a member bringing a mouse — as settled; verbatim quotes
   cannot catch that); spoiler display was NOT verified with a real model answer because the spoiler topics were not
   selected (no leak into open text either). Lower-priority defects: plans repeat information from points, 2–3 quotes per
-  item, output above the 1200-token optimisation target (about a third of the cap left). Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  item, output above the 1200-token optimisation target (about a third of the cap left).
+  **Targeted check C (1 request after the merge, same prompt and contract; new synthetic fixture with an invented series as
+  a main topic, an unconfirmed task and an explicit correction): 6284/1510 tokens, `stop`, `validation=None`, 30 quotes
+  verbatim, 8 candidate points → 6 shown. Operation and meaning passed (the unconfirmed task was reported as not certain;
+  the correction was kept). Spoiler display did NOT pass: the model wrote two labelled spoiler points but ranked them last
+  (not shown) and their text did not summarise the hidden content; no leak into open text.** 490 tokens (24.5 %) of the
+  cap were left. Spoiler display with a real model answer is still unverified. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
