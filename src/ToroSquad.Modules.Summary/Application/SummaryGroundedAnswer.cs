@@ -35,14 +35,21 @@ public enum SummaryGroundedFailure
 
     /// <summary>A record reference in a visible text.</summary>
     TechnicalLeak = 9,
+
+    /// <summary>A window record with a hidden part is not quoted (from that hidden part) by any spoiler point.</summary>
+    MissingRequiredSpoiler = 10,
+
+    /// <summary>The required spoiler sources are covered only by more spoiler points than may be shown.</summary>
+    SpoilerPointLimit = 11,
 }
 
 /// <summary>
 /// The outcome: the Markdown to post, or the failure category; plus counts for the log. <paramref name="EvidenceCount"/>
 /// covers every candidate that was checked; <paramref name="SpoilerClaimCount"/> the shown points and plans published as
 /// spoilers; the candidate counts are what the model wrote, the shown counts what was rendered.
-/// <paramref name="SpoilerCandidates"/> counts the candidates whose quotes really come from a hidden span, and
-/// <paramref name="SpoilerPromoted"/> tells whether one of them took the last shown place because none was among the first.
+/// <paramref name="SpoilerCandidates"/> counts the candidates whose quotes really come from a hidden span,
+/// <paramref name="RequiredSpoilers"/> the window records that had to be covered, and
+/// <paramref name="ReservedSpoilerPoints"/> the spoiler points that were given a shown place to keep that coverage visible.
 /// </summary>
 public sealed record SummaryGroundedResult(
     SummaryGroundedFailure Failure,
@@ -54,7 +61,8 @@ public sealed record SummaryGroundedResult(
     int ShownPoints = 0,
     int ShownPlans = 0,
     int SpoilerCandidates = 0,
-    bool SpoilerPromoted = false)
+    int RequiredSpoilers = 0,
+    int ReservedSpoilerPoints = 0)
 {
     public bool Succeeded => Failure == SummaryGroundedFailure.None && Markdown is not null;
 
@@ -71,11 +79,14 @@ public sealed record SummaryGroundedResult(
 /// <c>**Spoiler (konu):** ||…||</c> whatever the model said; hidden content in an open text is refused). One failure
 /// refuses the whole answer; a point is never dropped to hide its broken source. The DISPLAY TARGET is not a safety rule:
 /// when everything checked out, the first <see cref="ShownPoints"/> points and <see cref="ShownPlans"/> plans are shown, in
-/// the model's order, as complete items — a few more than that is not a failure, only the candidate bound is. One
-/// exception to the plain cut: when none of the first points quotes a hidden span but a later one does, the first such
-/// point takes the last shown place, so that the spoiler points the model wrote are not all lost. Selection never rewrites,
-/// shortens or merges a text; only records that are exactly the same (text, evidence, spoiler nature) are shown once. It
-/// cannot make a point informative either: a point that only says "a spoiler was shared" stays just that. This proves that sources exist and quotes are intact. It does NOT prove that the model understood those
+/// the model's order, as complete items — a few more than that is not a failure, only the candidate bound is. Selection
+/// never rewrites, shortens or merges a text; only records that are exactly the same (text, evidence, spoiler nature) are
+/// shown once. SPOILER COVERAGE is required, not left to the model's choice of topics: every window record with a hidden
+/// part (<see cref="SummaryGroundedInput.RequiredSpoilerSources"/>) must be quoted, from that hidden part, by a spoiler
+/// point — otherwise the answer is refused — and the fewest such points (at most <see cref="MaxShownSpoilerPoints"/>)
+/// are given a shown place before the remaining places go to the other points. Only a verified quote position counts:
+/// an "s" label or the word "spoiler" does not. The coverage check cannot tell whether the point's text really summarises
+/// the hidden event: "a spoiler was shared" with the right quote passes it. This proves that sources exist and quotes are intact. It does NOT prove that the model understood those
 /// sources, that each point is as self-contained as the prompt asks, or that a paraphrased spoiler was caught. A refused
 /// answer is never repaired, never retried and never replaced by the legacy path.
 /// </summary>
@@ -89,8 +100,14 @@ public static partial class SummaryGroundedAnswer
     public const int MaxCandidatePoints = 12;
     public const int MaxCandidatePlans = 4;
 
-    /// <summary>One quote is the norm; up to three stay possible for a correction, a reply, a disagreement or a who-about-whom relation.</summary>
-    public const int MaxEvidence = 3;
+    /// <summary>How many spoiler points may be given a shown place to keep the required coverage visible.</summary>
+    public const int MaxShownSpoilerPoints = 3;
+
+    /// <summary>
+    /// Safety ceiling for the quotes of one text — NOT the target: the prompt still asks for one, two or three when a
+    /// correction, a reply, a disagreement or a who-about-whom relation needs them. Every quote is checked in full.
+    /// </summary>
+    public const int MaxEvidence = 5;
     public const int MaxAnswerChars = 16000;
     public const int MaxTextChars = 500;
     public const int MaxTopicChars = 80;
@@ -103,9 +120,10 @@ public static partial class SummaryGroundedAnswer
     /// A point (with a topic) or a plan (without). <paramref name="Sources"/> identifies its evidence, order-independent.
     /// <paramref name="Protected"/> decides the rendering (hidden when a quote comes from a hidden span OR the model named a
     /// spoiler topic); <paramref name="HasSpoilerEvidence"/> is only the first of those — derived from where the checked quotes
-    /// sit in the source, never from the model's "s" field or wording.
+    /// sit in the source, never from the model's "s" field or wording. <paramref name="SpoilerSources"/> are the window
+    /// records this item quotes from their hidden part: what counts for the required coverage.
     /// </summary>
-    private sealed record Item(string Topic, string Text, bool Protected, bool HasSpoilerEvidence, string Label, string Sources)
+    private sealed record Item(string Topic, string Text, bool Protected, bool HasSpoilerEvidence, string Label, string Sources, IReadOnlyList<string> SpoilerSources)
     {
         public bool SameRecordAs(Item other) =>
             Protected == other.Protected && string.Equals(Text, other.Text, StringComparison.Ordinal) && string.Equals(Sources, other.Sources, StringComparison.Ordinal);
@@ -155,10 +173,20 @@ public static partial class SummaryGroundedAnswer
             if (open.Concat(all.Where(i => i.Protected).Select(i => i.Text)).Any(reader.MentionsRecordReference))
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.TechnicalLeak);
 
-            // 2) Selection among complete, checked items: exact copies once, then the first ones in the model's order.
+            // 2) Required spoiler coverage: every window record with a hidden part is quoted, from that part, by a spoiler point.
+            var required = input.RequiredSpoilerSources;
+            var covered = points.SelectMany(p => p.SpoilerSources).ToHashSet(StringComparer.Ordinal);
+            if (required.Any(r => !covered.Contains(r)))
+                return SummaryGroundedResult.Failed(SummaryGroundedFailure.MissingRequiredSpoiler);
+
+            // 3) Selection among complete, checked items: exact copies once, the spoiler points that keep the coverage, then
+            //    the first other ones in the model's order.
             var (candidatePoints, candidatePlans) = (points.Count, plans.Count);
             (points, plans) = WithoutExactCopies(points, plans);
-            var (shownPoints, promoted) = SelectPoints(points);
+            var reserved = SmallestCover(points, required);
+            if (reserved is null)
+                return SummaryGroundedResult.Failed(SummaryGroundedFailure.SpoilerPointLimit);
+            var shownPoints = SelectPoints(points, reserved);
             var shownPlans = plans.Take(ShownPlans).ToList();
 
             var markdown = SummaryOutput.Normalize(Render(main, shownPoints, shownPlans, atmosphere));
@@ -166,7 +194,7 @@ public static partial class SummaryGroundedAnswer
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.Limit);
             return new SummaryGroundedResult(SummaryGroundedFailure.None, markdown, reader.EvidenceCount,
                 shownPoints.Concat(shownPlans).Count(i => i.Protected), candidatePoints, candidatePlans, shownPoints.Count, shownPlans.Count,
-                all.Count(i => i.HasSpoilerEvidence), promoted);
+                all.Count(i => i.HasSpoilerEvidence), required.Count, reserved.Count);
         }
         catch (JsonException)
         {
@@ -179,21 +207,51 @@ public static partial class SummaryGroundedAnswer
     }
 
     /// <summary>
-    /// The first <see cref="ShownPoints"/> points in the model's order. If none of them quotes a hidden span while a later
-    /// point does, the first such point (in the model's order) replaces the last shown one as a whole; the others keep their
-    /// order. Only verified spoiler evidence earns that place — an "s" label or the word "spoiler" does not. This does not
-    /// promise that every spoiler topic is shown; it only keeps a blind cut from dropping all of them.
+    /// The fewest points (at most <see cref="MaxShownSpoilerPoints"/>) that together quote every required record from its
+    /// hidden part — the earliest such set in the model's order; empty when nothing is required; null when the model spread
+    /// the required sources over more spoiler points than may be shown. Texts are never merged to make a set smaller.
     /// </summary>
-    private static (List<Item> Shown, bool Promoted) SelectPoints(List<Item> points)
+    private static List<int>? SmallestCover(List<Item> points, IReadOnlyList<string> required)
     {
-        var shown = points.Take(ShownPoints).ToList();
-        if (shown.Any(p => p.HasSpoilerEvidence))
-            return (shown, false);
-        var candidate = points.Skip(ShownPoints).FirstOrDefault(p => p.HasSpoilerEvidence);
-        if (candidate is null)
-            return (shown, false);
-        shown[^1] = candidate; // none of the shown ones has spoiler evidence here, so the last one gives way
-        return (shown, true);
+        if (required.Count == 0)
+            return [];
+        var candidates = Enumerable.Range(0, points.Count).Where(i => points[i].SpoilerSources.Count > 0).ToList();
+        for (var size = 1; size <= Math.Min(MaxShownSpoilerPoints, candidates.Count); size++)
+        {
+            foreach (var set in Subsets(candidates, size))
+            {
+                if (required.All(r => set.Any(i => points[i].SpoilerSources.Contains(r))))
+                    return set;
+            }
+        }
+
+        return null;
+
+        // Index subsets of one size, in lexicographic order (so the earliest points win a tie).
+        static IEnumerable<List<int>> Subsets(List<int> from, int size, int start = 0)
+        {
+            if (size == 0)
+            {
+                yield return [];
+                yield break;
+            }
+
+            for (var i = start; i <= from.Count - size; i++)
+            {
+                foreach (var rest in Subsets(from, size - 1, i + 1))
+                    yield return [from[i], .. rest];
+            }
+        }
+    }
+
+    /// <summary>
+    /// At most <see cref="ShownPoints"/> whole points: first the reserved spoiler points, then the first other points in the
+    /// model's order for the places that are left; shown in the model's order.
+    /// </summary>
+    private static List<Item> SelectPoints(List<Item> points, List<int> reserved)
+    {
+        var chosen = reserved.Concat(Enumerable.Range(0, points.Count).Where(i => !reserved.Contains(i)).Take(ShownPoints - reserved.Count)).Order();
+        return chosen.Select(i => points[i]).ToList();
     }
 
     /// <summary>
@@ -205,6 +263,8 @@ public static partial class SummaryGroundedAnswer
     {
         points = Distinct(points);
         plans = Distinct(plans);
+        // A point that keeps the required spoiler coverage never gives way: its plan copy goes instead.
+        plans = plans.Where(plan => !points.Any(point => point.SpoilerSources.Count > 0 && point.SameRecordAs(plan))).ToList();
         var notPlans = points.Where(point => !plans.Any(point.SameRecordAs)).ToList();
         // The points section is never left empty: if every point is also a plan, the points stay and those plans go.
         return notPlans.Count > 0 ? (notPlans, plans) : (points, plans.Where(plan => !points.Any(plan.SameRecordAs)).ToList());
@@ -341,23 +401,25 @@ public static partial class SummaryGroundedAnswer
                 throw new Refused(SummaryGroundedFailure.Contract);
             var topic = withTopic ? Topic(Text(element, "topic", MaxTopicChars)) : "";
             var text = Text(element, "t", MaxTextChars);
-            var (fromHidden, sources) = Evidence(element);
+            var (fromHidden, sources, spoilerSources) = Evidence(element);
             var label = Label(element);
             var isProtected = fromHidden || label.Length > 0;
             if (isProtected && label.Length == 0)
                 label = UnknownSpoilerTopic;
-            return new Item(topic, text, isProtected, fromHidden, label, sources);
+            return new Item(topic, text, isProtected, fromHidden, label, sources, spoilerSources);
         }
 
         /// <summary>
         /// Checks the element's evidence list <c>e</c> — pairs of [record reference, verbatim quote]. FromHidden: any quote lies
         /// (partly) inside a spoiler span. Sources: the checked pairs in a fixed order, to recognise an exact copy.
+        /// SpoilerSources: the window (not context-only) records quoted from their hidden part.
         /// </summary>
-        private (bool FromHidden, string Sources) Evidence(JsonElement element)
+        private (bool FromHidden, string Sources, IReadOnlyList<string> SpoilerSources) Evidence(JsonElement element)
         {
             var fromHidden = false;
             var onlyContext = true;
             var pairs = new List<string>(MaxEvidence);
+            var spoilerSources = new List<string>();
             foreach (var item in Items(Required(element, "e", JsonValueKind.Array), 1, MaxEvidence))
             {
                 if (item.ValueKind != JsonValueKind.Array || item.GetArrayLength() != 2 ||
@@ -379,14 +441,18 @@ public static partial class SummaryGroundedAnswer
                     throw new Refused(SummaryGroundedFailure.QuoteNotFound);
 
                 var found = false;
+                var hidden = false;
                 for (var at = record.Plain.IndexOf(quote, StringComparison.Ordinal); at >= 0; at = record.Plain.IndexOf(quote, at + 1, StringComparison.Ordinal))
                 {
                     found = true;
-                    fromHidden |= record.SpoilerRanges.Any(s => at < s.End && at + quote.Length > s.Start);
+                    hidden |= record.SpoilerRanges.Any(s => at < s.End && at + quote.Length > s.Start);
                 }
 
                 if (!found)
                     throw new Refused(SummaryGroundedFailure.QuoteNotFound);
+                fromHidden |= hidden;
+                if (hidden && !record.ContextOnly && !spoilerSources.Contains(record.Ref))
+                    spoilerSources.Add(record.Ref);
                 onlyContext &= record.ContextOnly;
                 pairs.Add(reference + "\t" + quote);
                 EvidenceCount++;
@@ -395,7 +461,7 @@ public static partial class SummaryGroundedAnswer
             if (onlyContext)
                 throw new Refused(SummaryGroundedFailure.ContextOnly);
             pairs.Sort(StringComparer.Ordinal);
-            return (fromHidden, string.Join('\n', pairs));
+            return (fromHidden, string.Join('\n', pairs), spoilerSources);
         }
 
         public bool RepeatsHiddenContent(string text) => _hidden.Any(h => text.Contains(h, StringComparison.OrdinalIgnoreCase));
