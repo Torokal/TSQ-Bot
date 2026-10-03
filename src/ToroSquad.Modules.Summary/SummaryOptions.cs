@@ -1,5 +1,7 @@
 using System.Globalization;
 
+using ToroSquad.Modules.Summary.Application;
+
 namespace ToroSquad.Modules.Summary;
 
 /// <summary>How one /ozetle produces its summary. Chosen once per run; a run never uses both.</summary>
@@ -34,6 +36,26 @@ public sealed class SummaryOptions
     /// it needs more room than <see cref="MaxOutputTokens"/> (which the legacy request keeps). Never raised automatically.
     /// </summary>
     public int GroundedMaxOutputTokens { get; set; } = 2000;
+
+    /// <summary>
+    /// Grounded mode only — the model that writes the draft. It is called WITHOUT a <c>thinking</c> object and with
+    /// <see cref="GroundedGeneratorReasoningEffort"/>: the request shape checked for a model that lists effort levels and no
+    /// on/off switch. The legacy request keeps <see cref="Model"/>.
+    /// </summary>
+    public string GroundedGeneratorModel { get; set; } = "glm-5.3-flash";
+
+    /// <summary><c>reasoning_effort</c> of the grounded generator request (the lowest level the model lists).</summary>
+    public string GroundedGeneratorReasoningEffort { get; set; } = "low";
+
+    /// <summary>
+    /// Grounded mode only — the model that reviews the draft against the records (the second and last request of a run).
+    /// It is called with <c>thinking: {"type": "disabled"}</c> and no <c>reasoning_effort</c>, the shape checked for it.
+    /// </summary>
+    public string GroundedReviewerModel { get; set; } = "deepseek-v4.1-flash";
+
+    public SummaryAiProfile GroundedGenerator => new(GroundedGeneratorModel, SummaryThinking.EffortOnly, GroundedGeneratorReasoningEffort);
+
+    public SummaryAiProfile GroundedReviewer => new(GroundedReviewerModel, SummaryThinking.Disabled, null);
 
     /// <summary>The OpenCode Go API key: an environment variable (Railway Variables), or a user-secrets key of the same name.</summary>
     public const string ApiKeyVariable = "OPENCODE_GO_API_KEY";
@@ -143,6 +165,14 @@ public sealed class SummaryOptions
             errors.Add($"{Section}:GenerationMode must be Legacy or Grounded (got '{GenerationMode}')");
         if (GroundedMaxOutputTokens is < 500 or > 4000)
             errors.Add($"{Section}:GroundedMaxOutputTokens must be 500-4000 (got {GroundedMaxOutputTokens})");
+        foreach (var (name, model) in new[] { (nameof(GroundedGeneratorModel), GroundedGeneratorModel), (nameof(GroundedReviewerModel), GroundedReviewerModel) })
+        {
+            if (string.IsNullOrWhiteSpace(model) || model.Length > 100 || model.Any(char.IsWhiteSpace))
+                errors.Add($"{Section}:{name} must be a model id without spaces (got '{model}')");
+        }
+
+        if (GroundedGeneratorReasoningEffort is not ("low" or "high" or "max"))
+            errors.Add($"{Section}:GroundedGeneratorReasoningEffort must be low, high or max (got '{GroundedGeneratorReasoningEffort}')");
         if (AllowedRoleIds.Any(id => id is < MinSnowflake or > long.MaxValue))
             errors.Add($"{Section}:AllowedRoleIds must contain Discord role ids only (got {string.Join(", ", AllowedRoleIds)})");
         return errors;

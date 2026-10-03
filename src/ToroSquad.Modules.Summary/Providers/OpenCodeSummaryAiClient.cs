@@ -17,7 +17,7 @@ public sealed class SummaryApiKey(string? value)
 }
 
 /// <summary>
-/// <see cref="ISummaryAiClient"/> over OpenCode Go's OpenAI-compatible <c>POST chat/completions</c>: one request per summary,
+/// <see cref="ISummaryAiClient"/> over OpenCode Go's OpenAI-compatible <c>POST chat/completions</c>: one request per call,
 /// <c>stream: false</c>, no tools, no web access, the configured model, <c>thinking</c> disabled without
 /// <c>reasoning_effort</c> (see <see cref="SummaryOptions.DisableThinking"/>), temperature, top_p and <c>max_tokens</c>. Every
 /// request carries a new random <c>x-opencode-session</c> (a GUID — nothing about the guild, channel, members or text) and an honest User-Agent (TSQ Bot's summary module). No retry of any kind here: a 4xx, a 429, a 5xx, a
@@ -92,7 +92,7 @@ public sealed class OpenCodeSummaryAiClient(
         using (var json = new Utf8JsonWriter(buffer))
         {
             json.WriteStartObject();
-            json.WriteString("model", settings.Model);
+            json.WriteString("model", prompt.Profile?.Model ?? settings.Model);
             json.WriteStartArray("messages");
             json.WriteStartObject();
             json.WriteString("role", "system");
@@ -107,12 +107,30 @@ public sealed class OpenCodeSummaryAiClient(
             json.WriteNumber("temperature", settings.Temperature);
             json.WriteNumber("top_p", settings.TopP);
             // Thinking off is thinking.type=disabled ALONE: reasoning_effort is a thinking-mode setting, and sending both was a
-            // contradictory request that some upstream backends answered with unbounded hidden reasoning.
-            json.WriteStartObject("thinking");
-            json.WriteString("type", settings.DisableThinking ? "disabled" : "enabled");
-            json.WriteEndObject();
-            if (!settings.DisableThinking)
-                json.WriteString("reasoning_effort", settings.ReasoningEffort);
+            // contradictory request that some upstream backends answered with unbounded hidden reasoning. A request with its own
+            // profile uses that profile's shape: either the same "disabled" object, or reasoning_effort without any thinking
+            // object for a model that only lists effort levels.
+            if (prompt.Profile is { } profile)
+            {
+                if (profile.Thinking == SummaryThinking.Disabled)
+                {
+                    json.WriteStartObject("thinking");
+                    json.WriteString("type", "disabled");
+                    json.WriteEndObject();
+                }
+                else if (profile.ReasoningEffort is { Length: > 0 } effort)
+                {
+                    json.WriteString("reasoning_effort", effort);
+                }
+            }
+            else
+            {
+                json.WriteStartObject("thinking");
+                json.WriteString("type", settings.DisableThinking ? "disabled" : "enabled");
+                json.WriteEndObject();
+                if (!settings.DisableThinking)
+                    json.WriteString("reasoning_effort", settings.ReasoningEffort);
+            }
 
             json.WriteBoolean("stream", false);
             json.WriteEndObject();

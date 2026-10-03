@@ -182,7 +182,8 @@ public static partial class SummaryGrounded
                 }
             }
 
-            var shown = RecordsDelimiter().Replace(text, "‹$1records");
+            // The delimiters of the two requests (records, and the reviewer's draft block) cannot be typed by a member.
+            var shown = RecordsDelimiter().Replace(text, "‹$1$2");
             var (plain, ranges) = PlainText(shown);
             var record = new SummaryGroundedRecord(refs[message.Id], message.Id, message.AuthorId, authors[AuthorKey(message)],
                 replyRef, replyUnavailable, contextOnly, cut, shown, plain, ranges);
@@ -301,6 +302,6 @@ public static partial class SummaryGrounded
     /// <summary>A generous estimate of one record's JSON metadata (keys, reference, name, reply).</summary>
     private const int RecordOverhead = 80;
 
-    [GeneratedRegex(@"<(/?)\s*records", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"<(/?)\s*(records|draft)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex RecordsDelimiter();
 }

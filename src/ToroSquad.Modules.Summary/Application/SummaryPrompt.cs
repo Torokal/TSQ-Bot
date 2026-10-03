@@ -4,8 +4,10 @@ namespace ToroSquad.Modules.Summary.Application;
 /// The two messages of the single AI request: fixed instructions, then the transcript as data.
 /// <paramref name="MaxOutputTokens"/>: this request's own output cap (the grounded mode's JSON carries evidence next to the
 /// visible text); null keeps <see cref="SummaryOptions.MaxOutputTokens"/> — the legacy request is unchanged.
+/// <paramref name="Profile"/>: this request's own model and reasoning shape (grounded generator / reviewer); null keeps the
+/// configured legacy model and settings.
 /// </summary>
-public sealed record SummaryPromptMessages(string System, string User, int? MaxOutputTokens = null);
+public sealed record SummaryPromptMessages(string System, string User, int? MaxOutputTokens = null, SummaryAiProfile? Profile = null);
 
 /// <summary>
 /// The summary prompt, in one place. The system message is a constant: no member text ever reaches it. The transcript goes

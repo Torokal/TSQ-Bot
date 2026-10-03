@@ -82,7 +82,7 @@ public static class SummaryGroundedPrompt
     /// The user message: a one-line task with the real time span of the window, the records between delimiters, the required
     /// spoiler sources (if any), then the output reminder.
     /// </summary>
-    public static SummaryPromptMessages Build(SummaryGroundedInput input, TimeZoneInfo zone, int maxOutputTokens)
+    public static SummaryPromptMessages Build(SummaryGroundedInput input, TimeZoneInfo zone, int maxOutputTokens, SummaryAiProfile? profile = null)
     {
         var span = input is { From: { } from, To: { } to }
             ? " Mesajlar " + Local(from, zone) + " – " + Local(to, zone) + " arasında yazıldı."
@@ -93,7 +93,7 @@ public static class SummaryGroundedPrompt
         return new SummaryPromptMessages(System,
             "Aşağıdaki Discord konuşmasını kurallara göre özetle ve yalnızca JSON nesnesini yaz." + span + "\n\n" +
             "<records>\n" + input.Text + "\n</records>\n\n" + required + OutputReminder,
-            maxOutputTokens);
+            maxOutputTokens, profile);
     }
 
     private static string Local(DateTimeOffset instant, TimeZoneInfo zone) =>
