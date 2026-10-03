@@ -294,7 +294,14 @@ invite link and no global command registration. The source code is public under 
   verbatim, 8 candidate points → 6 shown. Operation and meaning passed (the unconfirmed task was reported as not certain;
   the correction was kept). Spoiler display did NOT pass: the model wrote two labelled spoiler points but ranked them last
   (not shown) and their text did not summarise the hidden content; no leak into open text.** 490 tokens (24.5 %) of the
-  cap were left. Spoiler display with a real model answer is still unverified. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  cap were left. Spoiler display with a real model answer is still unverified.
+  **Narrow spoiler fix (branch `fix/summary-grounded-spoiler-selection`, NOT merged): prompt rules (a spoiler mark does not
+  mean "skip"; the hidden event is summarised in its own point; an empty meta sentence is not enough; importance follows
+  the conversation) and one selection rule (if none of the first 6 points quotes a hidden span, the first later verified
+  point that does replaces the last shown one; only verified evidence earns it). TESTED_OFFLINE (3233 tests ×3). Model
+  re-check on fixture C with the frozen candidate (1 of 2 allowed requests): 6713/1379 tokens, `stop`, but
+  `validation=Limit` (4 quotes on four texts; the limit is 3) and NO spoiler point at all — NOT PASSED; B was not run.**
+  No leak into open text. The selection rule could not be exercised by real model output. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,

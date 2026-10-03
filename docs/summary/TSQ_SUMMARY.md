@@ -157,7 +157,9 @@ yok).
 > reddedildi (`validation=Limit`). Düz sözleşme (v3) kaynak güvenliğini gösterim hedefinden ayırır; aynı iki fixture'da, aynı
 > sabit prompt'la iki cevap da doğrulamadan geçti ve kesilmedi (aşağıda). Bu iki deneme genel doğruluk veya kesilmeme kanıtı
 > değildir ve canlı doğrulama değildir. Ardından yapılan hedefli denemede (C) işletim ve anlam ölçütleri geçti, **spoiler
-> gösterimi geçmedi** (aşağıda). Grounded **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
+> gösterimi geçmedi** (aşağıda). Dar spoiler düzeltmesinden (prompt kuralları + seçimde kaynaklı spoiler adayına tek yer)
+> sonraki yeniden denemede **cevap reddedildi ve spoiler point'i hiç yazılmadı**; düzeltme model denemesinde doğrulanamadı.
+> Grounded **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
 
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
 Geri dönüş: `Summary:GenerationMode=Legacy` (ortam değişkeni `TOROSQUAD_Summary__GenerationMode`). Değişiklik yalnızca sonraki
@@ -194,9 +196,16 @@ gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout 
     edilmez.
 - **Akış:** (1) tam cevap ayrıştırılır; (2) boyut ve sözleşme kontrol edilir; (3) güvenlik sınırı içindeki adayların **tümü** —
   gösterilmeyecek olanlar dahil — kaynak ve spoiler kontrollerinden geçer; (4) hepsi geçtiyse modelin verdiği sıra korunarak ilk
-  6 point ve ilk 2 plan seçilir; (5) Markdown üretilir. Seçim yalnızca tam ve kontrolden geçmiş maddeler arasındadır: başka bir
+  6 point ve ilk 2 plan seçilir (aşağıdaki tek istisnayla); (5) Markdown üretilir. Seçim yalnızca tam ve kontrolden geçmiş maddeler arasındadır: başka bir
   AI seçmez, metin kısaltılmaz veya yeniden yazılmaz, cümle/alıntı/spoiler ortasından kesilmez. Fazla maddelerden birinde bozuk
   alıntı veya bilinmeyen kaynak varsa o madde sessizce atılmaz; cevabın tamamı reddedilir.
+- **Kaynaklı spoiler adayı için tek yer:** ilk 6 point'in hiçbiri gizli alandan alıntı yapmıyorsa ve daha aşağıda, alıntısı
+  gerçekten gizli alana denk gelen doğrulanmış bir point varsa, bunların model sırasındaki ilki seçilmiş son point'in yerine
+  bütün olarak konur; diğerlerinin sırası değişmez, toplam yine en fazla 6 point ve 2 plandır. İlk 6'da zaten böyle bir point
+  varsa hiçbir şey taşınmaz. Bu yeri yalnızca doğrulanmış kaynak konumu kazandırır: `s` etiketi veya metinde "spoiler" kelimesi
+  kazandırmaz. Bu, bütün spoiler konularının gösterileceği anlamına gelmez; yalnızca modelin yazdığı kaynaklı spoiler
+  point'lerinin hepsinin körlemesine kesimde düşmesini önler. Seçim, "spoiler paylaşıldı" gibi boş bir cümleyi içerikli hâle
+  getiremez; metnin gizli olayı gerçekten özetleyip özetlemediğini kod denetlemez.
 - **Tekrarlar:** yalnızca birebir aynı kayıtlar (aynı metin + aynı dayanaklar + aynı spoiler niteliği) bir kez gösterilir; bir
   point birebir bir planla aynıysa plan kalır. Benzer metinler birleştirilmez; aynı kaynağı paylaşmak iki kaydın aynı bilgi
   olduğunu göstermez.
@@ -356,6 +365,37 @@ Fixture ve cevap anahtarı istekten önce sabitlendi; retry, Legacy veya hakem i
 Üç deneme (A, B, C) birlikte: anlam tersine çevirme ve yanlış kişi ataması görülmedi; bir kesinlik hatası (B) görüldü; spoiler
 sızıntısı görülmedi; spoiler gösterimi gerçek model cevabıyla hiçbirinde doğrulanmadı. Üç sentetik örnek genel doğruluk veya
 kesilmeme garantisi değildir.
+
+**Dar spoiler düzeltmesi ve yeniden deneme (2026-10-03; v3 sözleşme aynı).** İki değişiklik: (1) prompt'taki spoiler kuralları
+netleştirildi — spoiler işareti "bu bilgiyi işleme" demek değildir, gizli olayın kendisi ayrı bir point'te özetlenir, boş meta
+cümle yeterli değildir (fixture'lardan bağımsız, uydurma bir karşıt örnekle), aynı yapımın açık ve gizli yönleri farklı
+bilgilerdir, önem içerik türüne göre değil konuşmanın bağlamına göre belirlenir; (2) seçimde kaynaklı spoiler adayına tek yer
+(yukarıda). Kaynak kontrolleri, sınırlar ve sözleşme değişmedi.
+
+*Offline (model isteği yok).* Önceki C cevabı yeni seçiciden geçirildi: 7. sıradaki kaynaklı spoiler point'i 6. sıraya alındı
+ve `**Spoiler (…):** ||…||` olarak gösterildi. Bu yalnızca **seçim** testidir: o point'in metni hâlâ "spoiler içeren ayrıntılar
+paylaşıldı" diyordu; içerik üretimi geçmiş sayılmaz. A ve B cevaplarında kaynaklı spoiler adayı olmadığı için seçim değişmedi.
+
+*Model isteği (izin verilen 2 istekten 1'i kullanıldı; aday ilk istekten önce commit ile sabitlendi; fixture C ve cevap
+anahtarı aynı; retry yok).*
+
+| | C, düzeltilmiş adayla |
+|---|---|
+| input / output / reasoning token | 6713 / 1379 / 0 |
+| finish, süre | stop, 9,2 sn |
+| ham point / plan | 6 / 2 |
+| dayanak | 31 (ana konu ve üç point'te 4'er dayanak) |
+| doğrulama | **`Limit` — yayımlanmadı** (metin başına en fazla 3 dayanak) |
+| kaynaklı spoiler adayı / gösterilen spoiler / yer değiştirme | 0 / 0 / yok |
+
+**Sonuç: GEÇMEDİ.** İki ayrı aşama başarısız: (1) *içerik üretimi* — model bu kez hiç spoiler point'i yazmadı; dizinin
+yalnızca açık yönlerini (beğenen, aceleye geldi diyen, izlemeyen, ikinci sezon sorusu) özetledi, gizli olaylar özete girmedi;
+(2) *yapısal sınır* — model dört metne 4'er dayanak yazdı ve cevap bütünüyle reddedildi; önceki üç denemede en fazla 3'tü. Açık
+metne spoiler sızmadı. Yayımlanmayan ham cevapta kesinleşmemiş iş kesin yazılmamıştı ("kesin söz vermedi"), düzeltme ve fiyat
+düzeltmesi doğruydu ve dizi tartışması bu kez ilk sıradaydı; bunlar yayımlanabilir bir özet olmadığı için başarı sayılmaz.
+Yeni seçim kuralı gerçek model cevabıyla sınanamadı (kaynaklı spoiler adayı yoktu). C başarısız olduğu için B isteği
+kullanılmadı; yeniden istek, prompt değişikliği veya yeni şema yapılmadı. Tek bir örnekle prompt değişikliğinin bu sonuca
+yol açıp açmadığı ayırt edilemez.
 
 ## Kötüye kullanım koruması
 
