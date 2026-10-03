@@ -109,14 +109,22 @@ public sealed partial class SummaryArchitectureTests
     }
 
     [Fact]
-    public void One_summary_is_one_inference_with_one_model_and_no_fallback()
+    public void Legacy_is_one_inference_and_grounded_at_most_two_without_retry_or_fallback()
     {
         var code = AllCode();
-        Regex.Matches(code, @"\bai\.SummarizeAsync\(").Should().ContainSingle("SummaryService calls the model in exactly one place");
+        Regex.Matches(code, @"\bai\.SummarizeAsync\(").Should().HaveCount(2,
+            "SummaryService calls the model in exactly two places: the first request of a run, and the grounded review of an accepted draft");
         Regex.Matches(File.ReadAllText(Path.Combine(Root(), "Providers", "OpenCodeSummaryAiClient.cs")), @"\.SendAsync\(").Should().ContainSingle();
-        code.Should().NotMatchRegex("(?i)glm|fallback ?model\\s*=|FallbackModel", "no second model");
+        // No loop around a request, no retry and no fallback anywhere; the second model is named only as the grounded generator.
+        var service = File.ReadAllText(Path.Combine(Root(), "Application", "SummaryService.cs"));
+        service.Should().NotMatchRegex(@"\b(while|for|foreach|do)\b[^;{]*\{[^}]*ai\.SummarizeAsync", "a request is never inside a loop");
+        code.Should().NotMatchRegex("(?i)fallback ?model\\s*=|FallbackModel|RetryCount|MaxRetries");
+        Regex.Matches(code, "(?i)glm").Should().ContainSingle("only the default of GroundedGeneratorModel names it");
         Summary.GetTypes().Where(t => !t.IsInterface && typeof(ISummaryAiClient).IsAssignableFrom(t)).Should().Equal(typeof(OpenCodeSummaryAiClient));
         typeof(SummaryOptions).GetProperties().Select(p => p.Name).Should().NotContain(n => n.Contains("Fallback", StringComparison.Ordinal) || n.Contains("Retry", StringComparison.Ordinal));
+        var defaults = new SummaryOptions();
+        (defaults.GenerationMode, defaults.Model, defaults.GroundedGeneratorModel, defaults.GroundedReviewerModel)
+            .Should().Be((SummaryGenerationMode.Legacy, "deepseek-v4.1-flash", "glm-5.3-flash", "deepseek-v4.1-flash"), "legacy stays the default and keeps its model");
     }
 
     [Fact]

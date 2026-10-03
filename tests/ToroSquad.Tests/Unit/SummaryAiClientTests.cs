@@ -245,4 +245,47 @@ public sealed class SummaryAiClientTests
         http.Requests.Should().BeEmpty();
         new SummaryApiKey(Key).ToString().Should().NotContain(Key);
     }
+    [Fact]
+    public void A_request_with_its_own_profile_uses_that_model_and_reasoning_shape_and_the_legacy_request_is_unchanged()
+    {
+        var settings = new SummaryOptions();
+        var prompt = new SummaryPromptMessages("sistem", "kullanıcı", 2000);
+
+        using var legacy = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(prompt with { MaxOutputTokens = null }, settings));
+        using var generator = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(prompt with { Profile = settings.GroundedGenerator }, settings));
+        using var reviewer = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(prompt with { Profile = settings.GroundedReviewer }, settings));
+
+        // Legacy: the configured model, thinking disabled, no effort — exactly as before.
+        legacy.RootElement.GetProperty("model").GetString().Should().Be("deepseek-v4.1-flash");
+        legacy.RootElement.GetProperty("thinking").GetProperty("type").GetString().Should().Be("disabled");
+        legacy.RootElement.TryGetProperty("reasoning_effort", out _).Should().BeFalse();
+        legacy.RootElement.GetProperty("max_tokens").GetInt32().Should().Be(1200);
+
+        // Generator: no thinking object at all, the lowest effort level.
+        generator.RootElement.GetProperty("model").GetString().Should().Be("glm-5.3-flash");
+        generator.RootElement.TryGetProperty("thinking", out _).Should().BeFalse("this model lists effort levels and no on/off switch");
+        generator.RootElement.GetProperty("reasoning_effort").GetString().Should().Be("low");
+
+        // Reviewer: the shape checked for it — thinking disabled, never together with an effort.
+        reviewer.RootElement.GetProperty("model").GetString().Should().Be("deepseek-v4.1-flash");
+        reviewer.RootElement.GetProperty("thinking").GetProperty("type").GetString().Should().Be("disabled");
+        reviewer.RootElement.TryGetProperty("reasoning_effort", out _).Should().BeFalse();
+
+        foreach (var body in new[] { generator, reviewer })
+        {
+            body.RootElement.EnumerateObject().Select(p => p.Name).Should().NotContain(["tools", "tool_choice", "web_search", "user"], "no tools, no web access, nothing about the member");
+            (body.RootElement.GetProperty("max_tokens").GetInt32(), body.RootElement.GetProperty("temperature").GetDouble(), body.RootElement.GetProperty("top_p").GetDouble(),
+                body.RootElement.GetProperty("stream").GetBoolean()).Should().Be((2000, 0.3, 0.9, false));
+        }
+    }
+
+    [Fact]
+    public void The_grounded_models_are_validated_like_the_legacy_model()
+    {
+        new SummaryOptions().Validate().Should().BeEmpty();
+        new SummaryOptions { GroundedGeneratorModel = "" }.Validate().Should().ContainSingle().Which.Should().Contain("GroundedGeneratorModel");
+        new SummaryOptions { GroundedReviewerModel = "iki kelime" }.Validate().Should().ContainSingle().Which.Should().Contain("GroundedReviewerModel");
+        new SummaryOptions { GroundedGeneratorReasoningEffort = "none" }.Validate().Should().ContainSingle().Which.Should().Contain("GroundedGeneratorReasoningEffort");
+    }
+
 }

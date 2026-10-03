@@ -29,12 +29,12 @@ public sealed partial class SummaryFlowTests
     /// A valid answer in contract v4: open points with their own "t" and "e" pairs of [reference, quote]; the "spoilers" list
     /// is always there — empty, or one item quoting the given hidden part.
     /// </summary>
-    private static string GroundedJson(string pointRef = "m009", string pointQuote = "şimdi oldu", int extraPoints = 0, string? extraRef = null, string? extraQuote = null, string? spoilerRef = null, string? spoilerQuote = null)
+    private static string GroundedJson(string pointRef = "m009", string pointQuote = "şimdi oldu", int extraPoints = 0, string? extraRef = null, string? extraQuote = null, string? spoilerRef = null, string? spoilerQuote = null, string? pointText = null)
     {
         var first = new
         {
             topic = "Oyun ayarları",
-            t = "Monfy config'in önce çalışmadığını, yeniden başlatınca düzeldiğini söyledi.",
+            t = pointText ?? "Monfy config'in önce çalışmadığını, yeniden başlatınca düzeldiğini söyledi.",
             e = new[] { new[] { "m007", "koydum ama çalışmadı" }, new[] { pointRef, pointQuote } },
         };
         var extra = Enumerable.Range(1, extraPoints).Select(i => new
@@ -56,6 +56,7 @@ public sealed partial class SummaryFlowTests
         });
     }
 
+    /// <summary>A grounded world whose fake provider gives the same answer to the generator and to the reviewer.</summary>
     private static World GroundedWorld(string? answer = null, string finish = "stop")
     {
         var world = new World();
@@ -67,15 +68,15 @@ public sealed partial class SummaryFlowTests
     }
 
     [Fact]
-    public async Task Grounded_sends_records_with_reply_links_and_publishes_the_rendered_markdown_after_one_inference()
+    public async Task Grounded_sends_records_with_reply_links_and_publishes_the_rendered_markdown_after_a_draft_and_its_review()
     {
         var world = GroundedWorld();
         var responder = new FakeResponder();
 
         (await world.RunAsync(responder)).Should().Be(SummaryOutcome.Posted);
 
-        world.Ai.Calls.Should().Be(1);
-        var prompt = world.Ai.Prompts.Single();
+        world.Ai.Calls.Should().Be(2, "the draft and its review");
+        var prompt = world.Ai.Prompts.First();
         prompt.System.Should().Be(SummaryGroundedPrompt.System);
         prompt.MaxOutputTokens.Should().Be(2000);
         prompt.User.Should().Contain("""{"m":"m008","u":"Toro","re":"m007","t":"Oyunu yeniden başlattın mı?"}""");
@@ -129,7 +130,7 @@ public sealed partial class SummaryFlowTests
         world.Clock.Advance(SummaryThrottle.FailureCooldown);
         world.Ai.Respond = _ => Task.FromResult(new SummaryAiResult(SummaryAiFailure.None, GroundedJson(), "stop", SummaryAiUsage.None, TimeSpan.FromSeconds(5), 200));
         (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Posted, "no successful-summary cooldown was started");
-        world.Ai.Calls.Should().Be(2);
+        world.Ai.Calls.Should().Be(3, "the refused draft, then a draft and its review");
     }
 
     [Theory]
@@ -158,7 +159,8 @@ public sealed partial class SummaryFlowTests
         var logs = world.AllLogs;
         logs.Should().Contain("validation=None").And.Contain("source_count=9").And.Contain("reply_count=2").And.Contain("context_count=0")
             .And.Contain("evidence_count=4").And.Contain("message_count=9").And.Contain("input_tokens=3200")
-            .And.Contain("candidate_point_count=1").And.Contain("candidate_plan_count=0").And.Contain("shown_point_count=1").And.Contain("shown_plan_count=0");
+            .And.Contain("candidate_point_count=1").And.Contain("candidate_plan_count=0").And.Contain("shown_point_count=1").And.Contain("shown_plan_count=0")
+            .And.Contain("stage=generator").And.Contain("stage=reviewer").And.Contain("inference_count=2").And.Contain("total_ai_latency_ms=16000");
         logs.Should().NotContain(GroundedSecret).And.NotContain("config").And.NotContain("Monfy").And.NotContain("şimdi oldu")
             .And.NotContain("Oyun ayarı").And.NotContain("\"quote\"");
     }
@@ -174,7 +176,7 @@ public sealed partial class SummaryFlowTests
         var posted = string.Join("\n", responder.Public.Single());
         Regex.Count(posted, "(?m)^- ").Should().Be(6);
         posted.Should().Contain("- **Oyun ayarları:**").And.Contain("- **Ek konu 5:** Ek bilgi 5.").And.NotContain("Ek konu 6").And.NotContain("Ek konu 7");
-        world.Ai.Calls.Should().Be(1);
+        world.Ai.Calls.Should().Be(2);
         world.AllLogs.Should().Contain("validation=None").And.Contain("candidate_point_count=8").And.Contain("shown_point_count=6").And.Contain("evidence_count=11");
         (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Throttled, "a posted summary starts the channel cooldown as before");
     }
@@ -216,7 +218,7 @@ public sealed partial class SummaryFlowTests
         Regex.Count(posted, "(?m)^- ").Should().Be(7, "six points and the spoiler item: they do not compete for places");
         Regex.Count(posted, @"\|\|").Should().Be(2);
         posted.Should().NotContain("Ek konu 6").And.NotContain("ölüyor").And.NotContain("{").And.NotContain("m010");
-        world.Ai.Calls.Should().Be(1);
+        world.Ai.Calls.Should().Be(2);
         world.AllLogs.Should().Contain("validation=None").And.Contain("candidate_point_count=8").And.Contain("shown_point_count=6").And.Contain("spoiler_claim_count=1");
         world.AllLogs.Should().NotContain("ölüyor").And.NotContain("hayatını kaybettiği");
     }
@@ -268,7 +270,7 @@ public sealed partial class SummaryFlowTests
         (await world.RunAsync(responder)).Should().Be(SummaryOutcome.Posted);
 
         string.Join("\n", responder.Public.Single()).Should().Contain("## Ana konu\nOyun ayarı sorunu konuşuldu.").And.NotContain("{");
-        world.Ai.Calls.Should().Be(1);
+        world.Ai.Calls.Should().Be(2);
     }
 
     [Fact]
