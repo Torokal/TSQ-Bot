@@ -18,7 +18,7 @@ public enum SummaryGroundedFailure
     /// <summary>Wrong version, a missing field or a wrong type.</summary>
     Contract = 3,
 
-    /// <summary>A field, list or the rendered summary is larger than allowed.</summary>
+    /// <summary>The answer, a field or a list is larger than the safety bound allows, or the rendered summary is too long.</summary>
     Limit = 4,
 
     /// <summary>An evidence reference that was not in this request's records.</summary>
@@ -37,8 +37,20 @@ public enum SummaryGroundedFailure
     TechnicalLeak = 9,
 }
 
-/// <summary>The outcome: the Markdown to post, or the failure category; plus counts for the log.</summary>
-public sealed record SummaryGroundedResult(SummaryGroundedFailure Failure, string? Markdown, int EvidenceCount, int SpoilerClaimCount)
+/// <summary>
+/// The outcome: the Markdown to post, or the failure category; plus counts for the log. <paramref name="EvidenceCount"/>
+/// covers every candidate that was checked; <paramref name="SpoilerClaimCount"/> the shown points and plans published as
+/// spoilers; the candidate counts are what the model wrote, the shown counts what was rendered.
+/// </summary>
+public sealed record SummaryGroundedResult(
+    SummaryGroundedFailure Failure,
+    string? Markdown,
+    int EvidenceCount,
+    int SpoilerClaimCount,
+    int CandidatePoints = 0,
+    int CandidatePlans = 0,
+    int ShownPoints = 0,
+    int ShownPlans = 0)
 {
     public bool Succeeded => Failure == SummaryGroundedFailure.None && Markdown is not null;
 
@@ -46,27 +58,34 @@ public sealed record SummaryGroundedResult(SummaryGroundedFailure Failure, strin
 }
 
 /// <summary>
-/// Reads the grounded mode's JSON answer and renders the usual Markdown from it — or refuses it as a whole. What is checked
-/// is STRUCTURAL: one complete JSON object of the agreed shape and sizes, every evidence reference among the records that
-/// were sent, every quote really inside the record it names (only whitespace runs are collapsed — no punctuation, suffix or
-/// negation is ever dropped to make a quote fit), no text resting on context-only records alone, no record reference in a
-/// visible text, and spoiler protection decided here from where the quotes come from (a claim quoting a hidden span is
-/// rendered as <c>**Spoiler (konu):** ||…||</c> whatever the model said; hidden content in an open text is refused). This
-/// proves that sources exist and quotes are intact. It does NOT prove that the model understood those sources: a correct
-/// quote can still be misread, and a paraphrased spoiler cannot be detected deterministically. A refused answer is never
-/// repaired, never retried and never replaced by the legacy path.
+/// Reads the grounded mode's JSON answer and renders the usual Markdown from it — or refuses it as a whole. Two things are
+/// kept apart here. SOURCE SAFETY is strict and covers every point and plan the model wrote, shown or not: one complete
+/// JSON object of the agreed flat shape, every evidence reference among the records that were sent, every quote really
+/// inside the record it names (only whitespace runs are collapsed — no punctuation, suffix or negation is ever dropped to
+/// make a quote fit), no text resting on context-only records alone, no record reference in a visible text, and spoiler
+/// protection decided here from where the quotes come from (a point quoting a hidden span is rendered as
+/// <c>**Spoiler (konu):** ||…||</c> whatever the model said; hidden content in an open text is refused). One failure
+/// refuses the whole answer; a point is never dropped to hide its broken source. The DISPLAY TARGET is not a safety rule:
+/// when everything checked out, the first <see cref="ShownPoints"/> points and <see cref="ShownPlans"/> plans are shown, in
+/// the model's order, as complete items — a few more than that is not a failure, only the candidate bound is. Selection
+/// never rewrites, shortens or merges a text; only records that are exactly the same (text, evidence, spoiler nature) are
+/// shown once. This proves that sources exist and quotes are intact. It does NOT prove that the model understood those
+/// sources, that each point is as self-contained as the prompt asks, or that a paraphrased spoiler was caught. A refused
+/// answer is never repaired, never retried and never replaced by the legacy path.
 /// </summary>
 public static partial class SummaryGroundedAnswer
 {
-    public const int MaxPoints = 7;
-    public const int MaxClaimsPerPoint = 2;
-    public const int MaxPlans = 3;
+    /// <summary>Display target: how many points and plans are shown. More than this is trimmed by selection, not refused.</summary>
+    public const int ShownPoints = 6;
+    public const int ShownPlans = 2;
 
-    /// <summary>Claims of all points and plans together: the answer's volume is bounded as a whole, not only per list.</summary>
-    public const int MaxTotalClaims = 8;
+    /// <summary>Safety bound: how many candidates an answer may carry at all. More than this is refused.</summary>
+    public const int MaxCandidatePoints = 12;
+    public const int MaxCandidatePlans = 4;
 
     /// <summary>One quote is the norm; up to three stay possible for a correction, a reply, a disagreement or a who-about-whom relation.</summary>
     public const int MaxEvidence = 3;
+    public const int MaxAnswerChars = 16000;
     public const int MaxTextChars = 500;
     public const int MaxTopicChars = 80;
     public const int MinQuoteChars = 3;
@@ -74,7 +93,12 @@ public static partial class SummaryGroundedAnswer
     public const int MaxRenderedChars = 3900;
     public const string UnknownSpoilerTopic = "konu belirtilmemiş";
 
-    private sealed record Claim(string Text, bool Protected, string Label);
+    /// <summary>A point (with a topic) or a plan (without). <paramref name="Sources"/> identifies its evidence, order-independent.</summary>
+    private sealed record Item(string Topic, string Text, bool Protected, string Label, string Sources)
+    {
+        public bool SameRecordAs(Item other) =>
+            Protected == other.Protected && string.Equals(Text, other.Text, StringComparison.Ordinal) && string.Equals(Sources, other.Sources, StringComparison.Ordinal);
+    }
 
     private sealed class Refused(SummaryGroundedFailure failure) : Exception
     {
@@ -88,6 +112,8 @@ public static partial class SummaryGroundedAnswer
         var body = Unwrap(raw);
         if (body is null)
             return SummaryGroundedResult.Failed(SummaryGroundedFailure.NotJson);
+        if (body.Length > MaxAnswerChars)
+            return SummaryGroundedResult.Failed(SummaryGroundedFailure.Limit);
 
         try
         {
@@ -95,47 +121,40 @@ public static partial class SummaryGroundedAnswer
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.NotJson);
-            // Only the current compact contract is read: an answer in the earlier shape ("version": 1, long field names) is refused.
+            // Only the current flat contract is read: an answer in an earlier shape (v1 long names, v2 nested claims) is refused.
             if (!root.TryGetProperty("v", out var version) || version.ValueKind != JsonValueKind.Number ||
                 !version.TryGetInt32(out var number) || number != SummaryGroundedPrompt.ContractVersion)
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.Contract);
 
+            // 1) Every candidate inside the safety bound is checked in full — also the ones that will not be shown.
             var reader = new Reader(input);
             var main = reader.OpenText(Required(root, "main", JsonValueKind.Object));
-            var points = new List<(string Topic, List<Claim> Claims)>();
-            foreach (var point in Items(Required(root, "points", JsonValueKind.Array), 1, MaxPoints))
-            {
-                if (point.ValueKind != JsonValueKind.Object)
-                    throw new Refused(SummaryGroundedFailure.Contract);
-                var topic = Topic(Text(point, "topic", MaxTopicChars));
-                // A spoiler topic given for the whole point only LABELS claims that are protected anyway; it hides nothing itself.
-                var pointLabel = Label(point);
-                var claims = Items(Required(point, "claims", JsonValueKind.Array), 1, MaxClaimsPerPoint).Select(c => reader.Claim(c, pointLabel)).ToList();
-                points.Add((topic, claims));
-            }
-
+            var points = Items(Required(root, "points", JsonValueKind.Array), 1, MaxCandidatePoints).Select(p => reader.Item(p, withTopic: true)).ToList();
             var plans = root.TryGetProperty("plans", out var planList) && planList.ValueKind != JsonValueKind.Null
-                ? Items(planList.ValueKind == JsonValueKind.Array ? planList : throw new Refused(SummaryGroundedFailure.Contract), 0, MaxPlans)
-                    .Select(c => reader.Claim(c, "")).ToList()
+                ? Items(planList.ValueKind == JsonValueKind.Array ? planList : throw new Refused(SummaryGroundedFailure.Contract), 0, MaxCandidatePlans)
+                    .Select(p => reader.Item(p, withTopic: false)).ToList()
                 : [];
             var atmosphere = reader.OpenText(Required(root, "atmosphere", JsonValueKind.Object));
-            if (points.Sum(p => p.Claims.Count) + plans.Count > MaxTotalClaims)
-                return SummaryGroundedResult.Failed(SummaryGroundedFailure.Limit);
 
-            // Nothing shown openly may repeat hidden content or carry a technical reference.
-            var open = new[] { main, atmosphere }.Concat(points.Select(p => p.Topic))
-                .Concat(points.SelectMany(p => p.Claims).Concat(plans).SelectMany(c => c.Protected ? [c.Label] : new[] { c.Text })).ToList();
+            // Nothing that would be shown openly may repeat hidden content or carry a technical reference — in any candidate.
+            var all = points.Concat(plans).ToList();
+            var open = new[] { main, atmosphere }.Concat(points.Select(p => p.Topic)).Concat(all.Select(i => i.Protected ? i.Label : i.Text)).ToList();
             if (open.Any(reader.RepeatsHiddenContent))
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.SpoilerInOpenText);
-            var visible = open.Concat(points.SelectMany(p => p.Claims).Concat(plans).Where(c => c.Protected).Select(c => c.Text));
-            if (visible.Any(reader.MentionsRecordReference))
+            if (open.Concat(all.Where(i => i.Protected).Select(i => i.Text)).Any(reader.MentionsRecordReference))
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.TechnicalLeak);
 
-            var markdown = SummaryOutput.Normalize(Render(main, points, plans, atmosphere));
+            // 2) Selection among complete, checked items: exact copies once, then the first ones in the model's order.
+            var (candidatePoints, candidatePlans) = (points.Count, plans.Count);
+            (points, plans) = WithoutExactCopies(points, plans);
+            var shownPoints = points.Take(ShownPoints).ToList();
+            var shownPlans = plans.Take(ShownPlans).ToList();
+
+            var markdown = SummaryOutput.Normalize(Render(main, shownPoints, shownPlans, atmosphere));
             if (markdown is null || markdown.Length > MaxRenderedChars)
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.Limit);
             return new SummaryGroundedResult(SummaryGroundedFailure.None, markdown, reader.EvidenceCount,
-                points.SelectMany(p => p.Claims).Concat(plans).Count(c => c.Protected));
+                shownPoints.Concat(shownPlans).Count(i => i.Protected), candidatePoints, candidatePlans, shownPoints.Count, shownPlans.Count);
         }
         catch (JsonException)
         {
@@ -144,6 +163,32 @@ public static partial class SummaryGroundedAnswer
         catch (Refused refused)
         {
             return SummaryGroundedResult.Failed(refused.Failure);
+        }
+    }
+
+    /// <summary>
+    /// Removes records that are exactly the same — same text, same evidence, same spoiler nature — keeping the first of each
+    /// list; a point that is exactly a plan gives way to the plan. Nothing similar-but-different is ever merged: sharing a
+    /// source does not make two texts the same information.
+    /// </summary>
+    private static (List<Item> Points, List<Item> Plans) WithoutExactCopies(List<Item> points, List<Item> plans)
+    {
+        points = Distinct(points);
+        plans = Distinct(plans);
+        var notPlans = points.Where(point => !plans.Any(point.SameRecordAs)).ToList();
+        // The points section is never left empty: if every point is also a plan, the points stay and those plans go.
+        return notPlans.Count > 0 ? (notPlans, plans) : (points, plans.Where(plan => !points.Any(plan.SameRecordAs)).ToList());
+
+        static List<Item> Distinct(List<Item> items)
+        {
+            var kept = new List<Item>(items.Count);
+            foreach (var item in items)
+            {
+                if (!kept.Any(item.SameRecordAs))
+                    kept.Add(item);
+            }
+
+            return kept;
         }
     }
 
@@ -167,14 +212,14 @@ public static partial class SummaryGroundedAnswer
         return text.StartsWith('{') && text.EndsWith('}') ? text : null;
     }
 
-    private static string Render(string main, List<(string Topic, List<Claim> Claims)> points, List<Claim> plans, string atmosphere)
+    private static string Render(string main, List<Item> points, List<Item> plans, string atmosphere)
     {
         var sb = new StringBuilder();
         sb.Append(SummaryPrompt.Title).Append("\n\n");
         sb.Append(SummaryPrompt.MainTopicHeading).Append('\n').Append(main).Append("\n\n");
         sb.Append(SummaryPrompt.KeyPointsHeading).Append('\n');
-        foreach (var (topic, claims) in points)
-            sb.Append("- **").Append(topic).Append(":** ").AppendJoin(' ', claims.Select(Shown)).Append('\n');
+        foreach (var point in points)
+            sb.Append("- **").Append(point.Topic).Append(":** ").Append(Shown(point)).Append('\n');
         if (plans.Count > 0)
         {
             sb.Append('\n').Append(SummaryPrompt.PlansHeading).Append('\n');
@@ -186,7 +231,8 @@ public static partial class SummaryGroundedAnswer
         return sb.ToString();
     }
 
-    private static string Shown(Claim claim) => claim.Protected ? "**Spoiler (" + claim.Label + "):** ||" + claim.Text + "||" : claim.Text;
+    /// <summary>A whole item or nothing: a protected one is wrapped as a whole, never cut inside.</summary>
+    private static string Shown(Item item) => item.Protected ? "**Spoiler (" + item.Label + "):** ||" + item.Text + "||" : item.Text;
 
     private static JsonElement Required(JsonElement parent, string name, JsonValueKind kind) =>
         parent.TryGetProperty(name, out var value) && value.ValueKind == kind ? value : throw new Refused(SummaryGroundedFailure.Contract);
@@ -252,44 +298,46 @@ public static partial class SummaryGroundedAnswer
         public string OpenText(JsonElement element)
         {
             var text = Text(element, "t", MaxTextChars);
-            return Evidence(element) ? throw new Refused(SummaryGroundedFailure.SpoilerInOpenText) : text;
+            return Evidence(element).FromHidden ? throw new Refused(SummaryGroundedFailure.SpoilerInOpenText) : text;
         }
 
         /// <summary>
-        /// A claim or plan: protected when a quote comes from a hidden span, or when the model names a spoiler topic for it.
-        /// <paramref name="pointLabel"/> (a topic the model gave for the whole point) is only a label for a protected claim.
+        /// One point (<c>topic</c>, <c>t</c>, <c>e</c>, optional <c>s</c>) or one plan (no topic): protected when a quote comes
+        /// from a hidden span, or when the model names a spoiler topic for it.
         /// </summary>
-        public Claim Claim(JsonElement element, string pointLabel)
+        public Item Item(JsonElement element, bool withTopic)
         {
             if (element.ValueKind != JsonValueKind.Object)
                 throw new Refused(SummaryGroundedFailure.Contract);
+            var topic = withTopic ? Topic(Text(element, "topic", MaxTopicChars)) : "";
             var text = Text(element, "t", MaxTextChars);
-            var fromHidden = Evidence(element);
+            var (fromHidden, sources) = Evidence(element);
             var label = Label(element);
             var isProtected = fromHidden || label.Length > 0;
             if (isProtected && label.Length == 0)
-                label = pointLabel.Length > 0 ? pointLabel : UnknownSpoilerTopic;
-            return new Claim(text, isProtected, label);
+                label = UnknownSpoilerTopic;
+            return new Item(topic, text, isProtected, label, sources);
         }
 
         /// <summary>
-        /// Checks the element's evidence list <c>e</c> — pairs of [record reference, verbatim quote]; true when any quote lies
-        /// (partly) inside a spoiler span.
+        /// Checks the element's evidence list <c>e</c> — pairs of [record reference, verbatim quote]. FromHidden: any quote lies
+        /// (partly) inside a spoiler span. Sources: the checked pairs in a fixed order, to recognise an exact copy.
         /// </summary>
-        private bool Evidence(JsonElement element)
+        private (bool FromHidden, string Sources) Evidence(JsonElement element)
         {
             var fromHidden = false;
             var onlyContext = true;
+            var pairs = new List<string>(MaxEvidence);
             foreach (var item in Items(Required(element, "e", JsonValueKind.Array), 1, MaxEvidence))
             {
                 if (item.ValueKind != JsonValueKind.Array || item.GetArrayLength() != 2 ||
                     item[0].ValueKind != JsonValueKind.String || item[1].ValueKind != JsonValueKind.String)
                     throw new Refused(SummaryGroundedFailure.Contract);
-                var (reference, quoted) = (item[0], item[1]);
-                if (!input.Records.TryGetValue(reference.GetString()!.Trim(), out var record))
+                var reference = item[0].GetString()!.Trim();
+                if (!input.Records.TryGetValue(reference, out var record))
                     throw new Refused(SummaryGroundedFailure.UnknownSource);
 
-                var raw = quoted.GetString()!;
+                var raw = item[1].GetString()!;
                 if (raw.Length > MaxQuoteChars * 2)
                     throw new Refused(SummaryGroundedFailure.Limit);
                 // The only tolerance: spoiler tags (not part of the member's text) and whitespace runs.
@@ -310,10 +358,14 @@ public static partial class SummaryGroundedAnswer
                 if (!found)
                     throw new Refused(SummaryGroundedFailure.QuoteNotFound);
                 onlyContext &= record.ContextOnly;
+                pairs.Add(reference + "\t" + quote);
                 EvidenceCount++;
             }
 
-            return onlyContext ? throw new Refused(SummaryGroundedFailure.ContextOnly) : fromHidden;
+            if (onlyContext)
+                throw new Refused(SummaryGroundedFailure.ContextOnly);
+            pairs.Sort(StringComparer.Ordinal);
+            return (fromHidden, string.Join('\n', pairs));
         }
 
         public bool RepeatsHiddenContent(string text) => _hidden.Any(h => text.Contains(h, StringComparison.OrdinalIgnoreCase));
