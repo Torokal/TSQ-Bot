@@ -146,6 +146,13 @@ yok).
 
 ## Üretim modu: Legacy ve Grounded
 
+> **Güncel durum (2026-10-03):** Üretim **Legacy** modunda. Grounded kodu mevcut ama **kapalı**
+> (`TOROSQUAD_Summary__GenerationMode=Legacy`). Grounded #54'ten sonra etkinleştirildi ve aynı gün geri alındı: gerçek 100
+> mesajlık üç çalıştırmadan biri yayımlandı (çıktı 1661/2000 token), ikisi 2000 token sınırında kesildi
+> (`validation=Truncated`). Kesilen cevaplar tasarlandığı gibi yayımlanmadı, yeniden istenmedi, Legacy'e düşülmedi. Tek bir
+> başarılı canlı sonuç genel güvenilirlik kanıtı değildir; o özetin anlamı da kaynakla karşılaştırılmadı. Legacy'e dönüş
+> komutun kullanılabilirliğini geri getirdi; anlam doğruluğu iyileştirmesinin tamamlandığı anlamına gelmez.
+
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
 Geri dönüş: `Summary:GenerationMode=Legacy` (ortam değişkeni `TOROSQUAD_Summary__GenerationMode`). Değişiklik yalnızca sonraki
 komutları etkiler; eski özetler, sayaçlar ve cooldown'lar değişmez. İki modda da rol, 100 mesaj, cooldown, gönderim, log ve

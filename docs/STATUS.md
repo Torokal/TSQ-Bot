@@ -256,6 +256,14 @@ invite link and no global command registration. The source code is public under 
   synthetic snapshots (4 requests): no critical meaning error, source error, spoiler leak or truncation in the two Grounded
   runs (Legacy merged two separate conversations once). The checks are structural: they do not prove the model's reading
   of a source is right. Output used ~76% of the 2000-token cap.
+- **Current state (2026-10-03): production runs Legacy; the Grounded code is merged but switched off**
+  (`TOROSQUAD_Summary__GenerationMode=Legacy`). Grounded was enabled after #54 and rolled back the same day: of three live
+  runs on real 100-message windows, one was published (output 1661 of 2000 tokens) and two were cut off at the 2000-token
+  cap (`finish_reason=length`, `validation=Truncated`) — refused as designed, nothing posted, no retry, no Legacy fallback.
+  The two small synthetic snapshots (32–36 messages) had not been representative of real output size. The one published
+  live result shows the path works end to end; it is not evidence of general reliability, and its meaning was not checked
+  against the source. Going back to Legacy restored the command's availability — it does not mean the meaning-accuracy
+  improvement is done: Legacy still has the errors that motivated Grounded (merged conversations, question → event).
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
   `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
