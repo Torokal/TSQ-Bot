@@ -21,16 +21,37 @@ public sealed class SummaryGroundedAnswerTests
     private static SummarySourceMessage Msg(ulong id, ulong author, string name, string text, ulong? replyTo = null) =>
         new(id, T0.AddSeconds(id), SummaryAuthorKind.Member, name, text, [], [], AuthorId: author, ReplyToId: replyTo);
 
-    /// <summary>m001 context (Hasom) · m002 Monfy · m003 Toro · m004 Monfy · m005 Oykeli (spoiler) · m006 Hasom.</summary>
-    private static readonly SummaryGroundedInput Input = SummaryGrounded.Build(
+    /// <summary>m001 context (Hasom) · m002 Monfy · m003 Toro · m004 Monfy · m005 Oykeli · m006 Hasom.</summary>
+    private static SummaryGroundedInput Window(string series) => SummaryGrounded.Build(
         [
             Msg(41, 1, "Monfy", "Eski config'i koydum ama çalışmadı.", replyTo: 5),
             Msg(42, 2, "Toro", "Oyunu yeniden başlattın mı?", replyTo: 41),
             Msg(43, 1, "Monfy", "Evet, şimdi oldu.", replyTo: 42),
-            Msg(44, 3, "Oykeli", "Vinland Saga'yı bitirdim ||Thorfinn sonunda affediyor|| bence çok güzel"),
+            Msg(44, 3, "Oykeli", series),
             Msg(45, 4, "Hasom", "Yarın 21.00'de oynayalım, tamam."),
         ],
         [Msg(5, 4, "Hasom", "Config dosyasını değiştiren var mı?")],
+        SummaryMentionNames.Empty, Istanbul, 100);
+
+    /// <summary>No hidden part anywhere: nothing is required.</summary>
+    private static readonly SummaryGroundedInput Input = Window("Vinland Saga'yı bitirdim, bence çok güzel");
+
+    /// <summary>m005 has a hidden part, so it is a required spoiler source.</summary>
+    private static readonly SummaryGroundedInput Hidden = Window("Vinland Saga'yı bitirdim ||Thorfinn sonunda affediyor|| bence çok güzel");
+
+    /// <summary>
+    /// m001 context (Hasom, hidden part — never required) · m002 Oykeli (Dizi A) · m003 Aiwen (Dizi A) · m004 Monfy (Film B) ·
+    /// m005 Zel (Oyun C) · m006 Toro (open). Required: m002–m005.
+    /// </summary>
+    private static readonly SummaryGroundedInput Many = SummaryGrounded.Build(
+        [
+            Msg(51, 3, "Oykeli", "Dizi A finali ||kahraman ihanet ediyor|| şaşırdım", replyTo: 6),
+            Msg(52, 5, "Aiwen", "Dizi A'da ||gemi son bölümde batıyor|| üzüldüm"),
+            Msg(53, 1, "Monfy", "Film B'de ||katil aslında uşak çıkıyor|| vay"),
+            Msg(54, 6, "Zel", "Oyun C'de ||son boss kahramanın kardeşi|| inanamadım"),
+            Msg(55, 2, "Toro", "Yarın 21.00'de oynayalım, tamam."),
+        ],
+        [Msg(6, 4, "Hasom", "Eski sezonda ||baba karakteri ölüyor|| demiştim")],
         SummaryMentionNames.Empty, Istanbul, 100);
 
     /// <summary>One evidence pair: [record reference, verbatim quote].</summary>
@@ -79,7 +100,27 @@ public sealed class SummaryGroundedAnswerTests
 
     private static object[] Plans(int count) => Enumerable.Range(1, count).Select(i => (object)Block("Plan " + i + ".", [E("m006", "oynayalım, tamam")])).ToArray();
 
-    private static SummaryGroundedResult Read(string raw, string? finish = "stop") => SummaryGroundedAnswer.Read(raw, finish, Input);
+    private static SummaryGroundedResult Read(string raw, string? finish = "stop", SummaryGroundedInput? input = null) =>
+        SummaryGroundedAnswer.Read(raw, finish, input ?? Input);
+
+    private static SummaryGroundedResult ReadHidden(string raw) => Read(raw, input: Hidden);
+
+    private static readonly object[] OpenEvidence = [E("m006", "oynayalım, tamam")];
+
+    /// <summary>An answer for <see cref="Many"/>: main and atmosphere rest on the one open record.</summary>
+    private static SummaryGroundedResult ReadMany(params object[] points) => Read(
+        Answer(main: Block("Dizi, film ve oyun finalleri konuşuldu.", OpenEvidence), points: points, atmosphere: Block("Heyecanlı bir sohbet.", [E("m006", "Yarın 21.00'de")])),
+        input: Many);
+
+    private static object Open(int i) => Point("Konu " + i, "Bilgi " + i + ".", OpenEvidence);
+
+    /// <summary>A spoiler point quoting the given records from their hidden parts.</summary>
+    private static object Spoiler(string topic, string text, params (string Ref, string Quote)[] quotes) =>
+        Point(topic, text, quotes.Select(q => E(q.Ref, q.Quote)).ToArray(), topic + " finali");
+
+    private static readonly object DiziA = Spoiler("Dizi A", "Kahramanın ihanet ettiği ve geminin battığı konuşuldu.", ("m002", "kahraman ihanet ediyor"), ("m003", "gemi son bölümde batıyor"));
+    private static readonly object FilmB = Spoiler("Film B", "Katilin uşak çıktığı söylendi.", ("m004", "katil aslında uşak çıkıyor"));
+    private static readonly object OyunC = Spoiler("Oyun C", "Son boss'un kahramanın kardeşi olduğu söylendi.", ("m005", "son boss kahramanın kardeşi"));
 
     private static List<string> Bullets(string markdown) => Regex.Matches(markdown, "^- .+$", RegexOptions.Multiline).Select(m => m.Value).ToList();
 
@@ -253,7 +294,7 @@ public sealed class SummaryGroundedAnswerTests
         Read(Answer() + new string(' ', 10) + "\n").Failure.Should().Be(SummaryGroundedFailure.None);
         Read(Answer(main: Block("Konu.", MainEvidence)).Replace("\"v\":3", "\"v\":3,\"pad\":\"" + new string('x', SummaryGroundedAnswer.MaxAnswerChars) + "\"", StringComparison.Ordinal))
             .Failure.Should().Be(SummaryGroundedFailure.Limit, "the whole answer is bounded too");
-        (SummaryGroundedAnswer.MaxCandidatePoints, SummaryGroundedAnswer.MaxCandidatePlans, SummaryGroundedAnswer.MaxEvidence).Should().Be((12, 4, 3));
+        (SummaryGroundedAnswer.MaxCandidatePoints, SummaryGroundedAnswer.MaxCandidatePlans, SummaryGroundedAnswer.MaxEvidence).Should().Be((12, 4, 5));
     }
 
     [Theory]
@@ -283,8 +324,8 @@ public sealed class SummaryGroundedAnswerTests
         var reference = Points(8);
         reference[6] = Point("Konu 7", "Monfy m004 mesajında düzeldiğini söyledi.", MainEvidence);
 
-        Read(Answer(points: leak)).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
-        Read(Answer(points: reference)).Failure.Should().Be(SummaryGroundedFailure.TechnicalLeak);
+        ReadHidden(Answer(points: leak)).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
+        ReadHidden(Answer(points: reference)).Failure.Should().Be(SummaryGroundedFailure.TechnicalLeak);
     }
 
     [Fact]
@@ -307,7 +348,7 @@ public sealed class SummaryGroundedAnswerTests
         points[5] = Point("Vinland Saga", "Finalde Thorfinn'in affettiği konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")], "Vinland Saga finali"); // the last shown one
         points[6] = Point("Dizi", "Gösterilmeyen gizli bilgi.", [E("m005", "sonunda affediyor")], "dizi finali"); // the first one left out
 
-        var result = Read(Answer(points: points));
+        var result = ReadHidden(Answer(points: points));
 
         var bullets = Bullets(result.Markdown!);
         bullets.Should().HaveCount(6);
@@ -315,28 +356,38 @@ public sealed class SummaryGroundedAnswerTests
         Regex.Count(result.Markdown!, @"\|\|").Should().Be(2, "the shown spoiler is complete; the one left out leaves no half mark");
         result.Markdown.Should().NotContain("Gösterilmeyen").And.NotContain("dizi finali");
         result.SpoilerClaimCount.Should().Be(1, "counts what is published");
-        (result.SpoilerCandidates, result.SpoilerPromoted).Should().Be((2, false), "a sourced spoiler is already among the first six: nothing is moved");
+        (result.SpoilerCandidates, result.RequiredSpoilers, result.ReservedSpoilerPoints).Should().Be((2, 1, 1), "one point keeps the coverage; the second one for the same source is an ordinary candidate");
     }
 
     private static readonly string[] FirstSix = ["- **Konu 1:** Bilgi 1.", "- **Konu 2:** Bilgi 2.", "- **Konu 3:** Bilgi 3.", "- **Konu 4:** Bilgi 4.", "- **Konu 5:** Bilgi 5.", "- **Konu 6:** Bilgi 6."];
 
     [Fact]
-    public void Without_a_sourced_spoiler_candidate_selection_is_the_plain_first_six()
+    public void Without_a_hidden_part_nothing_is_required_and_selection_is_the_plain_first_six()
     {
         var result = Read(Answer(points: Points(9), plans: Plans(3)));
 
         Bullets(result.Markdown!).Should().Equal(FirstSix.Concat(["- Plan 1.", "- Plan 2."]));
-        (result.SpoilerCandidates, result.SpoilerPromoted, result.SpoilerClaimCount).Should().Be((0, false, 0));
+        (result.RequiredSpoilers, result.ReservedSpoilerPoints, result.SpoilerCandidates, result.SpoilerClaimCount).Should().Be((0, 0, 0, 0));
+        Input.RequiredSpoilerSources.Should().BeEmpty();
     }
 
     [Fact]
-    public void A_sourced_spoiler_point_below_the_cut_takes_the_last_shown_place_as_a_whole()
+    public void Required_spoiler_sources_come_from_the_record_map_and_never_include_context()
+    {
+        Hidden.RequiredSpoilerSources.Should().Equal("m005");
+        Many.RequiredSpoilerSources.Should().Equal("m002", "m003", "m004", "m005");
+        (Many.Records["m001"].HasSpoiler, Many.Records["m001"].ContextOnly).Should().Be((true, true), "a context record with a hidden part is told apart, and is not required");
+        Many.Records["m006"].HasSpoiler.Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_required_spoiler_point_below_the_cut_keeps_a_shown_place_as_a_whole()
     {
         var points = Points(8);
         points[2] = Point("Oyun ayarları", CorrectionText, Correction); // a correction among the shown ones: must stay whole and in place
         points[6] = Point("Vinland Saga", "Finalde Thorfinn'in affettiği konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")], "Vinland Saga finali");
 
-        var result = Read(Answer(points: points, plans: Plans(3)));
+        var result = ReadHidden(Answer(points: points, plans: Plans(3)));
 
         Bullets(result.Markdown!).Should().Equal(
             "- **Konu 1:** Bilgi 1.", "- **Konu 2:** Bilgi 2.", "- **Oyun ayarları:** " + CorrectionText, "- **Konu 4:** Bilgi 4.", "- **Konu 5:** Bilgi 5.",
@@ -345,73 +396,203 @@ public sealed class SummaryGroundedAnswerTests
         result.Markdown.Should().NotContain("Konu 6").And.NotContain("Bilgi 6", "the last ordinary point leaves as a whole — nothing of it remains");
         result.Markdown.Should().NotContain("Konu 8");
         Regex.Count(result.Markdown!, @"\|\|").Should().Be(2);
-        (result.ShownPoints, result.ShownPlans, result.SpoilerCandidates, result.SpoilerPromoted, result.SpoilerClaimCount).Should().Be((6, 2, 1, true, 1));
+        (result.ShownPoints, result.ShownPlans, result.RequiredSpoilers, result.ReservedSpoilerPoints, result.SpoilerClaimCount).Should().Be((6, 2, 1, 1, 1));
     }
 
     [Fact]
-    public void Of_two_sourced_spoiler_points_below_the_cut_only_the_first_is_shown()
+    public void Of_two_points_quoting_the_same_required_source_only_the_first_is_reserved()
     {
         var points = Points(8);
         points[6] = Point("Dizi", "Yedinci sıradaki gizli bilgi.", [E("m005", "Thorfinn sonunda affediyor")], "dizi finali");
         points[7] = Point("Dizi", "Sekizinci sıradaki gizli bilgi.", [E("m005", "sonunda affediyor")], "dizi finali");
 
-        var result = Read(Answer(points: points));
+        var result = ReadHidden(Answer(points: points));
 
         var bullets = Bullets(result.Markdown!);
         bullets.Take(5).Should().Equal(FirstSix.Take(5));
         bullets[5].Should().Be("- **Dizi:** **Spoiler (dizi finali):** ||Yedinci sıradaki gizli bilgi.||");
-        result.Markdown.Should().NotContain("Sekizinci", "one place is kept, not one per spoiler: no claim that every spoiler topic is shown");
-        (result.ShownPoints, result.SpoilerCandidates, result.SpoilerPromoted, result.SpoilerClaimCount).Should().Be((6, 2, true, 1));
+        result.Markdown.Should().NotContain("Sekizinci", "a place is kept for coverage, not for every spoiler point");
+        (result.ShownPoints, result.SpoilerCandidates, result.ReservedSpoilerPoints, result.SpoilerClaimCount).Should().Be((6, 2, 1, 1));
     }
 
     [Fact]
-    public void A_spoiler_label_or_the_word_spoiler_without_hidden_evidence_earns_no_place()
+    public void A_required_source_that_no_spoiler_point_quotes_from_its_hidden_part_refuses_the_answer()
     {
-        var points = Points(8);
-        points[6] = Point("Dizi", "Dizi hakkında spoiler paylaşıldı.", [E("m005", "bence çok güzel")], "dizi finali"); // "s" given, quote from the open part
-        points[7] = Point("Spoiler", "Spoiler konuşuldu.", MainEvidence); // the word alone
+        // No spoiler point at all: the spoiler topic was simply left out.
+        var leftOut = ReadHidden(Answer(points: Points(6)));
+        // An "s" label, or the word "spoiler", with a quote from the OPEN part of the required record is not coverage.
+        var labelOnly = ReadHidden(Answer(points: [Point("Dizi", "Dizi hakkında spoiler paylaşıldı.", [E("m005", "bence çok güzel")], "dizi finali")]));
+        var wordOnly = ReadHidden(Answer(points: [Point("Spoiler", "Spoiler konuşuldu.", MainEvidence)]));
 
-        var result = Read(Answer(points: points));
-
-        Bullets(result.Markdown!).Should().Equal(FirstSix);
-        (result.SpoilerCandidates, result.SpoilerPromoted).Should().Be((0, false));
+        (leftOut.Failure, leftOut.Markdown).Should().Be((SummaryGroundedFailure.MissingRequiredSpoiler, (string?)null));
+        labelOnly.Failure.Should().Be(SummaryGroundedFailure.MissingRequiredSpoiler, "only a verified quote from the hidden part covers a source");
+        wordOnly.Failure.Should().Be(SummaryGroundedFailure.MissingRequiredSpoiler);
+        // Without a required source the same labelled point is still just published hidden, as before.
+        Read(Answer(points: [Point("Dizi", "Dizi hakkında spoiler paylaşıldı.", [E("m005", "bence çok güzel")], "dizi finali")])).Failure.Should().Be(SummaryGroundedFailure.None);
     }
 
     [Fact]
-    public void A_point_without_the_spoiler_field_but_quoting_a_hidden_span_is_protected_and_keeps_the_place()
+    public void A_point_without_the_spoiler_field_but_quoting_a_hidden_span_covers_the_source_and_gets_the_fallback_label()
     {
         var points = Points(8);
         points[7] = Point("Dizi", "Finalde affetme sahnesi olduğu konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")]); // no "s"
 
-        var result = Read(Answer(points: points));
+        var result = ReadHidden(Answer(points: points));
 
         Bullets(result.Markdown!)[5].Should().Be("- **Dizi:** **Spoiler (konu belirtilmemiş):** ||Finalde affetme sahnesi olduğu konuşuldu.||");
         result.Markdown.Should().NotContain("Konu 6").And.NotContain("Konu 7");
-        (result.SpoilerCandidates, result.SpoilerPromoted).Should().Be((1, true));
+        (result.RequiredSpoilers, result.ReservedSpoilerPoints).Should().Be((1, 1));
     }
 
     [Fact]
-    public void A_broken_quote_still_refuses_everything_even_when_a_spoiler_point_would_have_been_moved_up()
+    public void A_broken_quote_still_refuses_everything_even_when_the_spoiler_coverage_is_complete()
     {
         var points = Points(9);
         points[6] = Point("Dizi", "Finalde affetme sahnesi olduğu konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")], "dizi finali");
         points[8] = Point("Konu 9", "Gösterilmeyecek ama hatalı bilgi.", [E("m002", "Eski config koydum")]);
 
-        var result = Read(Answer(points: points));
+        var result = ReadHidden(Answer(points: points));
 
-        (result.Failure, result.Markdown, result.SpoilerPromoted).Should().Be((SummaryGroundedFailure.QuoteNotFound, (string?)null, false));
+        (result.Failure, result.Markdown).Should().Be((SummaryGroundedFailure.QuoteNotFound, (string?)null));
     }
 
     [Fact]
-    public void Selection_cannot_turn_an_empty_spoiler_sentence_into_content()
+    public void Coverage_does_not_prove_that_the_text_summarises_the_hidden_event()
     {
-        // What the reader can check is where the quote comes from — not whether the text really summarises the hidden event.
+        // What the reader can check is where the quote comes from — not whether the text says what happened.
         var points = Points(7);
         points[6] = Point("Dizi", "Final hakkında spoiler paylaşıldı.", [E("m005", "Thorfinn sonunda affediyor")], "dizi finali");
 
-        var markdown = Read(Answer(points: points)).Markdown!;
+        var result = ReadHidden(Answer(points: points));
 
-        markdown.Should().Contain("**Spoiler (dizi finali):** ||Final hakkında spoiler paylaşıldı.||", "moved up and hidden, but exactly as empty as the model wrote it");
+        result.Failure.Should().Be(SummaryGroundedFailure.None, "an empty sentence with the right quote passes the structural check");
+        result.Markdown.Should().Contain("**Spoiler (dizi finali):** ||Final hakkında spoiler paylaşıldı.||", "hidden and shown, but exactly as empty as the model wrote it");
+    }
+
+    [Fact]
+    public void One_spoiler_point_may_cover_several_required_sources_and_all_reserved_points_are_shown()
+    {
+        var result = ReadMany(Open(1), DiziA, FilmB, OyunC);
+
+        result.Failure.Should().Be(SummaryGroundedFailure.None);
+        Bullets(result.Markdown!).Should().Equal(
+            "- **Konu 1:** Bilgi 1.",
+            "- **Dizi A:** **Spoiler (Dizi A finali):** ||Kahramanın ihanet ettiği ve geminin battığı konuşuldu.||",
+            "- **Film B:** **Spoiler (Film B finali):** ||Katilin uşak çıktığı söylendi.||",
+            "- **Oyun C:** **Spoiler (Oyun C finali):** ||Son boss'un kahramanın kardeşi olduğu söylendi.||");
+        (result.RequiredSpoilers, result.ReservedSpoilerPoints, result.SpoilerClaimCount).Should().Be((4, 3, 3));
+    }
+
+    [Fact]
+    public void One_uncovered_source_among_several_refuses_the_answer()
+    {
+        ReadMany(Open(1), DiziA, FilmB).Failure.Should().Be(SummaryGroundedFailure.MissingRequiredSpoiler, "m005 is not quoted from its hidden part");
+        // The same record quoted from its OPEN part inside a labelled point does not help.
+        ReadMany(Open(1), DiziA, FilmB, Spoiler("Oyun C", "Oyun C finali konuşuldu.", ("m005", "inanamadım")))
+            .Failure.Should().Be(SummaryGroundedFailure.MissingRequiredSpoiler);
+    }
+
+    [Fact]
+    public void A_context_only_record_with_a_hidden_part_is_neither_required_nor_coverage()
+    {
+        // Quoting the context record's hidden part (together with a window record) protects the point, but covers nothing.
+        var old = Point("Eski sezon", "Eski sezondaki bir olay hatırlatıldı.", [E("m001", "baba karakteri ölüyor"), E("m006", "tamam")], "eski sezon");
+
+        var complete = ReadMany(DiziA, FilmB, OyunC, old);
+        var missing = ReadMany(DiziA, FilmB, old);
+
+        complete.Failure.Should().Be(SummaryGroundedFailure.None, "m001 is context: nobody has to cover it");
+        complete.Markdown.Should().Contain("- **Eski sezon:** **Spoiler (eski sezon):** ||Eski sezondaki bir olay hatırlatıldı.||");
+        (complete.RequiredSpoilers, complete.ReservedSpoilerPoints, complete.SpoilerCandidates).Should().Be((4, 3, 4));
+        missing.Failure.Should().Be(SummaryGroundedFailure.MissingRequiredSpoiler, "the context quote does not stand in for m005");
+    }
+
+    [Fact]
+    public void Two_spoiler_points_below_six_ordinary_ones_are_both_kept_within_six()
+    {
+        var rest = Spoiler("Film ve oyun", "Katilin uşak, son boss'un da kardeş çıktığı söylendi.", ("m004", "katil aslında uşak"), ("m005", "kahramanın kardeşi"));
+
+        var result = ReadMany(Open(1), Open(2), Open(3), Open(4), Open(5), Open(6), DiziA, rest);
+
+        var bullets = Bullets(result.Markdown!);
+        bullets.Should().HaveCount(6);
+        bullets.Take(4).Should().Equal("- **Konu 1:** Bilgi 1.", "- **Konu 2:** Bilgi 2.", "- **Konu 3:** Bilgi 3.", "- **Konu 4:** Bilgi 4.");
+        bullets[4].Should().StartWith("- **Dizi A:** **Spoiler (Dizi A finali):** ||");
+        bullets[5].Should().StartWith("- **Film ve oyun:** **Spoiler (Film ve oyun finali):** ||").And.EndWith("||");
+        (result.CandidatePoints, result.ShownPoints, result.ReservedSpoilerPoints).Should().Be((8, 6, 2));
+    }
+
+    [Fact]
+    public void Three_spoiler_points_can_all_be_kept()
+    {
+        var result = ReadMany(Open(1), Open(2), Open(3), Open(4), Open(5), Open(6), DiziA, FilmB, OyunC);
+
+        Bullets(result.Markdown!).Select(b => b[..12]).Should().Equal("- **Konu 1:*", "- **Konu 2:*", "- **Konu 3:*", "- **Dizi A:*", "- **Film B:*", "- **Oyun C:*");
+        (result.ShownPoints, result.ReservedSpoilerPoints, result.SpoilerClaimCount).Should().Be((6, 3, 3));
+        SummaryGroundedAnswer.MaxShownSpoilerPoints.Should().Be(3);
+    }
+
+    [Fact]
+    public void Coverage_that_needs_more_spoiler_points_than_may_be_shown_is_refused_and_texts_are_never_merged()
+    {
+        var a1 = Spoiler("Dizi A", "Kahramanın ihanet ettiği söylendi.", ("m002", "kahraman ihanet ediyor"));
+        var a2 = Spoiler("Dizi A", "Geminin battığı söylendi.", ("m003", "gemi son bölümde batıyor"));
+
+        var four = ReadMany(Open(1), a1, a2, FilmB, OyunC);
+
+        (four.Failure, four.Markdown).Should().Be((SummaryGroundedFailure.SpoilerPointLimit, (string?)null), "four separate spoiler points cannot all be shown, and code does not merge them");
+    }
+
+    [Fact]
+    public void The_fewest_points_that_cover_everything_are_reserved_and_the_others_stay_ordinary_candidates()
+    {
+        var a1 = Spoiler("Dizi A", "Kahramanın ihanet ettiği söylendi.", ("m002", "kahraman ihanet ediyor"));
+        var a2 = Spoiler("Dizi A", "Geminin battığı söylendi.", ("m003", "gemi son bölümde batıyor"));
+
+        // a1 and a2 alone would need four points; with the combined DiziA point three are enough.
+        var result = ReadMany(a1, a2, FilmB, OyunC, DiziA, Open(1), Open(2), Open(3), Open(4));
+
+        result.Failure.Should().Be(SummaryGroundedFailure.None);
+        Bullets(result.Markdown!).Select(b => b[..12]).Should().Equal("- **Dizi A:*", "- **Dizi A:*", "- **Film B:*", "- **Oyun C:*", "- **Dizi A:*", "- **Konu 1:*");
+        (result.ShownPoints, result.ReservedSpoilerPoints, result.SpoilerClaimCount).Should().Be((6, 3, 5));
+    }
+
+    [Fact]
+    public void A_spoiler_point_that_keeps_the_coverage_does_not_give_way_to_an_identical_plan()
+    {
+        object[] quote = [E("m005", "Thorfinn sonunda affediyor")];
+
+        var result = ReadHidden(Answer(points: [Point("Dizi", "Finali birlikte izleyecekler.", quote)], plans: [Block("Finali birlikte izleyecekler.", quote)]));
+
+        Bullets(result.Markdown!).Should().Equal("- **Dizi:** **Spoiler (konu belirtilmemiş):** ||Finali birlikte izleyecekler.||");
+        (result.ShownPoints, result.ShownPlans).Should().Be((1, 0));
+    }
+
+    [Theory]
+    [InlineData(4, SummaryGroundedFailure.None)]
+    [InlineData(5, SummaryGroundedFailure.None)]
+    [InlineData(6, SummaryGroundedFailure.Limit)]
+    public void Up_to_five_checked_quotes_per_text_are_accepted_as_a_safety_ceiling_not_a_target(int quotes, SummaryGroundedFailure expected)
+    {
+        object[] all = [E("m002", "ama çalışmadı"), E("m003", "yeniden başlattın mı?"), E("m004", "şimdi oldu"), E("m006", "oynayalım, tamam"), E("m002", "Eski config'i koydum"), E("m004", "Evet")];
+        var evidence = all.Take(quotes).ToArray();
+
+        var onPoint = Read(Answer(points: [Point("Konu", "Bilgi.", evidence)]));
+        var onMain = Read(Answer(main: Block("Konu.", evidence)));
+
+        (onPoint.Failure, onMain.Failure).Should().Be((expected, expected));
+        if (expected == SummaryGroundedFailure.None)
+            onPoint.EvidenceCount.Should().Be(quotes + 2, "every one of them was checked");
+        SummaryGroundedAnswer.MaxEvidence.Should().Be(5);
+    }
+
+    [Fact]
+    public void One_false_quote_among_four_still_refuses_the_answer()
+    {
+        object[] evidence = [E("m002", "ama çalışmadı"), E("m003", "yeniden başlattın mı?"), E("m004", "Hayır, hâlâ olmadı."), E("m006", "oynayalım, tamam")];
+
+        Read(Answer(points: [Point("Konu", "Bilgi.", evidence)])).Failure.Should().Be(SummaryGroundedFailure.QuoteNotFound, "a higher ceiling does not loosen the check of each quote");
+        Read(Answer(points: [Point("Konu", "Bilgi.", [.. evidence.Take(2), E("m099", "şimdi oldu"), evidence[3]])])).Failure.Should().Be(SummaryGroundedFailure.UnknownSource);
     }
 
     [Fact]
@@ -462,7 +643,7 @@ public sealed class SummaryGroundedAnswerTests
     public void Oversized_fields_and_too_many_quotes_are_refused()
     {
         Read(Answer(main: Block(new string('a', 600), MainEvidence))).Failure.Should().Be(SummaryGroundedFailure.Limit);
-        Read(Answer(main: Block("Konu.", Enumerable.Repeat(MainEvidence[0], 4).ToArray()))).Failure.Should().Be(SummaryGroundedFailure.Limit, "three quotes are the most a text may need");
+        Read(Answer(main: Block("Konu.", Enumerable.Repeat(MainEvidence[0], 6).ToArray()))).Failure.Should().Be(SummaryGroundedFailure.Limit, "more than the safety ceiling");
         Read(Answer(points: [Point(new string('k', 200), "Bilgi.", MainEvidence)])).Failure.Should().Be(SummaryGroundedFailure.Limit);
         Read(Answer(points: [Point("Konu", new string('a', 600), MainEvidence)])).Failure.Should().Be(SummaryGroundedFailure.Limit);
     }
@@ -493,7 +674,7 @@ public sealed class SummaryGroundedAnswerTests
             Point("Vinland Saga", "Finalde Thorfinn'in affettiği konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")], "Vinland Saga finali"),
         ]);
 
-        var result = Read(raw);
+        var result = ReadHidden(raw);
 
         result.Failure.Should().Be(SummaryGroundedFailure.None);
         Bullets(result.Markdown!).Should().Equal(
@@ -509,15 +690,15 @@ public sealed class SummaryGroundedAnswerTests
         // No "s" at all (the contract's normal case for non-spoilers) — but the quote comes from a hidden span.
         var omitted = Answer(points: [Point("Dizi", "Finalde affetme sahnesi olduğu konuşuldu.", [E("m005", "<spoiler>Thorfinn sonunda affediyor</spoiler>")])]);
         omitted.Should().NotContain("\"s\"");
-        Read(omitted).Markdown.Should().Contain("- **Dizi:** **Spoiler (konu belirtilmemiş):** ||Finalde affetme sahnesi olduğu konuşuldu.||");
+        ReadHidden(omitted).Markdown.Should().Contain("- **Dizi:** **Spoiler (konu belirtilmemiş):** ||Finalde affetme sahnesi olduğu konuşuldu.||");
 
         // An explicit null is treated the same way; a quote only partly inside the span protects the point too.
         var withNull = Point("Dizi", "Final konuşuldu.", [E("m005", "bitirdim Thorfinn sonunda")]);
         withNull["s"] = null;
-        Read(Answer(points: [withNull])).Markdown.Should().Contain("**Spoiler (konu belirtilmemiş):** ||Final konuşuldu.||");
+        ReadHidden(Answer(points: [withNull])).Markdown.Should().Contain("**Spoiler (konu belirtilmemiş):** ||Final konuşuldu.||");
 
-        // The same holds for a plan.
-        Read(Answer(plans: [Block("Finali birlikte izleyecekler.", [E("m005", "sonunda affediyor")])])).Markdown
+        // The same holds for a plan (the required source itself is covered by a spoiler point).
+        ReadHidden(Answer(points: [withNull], plans: [Block("Finali birlikte izleyecekler.", [E("m005", "sonunda affediyor")])])).Markdown
             .Should().Contain("- **Spoiler (konu belirtilmemiş):** ||Finali birlikte izleyecekler.||");
     }
 
@@ -525,13 +706,13 @@ public sealed class SummaryGroundedAnswerTests
     public void Hidden_content_in_an_open_text_is_refused()
     {
         // main / atmosphere relying on a hidden span.
-        Read(Answer(main: Block("Dizi finali konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")]))).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
-        Read(Answer(atmosphere: Block("Duygusal.", [E("m005", "sonunda affediyor")]))).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
+        ReadHidden(Answer(main: Block("Dizi finali konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")]))).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
+        ReadHidden(Answer(atmosphere: Block("Duygusal.", [E("m005", "sonunda affediyor")]))).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
         // An open text repeating the hidden content verbatim, whatever its evidence.
-        Read(Answer(main: Block("Thorfinn sonunda affediyor diye konuşuldu.", MainEvidence))).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
-        Read(Answer(points: [Point("thorfinn sonunda affediyor", "Dizi konuşuldu.", [E("m005", "bence çok güzel")])])).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
+        ReadHidden(Answer(main: Block("Thorfinn sonunda affediyor diye konuşuldu.", MainEvidence))).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
+        ReadHidden(Answer(points: [Point("thorfinn sonunda affediyor", "Dizi konuşuldu.", [E("m005", "bence çok güzel")])])).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
         // A spoiler label that gives the content away.
-        Read(Answer(points: [Point("Dizi", "Final konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")], "Thorfinn sonunda affediyor")])).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
+        ReadHidden(Answer(points: [Point("Dizi", "Final konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")], "Thorfinn sonunda affediyor")])).Failure.Should().Be(SummaryGroundedFailure.SpoilerInOpenText);
     }
 
     [Fact]
@@ -556,7 +737,7 @@ public sealed class SummaryGroundedAnswerTests
         object Topic(int i) => i % 2 == 0
             ? Point("Konu " + i, string.Join(" ", Enumerable.Repeat("gizli" + i, 60)), [E("m005", "Thorfinn sonunda affediyor")], "dizi finali")
             : Point("Konu " + i, string.Join(" ", Enumerable.Repeat("açıklama" + i, 45)), MainEvidence);
-        var markdown = Read(Answer(points: Enumerable.Range(1, 6).Select(Topic).ToArray())).Markdown!;
+        var markdown = ReadHidden(Answer(points: Enumerable.Range(1, 6).Select(Topic).ToArray())).Markdown!;
         markdown.Length.Should().BeGreaterThan(2000);
 
         var parts = SummaryOutput.Split(markdown);

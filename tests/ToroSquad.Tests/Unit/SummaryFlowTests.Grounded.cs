@@ -171,6 +171,25 @@ public sealed partial class SummaryFlowTests
     }
 
     [Fact]
+    public async Task An_answer_that_leaves_a_required_spoiler_source_out_is_refused_after_one_inference()
+    {
+        var world = GroundedWorld(); // the default answer has no spoiler point
+        world.Discord.Channels[Here.Value] = [.. ConfigTalk(), Human(44, "Dizi finali ||kahraman son sahnede ölüyor|| çok şaşırdım") with { AuthorId = 3, AuthorName = "Oykeli" }];
+        var responder = new FakeResponder();
+
+        (await world.RunAsync(responder)).Should().Be(SummaryOutcome.AiFailed);
+
+        var user = world.Ai.Prompts.Single().User;
+        user.Should().Contain("\"sp\":true,\"t\":\"Dizi finali <spoiler>kahraman son sahnede ölüyor</spoiler> çok şaşırdım\"");
+        user.Should().Contain("\n</records>\n\nZorunlu spoiler kaynakları: m010\n\n");
+        world.Ai.Calls.Should().Be(1, "no retry and no legacy request");
+        responder.Public.Should().BeEmpty();
+        responder.Private.Single().Should().StartWith("Özet oluşturulamadı.").And.NotContain("ölüyor");
+        world.AllLogs.Should().Contain("validation=MissingRequiredSpoiler").And.Contain("generation_mode=Grounded");
+        world.AllLogs.Should().NotContain("ölüyor").And.NotContain("kahraman");
+    }
+
+    [Fact]
     public async Task A_sourced_spoiler_point_below_the_cut_is_posted_hidden_in_the_last_shown_place()
     {
         var world = GroundedWorld();
