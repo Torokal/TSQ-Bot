@@ -358,7 +358,14 @@ invite link and no global command registration. The source code is public under 
   **Reviewer rules narrowed (reviewer prompt only: support must be local to the event, hedges and causal strength are kept,
   supported details are not removed; 3273 tests ×3) — the one re-run on fixture A could not evaluate them: the GLM generator
   request TIMED OUT at 25 s, the reviewer was not called, nothing was retried.** The new rules are therefore untested by a
-  model. GLM latency on these fixtures ranged from 5.8 s to over 25 s (one timeout in seven requests). Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  model. GLM latency on these fixtures ranged from 5.8 s to over 25 s (one timeout in seven requests).
+  **Final repeat on fixture A with the frozen candidate (2 requests): generator 5996/867 tokens, 5.5 s; reviewer 9388/1055
+  tokens, 6.7 s; both `stop` and `validation=None`. The draft again carried both target errors and the reviewer corrected
+  both — the game name was detached from the training and kept only for the crash it is stated for; the hedged cause is
+  hedged again — and it also restored a dropped step, removed two more unsupported details and added a supported one. No
+  regression against the answer key.** Offline gate met: PR #58 is an offline merge candidate (agent's assessment); it is
+  NOT VERIFIED_LIVE, not an approval to enable Grounded, and the generator's latency risk (one 25 s timeout in eight
+  requests) remains open. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request in Legacy (production): OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,

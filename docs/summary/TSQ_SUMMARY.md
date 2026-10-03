@@ -616,6 +616,40 @@ model cevabıyla **sınanmadı**; A'daki iki gözlemin giderilip giderilmediği 
 fixture'larda 5,8 sn ile 25 sn üstü arasında değişti (yedi istekte bir zaman aşımı); 25 saniyelik sınırla Grounded'in ilk aşaması
 kendi başına başarısız olabiliyor.
 
+**Son tekrar: fixture A, dondurulmuş adayla (2026-10-04).** Aday, fixture ve cevap anahtarı değişmeden tek pipeline; 2 istek,
+retry yok, zaman aşımı olmadı.
+
+| | Üretici: GLM-5.3-Flash | Denetçi: DeepSeek V4.1 Flash |
+|---|---|---|
+| input / output / reasoning token | 5996 / 867 / 0 | 9388 / 1055 / 0 |
+| finish, süre (25 sn sınırına kalan) | stop, 5,5 sn (19,5 sn) | stop, 6,7 sn (18,3 sn) |
+| point / spoiler / plan | 5 / 0 / 2 | 5 / 0 / 2 |
+| alıntılar | 22/22 birebir | 22/22 birebir |
+| doğrulama | `None` | `None` |
+
+Toplam AI süresi 12,2 sn. Son özet 175 görünür kelime, 1432 karakter (tek Discord mesajı).
+
+Taslakta iki hedef hata yine vardı ve denetçi ikisini de düzeltti:
+
+- *Olaya bağlı destek.* Taslak: "Takımın CS2 antrenmanı …". Son özet: "Takımın akşam antrenmanı … ile CS2 çökme ve internet
+  sorunları konuşuldu." Oyun adı antrenmandan ayrıldı ve yalnızca kayıtların açıkça desteklediği yerde (çökme sorunu) kaldı;
+  desteklenen ayrıntı silinmedi.
+- *Kesinlik / neden-sonuç.* Taslak: "sorun bozuk kurulumdan çıktı" (başlıkta "çözüldü"). Son özet: "Sorunun bozuk kurulumdan
+  kaynaklandığı düşünülüyor." Kaynaktaki temkin korundu.
+
+Denetçinin diğer değişiklikleri: taslağın düşürdüğü "driver'ı geri aldı ama yine çöktü" adımını geri getirdi; "Toro … Oykeli'yi
+önerdi" ilişkisini açık yazdı; taslaktaki desteklenmeyen iki ayrıntıyı çıkardı ("Arif'in *kulaklık* siparişi" — kayıtlarda Arif'in
+ne sipariş ettiği yazmıyor; "*kayıp* kargo") ve kaynakta açıkça bulunan "takip numarası verilmemiş" ayrıntısını ekledi.
+
+Son özetin cevap anahtarıyla karşılaştırması: geri alma işe yaramadı → temiz kurulum çözdü; ping 200 → 40 ve kalıcılığı belirsiz;
+kaptan seçimi, kadro ve planlar doğru; kişiler doğru; ters anlam, yanlış kişi, eski bilginin güncel gibi kalması, yeni
+desteklenmeyen spesifik bilgi yok; `spoilers: []`. Bu denemede koyulan ölçütlerin hepsi karşılandı. İkincil: antrenman bilgisi
+hem bir point'te hem bir planda tekrarlanıyor.
+
+Bu sonuçla aday çevrimdışı ölçütleri karşılıyor (birleştirme adayı); canlı doğrulama değildir ve genel doğruluk garantisi
+değildir. Aynı fixture'daki bir önceki deneme üretici zaman aşımıyla bitmişti: GLM isteği sekiz denemede bir kez 25 saniyeyi
+aştı; bu güvenilirlik sorusu açık duruyor.
+
 ## Kötüye kullanım koruması
 
 - Kanal/thread cooldown'u **120 sn**. Başarılı bir özet kanala gönderildikten sonra başlar, özeti kim isterse istesin
