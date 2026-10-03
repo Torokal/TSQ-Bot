@@ -23,7 +23,11 @@ public sealed record SummaryGroundedRecord(
     bool Truncated,
     string Text,
     string Plain,
-    IReadOnlyList<(int Start, int End)> SpoilerRanges);
+    IReadOnlyList<(int Start, int End)> SpoilerRanges)
+{
+    /// <summary>The message really has a hidden (Discord spoiler) part — decided from the parsed text, never from what a member typed as data.</summary>
+    public bool HasSpoiler => SpoilerRanges.Any(r => r.End > r.Start);
+}
 
 /// <summary>The grounded request's data and the counts logged about it (never the text).</summary>
 /// <param name="Text">One JSON record per line, oldest → newest.</param>
@@ -43,11 +47,20 @@ public sealed record SummaryGroundedInput(
     int ReplyCount,
     int UnavailableReplyCount,
     DateTimeOffset? From,
-    DateTimeOffset? To);
+    DateTimeOffset? To)
+{
+    /// <summary>
+    /// The window records with a hidden part, by reference: every one of them must be covered by a spoiler point of the
+    /// answer. Derived from the record map of exactly what is sent; context-only records are never required.
+    /// </summary>
+    public IReadOnlyList<string> RequiredSpoilerSources { get; } =
+        Records.Values.Where(r => !r.ContextOnly && r.HasSpoiler).Select(r => r.Ref).Order(StringComparer.Ordinal).ToList();
+}
 
 /// <summary>
 /// Builds what the grounded mode sends instead of "Name: text" lines: one safely serialized JSON record per message with a
-/// bot-made reference, the author's display name, the real Discord reply link, and flags for context-only and cut records.
+/// bot-made reference, the author's display name, the real Discord reply link, and flags for context-only and cut records
+/// and for records with a hidden (spoiler) part.
 /// Everything a member typed stays inside the JSON string <c>t</c>, so text like "[m001] Toro: …" can never become a source
 /// or a speaker. Reply targets outside the window are added as context from what this request already has (the same history
 /// read, or the message Discord returned with the reply) — one level, member messages only, at most
@@ -169,7 +182,8 @@ public static partial class SummaryGrounded
                 }
             }
 
-            var shown = RecordsDelimiter().Replace(text, "‹$1records");
+            // The delimiters of the two requests (records, and the reviewer's draft block) cannot be typed by a member.
+            var shown = RecordsDelimiter().Replace(text, "‹$1$2");
             var (plain, ranges) = PlainText(shown);
             var record = new SummaryGroundedRecord(refs[message.Id], message.Id, message.AuthorId, authors[AuthorKey(message)],
                 replyRef, replyUnavailable, contextOnly, cut, shown, plain, ranges);
@@ -276,6 +290,8 @@ public static partial class SummaryGrounded
                 json.WriteBoolean("ctx", true);
             if (record.Truncated)
                 json.WriteBoolean("cut", true);
+            if (record.HasSpoiler)
+                json.WriteBoolean("sp", true);
             json.WriteString("t", record.Text);
             json.WriteEndObject();
         }
@@ -284,8 +300,8 @@ public static partial class SummaryGrounded
     }
 
     /// <summary>A generous estimate of one record's JSON metadata (keys, reference, name, reply).</summary>
-    private const int RecordOverhead = 70;
+    private const int RecordOverhead = 80;
 
-    [GeneratedRegex(@"<(/?)\s*records", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"<(/?)\s*(records|draft)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex RecordsDelimiter();
 }

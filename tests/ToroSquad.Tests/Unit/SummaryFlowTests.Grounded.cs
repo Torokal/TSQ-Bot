@@ -25,28 +25,38 @@ public sealed partial class SummaryFlowTests
         Human(43, "Evet, şimdi oldu.") with { AuthorId = 1, AuthorName = "Monfy", ReplyToId = 42 },
     ];
 
-    /// <summary>A valid answer in the flat contract (v3): a point carries its own "t" and "e" pairs of [reference, quote]; no "s", no null.</summary>
-    private static string GroundedJson(string pointRef = "m009", string pointQuote = "şimdi oldu", int extraPoints = 0, string? extraRef = null, string? extraQuote = null) => JsonSerializer.Serialize(new
+    /// <summary>
+    /// A valid answer in contract v4: open points with their own "t" and "e" pairs of [reference, quote]; the "spoilers" list
+    /// is always there — empty, or one item quoting the given hidden part.
+    /// </summary>
+    private static string GroundedJson(string pointRef = "m009", string pointQuote = "şimdi oldu", int extraPoints = 0, string? extraRef = null, string? extraQuote = null, string? spoilerRef = null, string? spoilerQuote = null, string? pointText = null)
     {
-        v = 3,
-        main = new { t = "Oyun ayarı sorunu konuşuldu.", e = new[] { new[] { "m007", "koydum ama çalışmadı" } } },
-        points = new[]
+        var first = new
         {
-            new
-            {
-                topic = "Oyun ayarları",
-                t = "Monfy config'in önce çalışmadığını, yeniden başlatınca düzeldiğini söyledi.",
-                e = new[] { new[] { "m007", "koydum ama çalışmadı" }, new[] { pointRef, pointQuote } },
-            },
-        }.Concat(Enumerable.Range(1, extraPoints).Select(i => new
+            topic = "Oyun ayarları",
+            t = pointText ?? "Monfy config'in önce çalışmadığını, yeniden başlatınca düzeldiğini söyledi.",
+            e = new[] { new[] { "m007", "koydum ama çalışmadı" }, new[] { pointRef, pointQuote } },
+        };
+        var extra = Enumerable.Range(1, extraPoints).Select(i => new
         {
             topic = "Ek konu " + i,
             t = "Ek bilgi " + i + ".",
             e = new[] { new[] { i == extraPoints && extraRef is not null ? extraRef : "m008", i == extraPoints && extraQuote is not null ? extraQuote : "yeniden başlattın mı?" } },
-        })),
-        atmosphere = new { t = "Yardımlaşmalı bir sohbet.", e = new[] { new[] { "m008", "yeniden başlattın mı?" } } },
-    });
+        });
+        object[] spoilers = spoilerRef is null
+            ? []
+            : [new { topic = "Dizi finali", t = "Kahramanın son sahnede hayatını kaybettiği konuşuldu.", e = new[] { new[] { spoilerRef, spoilerQuote! } } }];
+        return JsonSerializer.Serialize(new
+        {
+            v = 4,
+            main = new { t = "Oyun ayarı sorunu konuşuldu.", e = new[] { new[] { "m007", "koydum ama çalışmadı" } } },
+            points = new[] { first }.Concat(extra),
+            spoilers,
+            atmosphere = new { t = "Yardımlaşmalı bir sohbet.", e = new[] { new[] { "m008", "yeniden başlattın mı?" } } },
+        });
+    }
 
+    /// <summary>A grounded world whose fake provider gives the same answer to the generator and to the reviewer.</summary>
     private static World GroundedWorld(string? answer = null, string finish = "stop")
     {
         var world = new World();
@@ -58,15 +68,15 @@ public sealed partial class SummaryFlowTests
     }
 
     [Fact]
-    public async Task Grounded_sends_records_with_reply_links_and_publishes_the_rendered_markdown_after_one_inference()
+    public async Task Grounded_sends_records_with_reply_links_and_publishes_the_rendered_markdown_after_a_draft_and_its_review()
     {
         var world = GroundedWorld();
         var responder = new FakeResponder();
 
         (await world.RunAsync(responder)).Should().Be(SummaryOutcome.Posted);
 
-        world.Ai.Calls.Should().Be(1);
-        var prompt = world.Ai.Prompts.Single();
+        world.Ai.Calls.Should().Be(2, "the draft and its review");
+        var prompt = world.Ai.Prompts.First();
         prompt.System.Should().Be(SummaryGroundedPrompt.System);
         prompt.MaxOutputTokens.Should().Be(2000);
         prompt.User.Should().Contain("""{"m":"m008","u":"Toro","re":"m007","t":"Oyunu yeniden başlattın mı?"}""");
@@ -120,11 +130,11 @@ public sealed partial class SummaryFlowTests
         world.Clock.Advance(SummaryThrottle.FailureCooldown);
         world.Ai.Respond = _ => Task.FromResult(new SummaryAiResult(SummaryAiFailure.None, GroundedJson(), "stop", SummaryAiUsage.None, TimeSpan.FromSeconds(5), 200));
         (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Posted, "no successful-summary cooldown was started");
-        world.Ai.Calls.Should().Be(2);
+        world.Ai.Calls.Should().Be(3, "the refused draft, then a draft and its review");
     }
 
     [Theory]
-    [InlineData("stop", "{\"v\":3,\"main\":{\"t\":\"ÇOK-GİZLİ-CÜMLE-4f2a")] // broken JSON
+    [InlineData("stop", "{\"v\":4,\"main\":{\"t\":\"ÇOK-GİZLİ-CÜMLE-4f2a")] // broken JSON
     [InlineData("length", null)] // complete JSON, but the model reported it was cut off
     [InlineData("stop", "Özet: ÇOK-GİZLİ-CÜMLE-4f2a")]
     public async Task Broken_or_cut_off_grounded_answers_never_reach_the_channel_or_the_logs(string finish, string? raw)
@@ -149,7 +159,8 @@ public sealed partial class SummaryFlowTests
         var logs = world.AllLogs;
         logs.Should().Contain("validation=None").And.Contain("source_count=9").And.Contain("reply_count=2").And.Contain("context_count=0")
             .And.Contain("evidence_count=4").And.Contain("message_count=9").And.Contain("input_tokens=3200")
-            .And.Contain("candidate_point_count=1").And.Contain("candidate_plan_count=0").And.Contain("shown_point_count=1").And.Contain("shown_plan_count=0");
+            .And.Contain("candidate_point_count=1").And.Contain("candidate_plan_count=0").And.Contain("shown_point_count=1").And.Contain("shown_plan_count=0")
+            .And.Contain("stage=generator").And.Contain("stage=reviewer").And.Contain("inference_count=2").And.Contain("total_ai_latency_ms=16000");
         logs.Should().NotContain(GroundedSecret).And.NotContain("config").And.NotContain("Monfy").And.NotContain("şimdi oldu")
             .And.NotContain("Oyun ayarı").And.NotContain("\"quote\"");
     }
@@ -165,9 +176,68 @@ public sealed partial class SummaryFlowTests
         var posted = string.Join("\n", responder.Public.Single());
         Regex.Count(posted, "(?m)^- ").Should().Be(6);
         posted.Should().Contain("- **Oyun ayarları:**").And.Contain("- **Ek konu 5:** Ek bilgi 5.").And.NotContain("Ek konu 6").And.NotContain("Ek konu 7");
-        world.Ai.Calls.Should().Be(1);
+        world.Ai.Calls.Should().Be(2);
         world.AllLogs.Should().Contain("validation=None").And.Contain("candidate_point_count=8").And.Contain("shown_point_count=6").And.Contain("evidence_count=11");
         (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Throttled, "a posted summary starts the channel cooldown as before");
+    }
+
+    [Fact]
+    public async Task An_answer_that_leaves_a_required_spoiler_source_out_is_refused_after_one_inference()
+    {
+        var world = GroundedWorld(); // the default answer has an empty spoilers list
+        world.Discord.Channels[Here.Value] = [.. ConfigTalk(), Human(44, "Dizi finali ||kahraman son sahnede ölüyor|| çok şaşırdım") with { AuthorId = 3, AuthorName = "Oykeli" }];
+        var responder = new FakeResponder();
+
+        (await world.RunAsync(responder)).Should().Be(SummaryOutcome.AiFailed);
+
+        var user = world.Ai.Prompts.Single().User;
+        user.Should().Contain("\"sp\":true,\"t\":\"Dizi finali <spoiler>kahraman son sahnede ölüyor</spoiler> çok şaşırdım\"");
+        user.Should().Contain("\n</records>\n\nZorunlu spoiler kaynakları: m010\n\n");
+        world.Ai.Calls.Should().Be(1, "no retry and no legacy request");
+        responder.Public.Should().BeEmpty();
+        responder.Private.Single().Should().StartWith("Özet oluşturulamadı.").And.NotContain("ölüyor");
+        world.AllLogs.Should().Contain("validation=MissingRequiredSpoiler").And.Contain("generation_mode=Grounded");
+        world.AllLogs.Should().NotContain("ölüyor").And.NotContain("kahraman");
+    }
+
+    [Fact]
+    public async Task A_spoiler_item_is_posted_under_its_own_heading_as_a_native_spoiler_without_taking_a_point_place()
+    {
+        var world = GroundedWorld();
+        world.Discord.Channels[Here.Value] = [.. ConfigTalk(), Human(44, "Dizi finali ||kahraman son sahnede ölüyor|| çok şaşırdım") with { AuthorId = 3, AuthorName = "Oykeli" }];
+        world.Ai.Respond = _ => Task.FromResult(new SummaryAiResult(SummaryAiFailure.None,
+            GroundedJson(extraPoints: 7, spoilerRef: "m010", spoilerQuote: "kahraman son sahnede ölüyor"), "stop", new SummaryAiUsage(3200, 900, 0), TimeSpan.FromSeconds(8), 200));
+        var responder = new FakeResponder();
+
+        (await world.RunAsync(responder)).Should().Be(SummaryOutcome.Posted);
+
+        var posted = string.Join("\n", responder.Public.Single());
+        Regex.Matches(posted, "(?m)^#{1,2} .+$").Select(m => m.Value)
+            .Should().Equal("# Son Mesajların Özeti", "## Ana konu", "## Önemli noktalar", "## Spoilerlar", "## Genel atmosfer");
+        posted.Should().Contain("- **Ek konu 5:** Ek bilgi 5.\n\n## Spoilerlar\n- **Dizi finali:** ||Kahramanın son sahnede hayatını kaybettiği konuşuldu.||\n\n## Genel atmosfer");
+        Regex.Count(posted, "(?m)^- ").Should().Be(7, "six points and the spoiler item: they do not compete for places");
+        Regex.Count(posted, @"\|\|").Should().Be(2);
+        posted.Should().NotContain("Ek konu 6").And.NotContain("ölüyor").And.NotContain("{").And.NotContain("m010");
+        world.Ai.Calls.Should().Be(2);
+        world.AllLogs.Should().Contain("validation=None").And.Contain("candidate_point_count=8").And.Contain("shown_point_count=6").And.Contain("spoiler_claim_count=1");
+        world.AllLogs.Should().NotContain("ölüyor").And.NotContain("hayatını kaybettiği");
+    }
+
+    [Fact]
+    public async Task A_hidden_quote_under_an_open_point_refuses_the_run()
+    {
+        var world = GroundedWorld();
+        world.Discord.Channels[Here.Value] = [.. ConfigTalk(), Human(44, "Dizi finali ||kahraman son sahnede ölüyor|| çok şaşırdım") with { AuthorId = 3, AuthorName = "Oykeli" }];
+        world.Ai.Respond = _ => Task.FromResult(new SummaryAiResult(SummaryAiFailure.None,
+            GroundedJson(extraPoints: 2, extraRef: "m010", extraQuote: "kahraman son sahnede ölüyor", spoilerRef: "m010", spoilerQuote: "son sahnede ölüyor"), "stop",
+            new SummaryAiUsage(3200, 900, 0), TimeSpan.FromSeconds(8), 200));
+        var responder = new FakeResponder();
+
+        (await world.RunAsync(responder)).Should().Be(SummaryOutcome.AiFailed);
+
+        world.Ai.Calls.Should().Be(1);
+        responder.Public.Should().BeEmpty();
+        world.AllLogs.Should().Contain("validation=SpoilerInOpenText");
     }
 
     [Fact]
@@ -200,7 +270,7 @@ public sealed partial class SummaryFlowTests
         (await world.RunAsync(responder)).Should().Be(SummaryOutcome.Posted);
 
         string.Join("\n", responder.Public.Single()).Should().Contain("## Ana konu\nOyun ayarı sorunu konuşuldu.").And.NotContain("{");
-        world.Ai.Calls.Should().Be(1);
+        world.Ai.Calls.Should().Be(2);
     }
 
     [Fact]

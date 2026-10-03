@@ -98,12 +98,14 @@ public sealed record SummaryLastRun(SummaryOutcome Outcome, SummaryAiFailure AiF
 /// before anything is read. Then a private acknowledgement and a bounded scan of the channel's history
 /// (<see cref="SummaryHistory"/>): after an earlier TSQ summary at least <see cref="SummaryOptions.MaxMessages"/> new member
 /// messages are required, a first summary needs <see cref="SummaryOptions.MinMessages"/>, and an inconclusive scan fails
-/// closed. Then the one AI request of the run, built by the generation mode read once at the start
-/// (<see cref="SummaryOptions.GenerationMode"/>): Legacy sends the "Name: text" transcript and cleans the model's Markdown
-/// up; Grounded sends records with reply links (<see cref="SummaryGrounded"/>) and publishes only an answer whose sources
-/// and quotes check out (<see cref="SummaryGroundedAnswer"/>). A failed or refused answer is never retried, no other model
-/// is tried, and one mode never falls back to the other. The summary goes out as public message(s) without pings. Only a
-/// posted summary starts the full cooldowns. Logs carry
+/// closed. Then the AI part, by the generation mode read once at the start (<see cref="SummaryOptions.GenerationMode"/>).
+/// Legacy: ONE request — the "Name: text" transcript, the model's Markdown cleaned up. Grounded: at most TWO requests —
+/// the generator model drafts from records with reply links (<see cref="SummaryGrounded"/>); only a draft whose sources and
+/// quotes check out (<see cref="SummaryGroundedAnswer"/>) is sent, with the same records, to the reviewer model for a factual
+/// review (<see cref="SummaryGroundedReviewPrompt"/>), and the reviewed answer must pass the same reader to be published.
+/// A failed or refused answer of either stage ends the run: nothing is retried, repaired or sent to a third request, and
+/// one mode never falls back to the other. The summary goes out as public message(s) without pings. Only a posted
+/// summary starts the full cooldowns. Logs carry
 /// ids, counts, token usage, latency and outcome — never message text, names, the prompt or the answer.
 /// </summary>
 public sealed partial class SummaryService(
@@ -231,14 +233,15 @@ public sealed partial class SummaryService(
         SummarySourceMessage Named(SummarySourceMessage m) => names.Authors.TryGetValue(m.AuthorId, out var name) ? m with { AuthorName = name } : m;
         var selected = scan.MemberMessages.Select(Named).ToList();
 
-        // The one request of this run, built by the mode chosen at the start (the other mode's input is never built).
+        // The first request of this run, built by the mode chosen at the start (the other mode's input is never built). Legacy:
+        // the only request. Grounded: the generator's draft, which a second and last request reviews if it passes the reader.
         SummaryPromptMessages prompt;
         SummaryGroundedInput? grounded = null;
         int messageCount, truncatedCount, droppedCount, emptyCount;
         if (mode == SummaryGenerationMode.Grounded)
         {
             grounded = SummaryGrounded.Build(selected, replyContext.Select(Named).ToList(), names.Mentions, request.Zone, settings.MaxMessages);
-            prompt = SummaryGroundedPrompt.Build(grounded, request.Zone, settings.GroundedMaxOutputTokens);
+            prompt = SummaryGroundedPrompt.Build(grounded, request.Zone, settings.GroundedMaxOutputTokens, settings.GroundedGenerator);
             (messageCount, truncatedCount, droppedCount, emptyCount) =
                 (grounded.MessageCount, grounded.TruncatedMessageCount, grounded.DroppedForSizeCount, grounded.EmptyMessageCount);
         }
@@ -261,28 +264,58 @@ public sealed partial class SummaryService(
 
         var result = await ai.SummarizeAsync(prompt, CancellationToken.None);
         string? summary = null;
+        SummaryAiResult? review = null;
+        var draftAccepted = false;
         if (result.Succeeded && grounded is null)
         {
             summary = SummaryOutput.Normalize(result.Text, cutOff: result.FinishReason == "length");
         }
         else if (result.Succeeded && grounded is not null)
         {
-            // Structural check only (sources exist, quotes are intact), on every point and plan the model wrote; then the first
-            // ones are shown. A refused answer is not repaired, retried or replaced.
-            var answer = SummaryGroundedAnswer.Read(result.Text, result.FinishReason, grounded);
-            summary = answer.Markdown;
-            LogGrounded(logger, trace, answer.Failure, grounded.Records.Count, grounded.ReplyCount, grounded.UnavailableReplyCount,
-                grounded.ContextCount, answer.EvidenceCount, answer.SpoilerClaimCount, answer.CandidatePoints, answer.CandidatePlans,
-                answer.ShownPoints, answer.ShownPlans, ids.Guild, ids.Channel);
+            // Structural check only (sources exist, quotes are intact, hidden quotes stay hidden), on every item the model wrote.
+            // A refused draft ends the run: it is not repaired, retried or reviewed.
+            var draft = SummaryGroundedAnswer.Read(result.Text, result.FinishReason, grounded);
+            LogGrounded(logger, trace, "generator", draft.Failure, grounded.Records.Count, grounded.ReplyCount, grounded.UnavailableReplyCount,
+                grounded.ContextCount, draft.EvidenceCount, draft.SpoilerClaimCount, draft.CandidatePoints, draft.CandidatePlans,
+                draft.ShownPoints, draft.ShownPlans, ids.Guild, ids.Channel);
+            draftAccepted = draft.Succeeded;
+            if (draftAccepted)
+            {
+                // The second and LAST request of the run: a factual review of the accepted draft against the same records. Its
+                // answer replaces the draft and goes through the same reader from scratch; whatever happens, there is no third.
+                review = await ai.SummarizeAsync(
+                    SummaryGroundedReviewPrompt.Build(grounded, result.Text!, request.Zone, settings.GroundedMaxOutputTokens, settings.GroundedReviewer),
+                    CancellationToken.None);
+                if (review.Succeeded)
+                {
+                    var answer = SummaryGroundedAnswer.Read(review.Text, review.FinishReason, grounded);
+                    summary = answer.Markdown;
+                    LogGrounded(logger, trace, "reviewer", answer.Failure, grounded.Records.Count, grounded.ReplyCount, grounded.UnavailableReplyCount,
+                        grounded.ContextCount, answer.EvidenceCount, answer.SpoilerClaimCount, answer.CandidatePoints, answer.CandidatePlans,
+                        answer.ShownPoints, answer.ShownPlans, ids.Guild, ids.Channel);
+                }
+            }
         }
 
-        var failure = !result.Succeeded ? result.Failure
+        // The stage that decided the outcome: a provider failure of that stage, or an answer the reader refused.
+        var decisive = review ?? result;
+        var failure = !decisive.Succeeded ? decisive.Failure
             : summary is not null ? SummaryAiFailure.None
             : grounded is null ? SummaryAiFailure.EmptyOutput : SummaryAiFailure.InvalidResponse;
-        LogInference(logger, trace, failure == SummaryAiFailure.None ? "ok" : "failed", failure, result.HttpStatus, result.ProviderError, ai.Model,
+        LogInference(logger, trace, failure == SummaryAiFailure.None ? "ok" : "failed", failure, decisive.HttpStatus, decisive.ProviderError,
+            grounded is null ? ai.Model : settings.GroundedGeneratorModel,
             messageCount, truncatedCount, droppedCount, result.Usage.InputTokens,
             result.Usage.OutputTokens, result.Usage.ReasoningTokens, result.FinishReason, (long)result.Latency.TotalMilliseconds,
             ids.Guild, ids.Channel, ids.Member, mode);
+        if (grounded is not null)
+        {
+            LogPipeline(logger, trace, review is null ? 1 : 2, draftAccepted,
+                settings.GroundedGeneratorModel, Count(result.Usage.InputTokens), Count(result.Usage.OutputTokens), Count(result.Usage.ReasoningTokens), (long)result.Latency.TotalMilliseconds,
+                review is null ? "not_called" : settings.GroundedReviewerModel,
+                review is null ? "not_called" : Count(review.Usage.InputTokens), review is null ? "not_called" : Count(review.Usage.OutputTokens),
+                review is null ? "not_called" : Count(review.Usage.ReasoningTokens), review is null ? 0 : (long)review.Latency.TotalMilliseconds,
+                (long)(result.Latency + (review?.Latency ?? TimeSpan.Zero)).TotalMilliseconds, ids.Guild, ids.Channel);
+        }
 
         if (summary is null)
         {
@@ -316,6 +349,9 @@ public sealed partial class SummaryService(
         Volatile.Write(ref _last, new SummaryLastRun(outcome, failure, clock.GetUtcNow()));
         return outcome;
     }
+
+    /// <summary>A token count as the provider reported it; "unknown" when it did not (never a made-up zero).</summary>
+    private static string Count(int? tokens) => tokens?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
 
     private string TraceLine(SummaryRequest request, string trace) => "\n" + localizer.Get(request.Language, "error.trace_code", trace);
 
@@ -386,12 +422,21 @@ public sealed partial class SummaryService(
         string model, int count, int truncated, int dropped, int? input, int? output, int? reasoning, string? finish, long latency,
         ulong guild, ulong channel, ulong invoker, SummaryGenerationMode mode);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded validation={Validation} source_count={Sources} reply_count={Replies} " +
+    [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded stage={Stage} validation={Validation} source_count={Sources} reply_count={Replies} " +
         "reply_unavailable_count={Unavailable} context_count={Context} evidence_count={Evidence} spoiler_claim_count={SpoilerClaims} " +
         "candidate_point_count={CandidatePoints} candidate_plan_count={CandidatePlans} shown_point_count={ShownPoints} shown_plan_count={ShownPlans} " +
         "guild={Guild} channel={Channel}")]
-    private static partial void LogGrounded(ILogger logger, string trace, SummaryGroundedFailure validation, int sources, int replies, int unavailable,
+    private static partial void LogGrounded(ILogger logger, string trace, string stage, SummaryGroundedFailure validation, int sources, int replies, int unavailable,
         int context, int evidence, int spoilerClaims, int candidatePoints, int candidatePlans, int shownPoints, int shownPlans, ulong guild, ulong channel);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded pipeline inference_count={Inferences} draft_accepted={DraftAccepted} " +
+        "generator_model={GeneratorModel} generator_input_tokens={GeneratorInput} generator_output_tokens={GeneratorOutput} " +
+        "generator_reasoning_tokens={GeneratorReasoning} generator_latency_ms={GeneratorLatency} " +
+        "reviewer_model={ReviewerModel} reviewer_input_tokens={ReviewerInput} reviewer_output_tokens={ReviewerOutput} " +
+        "reviewer_reasoning_tokens={ReviewerReasoning} reviewer_latency_ms={ReviewerLatency} total_ai_latency_ms={TotalLatency} guild={Guild} channel={Channel}")]
+    private static partial void LogPipeline(ILogger logger, string trace, int inferences, bool draftAccepted, string generatorModel, string generatorInput,
+        string generatorOutput, string generatorReasoning, long generatorLatency, string reviewerModel, string reviewerInput, string reviewerOutput,
+        string reviewerReasoning, long reviewerLatency, long totalLatency, ulong guild, ulong channel);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Summary [{Trace}] Discord refused the public post guild={Guild} channel={Channel}")]
     private static partial void LogPostFailed(ILogger logger, string trace, ulong guild, ulong channel);

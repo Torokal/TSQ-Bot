@@ -274,7 +274,7 @@ invite link and no global command registration. The source code is public under 
   `finish_reason=stop` but over the volume bound (16 and 10 claims; 1858 and 1341 output tokens) and were refused — NOT
   PASSED.** The second request used a strengthened volume rule; it reduced the volume but not below the bound. Grounded
   stays off in production; re-enabling needs the owner's approval. See `docs/summary/TSQ_SUMMARY.md`.
-- Flat grounded contract (2026-10-03, branch `fix/summary-grounded-flat`): contract `"v":3` — each point carries its own
+- Flat grounded contract (2026-10-03, PR #56 merged `ac55c45`, deployed; production stays Legacy): contract `"v":3` — each point carries its own
   topic, text, evidence pairs and optional spoiler topic (no nested claims); v1/v2 answers are refused. Source safety and the
   display target are separated: up to 12 candidate points and 4 candidate plans are ALL checked (sources, verbatim quotes,
   context-only, spoiler provenance, technical references); one error still refuses the whole answer, also in an item that
@@ -288,9 +288,86 @@ invite link and no global command registration. The source code is public under 
   examples; **one certainty error** (B wrote an unconfirmed item — a member bringing a mouse — as settled; verbatim quotes
   cannot catch that); spoiler display was NOT verified with a real model answer because the spoiler topics were not
   selected (no leak into open text either). Lower-priority defects: plans repeat information from points, 2–3 quotes per
-  item, output above the 1200-token optimisation target (about a third of the cap left). Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  item, output above the 1200-token optimisation target (about a third of the cap left).
+  **Targeted check C (1 request after the merge, same prompt and contract; new synthetic fixture with an invented series as
+  a main topic, an unconfirmed task and an explicit correction): 6284/1510 tokens, `stop`, `validation=None`, 30 quotes
+  verbatim, 8 candidate points → 6 shown. Operation and meaning passed (the unconfirmed task was reported as not certain;
+  the correction was kept). Spoiler display did NOT pass: the model wrote two labelled spoiler points but ranked them last
+  (not shown) and their text did not summarise the hidden content; no leak into open text.** 490 tokens (24.5 %) of the
+  cap were left. Spoiler display with a real model answer is still unverified.
+  **Narrow spoiler fix (branch `fix/summary-grounded-spoiler-selection`, NOT merged): prompt rules (a spoiler mark does not
+  mean "skip"; the hidden event is summarised in its own point; an empty meta sentence is not enough; importance follows
+  the conversation) and one selection rule (if none of the first 6 points quotes a hidden span, the first later verified
+  point that does replaces the last shown one; only verified evidence earns it). TESTED_OFFLINE (3233 tests ×3). Model
+  re-check on fixture C with the frozen candidate (1 of 2 allowed requests): 6713/1379 tokens, `stop`, but
+  `validation=Limit` (4 quotes on four texts; the limit is 3) and NO spoiler point at all — NOT PASSED; B was not run.**
+  No leak into open text. The selection rule could not be exercised by real model output.
+  **Diagnosis (2026-10-04, no code change): fixture C's input is intact (hidden spans present verbatim, not context, not cut);
+  the refused DeepSeek answer had 31/31 verbatim quotes — the refusal was the 3-quote limit only — and no spoiler point. One
+  GLM-5.3-Flash request with the same frozen prompt (no `thinking` field, `reasoning_effort: low`): valid, 5965/1244 tokens,
+  but no spoiler point either.**
+  **Required spoiler coverage + five-quote ceiling (same branch, PR #57 draft, NOT merged; contract v3 unchanged): records with
+  a hidden part carry `"sp":true`; the window records among them are listed after the records block as required spoiler
+  sources; the reader refuses an answer in which a required source is not quoted from its hidden part by a spoiler point
+  (`MissingRequiredSpoiler`), reserves the fewest covering points (max 3) among the 6 shown, and refuses coverage that needs
+  more (`SpoilerPointLimit`). `MaxEvidence` is a safety ceiling of 5 (prompt target unchanged: 1, or 2–3). TESTED_OFFLINE
+  (3249 tests ×3). Model check on fixture C, one frozen candidate, 2 requests: DeepSeek 6876/957 tokens — no spoiler point;
+  GLM 6106/1543 (145 reasoning) — summarised the hidden events correctly but under a new top-level field outside the
+  contract; both refused with `MissingRequiredSpoiler` — NOT PASSED.** The coverage check worked as a guard; it did not make
+  either model write a contract-conforming spoiler point. Spoiler display with a real, conforming model answer is still
+  unverified.
+- Grounded contract v4 (2026-10-04, branch `fix/summary-grounded-v4-spoilers`, draft PR, NOT merged; supersedes the v3
+  spoiler approach of PR #57 if accepted): hidden information is a top-level `spoilers` array (always present, `[]` when
+  nothing is hidden) instead of specially labelled points; the `s` field is gone; v1/v2/v3 answers are refused. `main`,
+  `points`, `plans`, `atmosphere` are open — a quote from a hidden span there refuses the answer; hidden evidence is valid
+  only inside `spoilers`. Every required spoiler source must be quoted from its hidden part by a `spoilers` item
+  (`MissingRequiredSpoiler`). Rendering: `## Spoilerlar` with `- **topic:** ||text||`, only when there is an item. Points
+  and spoilers do not compete for places; the v3 reservation rules and `SpoilerPointLimit` are removed. Bounds: 8 candidate
+  points (6 shown), 4 spoiler items, 4 candidate plans (2 shown), 5 quotes per text. Input metadata (`"sp":true`, required
+  sources line) kept. Legacy path, model settings, `GroundedMaxOutputTokens` 2000 and all gates unchanged. TESTED_OFFLINE
+  (3242 tests ×3). **Model check on fixture C, one frozen candidate, 2 requests: GLM-5.3-Flash PASSED the agreed criteria —
+  6138/1311 tokens, `stop`, 16.1 s, `validation=None`, 3/3 required sources covered, the hidden events really summarised and
+  rendered as `||…||` under `## Spoilerlar`, safe topic, no leak, unconfirmed task kept unconfirmed, correction kept.
+  DeepSeek V4.1 Flash: the request timed out at 25 s — no answer to evaluate (not retried).** Seen in the GLM answer: one
+  probably wrong count ("7 people"), an inferred "CS", plans repeating points, 3 quotes on most texts, summary over 2000
+  characters (two messages). One synthetic success is not a guarantee of accuracy; NOT VERIFIED_LIVE. Grounded stays off in
+  production; which model, a short supervised live window and closing PR #57 are the owner's decisions.
+- Grounded two-stage pipeline (2026-10-04, same draft PR, NOT merged): at most TWO inferences per Grounded run. Generator
+  `GroundedGeneratorModel` (default `glm-5.3-flash`, no `thinking` object, `reasoning_effort: low`) writes the v4 draft →
+  the reader → only an accepted draft goes, with the same records and required spoiler sources, to the reviewer
+  `GroundedReviewerModel` (default `deepseek-v4.1-flash`, `thinking: disabled`) for a factual review (inverted meaning,
+  later corrections/updates, changed counts, question/suggestion/opinion as fact, speaker mix-ups, anything the records do
+  not state explicitly) → the reviewed full v4 answer replaces the draft and passes the same reader from scratch → render.
+  Any failure of either stage = no public summary; no retry, no third request, no legacy fallback; the success cooldown
+  starts only after the final post. Both stages are logged separately (model, tokens as reported or `unknown`, latency,
+  total), never content. In Grounded mode the same transient transcript is therefore sent to the provider a second time
+  (documented); Legacy stays one request and production stays Legacy. TESTED_OFFLINE (3268 tests ×3). **One pipeline run
+  on fixture C: generator 6138/1212 tokens, 15.6 s, `validation=None`; reviewer 9294/1396 tokens, 7.4 s,
+  `validation=None`; total 23.0 s. The reviewer removed the game name that the records never state and tightened one
+  sentence; spoiler section and 3/3 coverage kept; unconfirmed task still unconfirmed; corrections kept — PASSED the agreed
+  criteria.** Not exercised: the outdated-count error did not occur in this draft. Not improved: plans still repeat points.
+  One synthetic run; NOT VERIFIED_LIVE.
+  **Fixtures A and B through the frozen pipeline (4 requests, no retry, no timeout): all four stages `stop` and
+  `validation=None`; A 5996/932 + 8841/1087 tokens, 12.5 s total; B 5946/1284 + 9177/1477 tokens, 13.3 s total. B: clean on
+  every critical check — two spoiler items for two productions, 2/2 coverage, real content hidden, no leak; unconfirmed
+  things kept unconfirmed; rumour, disagreement and both corrections right. A: no inversion, wrong person or stale state, but
+  two low-severity findings in the critical classes that the reviewer left untouched — the game name attached to the
+  training although the records name it only for the crash, and a hedged cause ("seems so") written as established.** The
+  reviewer changed nothing in A and removed a supported detail ("LAN") in B. Gate: operation and B met; A not fully under a
+  strict reading — merge NOT recommended by the agent; owner's decision.
+  **Reviewer rules narrowed (reviewer prompt only: support must be local to the event, hedges and causal strength are kept,
+  supported details are not removed; 3273 tests ×3) — the one re-run on fixture A could not evaluate them: the GLM generator
+  request TIMED OUT at 25 s, the reviewer was not called, nothing was retried.** The new rules are therefore untested by a
+  model. GLM latency on these fixtures ranged from 5.8 s to over 25 s (one timeout in seven requests).
+  **Final repeat on fixture A with the frozen candidate (2 requests): generator 5996/867 tokens, 5.5 s; reviewer 9388/1055
+  tokens, 6.7 s; both `stop` and `validation=None`. The draft again carried both target errors and the reviewer corrected
+  both — the game name was detached from the training and kept only for the crash it is stated for; the hedged cause is
+  hedged again — and it also restored a dropped step, removed two more unsupported details and added a supported one. No
+  regression against the answer key.** Offline gate met: PR #58 is an offline merge candidate (agent's assessment); it is
+  NOT VERIFIED_LIVE, not an approval to enable Grounded, and the generator's latency risk (one 25 s timeout in eight
+  requests) remains open. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
   Grounded stays off in production; re-enabling needs the owner's approval.
-- One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
+- One summary = one AI request in Legacy (production): OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
   `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
   `x-opencode-session` per summary; honest User-Agent `TSQBot/<version> SummaryModule`. Key only from `OPENCODE_GO_API_KEY` (redacted); without it `/ozetle`

@@ -61,6 +61,22 @@ public sealed record SummaryAiResult(
         new(failure, null, null, SummaryAiUsage.None, latency, status, providerError);
 }
 
+/// <summary>How one request tells the model about hidden reasoning. The two shapes were each checked against the gateway.</summary>
+public enum SummaryThinking
+{
+    /// <summary><c>thinking: {"type": "disabled"}</c> and no <c>reasoning_effort</c> (the DeepSeek shape).</summary>
+    Disabled = 0,
+
+    /// <summary>No <c>thinking</c> object, <c>reasoning_effort</c> only (models that list effort levels but no on/off switch).</summary>
+    EffortOnly = 1,
+}
+
+/// <summary>
+/// The model and reasoning shape of ONE request, when it is not the configured legacy request: the grounded mode's generator
+/// and reviewer each carry their own. Nothing here is a fallback: a request has exactly one profile and is sent once.
+/// </summary>
+public sealed record SummaryAiProfile(string Model, SummaryThinking Thinking, string? ReasoningEffort);
+
 /// <summary>
 /// One summary request to one configured model. Implementations send exactly one inference request per call — no retry, no
 /// fallback model — and never throw for provider problems (every failure is a <see cref="SummaryAiResult"/>).
