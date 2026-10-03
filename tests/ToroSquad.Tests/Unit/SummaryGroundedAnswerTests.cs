@@ -315,6 +315,103 @@ public sealed class SummaryGroundedAnswerTests
         Regex.Count(result.Markdown!, @"\|\|").Should().Be(2, "the shown spoiler is complete; the one left out leaves no half mark");
         result.Markdown.Should().NotContain("Gösterilmeyen").And.NotContain("dizi finali");
         result.SpoilerClaimCount.Should().Be(1, "counts what is published");
+        (result.SpoilerCandidates, result.SpoilerPromoted).Should().Be((2, false), "a sourced spoiler is already among the first six: nothing is moved");
+    }
+
+    private static readonly string[] FirstSix = ["- **Konu 1:** Bilgi 1.", "- **Konu 2:** Bilgi 2.", "- **Konu 3:** Bilgi 3.", "- **Konu 4:** Bilgi 4.", "- **Konu 5:** Bilgi 5.", "- **Konu 6:** Bilgi 6."];
+
+    [Fact]
+    public void Without_a_sourced_spoiler_candidate_selection_is_the_plain_first_six()
+    {
+        var result = Read(Answer(points: Points(9), plans: Plans(3)));
+
+        Bullets(result.Markdown!).Should().Equal(FirstSix.Concat(["- Plan 1.", "- Plan 2."]));
+        (result.SpoilerCandidates, result.SpoilerPromoted, result.SpoilerClaimCount).Should().Be((0, false, 0));
+    }
+
+    [Fact]
+    public void A_sourced_spoiler_point_below_the_cut_takes_the_last_shown_place_as_a_whole()
+    {
+        var points = Points(8);
+        points[2] = Point("Oyun ayarları", CorrectionText, Correction); // a correction among the shown ones: must stay whole and in place
+        points[6] = Point("Vinland Saga", "Finalde Thorfinn'in affettiği konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")], "Vinland Saga finali");
+
+        var result = Read(Answer(points: points, plans: Plans(3)));
+
+        Bullets(result.Markdown!).Should().Equal(
+            "- **Konu 1:** Bilgi 1.", "- **Konu 2:** Bilgi 2.", "- **Oyun ayarları:** " + CorrectionText, "- **Konu 4:** Bilgi 4.", "- **Konu 5:** Bilgi 5.",
+            "- **Vinland Saga:** **Spoiler (Vinland Saga finali):** ||Finalde Thorfinn'in affettiği konuşuldu.||",
+            "- Plan 1.", "- Plan 2.");
+        result.Markdown.Should().NotContain("Konu 6").And.NotContain("Bilgi 6", "the last ordinary point leaves as a whole — nothing of it remains");
+        result.Markdown.Should().NotContain("Konu 8");
+        Regex.Count(result.Markdown!, @"\|\|").Should().Be(2);
+        (result.ShownPoints, result.ShownPlans, result.SpoilerCandidates, result.SpoilerPromoted, result.SpoilerClaimCount).Should().Be((6, 2, 1, true, 1));
+    }
+
+    [Fact]
+    public void Of_two_sourced_spoiler_points_below_the_cut_only_the_first_is_shown()
+    {
+        var points = Points(8);
+        points[6] = Point("Dizi", "Yedinci sıradaki gizli bilgi.", [E("m005", "Thorfinn sonunda affediyor")], "dizi finali");
+        points[7] = Point("Dizi", "Sekizinci sıradaki gizli bilgi.", [E("m005", "sonunda affediyor")], "dizi finali");
+
+        var result = Read(Answer(points: points));
+
+        var bullets = Bullets(result.Markdown!);
+        bullets.Take(5).Should().Equal(FirstSix.Take(5));
+        bullets[5].Should().Be("- **Dizi:** **Spoiler (dizi finali):** ||Yedinci sıradaki gizli bilgi.||");
+        result.Markdown.Should().NotContain("Sekizinci", "one place is kept, not one per spoiler: no claim that every spoiler topic is shown");
+        (result.ShownPoints, result.SpoilerCandidates, result.SpoilerPromoted, result.SpoilerClaimCount).Should().Be((6, 2, true, 1));
+    }
+
+    [Fact]
+    public void A_spoiler_label_or_the_word_spoiler_without_hidden_evidence_earns_no_place()
+    {
+        var points = Points(8);
+        points[6] = Point("Dizi", "Dizi hakkında spoiler paylaşıldı.", [E("m005", "bence çok güzel")], "dizi finali"); // "s" given, quote from the open part
+        points[7] = Point("Spoiler", "Spoiler konuşuldu.", MainEvidence); // the word alone
+
+        var result = Read(Answer(points: points));
+
+        Bullets(result.Markdown!).Should().Equal(FirstSix);
+        (result.SpoilerCandidates, result.SpoilerPromoted).Should().Be((0, false));
+    }
+
+    [Fact]
+    public void A_point_without_the_spoiler_field_but_quoting_a_hidden_span_is_protected_and_keeps_the_place()
+    {
+        var points = Points(8);
+        points[7] = Point("Dizi", "Finalde affetme sahnesi olduğu konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")]); // no "s"
+
+        var result = Read(Answer(points: points));
+
+        Bullets(result.Markdown!)[5].Should().Be("- **Dizi:** **Spoiler (konu belirtilmemiş):** ||Finalde affetme sahnesi olduğu konuşuldu.||");
+        result.Markdown.Should().NotContain("Konu 6").And.NotContain("Konu 7");
+        (result.SpoilerCandidates, result.SpoilerPromoted).Should().Be((1, true));
+    }
+
+    [Fact]
+    public void A_broken_quote_still_refuses_everything_even_when_a_spoiler_point_would_have_been_moved_up()
+    {
+        var points = Points(9);
+        points[6] = Point("Dizi", "Finalde affetme sahnesi olduğu konuşuldu.", [E("m005", "Thorfinn sonunda affediyor")], "dizi finali");
+        points[8] = Point("Konu 9", "Gösterilmeyecek ama hatalı bilgi.", [E("m002", "Eski config koydum")]);
+
+        var result = Read(Answer(points: points));
+
+        (result.Failure, result.Markdown, result.SpoilerPromoted).Should().Be((SummaryGroundedFailure.QuoteNotFound, (string?)null, false));
+    }
+
+    [Fact]
+    public void Selection_cannot_turn_an_empty_spoiler_sentence_into_content()
+    {
+        // What the reader can check is where the quote comes from — not whether the text really summarises the hidden event.
+        var points = Points(7);
+        points[6] = Point("Dizi", "Final hakkında spoiler paylaşıldı.", [E("m005", "Thorfinn sonunda affediyor")], "dizi finali");
+
+        var markdown = Read(Answer(points: points)).Markdown!;
+
+        markdown.Should().Contain("**Spoiler (dizi finali):** ||Final hakkında spoiler paylaşıldı.||", "moved up and hidden, but exactly as empty as the model wrote it");
     }
 
     [Fact]

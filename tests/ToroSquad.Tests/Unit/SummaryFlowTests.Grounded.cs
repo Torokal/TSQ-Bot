@@ -171,6 +171,27 @@ public sealed partial class SummaryFlowTests
     }
 
     [Fact]
+    public async Task A_sourced_spoiler_point_below_the_cut_is_posted_hidden_in_the_last_shown_place()
+    {
+        var world = GroundedWorld();
+        world.Discord.Channels[Here.Value] = [.. ConfigTalk(), Human(44, "Dizi finali ||kahraman son sahnede ölüyor|| çok şaşırdım") with { AuthorId = 3, AuthorName = "Oykeli" }];
+        world.Ai.Respond = _ => Task.FromResult(new SummaryAiResult(SummaryAiFailure.None,
+            GroundedJson(extraPoints: 7, extraRef: "m010", extraQuote: "kahraman son sahnede ölüyor"), "stop", new SummaryAiUsage(3200, 900, 0), TimeSpan.FromSeconds(8), 200));
+        var responder = new FakeResponder();
+
+        (await world.RunAsync(responder)).Should().Be(SummaryOutcome.Posted);
+
+        var posted = string.Join("\n", responder.Public.Single());
+        Regex.Count(posted, "(?m)^- ").Should().Be(6);
+        posted.Should().Contain("- **Ek konu 4:** Ek bilgi 4.\n- **Ek konu 7:** **Spoiler (konu belirtilmemiş):** ||Ek bilgi 7.||");
+        posted.Should().NotContain("Ek konu 5").And.NotContain("Ek konu 6").And.NotContain("ölüyor");
+        posted.Should().StartWith("# Son Mesajların Özeti\n\n## Ana konu\n").And.Contain("## Önemli noktalar").And.Contain("## Genel atmosfer");
+        world.Ai.Calls.Should().Be(1);
+        world.AllLogs.Should().Contain("validation=None").And.Contain("candidate_point_count=8").And.Contain("shown_point_count=6").And.Contain("spoiler_claim_count=1");
+        world.AllLogs.Should().NotContain("ölüyor").And.NotContain("kahraman");
+    }
+
+    [Fact]
     public async Task A_source_error_in_a_point_that_would_not_be_shown_still_refuses_the_run_without_a_second_inference()
     {
         var world = GroundedWorld(GroundedJson(extraPoints: 7, extraRef: "m008", extraQuote: "yeniden baslattin mi?")); // the 8th point: not verbatim
