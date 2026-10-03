@@ -478,9 +478,16 @@ public sealed partial class SummaryFlowTests
     public async Task Health_reports_configuration_and_the_last_run_without_calling_the_provider()
     {
         var world = new World();
-        var health = new SummaryHealthCheck(world.Service);
+        world.Options.GroundedCanaryChannelIds = [Here.Value, Other.Value];
+        var health = new SummaryHealthCheck(world.Service, Microsoft.Extensions.Options.Options.Create(world.Options));
 
-        (await health.CheckAsync(CancellationToken.None)).Overall.Should().Be(ToroSquad.Core.Modules.HealthState.Healthy);
+        var first = await health.CheckAsync(CancellationToken.None);
+        first.Overall.Should().Be(ToroSquad.Core.Modules.HealthState.Healthy);
+        // The configured generation: the global mode, HOW MANY canary channels (never their ids) and the two grounded models.
+        var generation = first.Entries.Single(e => e.Component == SummaryHealthCheck.GenerationComponent);
+        (generation.State, generation.DetailKey).Should().Be((ToroSquad.Core.Modules.HealthState.Healthy, "summary.health.generation"));
+        generation.Args.Should().Equal("Legacy", 2, "glm-5.3-flash", "deepseek-v4.1-flash");
+        generation.Args!.Select(a => a.ToString()).Should().NotContain(Here.Value.ToString());
         world.Ai.Respond = _ => Task.FromResult(SummaryAiResult.Failed(SummaryAiFailure.RateLimited, TimeSpan.Zero, 429));
         await world.RunAsync(new FakeResponder());
         (await health.CheckAsync(CancellationToken.None)).Overall.Should().Be(ToroSquad.Core.Modules.HealthState.Degraded);

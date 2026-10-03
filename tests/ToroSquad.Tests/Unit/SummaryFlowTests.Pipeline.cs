@@ -39,9 +39,9 @@ public sealed partial class SummaryFlowTests
         world.Ai.Calls.Should().Be(2, "one draft, one review — never more");
         var (draft, review) = (world.Ai.Prompts.First(), world.Ai.Prompts.Last());
         draft.System.Should().Be(SummaryGroundedPrompt.System);
-        draft.Profile.Should().Be(new SummaryAiProfile("glm-5.3-flash", SummaryThinking.EffortOnly, "low"));
+        draft.Profile.Should().Be(new SummaryAiProfile("glm-5.3-flash", SummaryThinking.EffortOnly, "low", TimeSpan.FromSeconds(35)));
         review.System.Should().Be(SummaryGroundedReviewPrompt.System);
-        review.Profile.Should().Be(new SummaryAiProfile("deepseek-v4.1-flash", SummaryThinking.Disabled, null));
+        review.Profile.Should().Be(new SummaryAiProfile("deepseek-v4.1-flash", SummaryThinking.Disabled, null, TimeSpan.FromSeconds(25)));
         (draft.MaxOutputTokens, review.MaxOutputTokens).Should().Be((2000, 2000), "the reviewer writes a whole answer in the same contract, under the same cap");
         RecordsBlock(review.User).Should().Be(RecordsBlock(draft.User), "the reviewer sees exactly the records the generator saw").And.Contain("\"m\":\"m009\"");
         review.User.Should().Contain("\n</records>\n\n<draft>\n" + GroundedJson() + "\n</draft>\n\n").And.EndWith(SummaryGroundedReviewPrompt.OutputReminder);
@@ -63,7 +63,7 @@ public sealed partial class SummaryFlowTests
         world.Ai.Prompts.Should().OnlyContain(p => !IsReview(p));
         responder.Public.Should().BeEmpty();
         world.AllLogs.Should().Contain("failure=" + failure).And.Contain("inference_count=1").And.Contain("draft_accepted=False").And.Contain("reviewer_model=not_called")
-            .And.Contain("reviewer_input_tokens=not_called").And.NotContain("stage=reviewer");
+            .And.Contain("reviewer_input_tokens=not_called").And.Contain("failed_stage=generator").And.NotContain("stage=reviewer");
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public sealed partial class SummaryFlowTests
         responder.Public.Should().BeEmpty("the accepted draft is not published without its review");
         responder.Private.Single().Should().NotContain("{").And.NotContain("Monfy");
         world.AllLogs.Should().Contain("failure=" + failure).And.Contain("inference_count=2").And.Contain("draft_accepted=True")
-            .And.Contain("stage=generator validation=None").And.NotContain("stage=reviewer");
+            .And.Contain("stage=generator validation=None").And.Contain("failed_stage=reviewer").And.NotContain("grounded stage=reviewer", "no answer came back to validate");
 
         // Only the short failure cooldown: no summary is in the channel, so no successful-summary cooldown and no marker.
         (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Throttled);
@@ -187,10 +187,10 @@ public sealed partial class SummaryFlowTests
         (await world.RunAsync(new FakeResponder())).Should().Be(SummaryOutcome.Posted);
 
         var logs = world.AllLogs;
-        logs.Should().Contain("inference_count=2 draft_accepted=True generator_model=glm-5.3-flash generator_input_tokens=6000 generator_output_tokens=1300 " +
+        logs.Should().Contain("inference_count=2 draft_accepted=True failed_stage=none generator_model=glm-5.3-flash generator_input_tokens=6000 generator_output_tokens=1300 " +
                               "generator_reasoning_tokens=0 generator_latency_ms=16000 reviewer_model=deepseek-v4.1-flash reviewer_input_tokens=unknown " +
                               "reviewer_output_tokens=unknown reviewer_reasoning_tokens=unknown reviewer_latency_ms=9000 total_ai_latency_ms=25000");
-        logs.Should().Contain("generation_mode=Grounded").And.Contain("model=glm-5.3-flash");
+        logs.Should().Contain("generation_mode=Grounded mode_source=Global").And.Contain("model=glm-5.3-flash");
         logs.Should().NotContain(GroundedSecret).And.NotContain("config").And.NotContain("Monfy").And.NotContain("şimdi oldu").And.NotContain("Oyun ayarı")
             .And.NotContain("<draft>").And.NotContain("\"t\"");
     }
