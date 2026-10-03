@@ -267,11 +267,13 @@ public sealed partial class SummaryService(
         }
         else if (result.Succeeded && grounded is not null)
         {
-            // Structural check only (sources exist, quotes are intact). A refused answer is not repaired, retried or replaced.
+            // Structural check only (sources exist, quotes are intact), on every point and plan the model wrote; then the first
+            // ones are shown. A refused answer is not repaired, retried or replaced.
             var answer = SummaryGroundedAnswer.Read(result.Text, result.FinishReason, grounded);
             summary = answer.Markdown;
             LogGrounded(logger, trace, answer.Failure, grounded.Records.Count, grounded.ReplyCount, grounded.UnavailableReplyCount,
-                grounded.ContextCount, answer.EvidenceCount, answer.SpoilerClaimCount, ids.Guild, ids.Channel);
+                grounded.ContextCount, answer.EvidenceCount, answer.SpoilerClaimCount, answer.CandidatePoints, answer.CandidatePlans,
+                answer.ShownPoints, answer.ShownPlans, ids.Guild, ids.Channel);
         }
 
         var failure = !result.Succeeded ? result.Failure
@@ -385,9 +387,11 @@ public sealed partial class SummaryService(
         ulong guild, ulong channel, ulong invoker, SummaryGenerationMode mode);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded validation={Validation} source_count={Sources} reply_count={Replies} " +
-        "reply_unavailable_count={Unavailable} context_count={Context} evidence_count={Evidence} spoiler_claim_count={SpoilerClaims} guild={Guild} channel={Channel}")]
+        "reply_unavailable_count={Unavailable} context_count={Context} evidence_count={Evidence} spoiler_claim_count={SpoilerClaims} " +
+        "candidate_point_count={CandidatePoints} candidate_plan_count={CandidatePlans} shown_point_count={ShownPoints} shown_plan_count={ShownPlans} " +
+        "guild={Guild} channel={Channel}")]
     private static partial void LogGrounded(ILogger logger, string trace, SummaryGroundedFailure validation, int sources, int replies, int unavailable,
-        int context, int evidence, int spoilerClaims, ulong guild, ulong channel);
+        int context, int evidence, int spoilerClaims, int candidatePoints, int candidatePlans, int shownPoints, int shownPlans, ulong guild, ulong channel);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Summary [{Trace}] Discord refused the public post guild={Guild} channel={Channel}")]
     private static partial void LogPostFailed(ILogger logger, string trace, ulong guild, ulong channel);
