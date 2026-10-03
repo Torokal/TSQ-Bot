@@ -25,10 +25,11 @@ public sealed partial class SummaryFlowTests
         Human(43, "Evet, şimdi oldu.") with { AuthorId = 1, AuthorName = "Monfy", ReplyToId = 42 },
     ];
 
-    private static string GroundedJson(string claimRef = "m009", string claimQuote = "Evet, şimdi oldu.") => JsonSerializer.Serialize(new
+    /// <summary>A valid answer in the compact contract (v2): "t" text, "e" pairs of [reference, quote]; no "s", no null.</summary>
+    private static string GroundedJson(string claimRef = "m009", string claimQuote = "şimdi oldu") => JsonSerializer.Serialize(new
     {
-        version = 1,
-        main = new { text = "Oyun ayarı sorunu konuşuldu.", evidence = new[] { new { message = "m007", quote = "Eski config'i koydum ama çalışmadı." } } },
+        v = 2,
+        main = new { t = "Oyun ayarı sorunu konuşuldu.", e = new[] { new[] { "m007", "koydum ama çalışmadı" } } },
         points = new[]
         {
             new
@@ -38,15 +39,13 @@ public sealed partial class SummaryFlowTests
                 {
                     new
                     {
-                        text = "Monfy config'in önce çalışmadığını, yeniden başlatınca düzeldiğini söyledi.",
-                        evidence = new[] { new { message = "m007", quote = "koydum ama çalışmadı" }, new { message = claimRef, quote = claimQuote } },
-                        spoiler_topic = (string?)null,
+                        t = "Monfy config'in önce çalışmadığını, yeniden başlatınca düzeldiğini söyledi.",
+                        e = new[] { new[] { "m007", "koydum ama çalışmadı" }, new[] { claimRef, claimQuote } },
                     },
                 },
             },
         },
-        plans = Array.Empty<object>(),
-        atmosphere = new { text = "Yardımlaşmalı bir sohbet.", evidence = new[] { new { message = "m008", quote = "Oyunu yeniden başlattın mı?" } } },
+        atmosphere = new { t = "Yardımlaşmalı bir sohbet.", e = new[] { new[] { "m008", "yeniden başlattın mı?" } } },
     });
 
     private static World GroundedWorld(string? answer = null, string finish = "stop")
@@ -77,7 +76,7 @@ public sealed partial class SummaryFlowTests
         var posted = string.Join("\n", responder.Public.Single());
         posted.Should().StartWith("# Son Mesajların Özeti\n\n## Ana konu\nOyun ayarı sorunu konuşuldu.");
         posted.Should().Contain("- **Oyun ayarları:** Monfy config'in önce çalışmadığını, yeniden başlatınca düzeldiğini söyledi.");
-        posted.Should().NotContain("{").And.NotContain("m00").And.NotContain("quote").And.NotContain("evidence");
+        posted.Should().NotContain("{").And.NotContain("[").And.NotContain("m00").And.NotContain("\"");
         responder.Private.Should().BeEmpty();
         (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Throttled, "a posted summary starts the channel cooldown as before");
     }
@@ -102,8 +101,8 @@ public sealed partial class SummaryFlowTests
 
     [Theory]
     [InlineData("m009", "Hayır, hâlâ olmadı.", "QuoteNotFound")] // an invented quote
-    [InlineData("m008", "Evet, şimdi oldu.", "QuoteNotFound")] // a real quote tied to the wrong source
-    [InlineData("m042", "Evet, şimdi oldu.", "UnknownSource")]
+    [InlineData("m008", "şimdi oldu", "QuoteNotFound")] // a real quote tied to the wrong source
+    [InlineData("m042", "şimdi oldu", "UnknownSource")]
     public async Task A_refused_grounded_answer_is_not_published_retried_or_replaced_by_legacy(string reference, string quote, string category)
     {
         var world = GroundedWorld(GroundedJson(reference, quote));
@@ -126,7 +125,7 @@ public sealed partial class SummaryFlowTests
     }
 
     [Theory]
-    [InlineData("stop", "{\"version\":1,\"main\":{\"text\":\"ÇOK-GİZLİ-CÜMLE-4f2a")] // broken JSON
+    [InlineData("stop", "{\"v\":2,\"main\":{\"t\":\"ÇOK-GİZLİ-CÜMLE-4f2a")] // broken JSON
     [InlineData("length", null)] // complete JSON, but the model reported it was cut off
     [InlineData("stop", "Özet: ÇOK-GİZLİ-CÜMLE-4f2a")]
     public async Task Broken_or_cut_off_grounded_answers_never_reach_the_channel_or_the_logs(string finish, string? raw)

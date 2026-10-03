@@ -11,7 +11,7 @@ namespace ToroSquad.Modules.Summary.Application;
 /// </summary>
 public static class SummaryGroundedPrompt
 {
-    public const int ContractVersion = 1;
+    public const int ContractVersion = 2;
 
     /// <summary>The fixed instructions, with LF line breaks whatever the source file's line endings are.</summary>
     public static string System { get; } = SystemText.ReplaceLineEndings("\n");
@@ -42,21 +42,31 @@ public static class SummaryGroundedPrompt
         - İsimleri düz metin yaz: @, <@...>, ID veya "m" referansı yazma. Aynı ada sahip farklı kişiler "Ad (2)" biçiminde ayrılmıştır; onları tek kişi sayma.
 
         SPOILER
-        - "t" içindeki <spoiler>...</spoiler> kullanıcının gizlediği içeriktir. Spoiler'a dayanan bilgi ayrı bir claim olur ve "spoiler_topic" alanına içeriği ele vermeyen kısa bir konu yazılır (örnek: "One Piece yeni bölüm"; konu kayıtlardan anlaşılmıyorsa "konu belirtilmemiş"). Konuyu uydurma; etiketin kendisi spoiler içermesin.
-        - Spoiler içeriğini main, topic, plans veya atmosphere metnine ya da spoiler olmayan bir claim'e yazma veya paraphrase etme. Farklı yapımların spoiler'larını tek claim'de birleştirme. Spoiler olmayan bilgiyi spoiler yapma.
+        - "t" içindeki <spoiler>...</spoiler> kullanıcının gizlediği içeriktir. Spoiler'a dayanan bilgi ayrı bir claim olur ve o claim'e "s" alanı eklenir: içeriği ele vermeyen kısa bir konu (örnek: "One Piece yeni bölüm"; konu kayıtlardan anlaşılmıyorsa "konu belirtilmemiş"). Konuyu uydurma; etiketin kendisi spoiler içermesin.
+        - Spoiler içeriğini main, topic, plans veya atmosphere metnine ya da spoiler olmayan bir claim'e yazma veya paraphrase etme. Farklı yapımların spoiler'larını tek claim'de birleştirme. Spoiler olmayan bilgiyi spoiler yapma; spoiler olmayan claim'e "s" ekleme.
         - Metinlere || veya <spoiler> yazma; gizlemeyi uygulama yapar.
 
         ÇIKTI
-        - Yalnızca tek bir JSON nesnesi yaz; öncesinde veya sonrasında metin, açıklama ya da kod bloğu olmasın:
-        {"version":1,"main":{"text":"...","evidence":[{"message":"m012","quote":"..."}]},"points":[{"topic":"Kısa konu","claims":[{"text":"...","evidence":[{"message":"m012","quote":"..."}],"spoiler_topic":null}]}],"plans":[{"text":"...","evidence":[{"message":"m020","quote":"..."}],"spoiler_topic":null}],"atmosphere":{"text":"...","evidence":[{"message":"m031","quote":"..."}]}}
-        - main: sohbetin genel konusu, tek cümle. atmosphere: sohbetin tonu, tek sade cümle; birkaç mesajdan bütün kanala dramatik bir ruh hali yükleme. İkisi de yeni olay veya kişisel iddia eklemez ve spoiler olmayan alıntılara dayanır.
-        - points: 4–6 konu (gerçekten gerekirse 7; konu azsa daha az, doldurmak için bilgi uydurma). Her konuda 1–3 claim; her claim tek bir bilgiyi anlatan 1–2 cümledir, birbirinden bağımsız olayları tek cümleye doldurma. Aynı bilgiyi iki yerde tekrar etme.
-        - plans: yalnızca gerçekten kararlaştırılmış plan, karar veya yapılacak iş; yoksa []. points içinde tekrar etme.
-        - evidence: her metin için 1–3 dayanak. "message" bir kayıt referansıdır; "quote" o kaydın "t" metninden BİREBİR kopyalanmış kısa ve kesintisiz bir parçadır (yaklaşık 3–15 kelime; yazımı düzeltme, kısaltma, birleştirme, çevirme). Olumsuzluğu veya düzeltmeyi anlamından koparan alıntı seçme: "çalışmadı demiyorum" metninden yalnızca "çalışmadı" alınmaz. Yalnızca "ctx" kayıtlarına dayanan bilgi yazma.
-        - Görünen metinlerin (text ve topic) toplamı yaklaşık 150–250 kelime olsun; alıntılar buna dahil değildir. Başka alan ekleme.
+        - Yalnızca tek bir JSON nesnesi yaz; öncesinde veya sonrasında metin, açıklama ya da kod bloğu olmasın. Alanlar: "t" görünür metin, "e" dayanaklar, her dayanak ["kayıt referansı", "birebir alıntı"] çiftidir:
+        {"v":2,"main":{"t":"...","e":[["m012","..."]]},"points":[{"topic":"Kısa konu","claims":[{"t":"...","e":[["m012","..."]]}]}],"plans":[{"t":"...","e":[["m020","..."]]}],"atmosphere":{"t":"...","e":[["m031","..."]]}}
+        - main: sohbetin genel konusu, tek kısa cümle. atmosphere: sohbetin tonu, tek sade cümle; birkaç mesajdan bütün kanala dramatik bir ruh hali yükleme. İkisi de yeni olay veya kişisel iddia eklemez ve spoiler olmayan alıntılara dayanır.
+        - HACİM (kesin kural, uygulama sayar): points içindeki claim'ler ve plans birlikte EN FAZLA 8 claim. Daha fazlasını içeren cevabın TAMAMI reddedilir ve özet hiç yayımlanmaz. Bu yüzden her şeyi kapsamaya çalışma: yazmadan önce konuşmanın en önemli en fazla 8 bilgisini seç (karar ve plan, sonuçlanan sorun, düzeltme, görüş ayrılığı önce gelir) ve gerisini HİÇ yazma. Selamlaşma, şaka, yemek gibi yan sohbetler ve ikincil ayrıntılar atlanır. Aynı bilgi iki yerde geçmez.
+        - points: genellikle 4–6 konu; konu azsa daha az, doldurmak için bilgi uydurma. Her konuda TEK claim yaz; ikinci claim yalnızca aynı konuda birbirinden bağımsız iki önemli bilgi varsa ve toplam 8'i aşmıyorsa olur, üçüncü claim olmaz. Her claim tek bir bilgiyi anlatan 1–2 kısa cümledir; birbirinden bağımsız olayları sayıya uymak için tek claim'e doldurma, gereksiz ayrıntıyı çıkar ama önemli anlamı koru.
+        - plans: yalnızca gerçekten kararlaştırılmış plan, karar veya yapılacak iş, en fazla 3 ve en önemlileri; yoksa alanı hiç yazma. Plan olarak yazdığın bilgiyi points içinde tekrar etme. Planlar da 8'lik toplama dahildir (örnek: 6 konu × 1 claim + 2 plan = 8).
+        - e: main, atmosphere ve her claim için normalde TEK dayanak yeter. Yalnızca anlam birden fazla mesaja dayanıyorsa 2–3 dayanak ver: önceki sözün sonradan düzeltilmesi, anlamı yanıtladığı mesaja bağlı bir yanıt, iki kişinin görüş ayrılığı, konuşmacı / muhatap / hakkında konuşulan kişi ayrımı. Böyle bir bilgiyi tek mesaja indirgeme.
+        - Alıntı: o kaydın "t" metninden BİREBİR kopyalanmış, anlamı destekleyen en kısa kesintisiz parça; genellikle 3–12 kelime, mesajın tamamını kopyalama. "Oldu", "gelmedi" gibi anlamlı kısa alıntılar olur. Yazımı düzeltme, kısaltma, birleştirme, çevirme. Olumsuzluğu, soruyu, düzeltmeyi, koşulu veya önemli özneyi keserek anlamı değiştiren alıntı seçme: "çalışmadı demiyorum" metninden yalnızca "çalışmadı" alınmaz. Yalnızca "ctx" kayıtlarına dayanan bilgi yazma.
+        - Görünen metinlerin (t ve topic) toplamı yaklaşık 150–250 kelime olsun; alıntılar buna dahil değildir. Boş veya null alan yazma; başka alan ekleme.
         """;
 
-    /// <summary>The user message: a one-line task with the real time span of the window, then the records between delimiters.</summary>
+    /// <summary>
+    /// The volume bound once more, as the last thing the model reads: a fixed line after the records (never member text). The
+    /// first compact check answered with twice the allowed claims while the bound stood only in the system message.
+    /// </summary>
+    public const string VolumeReminder =
+        "Hatırlatma: yalnızca JSON nesnesini yaz. points içindeki claim'ler ve plans birlikte EN FAZLA 8 claim; fazlası reddedilir. " +
+        "Her şeyi kapsama: en önemli bilgileri seç, konu başına tek claim ve normalde tek kısa alıntı yaz.";
+
+    /// <summary>The user message: a one-line task with the real time span of the window, the records between delimiters, then the volume reminder.</summary>
     public static SummaryPromptMessages Build(SummaryGroundedInput input, TimeZoneInfo zone, int maxOutputTokens)
     {
         var span = input is { From: { } from, To: { } to }
@@ -64,7 +74,7 @@ public static class SummaryGroundedPrompt
             : "";
         return new SummaryPromptMessages(System,
             "Aşağıdaki Discord konuşmasını kurallara göre özetle ve yalnızca JSON nesnesini yaz." + span + "\n\n" +
-            "<records>\n" + input.Text + "\n</records>",
+            "<records>\n" + input.Text + "\n</records>\n\n" + VolumeReminder,
             maxOutputTokens);
     }
 
