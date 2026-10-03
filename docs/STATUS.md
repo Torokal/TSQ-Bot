@@ -354,7 +354,11 @@ invite link and no global command registration. The source code is public under 
   two low-severity findings in the critical classes that the reviewer left untouched — the game name attached to the
   training although the records name it only for the crash, and a hedged cause ("seems so") written as established.** The
   reviewer changed nothing in A and removed a supported detail ("LAN") in B. Gate: operation and B met; A not fully under a
-  strict reading — merge NOT recommended by the agent; owner's decision. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  strict reading — merge NOT recommended by the agent; owner's decision.
+  **Reviewer rules narrowed (reviewer prompt only: support must be local to the event, hedges and causal strength are kept,
+  supported details are not removed; 3273 tests ×3) — the one re-run on fixture A could not evaluate them: the GLM generator
+  request TIMED OUT at 25 s, the reviewer was not called, nothing was retried.** The new rules are therefore untested by a
+  model. GLM latency on these fixtures ranged from 5.8 s to over 25 s (one timeout in seven requests). Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request in Legacy (production): OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,

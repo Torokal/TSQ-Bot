@@ -600,6 +600,22 @@ sınıfta iki düşük şiddetli gözlem kaldı ve denetçi ikisine de dokunmad�
 aşaması bu iki denemede hiçbir hatayı düzeltmedi; C'de bir çıkarımı kaldırmıştı. Üç sentetik örnek genel doğruluk garantisi
 değildir; canlı doğrulama yapılmadı.
 
+**Denetçi kuralları daraltıldı; A yeniden denemesi yapılamadı (2026-10-04).** A'da denetçinin kaçırdığı iki gözlem için yalnızca
+denetçi prompt'una dört kısa kural eklendi (üretici prompt'u, v4 sözleşmesi, okuyucu, modeller, sınırlar değişmedi):
+(1) *olaya bağlı destek* — bir bilginin kayıtların herhangi bir yerinde geçmesi yetmez; spesifik bir oyun, ürün, kişi, mekân,
+neden veya sonucun o maddedeki olayla ilişkisi kayıtlarda açıkça kurulmuş olmalıdır (başka bir konuda geçmesi, yanıt bağlantısı
+veya zaman yakınlığı bu ilişkiyi kurmaz); (2) *kesinlik* — "galiba", "öyle görünüyor", "belki", "bence" gibi belirsizlikle
+söylenen bilgi, sonradan açık doğrulama gelmediyse daha kesin yazılamaz; (3) *neden-sonuç* — "kaynaklandı", "bundan çıktı" gibi
+kesin ifadeler ancak kayıtlar nedeni belirsizlik olmadan söylüyorsa kalır; (4) *koruma* — kaynakta açıkça bulunan ve olayla
+bağlantılı bir ayrıntı yalnızca ihtiyat için silinmez. Örnekler uydurmadır; fixture içeriği prompt'ta yoktur. Bunlar prompt
+düzeyinde kurallardır: doğrulayıcı bir alıntının maddenin spesifik kısmını gerçekten desteklediğini anlamsal olarak kanıtlayamaz.
+
+Tek A pipeline denemesi: **üretici (GLM-5.3-Flash) isteği 25 saniyede zaman aşımına uğradı; denetçi çağrılmadı** (hat tasarlandığı
+gibi durdu, hiçbir şey yayımlanmazdı). Yeniden istek atılmadı, zaman aşımı artırılmadı. Sonuç: yeni denetçi kuralları gerçek bir
+model cevabıyla **sınanmadı**; A'daki iki gözlemin giderilip giderilmediği bilinmiyor. Ayrı bir bulgu olarak: aynı GLM isteği bu
+fixture'larda 5,8 sn ile 25 sn üstü arasında değişti (yedi istekte bir zaman aşımı); 25 saniyelik sınırla Grounded'in ilk aşaması
+kendi başına başarısız olabiliyor.
+
 ## Kötüye kullanım koruması
 
 - Kanal/thread cooldown'u **120 sn**. Başarılı bir özet kanala gönderildikten sonra başlar, özeti kim isterse istesin
