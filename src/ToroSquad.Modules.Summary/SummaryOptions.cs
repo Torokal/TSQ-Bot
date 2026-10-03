@@ -17,6 +17,22 @@ public enum SummaryGenerationMode
     Grounded = 1,
 }
 
+/// <summary>Why a run uses the mode it uses (for logs and /bot status).</summary>
+public enum SummaryModeSource
+{
+    /// <summary>The configured global mode is Legacy and the channel is not a canary: the legacy request.</summary>
+    Legacy = 0,
+
+    /// <summary><see cref="SummaryOptions.GenerationMode"/> is Grounded: every channel.</summary>
+    Global = 1,
+
+    /// <summary>The global mode is Legacy, but this exact channel or thread is listed as a grounded canary.</summary>
+    Canary = 2,
+}
+
+/// <summary>The mode of one run and where it came from. Decided once, at the start of the run.</summary>
+public readonly record struct SummaryModeDecision(SummaryGenerationMode Mode, SummaryModeSource Source);
+
 /// <summary>
 /// Section "Summary". Nothing here is a secret: the API key comes only from <see cref="ApiKeyVariable"/> (environment
 /// variable, or user-secrets in development). Defaults are the production values; every value is validated at startup.
@@ -53,12 +69,49 @@ public sealed class SummaryOptions
     /// </summary>
     public string GroundedReviewerModel { get; set; } = "deepseek-v4.1-flash";
 
-    public SummaryAiProfile GroundedGenerator => new(GroundedGeneratorModel, SummaryThinking.EffortOnly, GroundedGeneratorReasoningEffort);
+    /// <summary>
+    /// The whole grounded generator request (connect + answer). Longer than <see cref="RequestTimeoutSeconds"/>: the same
+    /// generator request took between 5 and more than 25 seconds in the checks. One request, never a retry.
+    /// </summary>
+    public int GroundedGeneratorTimeoutSeconds { get; set; } = 35;
 
-    public SummaryAiProfile GroundedReviewer => new(GroundedReviewerModel, SummaryThinking.Disabled, null);
+    /// <summary>The whole grounded reviewer request (connect + answer).</summary>
+    public int GroundedReviewerTimeoutSeconds { get; set; } = 25;
+
+    /// <summary>
+    /// Grounded canary: the EXACT channel or thread ids in which /ozetle uses the grounded mode while the global
+    /// <see cref="GenerationMode"/> stays Legacy. Empty (the default) means no canary. A thread is its own id: a listed
+    /// parent channel does not make its threads grounded, and there is no category or guild-wide inheritance. When the
+    /// global mode is Grounded this list changes nothing.
+    /// </summary>
+    public ulong[] GroundedCanaryChannelIds { get; set; } = [];
+
+    public TimeSpan GroundedGeneratorTimeout => TimeSpan.FromSeconds(GroundedGeneratorTimeoutSeconds);
+
+    public TimeSpan GroundedReviewerTimeout => TimeSpan.FromSeconds(GroundedReviewerTimeoutSeconds);
+
+    /// <summary>The longest single request of any mode (the HTTP client's backstop must not cut a request short).</summary>
+    public TimeSpan LongestRequestTimeout =>
+        TimeSpan.FromSeconds(Math.Max(RequestTimeoutSeconds, Math.Max(GroundedGeneratorTimeoutSeconds, GroundedReviewerTimeoutSeconds)));
+
+    public SummaryAiProfile GroundedGenerator => new(GroundedGeneratorModel, SummaryThinking.EffortOnly, GroundedGeneratorReasoningEffort, GroundedGeneratorTimeout);
+
+    public SummaryAiProfile GroundedReviewer => new(GroundedReviewerModel, SummaryThinking.Disabled, null, GroundedReviewerTimeout);
+
+    /// <summary>
+    /// The mode of a run in <paramref name="channelId"/> (the interaction's own channel or thread id). Global Grounded wins
+    /// everywhere; otherwise an exact canary match is Grounded; otherwise Legacy. Pure: no state, no clock.
+    /// </summary>
+    public SummaryModeDecision ResolveGenerationMode(ulong channelId) =>
+        GenerationMode == SummaryGenerationMode.Grounded ? new(SummaryGenerationMode.Grounded, SummaryModeSource.Global)
+        : Array.IndexOf(GroundedCanaryChannelIds, channelId) >= 0 ? new(SummaryGenerationMode.Grounded, SummaryModeSource.Canary)
+        : new(SummaryGenerationMode.Legacy, SummaryModeSource.Legacy);
 
     /// <summary>The OpenCode Go API key: an environment variable (Railway Variables), or a user-secrets key of the same name.</summary>
     public const string ApiKeyVariable = "OPENCODE_GO_API_KEY";
+
+    /// <summary>A canary is a short explicit list, not a rollout system.</summary>
+    public const int MaxCanaryChannels = 20;
 
     /// <summary>Smallest id Discord can issue (timestamp bits above the 22 worker/process/increment bits).</summary>
     public const ulong MinSnowflake = 1UL << 22;
@@ -171,6 +224,12 @@ public sealed class SummaryOptions
                 errors.Add($"{Section}:{name} must be a model id without spaces (got '{model}')");
         }
 
+        if (GroundedGeneratorTimeoutSeconds is < 5 or > 120)
+            errors.Add($"{Section}:GroundedGeneratorTimeoutSeconds must be 5-120 (got {GroundedGeneratorTimeoutSeconds})");
+        if (GroundedReviewerTimeoutSeconds is < 5 or > 120)
+            errors.Add($"{Section}:GroundedReviewerTimeoutSeconds must be 5-120 (got {GroundedReviewerTimeoutSeconds})");
+        if (GroundedCanaryChannelIds.Length > MaxCanaryChannels || GroundedCanaryChannelIds.Any(id => id is < MinSnowflake or > long.MaxValue))
+            errors.Add($"{Section}:GroundedCanaryChannelIds must contain at most {MaxCanaryChannels} Discord channel or thread ids (got {string.Join(", ", GroundedCanaryChannelIds)})");
         if (GroundedGeneratorReasoningEffort is not ("low" or "high" or "max"))
             errors.Add($"{Section}:GroundedGeneratorReasoningEffort must be low, high or max (got '{GroundedGeneratorReasoningEffort}')");
         if (AllowedRoleIds.Any(id => id is < MinSnowflake or > long.MaxValue))

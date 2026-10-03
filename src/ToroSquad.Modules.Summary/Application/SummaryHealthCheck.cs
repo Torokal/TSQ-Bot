@@ -1,15 +1,18 @@
+using Microsoft.Extensions.Options;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Modules;
 
 namespace ToroSquad.Modules.Summary.Application;
 
 /// <summary>
-/// /bot status line: whether the API key is configured and how the last /ozetle ended. Reads remembered state only — never
-/// calls the AI provider (a status check must not spend quota).
+/// /bot status lines: whether the API key is configured and how the last /ozetle ended, and the configured generation —
+/// the global mode, how many canary channels there are (never their ids) and the two grounded models. Reads configuration
+/// and remembered state only — never calls the AI provider (a status check must not spend quota).
 /// </summary>
-public sealed class SummaryHealthCheck(SummaryService summaries) : IModuleHealthCheck
+public sealed class SummaryHealthCheck(SummaryService summaries, IOptions<SummaryOptions> options) : IModuleHealthCheck
 {
     public const string Component = "summary.health.component";
+    public const string GenerationComponent = "summary.health.generation_component";
 
     public ModuleId Module => SummaryModule.ModuleIdTyped;
 
@@ -26,6 +29,9 @@ public sealed class SummaryHealthCheck(SummaryService summaries) : IModuleHealth
                     "summary.health.discord_failed", [DiscordText.Timestamp(last.At, 'R')]),
                 var last => new HealthEntry(Component, HealthState.Healthy, "summary.health.ok", [DiscordText.Timestamp(last.At, 'R')]),
             };
-        return Task.FromResult(new ModuleHealthReport(Module, [entry]));
+        var settings = options.Value;
+        var generation = new HealthEntry(GenerationComponent, HealthState.Healthy, "summary.health.generation",
+            [settings.GenerationMode.ToString(), settings.GroundedCanaryChannelIds.Length, settings.GroundedGeneratorModel, settings.GroundedReviewerModel]);
+        return Task.FromResult(new ModuleHealthReport(Module, [entry, generation]));
     }
 }
