@@ -27,6 +27,8 @@ public sealed record SummaryAttachment(string FileName, string? ContentType);
 /// One message as Discord returned it (SDK-free). <paramref name="Content"/> is the raw text with Discord markup
 /// (mentions, custom emoji, timestamps); <see cref="SummaryTranscript"/> makes it readable. <paramref name="FromThisBot"/>:
 /// written by TSQ Bot itself (its own user id) — the only author whose summary title marks an earlier summary.
+/// <paramref name="ReplyToId"/>: the message this one is a real Discord reply to (same channel), and
+/// <paramref name="ReplyTarget"/> that message when Discord returned it together with the reply (no extra read).
 /// </summary>
 public sealed record SummarySourceMessage(
     ulong Id,
@@ -40,7 +42,9 @@ public sealed record SummarySourceMessage(
     bool HasPoll = false,
     bool HasEmbeds = false,
     ulong AuthorId = 0,
-    bool FromThisBot = false);
+    bool FromThisBot = false,
+    ulong? ReplyToId = null,
+    SummarySourceMessage? ReplyTarget = null);
 
 /// <summary>Display names for the ids that appear in message markup (users, roles, channels).</summary>
 public sealed record SummaryMentionNames(
@@ -124,17 +128,37 @@ public static partial class SummaryTranscript
     }
 
     /// <summary>One message as a single transcript line body (without the name); empty when there is nothing to show.</summary>
-    public static (string Text, bool Truncated) Normalize(SummarySourceMessage message, SummaryMentionNames names, TimeZoneInfo zone)
+    public static (string Text, bool Truncated) Normalize(SummarySourceMessage message, SummaryMentionNames names, TimeZoneInfo zone) =>
+        Normalize(message, names, zone, MaxMessageChars, inlineMarker: true, preferSentenceEnd: false);
+
+    /// <summary>
+    /// The same normalization with a chosen length limit. <paramref name="inlineMarker"/>: append
+    /// <see cref="TruncatedMarker"/> to a cut text (the legacy transcript); otherwise the caller flags the record.
+    /// <paramref name="preferSentenceEnd"/>: cut after the last complete sentence when one ends in the second half of the limit.
+    /// </summary>
+    public static (string Text, bool Truncated) Normalize(
+        SummarySourceMessage message, SummaryMentionNames names, TimeZoneInfo zone, int maxChars, bool inlineMarker, bool preferSentenceEnd)
     {
         var text = ReadableText(message.Content, names, zone);
         var truncated = false;
-        if (text.Length > MaxMessageChars)
+        if (text.Length > maxChars)
         {
-            var cut = text.LastIndexOf(' ', MaxMessageChars);
-            text = text[..(cut > MaxMessageChars / 2 ? cut : MaxMessageChars)].TrimEnd();
+            var cut = text.LastIndexOf(' ', maxChars);
+            if (preferSentenceEnd)
+            {
+                var head = text.AsSpan(0, maxChars);
+                var sentence = Math.Max(
+                    Math.Max(head.LastIndexOf(". ", StringComparison.Ordinal), head.LastIndexOf("! ", StringComparison.Ordinal)),
+                    Math.Max(head.LastIndexOf("? ", StringComparison.Ordinal), head.LastIndexOf("… ", StringComparison.Ordinal)));
+                if (sentence + 1 > maxChars / 2)
+                    cut = sentence + 1;
+            }
+
+            text = text[..(cut > maxChars / 2 ? cut : maxChars)].TrimEnd();
             if (Count(text, SpoilerOpen) > Count(text, SpoilerClose))
                 text += SpoilerClose; // cut inside a spoiler: it stays marked as one
-            text += " " + TruncatedMarker;
+            if (inlineMarker)
+                text += " " + TruncatedMarker;
             truncated = true;
         }
 
@@ -203,7 +227,7 @@ public static partial class SummaryTranscript
         return plain.Length == 0 ? FallbackName : plain;
     }
 
-    private static int Count(string text, string value)
+    internal static int Count(string text, string value)
     {
         var count = 0;
         for (var at = text.IndexOf(value, StringComparison.Ordinal); at >= 0; at = text.IndexOf(value, at + value.Length, StringComparison.Ordinal))

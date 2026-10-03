@@ -29,10 +29,13 @@ public enum SummaryHistoryOutcome
 
 /// <summary>
 /// The result of one scan. <paramref name="MemberMessages"/> are the member messages newer than any earlier summary, newest
-/// first (at most the required number).
+/// first (at most the required number). <see cref="Read"/> is every message of the pages this scan read (any kind) — what
+/// a reply's older target is looked up in, without another Discord read.
 /// </summary>
 public sealed record SummaryHistoryScan(SummaryHistoryOutcome Outcome, IReadOnlyList<SummarySourceMessage> MemberMessages, int PageCount)
 {
+    public IReadOnlyDictionary<ulong, SummarySourceMessage> Read { get; init; } = new Dictionary<ulong, SummarySourceMessage>();
+
     public int EligibleCount => MemberMessages.Count;
 
     public bool MarkerFound => Outcome == SummaryHistoryOutcome.AfterEarlierSummary;
@@ -65,29 +68,34 @@ public static class SummaryHistory
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(required, 1);
         var members = new List<SummarySourceMessage>(required);
+        var read = new Dictionary<ulong, SummarySourceMessage>();
+        SummaryHistoryScan Done(SummaryHistoryOutcome outcome, int pageCount) => new(outcome, members, pageCount) { Read = read };
         ulong? before = null;
         for (var pages = 1; pages <= MaxPages; pages++)
         {
             var page = await discord.ReadHistoryPageAsync(guild, channel, before, cancellationToken);
             if (page.Status != SummaryFetchStatus.Ok)
-                return new(page.Status == SummaryFetchStatus.NoAccess ? SummaryHistoryOutcome.NoAccess : SummaryHistoryOutcome.Failed, members, pages);
+                return Done(page.Status == SummaryFetchStatus.NoAccess ? SummaryHistoryOutcome.NoAccess : SummaryHistoryOutcome.Failed, pages);
+
+            foreach (var message in page.Messages)
+                read[message.Id] = message;
 
             foreach (var message in page.Messages.OrderByDescending(m => m.Timestamp).ThenByDescending(m => m.Id))
             {
                 if (IsSummaryMarker(message))
-                    return new(SummaryHistoryOutcome.AfterEarlierSummary, members, pages);
+                    return Done(SummaryHistoryOutcome.AfterEarlierSummary, pages);
                 if (message.Kind != SummaryAuthorKind.Member)
                     continue;
                 members.Add(message);
                 if (members.Count >= required)
-                    return new(SummaryHistoryOutcome.Enough, members, pages);
+                    return Done(SummaryHistoryOutcome.Enough, pages);
             }
 
             if (page.ReachedStart || page.Messages.Count == 0)
-                return new(SummaryHistoryOutcome.WholeHistory, members, pages);
+                return Done(SummaryHistoryOutcome.WholeHistory, pages);
             before = page.Messages.Min(m => m.Id);
         }
 
-        return new(SummaryHistoryOutcome.LimitHit, members, MaxPages);
+        return Done(SummaryHistoryOutcome.LimitHit, MaxPages);
     }
 }

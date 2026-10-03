@@ -98,8 +98,12 @@ public sealed record SummaryLastRun(SummaryOutcome Outcome, SummaryAiFailure AiF
 /// before anything is read. Then a private acknowledgement and a bounded scan of the channel's history
 /// (<see cref="SummaryHistory"/>): after an earlier TSQ summary at least <see cref="SummaryOptions.MaxMessages"/> new member
 /// messages are required, a first summary needs <see cref="SummaryOptions.MinMessages"/>, and an inconclusive scan fails
-/// closed. Then the transcript, the AI request (a failure is never retried and no other model is tried), light deterministic
-/// clean-up, and the summary as public message(s) without pings. Only a posted summary starts the full cooldowns. Logs carry
+/// closed. Then the one AI request of the run, built by the generation mode read once at the start
+/// (<see cref="SummaryOptions.GenerationMode"/>): Legacy sends the "Name: text" transcript and cleans the model's Markdown
+/// up; Grounded sends records with reply links (<see cref="SummaryGrounded"/>) and publishes only an answer whose sources
+/// and quotes check out (<see cref="SummaryGroundedAnswer"/>). A failed or refused answer is never retried, no other model
+/// is tried, and one mode never falls back to the other. The summary goes out as public message(s) without pings. Only a
+/// posted summary starts the full cooldowns. Logs carry
 /// ids, counts, token usage, latency and outcome — never message text, names, the prompt or the answer.
 /// </summary>
 public sealed partial class SummaryService(
@@ -128,8 +132,12 @@ public sealed partial class SummaryService(
         var trace = TraceCodes.New();
         string T(string key, params object?[] args) => localizer.Get(request.Language, key, args);
 
+        // The settings (the generation mode among them) are taken once: one run never mixes two modes.
+        var settings = options.Value;
+        var mode = settings.GenerationMode;
+
         // Roles first: from the interaction payload, before anything is read or sent anywhere. Any ONE role is enough.
-        var allowedRoles = options.Value.EffectiveAllowedRoleIds;
+        var allowedRoles = settings.EffectiveAllowedRoleIds;
         if (!allowedRoles.Any(request.MemberRoles.Contains))
         {
             LogRefused(logger, trace, SummaryOutcome.RoleMissing, request.Guild.Value, request.Channel.Value, request.Member.Value);
@@ -171,7 +179,7 @@ public sealed partial class SummaryService(
         using (ticket)
         {
             await responder.DeferPrivateAsync();
-            return await SummarizeAsync(request, discord, responder, ticket, trace);
+            return await SummarizeAsync(request, discord, responder, ticket, trace, settings, mode);
         }
 
         async Task<SummaryOutcome> RefuseAsync(SummaryOutcome outcome, string key)
@@ -183,21 +191,27 @@ public sealed partial class SummaryService(
     }
 
     private async Task<SummaryOutcome> SummarizeAsync(
-        SummaryRequest request, ISummaryDiscord discord, ISummaryResponder responder, SummaryThrottle.Ticket ticket, string trace)
+        SummaryRequest request, ISummaryDiscord discord, ISummaryResponder responder, SummaryThrottle.Ticket ticket, string trace,
+        SummaryOptions settings, SummaryGenerationMode mode)
     {
         string T(string key, params object?[] args) => localizer.Get(request.Language, key, args);
-        var settings = options.Value;
         var ids = (Guild: request.Guild.Value, Channel: request.Channel.Value, Member: request.Member.Value);
 
         SummaryHistoryScan scan;
         SummaryNames names = SummaryNames.Empty;
+        IReadOnlyList<SummarySourceMessage> replyContext = [];
         using (var deadline = new CancellationTokenSource(FetchTimeout, clock))
         {
             scan = await SummaryHistory.ScanAsync(discord, request.Guild, request.Channel, settings.MaxMessages, deadline.Token);
             LogHistory(logger, trace, scan.Outcome, scan.PageCount, scan.EligibleCount, scan.MarkerFound, scan.Exhausted, scan.LimitHit,
                 ids.Guild, ids.Channel, ids.Member);
             if (scan.Outcome is SummaryHistoryOutcome.Enough or SummaryHistoryOutcome.WholeHistory)
-                names = await discord.ResolveNamesAsync(request.Guild, scan.MemberMessages, deadline.Token);
+            {
+                // Grounded: older reply targets come from what this scan already read (or what Discord sent with the reply).
+                if (mode == SummaryGenerationMode.Grounded)
+                    replyContext = SummaryGrounded.ContextCandidates(scan.MemberMessages, scan.Read);
+                names = await discord.ResolveNamesAsync(request.Guild, [.. scan.MemberMessages, .. replyContext], deadline.Token);
+            }
         }
 
         switch (scan.Outcome)
@@ -214,26 +228,59 @@ public sealed partial class SummaryService(
                 return SummaryOutcome.NotEnoughNewMessages;
         }
 
-        var selected = scan.MemberMessages
-            .Select(m => names.Authors.TryGetValue(m.AuthorId, out var name) ? m with { AuthorName = name } : m)
-            .ToList();
-        var transcript = SummaryTranscript.Build(selected, names.Mentions, request.Zone, settings.MaxMessages);
-        if (transcript.MessageCount < settings.MinMessages)
+        SummarySourceMessage Named(SummarySourceMessage m) => names.Authors.TryGetValue(m.AuthorId, out var name) ? m with { AuthorName = name } : m;
+        var selected = scan.MemberMessages.Select(Named).ToList();
+
+        // The one request of this run, built by the mode chosen at the start (the other mode's input is never built).
+        SummaryPromptMessages prompt;
+        SummaryGroundedInput? grounded = null;
+        int messageCount, truncatedCount, droppedCount, emptyCount;
+        if (mode == SummaryGenerationMode.Grounded)
+        {
+            grounded = SummaryGrounded.Build(selected, replyContext.Select(Named).ToList(), names.Mentions, request.Zone, settings.MaxMessages);
+            prompt = SummaryGroundedPrompt.Build(grounded, request.Zone, settings.GroundedMaxOutputTokens);
+            (messageCount, truncatedCount, droppedCount, emptyCount) =
+                (grounded.MessageCount, grounded.TruncatedMessageCount, grounded.DroppedForSizeCount, grounded.EmptyMessageCount);
+        }
+        else
+        {
+            var transcript = SummaryTranscript.Build(selected, names.Mentions, request.Zone, settings.MaxMessages);
+            prompt = SummaryPrompt.Build(transcript.Text);
+            (messageCount, truncatedCount, droppedCount, emptyCount) =
+                (transcript.MessageCount, transcript.TruncatedMessageCount, transcript.DroppedForSizeCount, transcript.EmptyMessageCount);
+        }
+
+        if (messageCount < settings.MinMessages)
         {
             // Normal member messages that came back completely empty: Discord withholds content without Message Content access.
-            var withheld = transcript.EmptyMessageCount > 0 && await discord.HasMessageContentAccessAsync() == false;
-            LogTooFew(logger, trace, transcript.MessageCount, transcript.EmptyMessageCount, withheld, ids.Guild, ids.Channel, ids.Member);
+            var withheld = emptyCount > 0 && await discord.HasMessageContentAccessAsync() == false;
+            LogTooFew(logger, trace, messageCount, emptyCount, withheld, ids.Guild, ids.Channel, ids.Member);
             await responder.ReplyPrivateAsync(withheld ? T("summary.content_unavailable") : T("summary.not_enough", settings.MinMessages));
             return Remember(withheld ? SummaryOutcome.ContentUnavailable : SummaryOutcome.NotEnoughMessages);
         }
 
-        var result = await ai.SummarizeAsync(SummaryPrompt.Build(transcript.Text), CancellationToken.None);
-        var summary = result.Succeeded ? SummaryOutput.Normalize(result.Text, cutOff: result.FinishReason == "length") : null;
-        var failure = result.Succeeded && summary is null ? SummaryAiFailure.EmptyOutput : result.Failure;
+        var result = await ai.SummarizeAsync(prompt, CancellationToken.None);
+        string? summary = null;
+        if (result.Succeeded && grounded is null)
+        {
+            summary = SummaryOutput.Normalize(result.Text, cutOff: result.FinishReason == "length");
+        }
+        else if (result.Succeeded && grounded is not null)
+        {
+            // Structural check only (sources exist, quotes are intact). A refused answer is not repaired, retried or replaced.
+            var answer = SummaryGroundedAnswer.Read(result.Text, result.FinishReason, grounded);
+            summary = answer.Markdown;
+            LogGrounded(logger, trace, answer.Failure, grounded.Records.Count, grounded.ReplyCount, grounded.UnavailableReplyCount,
+                grounded.ContextCount, answer.EvidenceCount, answer.SpoilerClaimCount, ids.Guild, ids.Channel);
+        }
+
+        var failure = !result.Succeeded ? result.Failure
+            : summary is not null ? SummaryAiFailure.None
+            : grounded is null ? SummaryAiFailure.EmptyOutput : SummaryAiFailure.InvalidResponse;
         LogInference(logger, trace, failure == SummaryAiFailure.None ? "ok" : "failed", failure, result.HttpStatus, result.ProviderError, ai.Model,
-            transcript.MessageCount, transcript.TruncatedMessageCount, transcript.DroppedForSizeCount, result.Usage.InputTokens,
+            messageCount, truncatedCount, droppedCount, result.Usage.InputTokens,
             result.Usage.OutputTokens, result.Usage.ReasoningTokens, result.FinishReason, (long)result.Latency.TotalMilliseconds,
-            ids.Guild, ids.Channel, ids.Member);
+            ids.Guild, ids.Channel, ids.Member, mode);
 
         if (summary is null)
         {
@@ -331,10 +378,16 @@ public sealed partial class SummaryService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] inference {Result} failure={Failure} status={Status} provider_error={ProviderError} " +
         "model={Model} message_count={Count} truncated_message_count={Truncated} dropped_message_count={Dropped} input_tokens={Input} " +
-        "output_tokens={Output} reasoning_tokens={Reasoning} finish_reason={Finish} latency_ms={Latency} guild={Guild} channel={Channel} invoker={Invoker}")]
+        "output_tokens={Output} reasoning_tokens={Reasoning} finish_reason={Finish} latency_ms={Latency} guild={Guild} channel={Channel} invoker={Invoker} " +
+        "generation_mode={Mode}")]
     private static partial void LogInference(ILogger logger, string trace, string result, SummaryAiFailure failure, int? status, string? providerError,
         string model, int count, int truncated, int dropped, int? input, int? output, int? reasoning, string? finish, long latency,
-        ulong guild, ulong channel, ulong invoker);
+        ulong guild, ulong channel, ulong invoker, SummaryGenerationMode mode);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded validation={Validation} source_count={Sources} reply_count={Replies} " +
+        "reply_unavailable_count={Unavailable} context_count={Context} evidence_count={Evidence} spoiler_claim_count={SpoilerClaims} guild={Guild} channel={Channel}")]
+    private static partial void LogGrounded(ILogger logger, string trace, SummaryGroundedFailure validation, int sources, int replies, int unavailable,
+        int context, int evidence, int spoilerClaims, ulong guild, ulong channel);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Summary [{Trace}] Discord refused the public post guild={Guild} channel={Channel}")]
     private static partial void LogPostFailed(ILogger logger, string trace, ulong guild, ulong channel);

@@ -103,7 +103,7 @@ public sealed class OpenCodeSummaryAiClient(
             json.WriteString("content", prompt.User);
             json.WriteEndObject();
             json.WriteEndArray();
-            json.WriteNumber("max_tokens", settings.MaxOutputTokens);
+            json.WriteNumber("max_tokens", prompt.MaxOutputTokens ?? settings.MaxOutputTokens);
             json.WriteNumber("temperature", settings.Temperature);
             json.WriteNumber("top_p", settings.TopP);
             // Thinking off is thinking.type=disabled ALONE: reasoning_effort is a thinking-mode setting, and sending both was a
