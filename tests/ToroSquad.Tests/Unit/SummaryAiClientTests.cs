@@ -224,6 +224,36 @@ public sealed class SummaryAiClientTests
         (await client.SummarizeAsync(Prompt, CancellationToken.None)).Failure.Should().Be(SummaryAiFailure.InvalidResponse);
     }
 
+    [Theory]
+    [InlineData(null, 25)] // the legacy request: Summary:RequestTimeoutSeconds
+    [InlineData("generator", 35)]
+    [InlineData("reviewer", 25)]
+    public async Task Each_request_times_out_on_its_own_deadline(string? stage, int seconds)
+    {
+        var settings = new SummaryOptions();
+        var (client, http, clock) = Create(async (_, ct) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        var prompt = stage switch
+        {
+            "generator" => Prompt with { Profile = settings.GroundedGenerator },
+            "reviewer" => Prompt with { Profile = settings.GroundedReviewer },
+            _ => Prompt,
+        };
+
+        var pending = client.SummarizeAsync(prompt, CancellationToken.None);
+        await http.Started.Task;
+        clock.Advance(TimeSpan.FromSeconds(seconds - 1));
+        pending.IsCompleted.Should().BeFalse("one second before its own deadline the request is still running");
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var result = await pending;
+
+        result.Failure.Should().Be(SummaryAiFailure.Timeout);
+        http.Requests.Should().ContainSingle("a timeout is not retried");
+    }
+
     [Fact]
     public async Task An_answer_without_text_is_empty_output()
     {

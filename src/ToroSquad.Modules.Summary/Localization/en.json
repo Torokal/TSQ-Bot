@@ -25,6 +25,8 @@
   "summary.health.ok": "Last summary request completed: {0}",
   "summary.health.ai_failed": "Last summary request failed ({0}): {1}",
   "summary.health.discord_failed": "Last summary request hit a Discord read/post error: {0}",
+  "summary.health.generation_component": "Summary generation",
+  "summary.health.generation": "Global mode: {0}; grounded canary channels: {1}; grounded generator: {2}, reviewer: {3}",
   "summary.role_required": "To use this command you need at least one of these roles: {0}. Any one of these roles is enough.",
   "summary.role_fallback": "Role {0}",
   "summary.not_enough_new": "There are **{0}** new messages since the last summary. **{1}** more are needed to summarize again.",

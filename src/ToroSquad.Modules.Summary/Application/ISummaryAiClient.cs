@@ -73,9 +73,11 @@ public enum SummaryThinking
 
 /// <summary>
 /// The model and reasoning shape of ONE request, when it is not the configured legacy request: the grounded mode's generator
-/// and reviewer each carry their own. Nothing here is a fallback: a request has exactly one profile and is sent once.
+/// and reviewer each carry their own. <paramref name="RequestTimeout"/> is that request's own deadline (null keeps
+/// <see cref="SummaryOptions.RequestTimeoutSeconds"/>). Nothing here is a fallback: a request has exactly one profile and
+/// is sent once.
 /// </summary>
-public sealed record SummaryAiProfile(string Model, SummaryThinking Thinking, string? ReasoningEffort);
+public sealed record SummaryAiProfile(string Model, SummaryThinking Thinking, string? ReasoningEffort, TimeSpan? RequestTimeout = null);
 
 /// <summary>
 /// One summary request to one configured model. Implementations send exactly one inference request per call — no retry, no

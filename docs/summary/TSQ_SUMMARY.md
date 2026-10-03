@@ -160,14 +160,31 @@ yok).
 > değildir ve canlı doğrulama değildir. Ardından yapılan hedefli denemede (C) işletim ve anlam ölçütleri geçti, **spoiler
 > gösterimi geçmedi** (aşağıda). Sonraki iki v3 adımında da spoiler gösterimi gerçek model cevabıyla doğrulanamadı.
 >
-> **Sözleşme v4 ve iki aşamalı hat (2026-10-04; draft PR, birleştirilmedi):** v4 ayrı bir `spoilers` listesi kullanır. Grounded
+> **Sözleşme v4 ve iki aşamalı hat (2026-10-04; PR #58 birleştirildi ve deploy edildi, Grounded üretimde KAPALI):** v4 ayrı bir `spoilers` listesi kullanır. Grounded
 > artık en fazla **iki** istek yapar: üretici model (GLM-5.3-Flash) taslağı yazar; taslak doğrulamadan geçerse denetçi model
 > (DeepSeek V4.1 Flash) onu aynı kayıtlarla karşılaştırıp düzeltir ve denetlenmiş cevap aynı doğrulamadan yeniden geçer. Fixture
 > C'de tek bir hat çalıştırması iki aşamada da doğrulamadan geçti; denetçi kayıtlarda geçmeyen oyun adını çıkardı, spoiler
 > bölümü ve kapsama korundu (aşağıda). Tek bir sentetik başarı genel doğruluk garantisi değildir ve canlı doğrulama değildir.
 > Grounded **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
+>
+> **Canary (2026-10-04):** Grounded'i genel olarak açmadan yalnızca açıkça listelenen kanal/thread ID'lerinde kullanmak için
+> `Summary:GroundedCanaryChannelIds` eklendi. Varsayılan liste **boştur**: canary yoktur ve bütün kanallar Legacy'dir. Mekanizmanın
+> deploy edilmesi canlı bir Grounded testi değildir.
 
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
+
+**Mod seçimi (işlem başında bir kez, etkileşimin kendi kanal/thread ID'siyle):**
+
+1. `GenerationMode = Grounded` ise her yerde Grounded (`mode_source=Global`). Canary listesi bu durumu değiştirmez; listeyle
+   genel Grounded kapatılamaz.
+2. Değilse ve etkileşimin kanal ID'si `GroundedCanaryChannelIds` içinde **birebir** varsa Grounded (`mode_source=Canary`).
+3. Değilse Legacy (`mode_source=Legacy`).
+
+Eşleşme yalnızca birebir ID'dir: joker, kategori veya sunucu kalıtımı yoktur. Bir thread kendi ID'siyle sayılır; üst kanalın
+listede olması thread'lerini Grounded yapmaz, thread'in listede olması da üst kanalı etkilemez. Liste en fazla 20 ID alır
+(`TOROSQUAD_Summary__GroundedCanaryChannelIds__0`, `__1`, …). Canary bir kanalda rol kontrolü, 100 mesaj kuralı, cooldown'lar
+ve gönderim davranışı aynıdır; yalnızca üretim yolu Grounded olur (en fazla iki istek). Canary'yi kapatmak için ID listeden
+çıkarılır; bu elle yapılan bir yapılandırma değişikliği ve yeniden deploy'dur — otomatik geri alma yoktur.
 Geri dönüş: `Summary:GenerationMode=Legacy` (ortam değişkeni `TOROSQUAD_Summary__GenerationMode`). Değişiklik yalnızca sonraki
 komutları etkiler; eski özetler, sayaçlar ve cooldown'lar değişmez. İki modda da rol, 100 mesaj, cooldown, gönderim, log ve
 gizlilik kuralları aynıdır. İstek sayısı farklıdır: Legacy **tek** AI isteği yapar; Grounded **en fazla iki** (taslak + denetim).
@@ -192,7 +209,7 @@ Legacy isteğinin modeli, thinking ayarı, temperature, top_p, timeout ve `max_t
 Herhangi bir aşama başarısız olursa (üretici isteği, taslağın doğrulaması, denetçi isteği, denetlenmiş cevabın doğrulaması)
 **herkese açık özet gönderilmez**. Üçüncü istek, yeniden deneme, başka denetçi veya Legacy'e düşme yoktur; kabul edilmiş taslak
 denetim olmadan yayımlanmaz. Başarılı özet cooldown'u yalnızca son Markdown Discord'a gönderilince başlar; diğer durumlarda kısa
-başarısızlık cooldown'u uygulanır. Her isteğin kendi 25 saniyelik zaman aşımı vardır. Denetim bir modelin yaptığı kontroldür,
+başarısızlık cooldown'u uygulanır. Her isteğin kendi zaman aşımı vardır: üretici 35 saniye (`GroundedGeneratorTimeoutSeconds`; aynı üretici isteği denemelerde 5 ile 25+ saniye arasında sürdü), denetçi 25 saniye (`GroundedReviewerTimeoutSeconds`); Legacy isteği 25 saniyede kalır. En kötü durumda hat 35 + 25 saniye sürebilir; bu bir kuyruk veya yeniden deneme değildir, her aşama yine yalnızca bir kez çağrılır. Denetim bir modelin yaptığı kontroldür,
 doğruluk kanıtı değildir.
 
 Kayıtların ve çıktının biçimi iki aşamada da aynıdır:
@@ -677,13 +694,16 @@ aştı; bu güvenilirlik sorusu açık duruyor.
 | `ChannelCooldownSeconds` | `120` |
 | `AllowedRoleIds` | yukarıdaki 6 rol ID'si (`Summary__AllowedRoleIds__0` …) |
 | `MaxConcurrentRequests` | `2` |
-| `RequestTimeoutSeconds` | `25` |
+| `RequestTimeoutSeconds` | `25` (Legacy isteği) |
 | `MaxOutputTokens` | `1200` (Legacy isteği) |
 | `GenerationMode` | `Legacy` (`Legacy` \| `Grounded`) |
 | `GroundedMaxOutputTokens` | `2000` (Grounded'in iki isteğinin her biri için) |
 | `GroundedGeneratorModel` | `glm-5.3-flash` (yalnızca Grounded; `thinking` alanı gönderilmez) |
 | `GroundedGeneratorReasoningEffort` | `low` |
 | `GroundedReviewerModel` | `deepseek-v4.1-flash` (yalnızca Grounded; `thinking: disabled`) |
+| `GroundedGeneratorTimeoutSeconds` | `35` (5–120; yalnızca Grounded üretici isteği) |
+| `GroundedReviewerTimeoutSeconds` | `25` (5–120; yalnızca Grounded denetçi isteği) |
+| `GroundedCanaryChannelIds` | boş (`Summary__GroundedCanaryChannelIds__0` …; birebir kanal/thread ID'leri, en fazla 20) |
 | `ReasoningEffort` | `low` |
 | `DisableThinking` | `true` |
 | `Temperature` | `0.3` |
@@ -719,7 +739,9 @@ Grounded modunda ayrıca: `validation` (kategori), `source_count`, `reply_count`
 `generator_model`, `generator_input_tokens`, `generator_output_tokens`, `generator_reasoning_tokens`, `generator_latency_ms`,
 `reviewer_model`, `reviewer_input_tokens`, `reviewer_output_tokens`, `reviewer_reasoning_tokens`, `reviewer_latency_ms`,
 `total_ai_latency_ms`. Sağlayıcının döndürmediği bir sayı `unknown` yazılır (uydurma sıfır değil); denetçi çağrılmadıysa
-`not_called`. Alıntılar, taslak, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
+`not_called`. `failed_stage` (none \| generator \| reviewer) hattı hangi aşamanın bitirdiğini, çıkarım satırındaki `mode_source`
+(Legacy \| Global \| Canary) modun nereden geldiğini gösterir. `/bot status` genel modu, canary kanalı **sayısını** (ID'leri değil)
+ve iki Grounded modelini gösterir. Alıntılar, taslak, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
 
 **Grounded'de ikinci gönderim.** Grounded modu doğrulamadan geçen bir ilk taslak ürettiğinde, aynı geçici Discord transcript'i
 (aynı kayıtlar) taslakla birlikte ikinci, denetim isteğinde de AI sağlayıcısına gönderilir. Bu veri de veritabanına yazılmaz,

@@ -366,6 +366,19 @@ invite link and no global command registration. The source code is public under 
   regression against the answer key.** Offline gate met: PR #58 is an offline merge candidate (agent's assessment); it is
   NOT VERIFIED_LIVE, not an approval to enable Grounded, and the generator's latency risk (one 25 s timeout in eight
   requests) remains open. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+- **Current state (2026-10-04): PR #58 merged (`980afd6`) and deployed — DEPLOYED_LEGACY_GROUNDED_AVAILABLE_OFF.** Production
+  runs `TOROSQUAD_Summary__GenerationMode=Legacy`; the grounded pipeline is in the build but not used. Merging it is not a
+  live approval of Grounded.
+- Grounded canary (2026-10-04, branch `feat/summary-grounded-canary`): `Summary:GroundedCanaryChannelIds` (default empty =
+  no canary). Mode per run, decided once from the interaction's own channel or thread id: global `Grounded` → Grounded
+  everywhere; else an EXACT id match in the list → Grounded; else Legacy. No wildcard, no parent/category/guild
+  inheritance; a thread counts by its own id. Stage-specific deadlines: `GroundedGeneratorTimeoutSeconds` 35 (the generator
+  request took 5 to 25+ s in the checks and timed out once at 25 s), `GroundedReviewerTimeoutSeconds` 25; the legacy
+  request keeps `RequestTimeoutSeconds` 25. Still one call per stage, at most two per grounded run, one per legacy run.
+  Logs: `mode_source` (Legacy|Global|Canary) and `failed_stage` (none|generator|reviewer). `/bot status` shows the global
+  mode, the canary channel COUNT and the two grounded models. No prompt or contract change, so no model check was run.
+  TESTED_OFFLINE. The canary list stays EMPTY in production until the owner names a channel or thread id; turning a canary
+  off is a manual configuration change and redeploy, not an automatic rollback.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request in Legacy (production): OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,

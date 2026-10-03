@@ -46,7 +46,8 @@ public sealed class OpenCodeSummaryAiClient(
 
         var settings = options.Value;
         var started = clock.GetTimestamp();
-        using var deadline = new CancellationTokenSource(settings.RequestTimeout, clock);
+        // Each request has its own deadline: the legacy one, or the one its profile carries (grounded generator / reviewer).
+        using var deadline = new CancellationTokenSource(prompt.Profile?.RequestTimeout ?? settings.RequestTimeout, clock);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {

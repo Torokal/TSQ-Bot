@@ -134,9 +134,11 @@ public sealed partial class SummaryService(
         var trace = TraceCodes.New();
         string T(string key, params object?[] args) => localizer.Get(request.Language, key, args);
 
-        // The settings (the generation mode among them) are taken once: one run never mixes two modes.
+        // The settings are taken once and the mode is decided once, from the interaction's own channel or thread id: one run
+        // never mixes two modes, whatever the configuration does afterwards.
         var settings = options.Value;
-        var mode = settings.GenerationMode;
+        var decision = settings.ResolveGenerationMode(request.Channel.Value);
+        var mode = decision.Mode;
 
         // Roles first: from the interaction payload, before anything is read or sent anywhere. Any ONE role is enough.
         var allowedRoles = settings.EffectiveAllowedRoleIds;
@@ -181,7 +183,7 @@ public sealed partial class SummaryService(
         using (ticket)
         {
             await responder.DeferPrivateAsync();
-            return await SummarizeAsync(request, discord, responder, ticket, trace, settings, mode);
+            return await SummarizeAsync(request, discord, responder, ticket, trace, settings, mode, decision.Source);
         }
 
         async Task<SummaryOutcome> RefuseAsync(SummaryOutcome outcome, string key)
@@ -194,7 +196,7 @@ public sealed partial class SummaryService(
 
     private async Task<SummaryOutcome> SummarizeAsync(
         SummaryRequest request, ISummaryDiscord discord, ISummaryResponder responder, SummaryThrottle.Ticket ticket, string trace,
-        SummaryOptions settings, SummaryGenerationMode mode)
+        SummaryOptions settings, SummaryGenerationMode mode, SummaryModeSource modeSource)
     {
         string T(string key, params object?[] args) => localizer.Get(request.Language, key, args);
         var ids = (Guild: request.Guild.Value, Channel: request.Channel.Value, Member: request.Member.Value);
@@ -306,10 +308,12 @@ public sealed partial class SummaryService(
             grounded is null ? ai.Model : settings.GroundedGeneratorModel,
             messageCount, truncatedCount, droppedCount, result.Usage.InputTokens,
             result.Usage.OutputTokens, result.Usage.ReasoningTokens, result.FinishReason, (long)result.Latency.TotalMilliseconds,
-            ids.Guild, ids.Channel, ids.Member, mode);
+            ids.Guild, ids.Channel, ids.Member, mode, modeSource);
         if (grounded is not null)
         {
-            LogPipeline(logger, trace, review is null ? 1 : 2, draftAccepted,
+            // Which stage ended the run, if any: a failed or refused generator answer, or a failed or refused review.
+            var failedStage = failure == SummaryAiFailure.None ? "none" : review is null ? "generator" : "reviewer";
+            LogPipeline(logger, trace, review is null ? 1 : 2, draftAccepted, failedStage,
                 settings.GroundedGeneratorModel, Count(result.Usage.InputTokens), Count(result.Usage.OutputTokens), Count(result.Usage.ReasoningTokens), (long)result.Latency.TotalMilliseconds,
                 review is null ? "not_called" : settings.GroundedReviewerModel,
                 review is null ? "not_called" : Count(review.Usage.InputTokens), review is null ? "not_called" : Count(review.Usage.OutputTokens),
@@ -417,10 +421,10 @@ public sealed partial class SummaryService(
     [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] inference {Result} failure={Failure} status={Status} provider_error={ProviderError} " +
         "model={Model} message_count={Count} truncated_message_count={Truncated} dropped_message_count={Dropped} input_tokens={Input} " +
         "output_tokens={Output} reasoning_tokens={Reasoning} finish_reason={Finish} latency_ms={Latency} guild={Guild} channel={Channel} invoker={Invoker} " +
-        "generation_mode={Mode}")]
+        "generation_mode={Mode} mode_source={ModeSource}")]
     private static partial void LogInference(ILogger logger, string trace, string result, SummaryAiFailure failure, int? status, string? providerError,
         string model, int count, int truncated, int dropped, int? input, int? output, int? reasoning, string? finish, long latency,
-        ulong guild, ulong channel, ulong invoker, SummaryGenerationMode mode);
+        ulong guild, ulong channel, ulong invoker, SummaryGenerationMode mode, SummaryModeSource modeSource);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded stage={Stage} validation={Validation} source_count={Sources} reply_count={Replies} " +
         "reply_unavailable_count={Unavailable} context_count={Context} evidence_count={Evidence} spoiler_claim_count={SpoilerClaims} " +
@@ -429,12 +433,12 @@ public sealed partial class SummaryService(
     private static partial void LogGrounded(ILogger logger, string trace, string stage, SummaryGroundedFailure validation, int sources, int replies, int unavailable,
         int context, int evidence, int spoilerClaims, int candidatePoints, int candidatePlans, int shownPoints, int shownPlans, ulong guild, ulong channel);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded pipeline inference_count={Inferences} draft_accepted={DraftAccepted} " +
+    [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded pipeline inference_count={Inferences} draft_accepted={DraftAccepted} failed_stage={FailedStage} " +
         "generator_model={GeneratorModel} generator_input_tokens={GeneratorInput} generator_output_tokens={GeneratorOutput} " +
         "generator_reasoning_tokens={GeneratorReasoning} generator_latency_ms={GeneratorLatency} " +
         "reviewer_model={ReviewerModel} reviewer_input_tokens={ReviewerInput} reviewer_output_tokens={ReviewerOutput} " +
         "reviewer_reasoning_tokens={ReviewerReasoning} reviewer_latency_ms={ReviewerLatency} total_ai_latency_ms={TotalLatency} guild={Guild} channel={Channel}")]
-    private static partial void LogPipeline(ILogger logger, string trace, int inferences, bool draftAccepted, string generatorModel, string generatorInput,
+    private static partial void LogPipeline(ILogger logger, string trace, int inferences, bool draftAccepted, string failedStage, string generatorModel, string generatorInput,
         string generatorOutput, string generatorReasoning, long generatorLatency, string reviewerModel, string reviewerInput, string reviewerOutput,
         string reviewerReasoning, long reviewerLatency, long totalLatency, ulong guild, ulong channel);
 

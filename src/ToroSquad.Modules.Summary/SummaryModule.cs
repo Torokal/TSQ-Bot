@@ -53,7 +53,7 @@ public sealed class SummaryModule : IToroModule
             {
                 var options = sp.GetRequiredService<IOptions<SummaryOptions>>().Value;
                 client.BaseAddress = new Uri(options.BaseUrl);
-                client.Timeout = options.RequestTimeout + TimeSpan.FromSeconds(5);
+                client.Timeout = options.LongestRequestTimeout + TimeSpan.FromSeconds(5);
                 client.MaxResponseContentBufferSize = OpenCodeSummaryAiClient.MaxResponseBytes;
                 client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent(sp.GetService<ProductInfo>()?.Version));
             })

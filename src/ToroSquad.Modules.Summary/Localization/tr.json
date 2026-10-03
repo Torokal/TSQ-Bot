@@ -25,6 +25,8 @@
   "summary.health.ok": "Son özet isteği tamamlandı: {0}",
   "summary.health.ai_failed": "Son özet isteği başarısız ({0}): {1}",
   "summary.health.discord_failed": "Son özet isteğinde Discord okuma/gönderme hatası: {0}",
+  "summary.health.generation_component": "Özet üretimi",
+  "summary.health.generation": "Genel mod: {0}; Grounded canary kanalı: {1}; Grounded üretici: {2}, denetçi: {3}",
   "summary.role_required": "Bu komutu kullanmak için şu rollerden en az birine sahip olmalısın: {0}. Bu rollerden yalnızca biri yeterli.",
   "summary.role_fallback": "Rol {0}",
   "summary.not_enough_new": "Son özetten beri **{0}** yeni mesaj var. Tekrar özetlemek için **{1}** mesaj daha gerekiyor.",
