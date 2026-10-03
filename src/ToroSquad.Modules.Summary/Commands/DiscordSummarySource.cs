@@ -75,7 +75,25 @@ public sealed partial class DiscordSummarySource(DiscordSocketClient client, IGu
         var self = client.CurrentUser?.Id;
         foreach (var message in batch)
             _read[message.Id] = message;
-        var messages = batch.Select(m => new SummarySourceMessage(
+        var messages = batch.Select(m => Map(m, self, channel.Value, withReply: true)).ToList();
+        return new SummaryHistoryPage(SummaryFetchStatus.Ok, messages, ReachedStart: batch.Count < PageSize);
+    }
+
+    /// <summary>
+    /// One Discord message, SDK-free. A real reply keeps the id of the message it answers (same channel only) and — when
+    /// Discord returned that message together with the reply — the message itself, one level deep. Nothing else is read.
+    /// </summary>
+    private SummarySourceMessage Map(IMessage m, ulong? self, ulong channel, bool withReply)
+    {
+        var replyTo = withReply ? ReplyTargetId(m, channel) : null;
+        SummarySourceMessage? target = null;
+        if (replyTo is not null && (m as IUserMessage)?.ReferencedMessage is { } referenced && referenced.Id == replyTo)
+        {
+            _read.TryAdd(referenced.Id, referenced);
+            target = Map(referenced, self, channel, withReply: false);
+        }
+
+        return new SummarySourceMessage(
             m.Id,
             m.Timestamp,
             Kind(m),
@@ -87,8 +105,9 @@ public sealed partial class DiscordSummarySource(DiscordSocketClient client, IGu
             HasPoll: (m as IUserMessage)?.Poll is not null,
             HasEmbeds: m.Embeds.Count > 0,
             AuthorId: m.Author.Id,
-            FromThisBot: self is { } me && m.Author.Id == me)).ToList();
-        return new SummaryHistoryPage(SummaryFetchStatus.Ok, messages, ReachedStart: batch.Count < PageSize);
+            FromThisBot: self is { } me && m.Author.Id == me,
+            ReplyToId: replyTo,
+            ReplyTarget: target);
     }
 
     public async Task<SummaryNames> ResolveNamesAsync(GuildId guild, IReadOnlyList<SummarySourceMessage> messages, CancellationToken cancellationToken)
@@ -112,6 +131,17 @@ public sealed partial class DiscordSummarySource(DiscordSocketClient client, IGu
             return null; // unknown: never guess about configuration
         }
     }
+
+    /// <summary>
+    /// The message a real Discord reply answers — only for the Reply type, never a forward, and only inside
+    /// <paramref name="channel"/> (a reference into another channel is not a reply link here). Null otherwise.
+    /// </summary>
+    public static ulong? ReplyTargetId(IMessage message, ulong channel) =>
+        message.Type == MessageType.Reply && message.Reference is { MessageId.IsSpecified: true } reference &&
+        reference.ReferenceType.GetValueOrDefault() != MessageReferenceType.Forward &&
+        (reference.ChannelId == 0 || reference.ChannelId == channel)
+            ? reference.MessageId.Value
+            : null;
 
     /// <summary>A person's own message: not a bot, not a webhook, not a system event (joins, pins, boosts, thread notices …).</summary>
     public static bool IsMemberMessage(IMessage message) => Kind(message) == SummaryAuthorKind.Member;

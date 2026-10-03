@@ -93,6 +93,20 @@ public sealed class SummaryAiClientTests
     }
 
     [Fact]
+    public void A_request_may_carry_its_own_output_cap_and_nothing_else_changes()
+    {
+        using var legacy = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(Prompt, new SummaryOptions()));
+        using var grounded = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(Prompt with { MaxOutputTokens = 2000 }, new SummaryOptions()));
+
+        legacy.RootElement.GetProperty("max_tokens").GetInt32().Should().Be(1200);
+        grounded.RootElement.GetProperty("max_tokens").GetInt32().Should().Be(2000);
+        foreach (var name in new[] { "model", "temperature", "top_p", "thinking", "stream" })
+            grounded.RootElement.GetProperty(name).GetRawText().Should().Be(legacy.RootElement.GetProperty(name).GetRawText(), name);
+        grounded.RootElement.EnumerateObject().Select(p => p.Name).Should().Equal(legacy.RootElement.EnumerateObject().Select(p => p.Name),
+            "no response_format, no tools, no reasoning_effort");
+    }
+
+    [Fact]
     public void Reasoning_effort_is_sent_only_in_thinking_mode()
     {
         using var enabled = JsonDocument.Parse(OpenCodeSummaryAiClient.RequestBody(Prompt, new SummaryOptions { DisableThinking = false, ReasoningEffort = "high" }));

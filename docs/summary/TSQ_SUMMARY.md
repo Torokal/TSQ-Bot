@@ -144,6 +144,65 @@ Geçmiş yeniden eskiye, 100'lük sayfalar halinde en fazla **10 sayfa** (1000 m
 Log: `history_page_count`, `eligible_message_count`, `summary_marker_found`, `history_exhausted`, `history_limit_hit` (içerik
 yok).
 
+## Üretim modu: Legacy ve Grounded
+
+`Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
+Geri dönüş: `Summary:GenerationMode=Legacy` (ortam değişkeni `TOROSQUAD_Summary__GenerationMode`). Değişiklik yalnızca sonraki
+komutları etkiler; eski özetler, sayaçlar ve cooldown'lar değişmez. İki modda da rol, 100 mesaj, cooldown, gönderim, log ve
+gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout aynıdır; bir işlem **en fazla bir** AI isteği yapar.
+
+**Legacy:** yukarıda anlatılan `Ad: mesaj` transcript'i ve modelin yazdığı Markdown (hafif temizleme). `max_tokens` 1200.
+
+**Grounded:** aynı mesajlar, ilişkileriyle birlikte gönderilir ve model kaynak göstererek cevap verir.
+
+- **Girdi:** Her mesaj tek satırlık güvenli bir JSON kaydıdır: `{"m":"m042","u":"Toro","re":"m041","t":"…"}`. `m` yalnızca bu
+  isteğe özel bir referanstır (Discord ID'leri modele gitmez). `u` görünen addır; aynı ada sahip iki farklı kişi birleştirilmez
+  ("Ad", "Ad (2)"). `re` gerçek Discord yanıt bağlantısıdır. Üyenin yazdığı her şey `t` metninin içinde kalır; "[m001] Toro: …"
+  gibi bir metin kaynak veya konuşmacı oluşturamaz.
+- **Yanıt bağlamı:** Pencere dışındaki yanıt hedefi yalnızca eldeki veriden alınır: aynı geçmiş okumasında zaten okunmuş mesaj
+  ya da Discord'un yanıtla birlikte döndürdüğü mesaj. Ek REST çağrısı yapılmaz, yalnızca aynı kanal/thread, tek seviye, yalnızca
+  üye mesajı (bot, webhook ve eski özet geri girmez), en fazla 10 kayıt ve 2500 karakter (kayıt başına 300). Bu kayıtlar
+  `"ctx":true` ile işaretlenir, 100 mesaj sayacına girmez ve tek başına özet konusu olamaz. Bulunamayan hedef
+  `"re":"bağlam mevcut değil"` olur; tahmin edilmez. Kod, yanıt verilen kişiyi "hakkında konuşulan kişi" olarak atamaz.
+- **Kırpma:** 1500 karakteri aşan mesaj mümkünse cümle sonunda kesilir ve `"cut":true` ile işaretlenir. Toplam sınır (40.000
+  karakter) referans metadata'sını ve bağlamı da kapsar; düşen kayıtların referansı kalmaz.
+- **Çıktı:** Tek bir JSON nesnesi: `main`, `points[].claims[]`, `plans[]`, `atmosphere`; her görünür metin 1–3 dayanak taşır
+  (`{"message":"m043","quote":"…"}`, alıntı kaynaktan birebir). `max_tokens` 2000 (yalnızca bu mod; otomatik büyütülmez).
+- **Kod tarafı kontrol (`SummaryGroundedAnswer`):** tam ve geçerli JSON mu, sürüm ve alanlar doğru mu, liste/alan sınırları
+  uygun mu, her referans bu isteğin kayıtlarında var mı, her alıntı belirtilen kayıtta gerçekten geçiyor mu (yalnızca boşluk
+  dizileri birleştirilir; noktalama, ek veya olumsuzluk silinmez), metin yalnızca bağlam kaydına mı dayanıyor, görünür metinde
+  kayıt referansı var mı, `finish_reason` `length` mi. Herhangi biri tutmazsa cevabın tamamı reddedilir: ham JSON gönderilmez,
+  onarılmaz, yeniden istenmez, Legacy'e düşülmez; kullanıcıya özel "Özet oluşturulamadı" mesajı gider ve yalnızca kısa
+  başarısızlık cooldown'u uygulanır.
+- **Spoiler:** Bir claim'in alıntısı spoiler alanından geliyorsa, model ne derse desin claim
+  `**Spoiler (konu):** ||…||` olarak yayımlanır (konu yoksa `konu belirtilmemiş`). `main`/`atmosphere` spoiler alanına dayanamaz;
+  açık bir metin gizli içeriği birebir tekrar ederse cevap reddedilir. Aynı mesajın spoiler dışındaki bilgileri gizlenmez.
+- **Görünüm:** Başlıkları ve biçimi uygulama üretir; kullanıcıya görünen Markdown Legacy ile aynıdır. Referanslar, alıntılar
+  ve JSON hiçbir zaman gösterilmez.
+
+**Doğrulamanın sınırı.** Bu kontroller yapısaldır: kaynağın var olduğunu ve alıntının bozulmadığını kanıtlar. Modelin o
+kaynağı doğru yorumladığını kanıtlamaz; doğru bir alıntıya dayanan cümle yine de yanlış anlam taşıyabilir, kişi ilişkisi yanlış
+kurulabilir, spoiler dolaylı bir ifadeyle (paraphrase) sızabilir. Prompt'taki anlam kuralları (olumlu/olumsuz, soru/olay,
+düzeltme/anlaşmazlık, konuşmacı/muhatap/hakkında konuşulan, plan/olasılık/mevcut durum) modelin uyacağının garantisi değildir.
+
+**Sınırlı gerçek model karşılaştırması (2026-10-03, sentetik iki snapshot, toplam 4 istek, retry yok):**
+
+| | A Legacy | A Grounded | B Legacy | B Grounded |
+|---|---|---|---|---|
+| input / output token | 2857 / 572 | 3249 / 1543 | 2829 / 619 | 3183 / 1518 |
+| reasoning, finish | 0, stop | 0, stop | 0, stop | 0, stop |
+| süre | 5,2 sn | 9,7 sn | 5,8 sn | 8,7 sn |
+| görünür özet | 182 kelime | 234 kelime | 201 kelime | 234 kelime |
+| yapısal kontrol | — | geçti (30 alıntı) | — | geçti (27 alıntı) |
+
+A (düzeltme, araya giren konuşma, açık yanıt, soru): Legacy bir kişinin çözümünü başka bir kişinin ayrı sorununa karıştırdı;
+Grounded iki sorunu ayrı tuttu ve çözülmeyen sorunu çözülmemiş bıraktı. İkisi de cevapsız kalan soruyu özete almadı. B
+(olumsuzluk, anlaşmazlık, belirsiz muhatap, plan ayrımı, spoiler): Legacy bir soruyu olay gibi yazdı ve olasılığı Planlar'a
+koydu; Grounded bunları yapmadı ve muhatabı belirsiz sözde isim uydurmadı. İkisinde de spoiler sızmadı; Grounded asıl spoiler
+bilgisini özete almadı. Grounded çıktısı 2000 sınırının yaklaşık %76'sını kullandı; daha uzun özetlerde kesilme riski vardır
+(kesilen cevap yayımlanmaz, log'da `validation=Truncated` görünür). Çıktının yaklaşık %60'ı dayanak metadata'sıdır; kısaltma
+gerekirse ilk aday alan adlarını kısaltmak ve boş `spoiler_topic` alanlarını atlamaktır.
+
 ## Kötüye kullanım koruması
 
 - Kanal/thread cooldown'u **120 sn**. Başarılı bir özet kanala gönderildikten sonra başlar, özeti kim isterse istesin
@@ -172,7 +231,9 @@ yok).
 | `AllowedRoleIds` | yukarıdaki 6 rol ID'si (`Summary__AllowedRoleIds__0` …) |
 | `MaxConcurrentRequests` | `2` |
 | `RequestTimeoutSeconds` | `25` |
-| `MaxOutputTokens` | `1200` |
+| `MaxOutputTokens` | `1200` (Legacy isteği) |
+| `GenerationMode` | `Legacy` (`Legacy` \| `Grounded`) |
+| `GroundedMaxOutputTokens` | `2000` (yalnızca Grounded isteği) |
 | `ReasoningEffort` | `low` |
 | `DisableThinking` | `true` |
 | `Temperature` | `0.3` |
@@ -199,7 +260,9 @@ loglanmaz. Özetin kalıcı kopyası tutulmaz (gönderilen özet normal bir kana
 
 Log satırlarında yalnızca şunlar bulunur: izleme kodu, guild/kanal/çağıran ID'si, `message_count`,
 `truncated_message_count`, `dropped_message_count`, model, `input_tokens`, `output_tokens`, `reasoning_tokens`,
-`finish_reason`, `latency_ms`, sonuç ve hata kategorisi (HTTP durumu, sağlayıcı hata tipi, `RegionPolicy`).
+`finish_reason`, `latency_ms`, `generation_mode`, sonuç ve hata kategorisi (HTTP durumu, sağlayıcı hata tipi, `RegionPolicy`).
+Grounded modunda ayrıca: `validation` (kategori), `source_count`, `reply_count`, `reply_unavailable_count`, `context_count`,
+`evidence_count`, `spoiler_claim_count`. Alıntılar, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
 
 Transcript üçüncü taraf bir işleyiciye gider: OpenCode Go ve üst sağlayıcısı. DeepSeek V4.1 Flash için OpenCode workspace'inde
 **Global** bölgenin açık olması gerekir.

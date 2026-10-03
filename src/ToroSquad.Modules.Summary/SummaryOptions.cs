@@ -2,6 +2,19 @@ using System.Globalization;
 
 namespace ToroSquad.Modules.Summary;
 
+/// <summary>How one /ozetle produces its summary. Chosen once per run; a run never uses both.</summary>
+public enum SummaryGenerationMode
+{
+    /// <summary>The original path: a "Name: text" transcript and the model's Markdown, lightly cleaned up.</summary>
+    Legacy = 0,
+
+    /// <summary>
+    /// Records with references and reply links, one JSON answer whose texts carry quotes from their sources, checked and
+    /// rendered by the application. A refused answer is not published — and never replaced by a legacy request.
+    /// </summary>
+    Grounded = 1,
+}
+
 /// <summary>
 /// Section "Summary". Nothing here is a secret: the API key comes only from <see cref="ApiKeyVariable"/> (environment
 /// variable, or user-secrets in development). Defaults are the production values; every value is validated at startup.
@@ -9,6 +22,18 @@ namespace ToroSquad.Modules.Summary;
 public sealed class SummaryOptions
 {
     public const string Section = "Summary";
+
+    /// <summary>
+    /// Legacy (default) or Grounded. Read once at the start of each /ozetle; changing it (a configuration change and restart)
+    /// affects only later commands. Rollback: <c>Summary:GenerationMode=Legacy</c>.
+    /// </summary>
+    public SummaryGenerationMode GenerationMode { get; set; } = SummaryGenerationMode.Legacy;
+
+    /// <summary>
+    /// <c>max_tokens</c> of the grounded request only: its JSON carries references and quotes next to the visible text, so
+    /// it needs more room than <see cref="MaxOutputTokens"/> (which the legacy request keeps). Never raised automatically.
+    /// </summary>
+    public int GroundedMaxOutputTokens { get; set; } = 2000;
 
     /// <summary>The OpenCode Go API key: an environment variable (Railway Variables), or a user-secrets key of the same name.</summary>
     public const string ApiKeyVariable = "OPENCODE_GO_API_KEY";
@@ -114,6 +139,10 @@ public sealed class SummaryOptions
             errors.Add(string.Create(CultureInfo.InvariantCulture, $"{Section}:Temperature must be 0-2 (got {Temperature})"));
         if (TopP is <= 0 or > 1 || double.IsNaN(TopP))
             errors.Add(string.Create(CultureInfo.InvariantCulture, $"{Section}:TopP must be greater than 0 and at most 1 (got {TopP})"));
+        if (!Enum.IsDefined(GenerationMode))
+            errors.Add($"{Section}:GenerationMode must be Legacy or Grounded (got '{GenerationMode}')");
+        if (GroundedMaxOutputTokens is < 500 or > 4000)
+            errors.Add($"{Section}:GroundedMaxOutputTokens must be 500-4000 (got {GroundedMaxOutputTokens})");
         if (AllowedRoleIds.Any(id => id is < MinSnowflake or > long.MaxValue))
             errors.Add($"{Section}:AllowedRoleIds must contain Discord role ids only (got {string.Join(", ", AllowedRoleIds)})");
         return errors;

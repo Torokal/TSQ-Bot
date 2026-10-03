@@ -246,7 +246,16 @@ invite link and no global command registration. The source code is public under 
   the transcript carries server display names; the prompt rule "names only when really needed" is replaced by: use the
   display name when a view, question, joke, experience, plan or action belongs to one person; no "bir kullanıcı" when the
   name is known; at most 2–3 names per bullet; plain names from the transcript only; attribution and spoiler rules
-  unchanged. TESTED_OFFLINE.
+  unchanged. Deployed (#36); natural names VERIFIED_LIVE 2026-09-29.
+- Grounded generation mode (2026-10-03, branch `fix/summary-grounded-context`): `Summary:GenerationMode` Legacy (default,
+  unchanged request and output) | Grounded. Grounded sends one JSON record per message (request-local reference, display
+  name, the real reply link, bounded one-level reply context from data already read, cut/context flags), asks for one JSON
+  answer whose visible texts carry verbatim quotes, checks structure/sources/quotes/spoiler provenance in code and renders
+  the same Markdown; a refused answer is not published, repaired, retried or replaced by Legacy. One inference per run in
+  both modes; gates, cooldowns, logging and privacy unchanged. TESTED_OFFLINE; limited real-model comparison on two
+  synthetic snapshots (4 requests): no critical meaning error, source error, spoiler leak or truncation in the two Grounded
+  runs (Legacy merged two separate conversations once). The checks are structural: they do not prove the model's reading
+  of a source is right. Output used ~76% of the 2000-token cap.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
   `max_tokens` 1200, no tools, 25 s timeout, **no retry, no fallback model, no second pass**. Fresh random
