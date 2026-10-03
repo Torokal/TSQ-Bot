@@ -25,26 +25,25 @@ public sealed partial class SummaryFlowTests
         Human(43, "Evet, şimdi oldu.") with { AuthorId = 1, AuthorName = "Monfy", ReplyToId = 42 },
     ];
 
-    /// <summary>A valid answer in the compact contract (v2): "t" text, "e" pairs of [reference, quote]; no "s", no null.</summary>
-    private static string GroundedJson(string claimRef = "m009", string claimQuote = "şimdi oldu") => JsonSerializer.Serialize(new
+    /// <summary>A valid answer in the flat contract (v3): a point carries its own "t" and "e" pairs of [reference, quote]; no "s", no null.</summary>
+    private static string GroundedJson(string pointRef = "m009", string pointQuote = "şimdi oldu", int extraPoints = 0, string? extraRef = null, string? extraQuote = null) => JsonSerializer.Serialize(new
     {
-        v = 2,
+        v = 3,
         main = new { t = "Oyun ayarı sorunu konuşuldu.", e = new[] { new[] { "m007", "koydum ama çalışmadı" } } },
         points = new[]
         {
             new
             {
                 topic = "Oyun ayarları",
-                claims = new[]
-                {
-                    new
-                    {
-                        t = "Monfy config'in önce çalışmadığını, yeniden başlatınca düzeldiğini söyledi.",
-                        e = new[] { new[] { "m007", "koydum ama çalışmadı" }, new[] { claimRef, claimQuote } },
-                    },
-                },
+                t = "Monfy config'in önce çalışmadığını, yeniden başlatınca düzeldiğini söyledi.",
+                e = new[] { new[] { "m007", "koydum ama çalışmadı" }, new[] { pointRef, pointQuote } },
             },
-        },
+        }.Concat(Enumerable.Range(1, extraPoints).Select(i => new
+        {
+            topic = "Ek konu " + i,
+            t = "Ek bilgi " + i + ".",
+            e = new[] { new[] { i == extraPoints && extraRef is not null ? extraRef : "m008", i == extraPoints && extraQuote is not null ? extraQuote : "yeniden başlattın mı?" } },
+        })),
         atmosphere = new { t = "Yardımlaşmalı bir sohbet.", e = new[] { new[] { "m008", "yeniden başlattın mı?" } } },
     });
 
@@ -125,7 +124,7 @@ public sealed partial class SummaryFlowTests
     }
 
     [Theory]
-    [InlineData("stop", "{\"v\":2,\"main\":{\"t\":\"ÇOK-GİZLİ-CÜMLE-4f2a")] // broken JSON
+    [InlineData("stop", "{\"v\":3,\"main\":{\"t\":\"ÇOK-GİZLİ-CÜMLE-4f2a")] // broken JSON
     [InlineData("length", null)] // complete JSON, but the model reported it was cut off
     [InlineData("stop", "Özet: ÇOK-GİZLİ-CÜMLE-4f2a")]
     public async Task Broken_or_cut_off_grounded_answers_never_reach_the_channel_or_the_logs(string finish, string? raw)
@@ -149,9 +148,42 @@ public sealed partial class SummaryFlowTests
 
         var logs = world.AllLogs;
         logs.Should().Contain("validation=None").And.Contain("source_count=9").And.Contain("reply_count=2").And.Contain("context_count=0")
-            .And.Contain("evidence_count=4").And.Contain("message_count=9").And.Contain("input_tokens=3200");
+            .And.Contain("evidence_count=4").And.Contain("message_count=9").And.Contain("input_tokens=3200")
+            .And.Contain("candidate_point_count=1").And.Contain("candidate_plan_count=0").And.Contain("shown_point_count=1").And.Contain("shown_plan_count=0");
         logs.Should().NotContain(GroundedSecret).And.NotContain("config").And.NotContain("Monfy").And.NotContain("şimdi oldu")
             .And.NotContain("Oyun ayarı").And.NotContain("\"quote\"");
+    }
+
+    [Fact]
+    public async Task More_valid_points_than_are_shown_are_selected_and_posted_as_a_normal_summary()
+    {
+        var world = GroundedWorld(GroundedJson(extraPoints: 7));
+        var responder = new FakeResponder();
+
+        (await world.RunAsync(responder)).Should().Be(SummaryOutcome.Posted, "eight valid points are not a failure");
+
+        var posted = string.Join("\n", responder.Public.Single());
+        Regex.Count(posted, "(?m)^- ").Should().Be(6);
+        posted.Should().Contain("- **Oyun ayarları:**").And.Contain("- **Ek konu 5:** Ek bilgi 5.").And.NotContain("Ek konu 6").And.NotContain("Ek konu 7");
+        world.Ai.Calls.Should().Be(1);
+        world.AllLogs.Should().Contain("validation=None").And.Contain("candidate_point_count=8").And.Contain("shown_point_count=6").And.Contain("evidence_count=11");
+        (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Throttled, "a posted summary starts the channel cooldown as before");
+    }
+
+    [Fact]
+    public async Task A_source_error_in_a_point_that_would_not_be_shown_still_refuses_the_run_without_a_second_inference()
+    {
+        var world = GroundedWorld(GroundedJson(extraPoints: 7, extraRef: "m008", extraQuote: "yeniden baslattin mi?")); // the 8th point: not verbatim
+        var responder = new FakeResponder();
+
+        (await world.RunAsync(responder)).Should().Be(SummaryOutcome.AiFailed);
+
+        world.Ai.Calls.Should().Be(1, "no retry and no legacy request");
+        responder.Public.Should().BeEmpty("nothing is posted, so no summary marker and no successful-summary cooldown exist");
+        world.AllLogs.Should().Contain("validation=QuoteNotFound").And.Contain("shown_point_count=0");
+        world.Clock.Advance(SummaryThrottle.FailureCooldown);
+        world.Ai.Respond = _ => Task.FromResult(new SummaryAiResult(SummaryAiFailure.None, GroundedJson(), "stop", SummaryAiUsage.None, TimeSpan.FromSeconds(5), 200));
+        (await world.RunAsync(new FakeResponder(), member: Member2)).Should().Be(SummaryOutcome.Posted, "only the short failure cooldown applied");
     }
 
     [Fact]
