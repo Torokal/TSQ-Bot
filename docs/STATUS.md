@@ -301,7 +301,21 @@ invite link and no global command registration. The source code is public under 
   point that does replaces the last shown one; only verified evidence earns it). TESTED_OFFLINE (3233 tests ×3). Model
   re-check on fixture C with the frozen candidate (1 of 2 allowed requests): 6713/1379 tokens, `stop`, but
   `validation=Limit` (4 quotes on four texts; the limit is 3) and NO spoiler point at all — NOT PASSED; B was not run.**
-  No leak into open text. The selection rule could not be exercised by real model output. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
+  No leak into open text. The selection rule could not be exercised by real model output.
+  **Diagnosis (2026-10-04, no code change): fixture C's input is intact (hidden spans present verbatim, not context, not cut);
+  the refused DeepSeek answer had 31/31 verbatim quotes — the refusal was the 3-quote limit only — and no spoiler point. One
+  GLM-5.3-Flash request with the same frozen prompt (no `thinking` field, `reasoning_effort: low`): valid, 5965/1244 tokens,
+  but no spoiler point either.**
+  **Required spoiler coverage + five-quote ceiling (same branch, PR #57 draft, NOT merged; contract v3 unchanged): records with
+  a hidden part carry `"sp":true`; the window records among them are listed after the records block as required spoiler
+  sources; the reader refuses an answer in which a required source is not quoted from its hidden part by a spoiler point
+  (`MissingRequiredSpoiler`), reserves the fewest covering points (max 3) among the 6 shown, and refuses coverage that needs
+  more (`SpoilerPointLimit`). `MaxEvidence` is a safety ceiling of 5 (prompt target unchanged: 1, or 2–3). TESTED_OFFLINE
+  (3249 tests ×3). Model check on fixture C, one frozen candidate, 2 requests: DeepSeek 6876/957 tokens — no spoiler point;
+  GLM 6106/1543 (145 reasoning) — summarised the hidden events correctly but under a new top-level field outside the
+  contract; both refused with `MissingRequiredSpoiler` — NOT PASSED.** The coverage check worked as a guard; it did not make
+  either model write a contract-conforming spoiler point. Spoiler display with a real, conforming model answer is still
+  unverified. Two synthetic examples are not a guarantee of accuracy or of never being cut off; NOT VERIFIED_LIVE.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request: OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,

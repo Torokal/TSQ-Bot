@@ -157,9 +157,10 @@ yok).
 > reddedildi (`validation=Limit`). Düz sözleşme (v3) kaynak güvenliğini gösterim hedefinden ayırır; aynı iki fixture'da, aynı
 > sabit prompt'la iki cevap da doğrulamadan geçti ve kesilmedi (aşağıda). Bu iki deneme genel doğruluk veya kesilmeme kanıtı
 > değildir ve canlı doğrulama değildir. Ardından yapılan hedefli denemede (C) işletim ve anlam ölçütleri geçti, **spoiler
-> gösterimi geçmedi** (aşağıda). Dar spoiler düzeltmesinden (prompt kuralları + seçimde kaynaklı spoiler adayına tek yer)
-> sonraki yeniden denemede **cevap reddedildi ve spoiler point'i hiç yazılmadı**; düzeltme model denemesinde doğrulanamadı.
-> Grounded **kapalı kalır**; yeniden açılması sahibin onayına bağlıdır.
+> gösterimi geçmedi** (aşağıda). Sonraki iki adımda da spoiler gösterimi gerçek model cevabıyla **doğrulanamadı**: son adayda
+> (zorunlu spoiler kapsaması) DeepSeek spoiler point'i yazmadı, GLM gizli olayı doğru özetledi ama sözleşmede olmayan bir alana
+> koydu; iki cevap da `MissingRequiredSpoiler` ile reddedildi. Grounded **kapalı kalır**; yeniden açılması sahibin onayına
+> bağlıdır.
 
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
 Geri dönüş: `Summary:GenerationMode=Legacy` (ortam değişkeni `TOROSQUAD_Summary__GenerationMode`). Değişiklik yalnızca sonraki
@@ -173,7 +174,11 @@ gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout 
 - **Girdi:** Her mesaj tek satırlık güvenli bir JSON kaydıdır: `{"m":"m042","u":"Toro","re":"m041","t":"…"}`. `m` yalnızca bu
   isteğe özel bir referanstır (Discord ID'leri modele gitmez). `u` görünen addır; aynı ada sahip iki farklı kişi birleştirilmez
   ("Ad", "Ad (2)"). `re` gerçek Discord yanıt bağlantısıdır. Üyenin yazdığı her şey `t` metninin içinde kalır; "[m001] Toro: …"
-  gibi bir metin kaynak veya konuşmacı oluşturamaz.
+  gibi bir metin kaynak veya konuşmacı oluşturamaz. Gerçekten gizli (Discord spoiler) bölümü olan kayıt, uygulamanın kendi
+  bayrağını taşır: `"sp":true` (gizli bölümü olmayan kayıtta alan hiç yazılmaz; bağlam kaydı da taşıyabilir). `<spoiler>…</spoiler>`
+  içeriği modele aynen gider. Kayıtlar bloğundan **sonra**, pencere kayıtlarından gizli bölümü olanların referansları sabit bir
+  satırla verilir: `Zorunlu spoiler kaynakları: m042, m057` (liste boşsa satır yazılmaz; bağlam kayıtları listeye girmez). Bayrak
+  ve liste kayıt haritasından üretilir; bir üyenin mesajına `"sp":true` veya aynı satırı yazması ikisini de değiştiremez.
 - **Yanıt bağlamı:** Pencere dışındaki yanıt hedefi yalnızca eldeki veriden alınır: aynı geçmiş okumasında zaten okunmuş mesaj
   ya da Discord'un yanıtla birlikte döndürdüğü mesaj. Ek REST çağrısı yapılmaz, yalnızca aynı kanal/thread, tek seviye, yalnızca
   üye mesajı (bot, webhook ve eski özet geri girmez), en fazla 10 kayıt ve 2500 karakter (kayıt başına 300). Bu kayıtlar
@@ -191,7 +196,7 @@ gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout 
   - *Gösterim hedefi (güvenlik kuralı değildir):* en fazla **6 point ve 2 plan** gösterilir; prompt en önemli 4–6 point'i ve
     en fazla 2 planı önem sırasıyla, toplam yaklaşık 150–250 görünür kelimeyle ister. Model biraz fazlasını yazarsa cevap
     reddedilmez.
-  - *Güvenlik sınırı:* en fazla **12 aday point ve 4 aday plan**, metin başına 3 dayanak, alan/alıntı uzunlukları, toplam cevap
+  - *Güvenlik sınırı:* en fazla **12 aday point ve 4 aday plan**, metin başına 5 dayanak, alan/alıntı uzunlukları, toplam cevap
     16.000 karakter, render edilmiş özet 3900 karakter. Bunu aşan cevap bütünüyle reddedilir (`Limit`); sınırsız liste kabul
     edilmez.
 - **Akış:** (1) tam cevap ayrıştırılır; (2) boyut ve sözleşme kontrol edilir; (3) güvenlik sınırı içindeki adayların **tümü** —
@@ -199,13 +204,17 @@ gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout 
   6 point ve ilk 2 plan seçilir (aşağıdaki tek istisnayla); (5) Markdown üretilir. Seçim yalnızca tam ve kontrolden geçmiş maddeler arasındadır: başka bir
   AI seçmez, metin kısaltılmaz veya yeniden yazılmaz, cümle/alıntı/spoiler ortasından kesilmez. Fazla maddelerden birinde bozuk
   alıntı veya bilinmeyen kaynak varsa o madde sessizce atılmaz; cevabın tamamı reddedilir.
-- **Kaynaklı spoiler adayı için tek yer:** ilk 6 point'in hiçbiri gizli alandan alıntı yapmıyorsa ve daha aşağıda, alıntısı
-  gerçekten gizli alana denk gelen doğrulanmış bir point varsa, bunların model sırasındaki ilki seçilmiş son point'in yerine
-  bütün olarak konur; diğerlerinin sırası değişmez, toplam yine en fazla 6 point ve 2 plandır. İlk 6'da zaten böyle bir point
-  varsa hiçbir şey taşınmaz. Bu yeri yalnızca doğrulanmış kaynak konumu kazandırır: `s` etiketi veya metinde "spoiler" kelimesi
-  kazandırmaz. Bu, bütün spoiler konularının gösterileceği anlamına gelmez; yalnızca modelin yazdığı kaynaklı spoiler
-  point'lerinin hepsinin körlemesine kesimde düşmesini önler. Seçim, "spoiler paylaşıldı" gibi boş bir cümleyi içerikli hâle
-  getiremez; metnin gizli olayı gerçekten özetleyip özetlemediğini kod denetlemez.
+- **Zorunlu spoiler kapsaması:** spoiler konusunun özete girip girmeyeceği modelin konu seçimine bırakılmaz. Bütün kaynak
+  kontrolleri geçtikten sonra, zorunlu listedeki **her** kaynağın en az bir point tarafından **gizli bölümünden** alıntılanmış
+  olması gerekir; biri eksikse cevap reddedilir (`MissingRequiredSpoiler`). Yalnızca doğrulanmış alıntı konumu sayılır: `s`
+  etiketi, metindeki "spoiler" kelimesi veya aynı kaydın açık bölümünden alıntı kapsama sağlamaz. Aynı yapıma ait birkaç kaynak
+  tek point'te kapsanabilir.
+- **Spoiler point'lerine ayrılan yer:** kapsamayı sağlayan en az sayıdaki point (model sırasındaki en erken küme, en fazla **3**)
+  gösterilecek 6 point'in içinde yer alır; kalan yerler diğer point'lerle model sırasına göre doldurulur ve hepsi model sırasıyla
+  gösterilir. Kapsama ancak 4 veya daha fazla ayrı spoiler point'iyle mümkünse cevap reddedilir (`SpoilerPointLimit`); kod
+  metinleri birleştirmez veya yeniden yazmaz. Ayrılan yer sıradan bir point'i dışarıda bırakabilir.
+- **Bu kontrolün sınırı:** kapsama kaynak güvenliğini güçlendirir, anlamı kanıtlamaz. Doğru alıntıyı taşıyan ama yalnızca "spoiler
+  paylaşıldı" diyen bir point kapsamadan geçer; metnin gizli olayı gerçekten özetleyip özetlemediğini kod denetlemez.
 - **Tekrarlar:** yalnızca birebir aynı kayıtlar (aynı metin + aynı dayanaklar + aynı spoiler niteliği) bir kez gösterilir; bir
   point birebir bir planla aynıysa plan kalır. Benzer metinler birleştirilmez; aynı kaynağı paylaşmak iki kaydın aynı bilgi
   olduğunu göstermez.
@@ -213,7 +222,9 @@ gizlilik davranışı aynıdır; model, thinking, temperature, top_p ve timeout 
   düzeltmenin ("ilk denemede çalışmadı; yeniden başlatınca düzeldi") ve bir görüş ayrılığının iki tarafının aynı point'te
   durmasını ister; böylece ilk 6'yı seçmek yanlış son durum bırakmaz. Kod bunun anlamsal olarak her zaman uygulandığını
   kanıtlayamaz; birbirine bağlı bilgileri kod birleştirmez.
-- **Dayanak:** metin başına normalde 1, en fazla 3. Birden fazlası şu durumlar içindir: sonradan düzeltme, anlamı yanıtlanan
+- **Dayanak:** prompt hedefi metin başına normalde 1, gerektiğinde 2–3'tür; doğrulayıcının güvenlik tavanı **5**'tir (hedef
+  değil: 4 doğru alıntı yüzünden bütün cevabı reddetmemek için; 5'ten fazlası `Limit`). Her alıntı aynı sıkılıkla denetlenir.
+  Birden fazlası şu durumlar içindir: sonradan düzeltme, anlamı yanıtlanan
   mesaja bağlı yanıt, görüş ayrılığı, konuşmacı / muhatap / hakkında konuşulan ayrımı. Alıntı kaynaktan birebir, en kısa
   kesintisiz parçadır (genellikle 3–12 kelime; "Oldu", "gelmedi" gibi kısa ama anlamlı alıntı geçerlidir; en az 3 karakter).
   Yakın anlamlı ama birebir olmayan alıntı ("savunma tarafında" yerine "savunmada") geçersizdir: bulanık eşleştirme, eş anlam,
@@ -397,6 +408,53 @@ Yeni seçim kuralı gerçek model cevabıyla sınanamadı (kaynaklı spoiler ada
 kullanılmadı; yeniden istek, prompt değişikliği veya yeni şema yapılmadı. Tek bir örnekle prompt değişikliğinin bu sonuca
 yol açıp açmadığı ayırt edilemez.
 
+**Teşhis ve tek GLM denemesi (2026-10-04; kod değişikliği yok).** Fixture C'nin modele giden girdisi aynı kod yolundan yeniden
+üretildi: üç gizli alan `<spoiler>` içinde birebir duruyor, bağlam kaydı değil, kırpılmamış; 24 yanıt bağlantısı doğru. Reddedilen
+DeepSeek cevabı ilk hatada durmadan incelendi: 4 metin 3 dayanak sınırını aşıyordu, 31 alıntının 31'i kaynakta birebirdi,
+bilinmeyen kaynak yoktu ve hiçbir aday gizli alana dayanmıyordu — ret yalnızca sayı sınırındandı ve spoiler point'i gerçekten
+yoktu. Aynı dondurulmuş prompt GLM-5.3-Flash ile bir kez denendi (`thinking` alanı gönderilmedi, `reasoning_effort: low`; yani
+"yalnız model değişti" değil): 5965 / 1244 token, `stop`, doğrulama geçti, 26/26 alıntı birebir, kesinleşmemiş iş kesinleştirilmedi —
+ama o da gizli olayları hiç özetlemedi. İki model de aynı prompt'la spoiler'ı atladığı için kapsama modelin tercihine bırakılmadı.
+
+**Zorunlu spoiler kapsaması ve 5 dayanak tavanı: iki model denemesi (2026-10-04; v3 sözleşme aynı).** Aday ilk istekten önce
+commit ile sabitlendi; aynı fixture C, aynı prompt, aynı okuyucu; toplam 2 istek, retry yok. GLM isteği yine `thinking` alanı
+olmadan ve `reasoning_effort: low` ile gitti.
+
+| | DeepSeek V4.1 Flash | GLM-5.3-Flash |
+|---|---|---|
+| input / output token | 6876 / 957 | 6106 / 1543 |
+| reasoning token | 0 | 145 (output'a dahil raporlandı) |
+| finish, süre | stop, 7,8 sn | stop, 21,5 sn |
+| zorunlu spoiler kaynağı | 3 | 3 |
+| `points` içinde spoiler point'i | 0 | 0 |
+| zorunlu kapsama | **yok** | **yok** (`points` içinde) |
+| doğrulama | **`MissingRequiredSpoiler` — yayımlanmadı** | **`MissingRequiredSpoiler` — yayımlanmadı** |
+| son Markdown'da `||…||` | yok | yok |
+| alıntılar (ayrı inceleme) | 13/13 birebir | 26/26 birebir |
+| metin başına dayanak | 7 metinde 1, 3 metinde 2 | 4 metinde 2, 6 metinde 3 |
+| açık metne spoiler sızıntısı | yok | yok |
+
+**Sonuç: iki deneme de GEÇMEDİ.** DeepSeek, `"sp":true` bayrağına, zorunlu kaynak satırına ve kurala rağmen hiç spoiler point'i
+yazmadı. GLM gizli olayı gerçekten özetledi — üç zorunlu kaynağın üçünden de gizli bölümden birebir alıntı, güvenli etiket — ama
+bunu `points` listesine değil, sözleşmede olmayan yeni bir üst alana (`points_spoiler`) yazdı. Okuyucu sözleşme dışı alanı
+okumaz; `points` içinde kapsama olmadığı için cevabı reddetti. Bu ret doğrudur: sözleşme "başka alan ekleme" der ve okuyucu
+bilinmeyen bir alanı içerik olarak yorumlamaz.
+
+Reddedilen ham cevaplarda (yayımlanmadıkları için başarı sayılmaz): iki modelde de kesinleşmemiş mouse işi kesinleştirilmedi,
+olumsuz → olumlu düzeltme ve fiyat düzeltmesi korundu, kişi ilişkileri doğruydu. DeepSeek yedek seçeneği ("olmazsa kafeden
+oynayacak") kaynağın "bakarız" demesine rağmen biraz kesin yazdı. GLM yine kayıtlarda geçmeyen "CS maçı" çıkarımını yaptı ve
+25 saniyelik zaman aşımına yakın sürdü; aynı parametrelerle bu kez reasoning token'ı raporlandı (önceki denemede 0'dı).
+
+*Yalnızca offline, elle düzenlenmiş cevapla (model başarısı DEĞİLDİR):* GLM'nin `points_spoiler` altına yazdığı nesne elle
+`points` listesinin sonuna taşındığında okuyucu cevabı kabul ediyor: kapsama tam, bir spoiler point'i yer ayırtıyor ve son
+özette güvenli etiketle `||…||` içinde, gizli olayın gerçek özetiyle görünüyor; bunun için altıncı sıradaki sıradan point
+(mouse konusu) dışarıda kalıyor. Bu, kapsama + yer ayırma + gösterim zincirinin model tarafından yazılmış gerçek bir spoiler
+metniyle çalıştığını gösterir; modelin sözleşmeye uyduğunu göstermez.
+
+Zorunlu kapsama mekanizması doğrulayıcı olarak işini yaptı (spoiler'ı atlayan iki cevap da yayımlanmadı), ama tek başına
+modelleri sözleşmeye uygun spoiler point'i yazmaya götürmedi. Spoiler gösterimi gerçek, sözleşmeye uygun bir model cevabıyla
+hâlâ doğrulanmış değildir. `SpoilerPointLimit` davranışı bu denemelerde hiç tetiklenmedi; gerekli olup olmadığı bilinmiyor.
+
 ## Kötüye kullanım koruması
 
 - Kanal/thread cooldown'u **120 sn**. Başarılı bir özet kanala gönderildikten sonra başlar, özeti kim isterse istesin
@@ -457,7 +515,8 @@ Log satırlarında yalnızca şunlar bulunur: izleme kodu, guild/kanal/çağıra
 `finish_reason`, `latency_ms`, `generation_mode`, sonuç ve hata kategorisi (HTTP durumu, sağlayıcı hata tipi, `RegionPolicy`).
 Grounded modunda ayrıca: `validation` (kategori), `source_count`, `reply_count`, `reply_unavailable_count`, `context_count`,
 `evidence_count` (kontrol edilen tüm adaylar), `spoiler_claim_count` (spoiler olarak yayımlanan maddeler),
-`candidate_point_count`, `candidate_plan_count`, `shown_point_count`, `shown_plan_count`. Alıntılar, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
+`candidate_point_count`, `candidate_plan_count`, `shown_point_count`, `shown_plan_count`. `validation` kategorileri arasında
+`MissingRequiredSpoiler` ve `SpoilerPointLimit` de vardır. Alıntılar, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
 
 Transcript üçüncü taraf bir işleyiciye gider: OpenCode Go ve üst sağlayıcısı. DeepSeek V4.1 Flash için OpenCode workspace'inde
 **Global** bölgenin açık olması gerekir.
