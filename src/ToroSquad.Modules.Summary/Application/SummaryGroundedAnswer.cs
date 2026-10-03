@@ -41,6 +41,8 @@ public enum SummaryGroundedFailure
 /// The outcome: the Markdown to post, or the failure category; plus counts for the log. <paramref name="EvidenceCount"/>
 /// covers every candidate that was checked; <paramref name="SpoilerClaimCount"/> the shown points and plans published as
 /// spoilers; the candidate counts are what the model wrote, the shown counts what was rendered.
+/// <paramref name="SpoilerCandidates"/> counts the candidates whose quotes really come from a hidden span, and
+/// <paramref name="SpoilerPromoted"/> tells whether one of them took the last shown place because none was among the first.
 /// </summary>
 public sealed record SummaryGroundedResult(
     SummaryGroundedFailure Failure,
@@ -50,7 +52,9 @@ public sealed record SummaryGroundedResult(
     int CandidatePoints = 0,
     int CandidatePlans = 0,
     int ShownPoints = 0,
-    int ShownPlans = 0)
+    int ShownPlans = 0,
+    int SpoilerCandidates = 0,
+    bool SpoilerPromoted = false)
 {
     public bool Succeeded => Failure == SummaryGroundedFailure.None && Markdown is not null;
 
@@ -67,9 +71,11 @@ public sealed record SummaryGroundedResult(
 /// <c>**Spoiler (konu):** ||…||</c> whatever the model said; hidden content in an open text is refused). One failure
 /// refuses the whole answer; a point is never dropped to hide its broken source. The DISPLAY TARGET is not a safety rule:
 /// when everything checked out, the first <see cref="ShownPoints"/> points and <see cref="ShownPlans"/> plans are shown, in
-/// the model's order, as complete items — a few more than that is not a failure, only the candidate bound is. Selection
-/// never rewrites, shortens or merges a text; only records that are exactly the same (text, evidence, spoiler nature) are
-/// shown once. This proves that sources exist and quotes are intact. It does NOT prove that the model understood those
+/// the model's order, as complete items — a few more than that is not a failure, only the candidate bound is. One
+/// exception to the plain cut: when none of the first points quotes a hidden span but a later one does, the first such
+/// point takes the last shown place, so that the spoiler points the model wrote are not all lost. Selection never rewrites,
+/// shortens or merges a text; only records that are exactly the same (text, evidence, spoiler nature) are shown once. It
+/// cannot make a point informative either: a point that only says "a spoiler was shared" stays just that. This proves that sources exist and quotes are intact. It does NOT prove that the model understood those
 /// sources, that each point is as self-contained as the prompt asks, or that a paraphrased spoiler was caught. A refused
 /// answer is never repaired, never retried and never replaced by the legacy path.
 /// </summary>
@@ -93,8 +99,13 @@ public static partial class SummaryGroundedAnswer
     public const int MaxRenderedChars = 3900;
     public const string UnknownSpoilerTopic = "konu belirtilmemiş";
 
-    /// <summary>A point (with a topic) or a plan (without). <paramref name="Sources"/> identifies its evidence, order-independent.</summary>
-    private sealed record Item(string Topic, string Text, bool Protected, string Label, string Sources)
+    /// <summary>
+    /// A point (with a topic) or a plan (without). <paramref name="Sources"/> identifies its evidence, order-independent.
+    /// <paramref name="Protected"/> decides the rendering (hidden when a quote comes from a hidden span OR the model named a
+    /// spoiler topic); <paramref name="HasSpoilerEvidence"/> is only the first of those — derived from where the checked quotes
+    /// sit in the source, never from the model's "s" field or wording.
+    /// </summary>
+    private sealed record Item(string Topic, string Text, bool Protected, bool HasSpoilerEvidence, string Label, string Sources)
     {
         public bool SameRecordAs(Item other) =>
             Protected == other.Protected && string.Equals(Text, other.Text, StringComparison.Ordinal) && string.Equals(Sources, other.Sources, StringComparison.Ordinal);
@@ -147,14 +158,15 @@ public static partial class SummaryGroundedAnswer
             // 2) Selection among complete, checked items: exact copies once, then the first ones in the model's order.
             var (candidatePoints, candidatePlans) = (points.Count, plans.Count);
             (points, plans) = WithoutExactCopies(points, plans);
-            var shownPoints = points.Take(ShownPoints).ToList();
+            var (shownPoints, promoted) = SelectPoints(points);
             var shownPlans = plans.Take(ShownPlans).ToList();
 
             var markdown = SummaryOutput.Normalize(Render(main, shownPoints, shownPlans, atmosphere));
             if (markdown is null || markdown.Length > MaxRenderedChars)
                 return SummaryGroundedResult.Failed(SummaryGroundedFailure.Limit);
             return new SummaryGroundedResult(SummaryGroundedFailure.None, markdown, reader.EvidenceCount,
-                shownPoints.Concat(shownPlans).Count(i => i.Protected), candidatePoints, candidatePlans, shownPoints.Count, shownPlans.Count);
+                shownPoints.Concat(shownPlans).Count(i => i.Protected), candidatePoints, candidatePlans, shownPoints.Count, shownPlans.Count,
+                all.Count(i => i.HasSpoilerEvidence), promoted);
         }
         catch (JsonException)
         {
@@ -164,6 +176,24 @@ public static partial class SummaryGroundedAnswer
         {
             return SummaryGroundedResult.Failed(refused.Failure);
         }
+    }
+
+    /// <summary>
+    /// The first <see cref="ShownPoints"/> points in the model's order. If none of them quotes a hidden span while a later
+    /// point does, the first such point (in the model's order) replaces the last shown one as a whole; the others keep their
+    /// order. Only verified spoiler evidence earns that place — an "s" label or the word "spoiler" does not. This does not
+    /// promise that every spoiler topic is shown; it only keeps a blind cut from dropping all of them.
+    /// </summary>
+    private static (List<Item> Shown, bool Promoted) SelectPoints(List<Item> points)
+    {
+        var shown = points.Take(ShownPoints).ToList();
+        if (shown.Any(p => p.HasSpoilerEvidence))
+            return (shown, false);
+        var candidate = points.Skip(ShownPoints).FirstOrDefault(p => p.HasSpoilerEvidence);
+        if (candidate is null)
+            return (shown, false);
+        shown[^1] = candidate; // none of the shown ones has spoiler evidence here, so the last one gives way
+        return (shown, true);
     }
 
     /// <summary>
@@ -316,7 +346,7 @@ public static partial class SummaryGroundedAnswer
             var isProtected = fromHidden || label.Length > 0;
             if (isProtected && label.Length == 0)
                 label = UnknownSpoilerTopic;
-            return new Item(topic, text, isProtected, label, sources);
+            return new Item(topic, text, isProtected, fromHidden, label, sources);
         }
 
         /// <summary>
