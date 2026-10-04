@@ -355,11 +355,12 @@ public sealed partial class SummaryService(
 
     /// <summary>
     /// The reader's verdict on one stage's answer, as a category and numbers. What the reader did not reach before it refused
-    /// the answer is "unknown"; the bound behind a Limit refusal is named, with the size that broke it.
+    /// the answer is "unknown"; the bound behind a Limit refusal is named, with the size that broke it, and so is the reason
+    /// a NotJson answer was not one JSON object.
     /// </summary>
     private void LogValidation(string trace, string stage, SummaryGroundedResult answer, SummaryGroundedInput grounded, ulong guild, ulong channel) =>
         LogGrounded(logger, trace, stage, answer.Failure, answer.LimitReason,
-            answer.LimitReason == SummaryGroundedLimitReason.None ? "none" : Count(answer.LimitValue),
+            answer.LimitReason == SummaryGroundedLimitReason.None ? "none" : Count(answer.LimitValue), answer.NotJsonReason,
             grounded.Records.Count, grounded.ReplyCount, grounded.UnavailableReplyCount, grounded.ContextCount,
             Count(answer.AnswerChars), Count(answer.EvidenceCount), answer.SpoilerClaimCount,
             Count(answer.CandidatePoints), Count(answer.CandidateSpoilers), Count(answer.CandidatePlans),
@@ -435,13 +436,14 @@ public sealed partial class SummaryService(
         ulong guild, ulong channel, ulong invoker, SummaryGenerationMode mode, SummaryModeSource modeSource);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded stage={Stage} validation={Validation} limit_reason={LimitReason} " +
-        "limit_value={LimitValue} source_count={Sources} reply_count={Replies} reply_unavailable_count={Unavailable} context_count={Context} " +
-        "raw_answer_chars={AnswerChars} evidence_count={Evidence} spoiler_claim_count={SpoilerClaims} candidate_point_count={CandidatePoints} " +
-        "candidate_spoiler_count={CandidateSpoilers} candidate_plan_count={CandidatePlans} shown_point_count={ShownPoints} shown_plan_count={ShownPlans} " +
-        "rendered_chars={RenderedChars} guild={Guild} channel={Channel}")]
+        "limit_value={LimitValue} not_json_reason={NotJsonReason} source_count={Sources} reply_count={Replies} reply_unavailable_count={Unavailable} " +
+        "context_count={Context} raw_answer_chars={AnswerChars} evidence_count={Evidence} spoiler_claim_count={SpoilerClaims} " +
+        "candidate_point_count={CandidatePoints} candidate_spoiler_count={CandidateSpoilers} candidate_plan_count={CandidatePlans} " +
+        "shown_point_count={ShownPoints} shown_plan_count={ShownPlans} rendered_chars={RenderedChars} guild={Guild} channel={Channel}")]
     private static partial void LogGrounded(ILogger logger, string trace, string stage, SummaryGroundedFailure validation, SummaryGroundedLimitReason limitReason,
-        string limitValue, int sources, int replies, int unavailable, int context, string answerChars, string evidence, int spoilerClaims, string candidatePoints,
-        string candidateSpoilers, string candidatePlans, int shownPoints, int shownPlans, string renderedChars, ulong guild, ulong channel);
+        string limitValue, SummaryGroundedNotJsonReason notJsonReason, int sources, int replies, int unavailable, int context, string answerChars, string evidence,
+        int spoilerClaims, string candidatePoints, string candidateSpoilers, string candidatePlans, int shownPoints, int shownPlans, string renderedChars,
+        ulong guild, ulong channel);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded pipeline inference_count={Inferences} draft_accepted={DraftAccepted} failed_stage={FailedStage} " +
         "generator_model={GeneratorModel} generator_input_tokens={GeneratorInput} generator_output_tokens={GeneratorOutput} " +
