@@ -380,23 +380,34 @@ invite link and no global command registration. The source code is public under 
   TESTED_OFFLINE. The canary list stays EMPTY in production until the owner names a channel or thread id; turning a canary
   off is a manual configuration change and redeploy, not an automatic rollback.
 - **Live Grounded evaluation (2026-10-04) — GROUNDED_LIVE_EVALUATION_STOPPED, PRODUCTION_LEGACY.** By the owner's decision
-  Grounded was enabled globally in production (`mode_source=Global`, canary list empty). Two real 100-message attempts,
-  both ended in the generator stage: (1) generator timeout at 35.005 s; (2) the generator answered in 31.267 s (HTTP 200,
-  `finish_reason=stop`, 5983 input / 1285 output / 0 reasoning tokens) and the strict reader refused the draft with
-  `validation=Limit`. The reviewer was not called in either attempt and no public Grounded summary was ever posted. The
-  stop criterion (2 operational failures within the first 10 real attempts) was met and production was rolled back to
-  `TOROSQUAD_Summary__GenerationMode=Legacy` by hand. Two more commands in that window ended at the 100-new-message gate
-  without an AI request and are not attempts. Which `Limit` bound the second draft broke is UNKNOWN: the log carried only
-  the general category then and answer content is never logged; it cannot be filled in afterwards. Both attempts differ
-  from the synthetic checks: the generator took 31-35+ s (5-22 s on the fixtures) and a `Limit` refusal had not occurred
-  on contract v4. NOT VERIFIED_LIVE.
+  Grounded was enabled globally in production twice (`mode_source=Global`, canary list empty). Three real 100-message
+  attempts in total, 0 public Grounded summaries, 3 generator-stage failures: (1) generator timeout at 35.005 s; (2) the
+  generator answered in 31.267 s (HTTP 200, `finish_reason=stop`, 5983 input / 1285 output / 0 reasoning tokens) and the
+  strict reader refused the draft with `validation=Limit`; (3) second window: the generator answered in 5.344 s (HTTP 200,
+  `finish_reason=stop`, 5983 / 1133 / 0 tokens, 3232 answer characters) and the reader refused the draft with
+  `validation=NotJson`. The reviewer was not called in any live attempt. The first window was closed after two attempts
+  (stop criterion: 2 operational failures within the first 10 real attempts), the second after one, both by rolling back
+  to `TOROSQUAD_Summary__GenerationMode=Legacy` by hand. Two more commands in the first window ended at the
+  100-new-message gate without an AI request and are not attempts. UNKNOWN and not recoverable, because answer content is
+  never logged and the diagnostics came after each attempt: which `Limit` bound the second draft broke, and why the third
+  draft was not one JSON object. The live attempts differ from the synthetic checks: the generator took 31-35+ s in the
+  first window (5-22 s on the fixtures) and neither a `Limit` nor a `NotJson` refusal had occurred on contract v4.
+  NOT VERIFIED_LIVE.
 - Limit diagnostics (2026-10-04, branch `feat/summary-grounded-limit-reason`): a `Limit` refusal now names the first
   safety bound the reader met — `limit_reason` AnswerChars | CandidatePoints | CandidateSpoilers | CandidatePlans |
   EvidencePerText | TextChars | TopicChars | QuoteChars | RenderedChars (None for every other outcome) — and
   `limit_value`, the size that broke it. The validation line also carries `raw_answer_chars`, `candidate_spoiler_count`
   and `rendered_chars`; a number the reader did not reach is `unknown`, never a made-up 0 (`evidence_count` and the
   candidate counts of a refused answer used to be logged as 0). Names and numbers only, no content. No bound, prompt,
-  model, contract or deadline changed; no model request was made. TESTED_OFFLINE.
+  model, contract or deadline changed; no model request was made. Merged and deployed (#60).
+- NotJson diagnostics (2026-10-04, branch `feat/summary-grounded-not-json-reason`): a `NotJson` refusal now logs
+  `not_json_reason` Envelope | CodeFence | MalformedJson | RootNotObject (None for every other outcome). Envelope: after
+  the one supported enclosing fence the answer does not start with `{` and end with `}`; CodeFence: a leading fence in
+  another shape; MalformedJson: brace to brace but not valid JSON; RootNotObject: valid JSON of another kind. Strictness
+  is unchanged: no object is searched for inside the text, no text is cut away, nothing is repaired, the fence tolerance
+  is the same, no repair request. An empty answer stays the provider client's own failure (EmptyOutput). The parser's
+  message, the answer's first or last characters and a fence's language are not logged. No model request was made.
+  TESTED_OFFLINE.
   Grounded stays off in production; re-enabling needs the owner's approval.
 - One summary = one AI request in Legacy (production): OpenCode Go `POST /zen/go/v1/chat/completions`, model `deepseek-v4.1-flash` (API id
   verified from the live `/models` list), `thinking: disabled` **without** `reasoning_effort`, temperature 0.3, top_p 0.9,
