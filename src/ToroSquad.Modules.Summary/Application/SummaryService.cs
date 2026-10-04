@@ -277,9 +277,7 @@ public sealed partial class SummaryService(
             // Structural check only (sources exist, quotes are intact, hidden quotes stay hidden), on every item the model wrote.
             // A refused draft ends the run: it is not repaired, retried or reviewed.
             var draft = SummaryGroundedAnswer.Read(result.Text, result.FinishReason, grounded);
-            LogGrounded(logger, trace, "generator", draft.Failure, grounded.Records.Count, grounded.ReplyCount, grounded.UnavailableReplyCount,
-                grounded.ContextCount, draft.EvidenceCount, draft.SpoilerClaimCount, draft.CandidatePoints, draft.CandidatePlans,
-                draft.ShownPoints, draft.ShownPlans, ids.Guild, ids.Channel);
+            LogValidation(trace, "generator", draft, grounded, ids.Guild, ids.Channel);
             draftAccepted = draft.Succeeded;
             if (draftAccepted)
             {
@@ -292,9 +290,7 @@ public sealed partial class SummaryService(
                 {
                     var answer = SummaryGroundedAnswer.Read(review.Text, review.FinishReason, grounded);
                     summary = answer.Markdown;
-                    LogGrounded(logger, trace, "reviewer", answer.Failure, grounded.Records.Count, grounded.ReplyCount, grounded.UnavailableReplyCount,
-                        grounded.ContextCount, answer.EvidenceCount, answer.SpoilerClaimCount, answer.CandidatePoints, answer.CandidatePlans,
-                        answer.ShownPoints, answer.ShownPlans, ids.Guild, ids.Channel);
+                    LogValidation(trace, "reviewer", answer, grounded, ids.Guild, ids.Channel);
                 }
             }
         }
@@ -354,8 +350,20 @@ public sealed partial class SummaryService(
         return outcome;
     }
 
-    /// <summary>A token count as the provider reported it; "unknown" when it did not (never a made-up zero).</summary>
-    private static string Count(int? tokens) => tokens?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+    /// <summary>A number as it was reported or measured; "unknown" when it was not (never a made-up zero).</summary>
+    private static string Count(int? number) => number?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+
+    /// <summary>
+    /// The reader's verdict on one stage's answer, as a category and numbers. What the reader did not reach before it refused
+    /// the answer is "unknown"; the bound behind a Limit refusal is named, with the size that broke it.
+    /// </summary>
+    private void LogValidation(string trace, string stage, SummaryGroundedResult answer, SummaryGroundedInput grounded, ulong guild, ulong channel) =>
+        LogGrounded(logger, trace, stage, answer.Failure, answer.LimitReason,
+            answer.LimitReason == SummaryGroundedLimitReason.None ? "none" : Count(answer.LimitValue),
+            grounded.Records.Count, grounded.ReplyCount, grounded.UnavailableReplyCount, grounded.ContextCount,
+            Count(answer.AnswerChars), Count(answer.EvidenceCount), answer.SpoilerClaimCount,
+            Count(answer.CandidatePoints), Count(answer.CandidateSpoilers), Count(answer.CandidatePlans),
+            answer.ShownPoints, answer.ShownPlans, Count(answer.RenderedChars), guild, channel);
 
     private string TraceLine(SummaryRequest request, string trace) => "\n" + localizer.Get(request.Language, "error.trace_code", trace);
 
@@ -426,12 +434,14 @@ public sealed partial class SummaryService(
         string model, int count, int truncated, int dropped, int? input, int? output, int? reasoning, string? finish, long latency,
         ulong guild, ulong channel, ulong invoker, SummaryGenerationMode mode, SummaryModeSource modeSource);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded stage={Stage} validation={Validation} source_count={Sources} reply_count={Replies} " +
-        "reply_unavailable_count={Unavailable} context_count={Context} evidence_count={Evidence} spoiler_claim_count={SpoilerClaims} " +
-        "candidate_point_count={CandidatePoints} candidate_plan_count={CandidatePlans} shown_point_count={ShownPoints} shown_plan_count={ShownPlans} " +
-        "guild={Guild} channel={Channel}")]
-    private static partial void LogGrounded(ILogger logger, string trace, string stage, SummaryGroundedFailure validation, int sources, int replies, int unavailable,
-        int context, int evidence, int spoilerClaims, int candidatePoints, int candidatePlans, int shownPoints, int shownPlans, ulong guild, ulong channel);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded stage={Stage} validation={Validation} limit_reason={LimitReason} " +
+        "limit_value={LimitValue} source_count={Sources} reply_count={Replies} reply_unavailable_count={Unavailable} context_count={Context} " +
+        "raw_answer_chars={AnswerChars} evidence_count={Evidence} spoiler_claim_count={SpoilerClaims} candidate_point_count={CandidatePoints} " +
+        "candidate_spoiler_count={CandidateSpoilers} candidate_plan_count={CandidatePlans} shown_point_count={ShownPoints} shown_plan_count={ShownPlans} " +
+        "rendered_chars={RenderedChars} guild={Guild} channel={Channel}")]
+    private static partial void LogGrounded(ILogger logger, string trace, string stage, SummaryGroundedFailure validation, SummaryGroundedLimitReason limitReason,
+        string limitValue, int sources, int replies, int unavailable, int context, string answerChars, string evidence, int spoilerClaims, string candidatePoints,
+        string candidateSpoilers, string candidatePlans, int shownPoints, int shownPlans, string renderedChars, ulong guild, ulong channel);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Summary [{Trace}] grounded pipeline inference_count={Inferences} draft_accepted={DraftAccepted} failed_stage={FailedStage} " +
         "generator_model={GeneratorModel} generator_input_tokens={GeneratorInput} generator_output_tokens={GeneratorOutput} " +

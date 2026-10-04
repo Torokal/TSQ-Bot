@@ -41,25 +41,71 @@ public enum SummaryGroundedFailure
 }
 
 /// <summary>
-/// The outcome: the Markdown to post, or the failure category; plus counts for the log. <paramref name="EvidenceCount"/>
+/// Which safety bound refused an answer with <see cref="SummaryGroundedFailure.Limit"/>: the first one the reader met, in
+/// its fixed reading order. Diagnostic only — the bounds and what is refused are the same; <see cref="None"/> for every
+/// other outcome. Logged as a name, never with the answer's content.
+/// </summary>
+public enum SummaryGroundedLimitReason
+{
+    None = 0,
+
+    /// <summary>The whole answer is longer than <see cref="SummaryGroundedAnswer.MaxAnswerChars"/>.</summary>
+    AnswerChars = 1,
+
+    /// <summary>More items in <c>points</c> than <see cref="SummaryGroundedAnswer.MaxCandidatePoints"/>.</summary>
+    CandidatePoints = 2,
+
+    /// <summary>More items in <c>spoilers</c> than <see cref="SummaryGroundedAnswer.MaxSpoilers"/>.</summary>
+    CandidateSpoilers = 3,
+
+    /// <summary>More items in <c>plans</c> than <see cref="SummaryGroundedAnswer.MaxCandidatePlans"/>.</summary>
+    CandidatePlans = 4,
+
+    /// <summary>More quotes on one text than <see cref="SummaryGroundedAnswer.MaxEvidence"/>.</summary>
+    EvidencePerText = 5,
+
+    /// <summary>A text <c>t</c> longer than <see cref="SummaryGroundedAnswer.MaxTextChars"/>.</summary>
+    TextChars = 6,
+
+    /// <summary>A <c>topic</c> longer than <see cref="SummaryGroundedAnswer.MaxTopicChars"/>.</summary>
+    TopicChars = 7,
+
+    /// <summary>A quote longer than <see cref="SummaryGroundedAnswer.MaxQuoteChars"/>.</summary>
+    QuoteChars = 8,
+
+    /// <summary>The rendered summary is longer than <see cref="SummaryGroundedAnswer.MaxRenderedChars"/>.</summary>
+    RenderedChars = 9,
+}
+
+/// <summary>
+/// The outcome: the Markdown to post, or the failure category; plus numbers for the log. <paramref name="EvidenceCount"/>
 /// covers every candidate that was checked; <paramref name="SpoilerClaimCount"/> the items published in the hidden section;
 /// the candidate counts are what the model wrote, the shown counts what was rendered;
-/// <paramref name="RequiredSpoilers"/> the window records that had to be covered.
+/// <paramref name="RequiredSpoilers"/> the window records that had to be covered; <paramref name="AnswerChars"/> is the
+/// length of the answer as it was received, <paramref name="RenderedChars"/> of the Markdown made from it. A number the
+/// reader did not reach before it refused the answer is <c>null</c> (logged as unknown) — never a 0 that would read as "the
+/// model wrote none". The published counts (<paramref name="SpoilerClaimCount"/>, the shown counts) are really 0 for a
+/// refused answer.
+/// <paramref name="LimitReason"/> names the bound behind a <see cref="SummaryGroundedFailure.Limit"/> and
+/// <paramref name="LimitValue"/> the size that broke it (a count or a length, never content).
 /// </summary>
 public sealed record SummaryGroundedResult(
     SummaryGroundedFailure Failure,
     string? Markdown,
-    int EvidenceCount,
+    int? EvidenceCount,
     int SpoilerClaimCount,
-    int CandidatePoints = 0,
-    int CandidatePlans = 0,
+    int? CandidatePoints = null,
+    int? CandidatePlans = null,
     int ShownPoints = 0,
     int ShownPlans = 0,
-    int RequiredSpoilers = 0)
+    int RequiredSpoilers = 0,
+    int? CandidateSpoilers = null,
+    int? AnswerChars = null,
+    int? RenderedChars = null,
+    SummaryGroundedLimitReason LimitReason = SummaryGroundedLimitReason.None,
+    int? LimitValue = null)
 {
     public bool Succeeded => Failure == SummaryGroundedFailure.None && Markdown is not null;
-
-    public static SummaryGroundedResult Failed(SummaryGroundedFailure failure) => new(failure, null, 0, 0);
 }
 
 /// <summary>
@@ -119,81 +165,107 @@ public static partial class SummaryGroundedAnswer
             string.Equals(Text, other.Text, StringComparison.Ordinal) && string.Equals(Sources, other.Sources, StringComparison.Ordinal);
     }
 
-    private sealed class Refused(SummaryGroundedFailure failure) : Exception
+    private sealed class Refused(SummaryGroundedFailure failure, SummaryGroundedLimitReason limitReason = SummaryGroundedLimitReason.None, int? limitValue = null) : Exception
     {
         public SummaryGroundedFailure Failure { get; } = failure;
+
+        public SummaryGroundedLimitReason LimitReason { get; } = limitReason;
+
+        public int? LimitValue { get; } = limitValue;
     }
+
+    /// <summary>A safety bound was exceeded: which one, and the size (a count or a length) that broke it.</summary>
+    private static Refused TooLarge(SummaryGroundedLimitReason reason, int value) => new(SummaryGroundedFailure.Limit, reason, value);
 
     public static SummaryGroundedResult Read(string? raw, string? finishReason, SummaryGroundedInput input)
     {
+        // What a refusal can still say in numbers. Each stays null until the reader has really measured it: an answer refused
+        // early has unknown counts, not zero ones.
+        int? answerChars = raw?.Length, candidatePoints = null, candidateSpoilers = null, candidatePlans = null, evidence = null, renderedChars = null;
+        SummaryGroundedResult Refuse(SummaryGroundedFailure failure, SummaryGroundedLimitReason limitReason = SummaryGroundedLimitReason.None, int? limitValue = null) =>
+            new(failure, null, evidence, 0, candidatePoints, candidatePlans, CandidateSpoilers: candidateSpoilers, AnswerChars: answerChars,
+                RenderedChars: renderedChars, LimitReason: limitReason, LimitValue: limitValue);
+
         if (finishReason == "length")
-            return SummaryGroundedResult.Failed(SummaryGroundedFailure.Truncated);
+            return Refuse(SummaryGroundedFailure.Truncated);
         var body = Unwrap(raw);
         if (body is null)
-            return SummaryGroundedResult.Failed(SummaryGroundedFailure.NotJson);
+            return Refuse(SummaryGroundedFailure.NotJson);
         if (body.Length > MaxAnswerChars)
-            return SummaryGroundedResult.Failed(SummaryGroundedFailure.Limit);
+            return Refuse(SummaryGroundedFailure.Limit, SummaryGroundedLimitReason.AnswerChars, body.Length);
 
         try
         {
             using var document = JsonDocument.Parse(body);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
-                return SummaryGroundedResult.Failed(SummaryGroundedFailure.NotJson);
+                return Refuse(SummaryGroundedFailure.NotJson);
+            // The three list sizes as plain numbers, before any item is read: a refusal further down can still say how much
+            // the model wrote. Nothing is checked or decided here.
+            (candidatePoints, candidateSpoilers, candidatePlans) = (Length(root, "points"), Length(root, "spoilers"), Length(root, "plans"));
             // Only the current contract is read: an answer in an earlier shape (v1 long names, v2 nested claims, v3 spoilers
             // as labelled points) is refused, never converted.
             if (!root.TryGetProperty("v", out var version) || version.ValueKind != JsonValueKind.Number ||
                 !version.TryGetInt32(out var number) || number != SummaryGroundedPrompt.ContractVersion)
-                return SummaryGroundedResult.Failed(SummaryGroundedFailure.Contract);
+                return Refuse(SummaryGroundedFailure.Contract);
 
             // 1) Every item inside the safety bound is checked in full — also the ones that will not be shown. Open texts
             //    may not quote a hidden span; hidden evidence is valid only inside "spoilers".
             var reader = new Reader(input);
             var main = reader.Open(Required(root, "main", JsonValueKind.Object), withTopic: false).Text;
-            var points = Items(Required(root, "points", JsonValueKind.Array), 1, MaxCandidatePoints).Select(p => reader.Open(p, withTopic: true)).ToList();
-            var spoilers = Items(Required(root, "spoilers", JsonValueKind.Array), 0, MaxSpoilers).Select(reader.Hidden).ToList();
+            var points = Items(Required(root, "points", JsonValueKind.Array), 1, MaxCandidatePoints, SummaryGroundedLimitReason.CandidatePoints)
+                .Select(p => reader.Open(p, withTopic: true)).ToList();
+            var spoilers = Items(Required(root, "spoilers", JsonValueKind.Array), 0, MaxSpoilers, SummaryGroundedLimitReason.CandidateSpoilers)
+                .Select(reader.Hidden).ToList();
             var plans = root.TryGetProperty("plans", out var planList) && planList.ValueKind != JsonValueKind.Null
-                ? Items(planList.ValueKind == JsonValueKind.Array ? planList : throw new Refused(SummaryGroundedFailure.Contract), 0, MaxCandidatePlans)
+                ? Items(planList.ValueKind == JsonValueKind.Array ? planList : throw new Refused(SummaryGroundedFailure.Contract), 0, MaxCandidatePlans,
+                        SummaryGroundedLimitReason.CandidatePlans)
                     .Select(p => reader.Open(p, withTopic: false)).ToList()
                 : [];
             var atmosphere = reader.Open(Required(root, "atmosphere", JsonValueKind.Object), withTopic: false).Text;
+            // Every item has been read: the quote count is complete, and a missing "plans" list is really no plans.
+            (evidence, candidatePlans) = (reader.EvidenceCount, plans.Count);
 
             // Nothing shown openly may repeat hidden content — in any candidate; the topic of a spoiler item is shown openly too.
             var open = new[] { main, atmosphere }.Concat(points.Select(p => p.Topic)).Concat(points.Concat(plans).Select(i => i.Text))
                 .Concat(spoilers.Select(s => s.Topic)).ToList();
             if (open.Any(reader.RepeatsHiddenContent))
-                return SummaryGroundedResult.Failed(SummaryGroundedFailure.SpoilerInOpenText);
+                return Refuse(SummaryGroundedFailure.SpoilerInOpenText);
             if (open.Concat(spoilers.Select(s => s.Text)).Any(reader.MentionsRecordReference))
-                return SummaryGroundedResult.Failed(SummaryGroundedFailure.TechnicalLeak);
+                return Refuse(SummaryGroundedFailure.TechnicalLeak);
 
             // 2) Required spoiler coverage: every window record with a hidden part is quoted, from that part, inside "spoilers".
             var required = input.RequiredSpoilerSources;
             var covered = spoilers.SelectMany(s => s.HiddenSources).ToHashSet(StringComparer.Ordinal);
             if (required.Any(r => !covered.Contains(r)))
-                return SummaryGroundedResult.Failed(SummaryGroundedFailure.MissingRequiredSpoiler);
+                return Refuse(SummaryGroundedFailure.MissingRequiredSpoiler);
 
             // 3) What is shown: exact copies once; the first points and plans in the model's order; every spoiler item.
-            var (candidatePoints, candidatePlans) = (points.Count, plans.Count);
             (points, plans) = WithoutExactCopies(points, plans);
             spoilers = Distinct(spoilers);
             var shownPoints = points.Take(ShownPoints).ToList();
             var shownPlans = plans.Take(ShownPlans).ToList();
 
             var markdown = SummaryOutput.Normalize(Render(main, shownPoints, spoilers, shownPlans, atmosphere));
+            renderedChars = markdown?.Length;
             if (markdown is null || markdown.Length > MaxRenderedChars)
-                return SummaryGroundedResult.Failed(SummaryGroundedFailure.Limit);
-            return new SummaryGroundedResult(SummaryGroundedFailure.None, markdown, reader.EvidenceCount, spoilers.Count,
-                candidatePoints, candidatePlans, shownPoints.Count, shownPlans.Count, required.Count);
+                return Refuse(SummaryGroundedFailure.Limit, SummaryGroundedLimitReason.RenderedChars, renderedChars);
+            return new SummaryGroundedResult(SummaryGroundedFailure.None, markdown, evidence, spoilers.Count,
+                candidatePoints, candidatePlans, shownPoints.Count, shownPlans.Count, required.Count, candidateSpoilers, answerChars, renderedChars);
         }
         catch (JsonException)
         {
-            return SummaryGroundedResult.Failed(SummaryGroundedFailure.NotJson); // the exception text may quote the answer: never logged
+            return Refuse(SummaryGroundedFailure.NotJson); // the exception text may quote the answer: never logged
         }
         catch (Refused refused)
         {
-            return SummaryGroundedResult.Failed(refused.Failure);
+            return Refuse(refused.Failure, refused.LimitReason, refused.LimitValue);
         }
     }
+
+    /// <summary>The size of a list of the answer, or null when it is not there as a list. A number only; no item is read.</summary>
+    private static int? Length(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array ? value.GetArrayLength() : null;
 
     /// <summary>
     /// Removes records that are exactly the same — same text, same evidence — keeping the first of each list; a point that is
@@ -271,26 +343,29 @@ public static partial class SummaryGroundedAnswer
     private static JsonElement Required(JsonElement parent, string name, JsonValueKind kind) =>
         parent.TryGetProperty(name, out var value) && value.ValueKind == kind ? value : throw new Refused(SummaryGroundedFailure.Contract);
 
-    private static List<JsonElement> Items(JsonElement array, int min, int max)
+    private static List<JsonElement> Items(JsonElement array, int min, int max, SummaryGroundedLimitReason bound)
     {
         var count = array.GetArrayLength();
         if (count < min)
             throw new Refused(SummaryGroundedFailure.Contract);
-        return count > max ? throw new Refused(SummaryGroundedFailure.Limit) : array.EnumerateArray().ToList();
+        return count > max ? throw TooLarge(bound, count) : array.EnumerateArray().ToList();
     }
 
-    /// <summary>A required visible string: one line, without spoiler marks or heading markup, within <paramref name="max"/>.</summary>
-    private static string Text(JsonElement parent, string name, int max)
+    /// <summary>
+    /// A required visible string: one line, without spoiler marks or heading markup, within <paramref name="max"/>;
+    /// <paramref name="bound"/> names that bound when the string is too long.
+    /// </summary>
+    private static string Text(JsonElement parent, string name, int max, SummaryGroundedLimitReason bound)
     {
         if (!parent.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String)
             throw new Refused(SummaryGroundedFailure.Contract);
         var raw = value.GetString()!;
         if (raw.Length > max * 2)
-            throw new Refused(SummaryGroundedFailure.Limit);
+            throw TooLarge(bound, raw.Length);
         var text = Clean(raw);
         if (text.Length == 0)
             throw new Refused(SummaryGroundedFailure.Contract);
-        return text.Length > max ? throw new Refused(SummaryGroundedFailure.Limit) : text;
+        return text.Length > max ? throw TooLarge(bound, text.Length) : text;
     }
 
     private static string Clean(string text)
@@ -326,8 +401,8 @@ public static partial class SummaryGroundedAnswer
             // The spoiler topic field of the earlier contract has no place here: such an answer is not converted silently.
             if (element.ValueKind != JsonValueKind.Object || element.TryGetProperty("s", out _))
                 throw new Refused(SummaryGroundedFailure.Contract);
-            var topic = withTopic ? Topic(Text(element, "topic", MaxTopicChars)) : "";
-            var text = Text(element, "t", MaxTextChars);
+            var topic = withTopic ? Topic(Text(element, "topic", MaxTopicChars, SummaryGroundedLimitReason.TopicChars)) : "";
+            var text = Text(element, "t", MaxTextChars, SummaryGroundedLimitReason.TextChars);
             var (fromHidden, sources, hiddenSources) = Evidence(element);
             return new Item(topic, text, sources, fromHidden, hiddenSources);
         }
@@ -343,7 +418,7 @@ public static partial class SummaryGroundedAnswer
             var onlyContext = true;
             var pairs = new List<string>(MaxEvidence);
             var hiddenSources = new List<string>();
-            foreach (var item in Items(Required(element, "e", JsonValueKind.Array), 1, MaxEvidence))
+            foreach (var item in Items(Required(element, "e", JsonValueKind.Array), 1, MaxEvidence, SummaryGroundedLimitReason.EvidencePerText))
             {
                 if (item.ValueKind != JsonValueKind.Array || item.GetArrayLength() != 2 ||
                     item[0].ValueKind != JsonValueKind.String || item[1].ValueKind != JsonValueKind.String)
@@ -354,12 +429,12 @@ public static partial class SummaryGroundedAnswer
 
                 var raw = item[1].GetString()!;
                 if (raw.Length > MaxQuoteChars * 2)
-                    throw new Refused(SummaryGroundedFailure.Limit);
+                    throw TooLarge(SummaryGroundedLimitReason.QuoteChars, raw.Length);
                 // The only tolerance: spoiler tags (not part of the member's text) and whitespace runs.
                 var quote = SummaryGrounded.CollapseWhitespace(raw.Replace(SummaryTranscript.SpoilerOpen, " ", StringComparison.Ordinal)
                     .Replace(SummaryTranscript.SpoilerClose, " ", StringComparison.Ordinal));
                 if (quote.Length > MaxQuoteChars)
-                    throw new Refused(SummaryGroundedFailure.Limit);
+                    throw TooLarge(SummaryGroundedLimitReason.QuoteChars, quote.Length);
                 if (quote.Length < MinQuoteChars)
                     throw new Refused(SummaryGroundedFailure.QuoteNotFound);
 
