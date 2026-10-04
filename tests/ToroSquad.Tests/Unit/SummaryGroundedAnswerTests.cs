@@ -14,7 +14,7 @@ namespace ToroSquad.Tests.Unit;
 /// separate: a few more points or plans than are shown is not a failure. These checks prove that sources exist, quotes are
 /// intact and hidden quotes stay hidden — not that the model understood them or that a spoiler text says what happened.
 /// </summary>
-public sealed class SummaryGroundedAnswerTests
+public sealed partial class SummaryGroundedAnswerTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 10, 3, 18, 0, 0, TimeSpan.Zero);
     private static readonly TimeZoneInfo Istanbul = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
