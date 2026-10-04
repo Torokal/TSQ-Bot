@@ -171,29 +171,40 @@ yok).
 > `Summary:GroundedCanaryChannelIds` eklendi. Varsayılan liste **boştur**: canary yoktur ve bütün kanallar Legacy'dir. Mekanizmanın
 > deploy edilmesi canlı bir Grounded testi değildir.
 >
-> **Canlı Grounded değerlendirmesi (2026-10-04) — DURDURULDU, üretim Legacy:** Sahibin kararıyla Grounded üretimde genel
-> olarak açıldı (`mode_source=Global`, canary listesi boş). İki gerçek 100 mesajlık deneme yapıldı, ikisi de üretici
+> **Canlı Grounded değerlendirmesi (2026-10-04) — DURDURULDU, üretim Legacy:** Sahibin kararıyla Grounded üretimde iki kez genel
+> olarak açıldı (`mode_source=Global`, canary listesi boş). Toplam **üç** gerçek 100 mesajlık deneme yapıldı, üçü de üretici
 > aşamasında bitti:
 >
-> | | Deneme 1 | Deneme 2 |
-> |---|---|---|
-> | üretici (GLM-5.3-Flash) | zaman aşımı, 35,005 sn | cevap geldi, 31,267 sn (HTTP 200, `finish_reason=stop`, 5983 girdi / 1285 çıktı / 0 reasoning token) |
-> | doğrulama | cevap yok | `validation=Limit` — taslak reddedildi |
-> | denetçi | çağrılmadı | çağrılmadı |
-> | yayımlanan özet | yok | yok |
+> | | Deneme 1 (1. pencere) | Deneme 2 (1. pencere) | Deneme 3 (2. pencere) |
+> |---|---|---|---|
+> | üretici (GLM-5.3-Flash) | zaman aşımı, 35,005 sn | cevap geldi, 31,267 sn (HTTP 200, `finish_reason=stop`, 5983 girdi / 1285 çıktı / 0 reasoning token) | cevap geldi, 5,344 sn (HTTP 200, `finish_reason=stop`, 5983 girdi / 1133 çıktı / 0 reasoning token) |
+> | doğrulama | cevap yok | `validation=Limit` — taslak reddedildi | `validation=NotJson` — taslak reddedildi |
+> | denetçi | çağrılmadı | çağrılmadı | çağrılmadı |
+> | yayımlanan özet | yok | yok | yok |
 >
-> Denetçi iki denemede de çağrılmadı ve herkese açık bir Grounded özet **hiç yayımlanmadı**. Durdurma ölçütü (ilk 10 gerçek
-> denemede 2 işletim hatası) tetiklendi ve üretim elle Legacy'e geri alındı (`TOROSQUAD_Summary__GenerationMode=Legacy`).
-> Aynı pencerede iki komut daha 100 yeni mesaj kuralında bitti; AI isteği yapılmadığı için deneme sayılmaz. İkinci denemede
-> **hangi `Limit` sınırının aşıldığı bilinmiyor**: o sırada log yalnızca genel kategoriyi taşıyordu ve cevap içeriği hiçbir
-> zaman loglanmaz. Bu sonradan da doldurulamaz. İki deneme sentetik denemelerden iki noktada ayrıldı: üretici 31–35+ saniye
-> sürdü (sentetik fixture'larda 5–22 saniye) ve v4 denemelerinde görülmeyen bir `Limit` reddi oldu. Durum:
+> Canlı toplam: **3 Grounded denemesi, 0 yayımlanan özet, 3 üretici aşaması hatası** (Timeout, Limit, NotJson). Denetçi hiçbir
+> canlı denemede çağrılmadı. İlk pencere iki denemeden sonra (durdurma ölçütü: ilk 10 gerçek denemede 2 işletim hatası),
+> ikinci pencere tek denemeden sonra sahibin kararıyla kapatıldı; ikisinde de üretim elle Legacy'e geri alındı
+> (`TOROSQUAD_Summary__GenerationMode=Legacy`). İlk pencerede iki komut daha 100 yeni mesaj kuralında bitti; AI isteği
+> yapılmadığı için deneme sayılmaz.
+>
+> Bilinmeyenler sonradan doldurulamaz, çünkü cevap içeriği hiçbir zaman loglanmaz ve ilgili tanılama o sırada yoktu:
+> ikinci denemede **hangi `Limit` sınırının aşıldığı bilinmiyor** (`limit_reason` o denemeden sonra eklendi); üçüncü denemede
+> cevabın **neden tek bir JSON nesnesi olarak okunamadığı bilinmiyor** (`not_json_reason` o denemeden sonra eklendi).
+> Üçüncü denemeden bilinenler: cevap 3232 karakterdi (`raw_answer_chars`), kesilmedi ve bir `Limit` değildi. Canlı denemeler
+> sentetik denemelerden ayrıldı: üretici ilk pencerede 31–35+ saniye sürdü (sentetik fixture'larda 5–22 saniye; üçüncü denemede
+> 5,3 saniye) ve v4 sentetik denemelerinde görülmeyen `Limit` ve `NotJson` retleri oldu. Durum:
 > `GROUNDED_LIVE_EVALUATION_STOPPED`, `PRODUCTION_LEGACY`. Grounded'in yeniden açılması, yeni bir canary veya yeni bir model
 > denemesi sahibin ayrı onayına bağlıdır.
 >
 > **`Limit` tanılaması (2026-10-04):** `Limit` reddi artık hangi güvenlik sınırının ilk reddi oluşturduğunu söyler
 > (`limit_reason`, aşağıda "Gizlilik ve loglar"). Yalnızca tanılama görünürlüğüdür: sınırların hiçbiri, prompt, modeller,
 > sözleşme ve zaman aşımları değişmedi; bugün reddedilen bir cevap aynı şekilde reddedilir. Yeni bir model isteği yapılmadı.
+>
+> **`NotJson` tanılaması (2026-10-04):** `NotJson` reddi artık cevabın neden tek bir JSON nesnesi olarak okunamadığını söyler
+> (`not_json_reason`, aşağıda "Gizlilik ve loglar"). Yalnızca tanılama: metnin içinden `{…}` aranmaz, fazladan metin kesilip
+> kabul edilmez, bozuk JSON onarılmaz, kod çiti toleransı genişletilmedi ve JSON onarımı için ikinci bir istek yapılmaz. Bugün
+> `NotJson` olan cevap aynı şekilde `NotJson` olur. Yeni bir model isteği yapılmadı.
 
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
 
@@ -758,8 +769,8 @@ Log satırlarında yalnızca şunlar bulunur: izleme kodu, guild/kanal/çağıra
 Grounded modunda ayrıca: `validation` (kategori), `source_count`, `reply_count`, `reply_unavailable_count`, `context_count`,
 `evidence_count` (kontrol edilen tüm adaylar), `spoiler_claim_count` (spoiler olarak yayımlanan maddeler),
 `candidate_point_count`, `candidate_spoiler_count`, `candidate_plan_count`, `shown_point_count`, `shown_plan_count`,
-`raw_answer_chars` (cevabın alındığı hâliyle uzunluğu), `rendered_chars` (oluşturulan Markdown'un uzunluğu), `limit_reason`
-ve `limit_value`. `validation` kategorileri arasında
+`raw_answer_chars` (cevabın alındığı hâliyle uzunluğu), `rendered_chars` (oluşturulan Markdown'un uzunluğu), `limit_reason`,
+`limit_value` ve `not_json_reason`. `validation` kategorileri arasında
 `MissingRequiredSpoiler` de vardır; `spoiler_claim_count` yayımlanan spoiler elemanlarının sayısıdır. Grounded doğrulama satırı
 `stage` (generator \| reviewer) taşır ve ayrı bir satırda iki aşamanın kullanımı loglanır: `inference_count`, `draft_accepted`,
 `generator_model`, `generator_input_tokens`, `generator_output_tokens`, `generator_reasoning_tokens`, `generator_latency_ms`,
@@ -792,6 +803,21 @@ değer `unknown` olur, uydurma `0` olmaz. Üç liste boyu (`candidate_*_count`) 
 okunmadan bilinir; `evidence_count` yalnızca bütün maddeler okunduysa, `rendered_chars` yalnızca özet oluşturulduysa bilinir.
 `shown_point_count`, `shown_plan_count` ve `spoiler_claim_count` yayımlananı sayar; reddedilen cevapta gerçekten `0`'dır.
 Bu satır yalnızca ad ve sayı taşır: cevap, konu başlığı, alıntı, mesaj metni veya prompt yazılmaz.
+
+**`NotJson` alt nedeni.** `validation=NotJson` olduğunda `not_json_reason` cevabın neden tek bir JSON nesnesi olarak
+okunamadığını adlandırır; diğer bütün sonuçlarda `not_json_reason=None` yazılır.
+
+| `not_json_reason` | Anlamı |
+|---|---|
+| `Envelope` | Baştaki/sondaki boşluk ve desteklenen tek kod çiti çıkarıldıktan sonra cevap `{` ile başlayıp `}` ile bitmiyor: nesnenin önünde veya arkasında metin, kapanmamış bir nesne ya da hiç nesne yok |
+| `CodeFence` | Cevap bir kod çitiyle başlıyor ama desteklenen biçimde değil: açılış satırından sonra satır sonu yok, kapanış çiti yok ya da kapanıştan sonra metin var |
+| `MalformedJson` | Cevap `{` ile başlayıp `}` ile bitiyor ama geçerli JSON değil |
+| `RootNotObject` | Geçerli JSON, ama kökü nesne değil (dizi, metin, sayı, sabit) |
+
+Desteklenen tek kod çiti biçimi değişmedi: açılış satırı, nesne ve en sonda kapanış çiti. Boş cevap için ayrı bir kategori
+yoktur: sağlayıcı istemcisi boş cevabı kendi hatasıyla (`EmptyOutput`) bildirir ve okuyucuya ulaşmaz. `NotJson` olan bir cevap
+açılmadığı için aday ve dayanak sayıları `unknown` kalır; yalnızca `raw_answer_chars` bilinir. Cevabın başındaki veya
+sonundaki karakterler, kod çitinin dili ve JSON ayrıştırıcısının hata mesajı (cevap içeriği taşıyabilir) loglanmaz.
 
 **Grounded'de ikinci gönderim.** Grounded modu doğrulamadan geçen bir ilk taslak ürettiğinde, aynı geçici Discord transcript'i
 (aynı kayıtlar) taslakla birlikte ikinci, denetim isteğinde de AI sağlayıcısına gönderilir. Bu veri de veritabanına yazılmaz,

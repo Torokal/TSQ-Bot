@@ -78,6 +78,34 @@ public enum SummaryGroundedLimitReason
 }
 
 /// <summary>
+/// Why an answer refused with <see cref="SummaryGroundedFailure.NotJson"/> could not be read as one JSON object. Diagnostic
+/// only — what is accepted and refused is the same; <see cref="None"/> for every other outcome. Logged as a name, never
+/// with the answer's content, its first or last characters, a fence's language or the parser's message.
+/// </summary>
+public enum SummaryGroundedNotJsonReason
+{
+    None = 0,
+
+    /// <summary>
+    /// Once surrounding whitespace and the one supported enclosing code fence are removed, the answer does not start with
+    /// <c>{</c> and end with <c>}</c>: text before or after the object, an object that is not closed, or no object at all.
+    /// </summary>
+    Envelope = 1,
+
+    /// <summary>
+    /// The answer begins with a code fence that is not the supported shape (an opening line, the object, the closing fence
+    /// at the very end): no line break after the opening, no closing fence, or text after it.
+    /// </summary>
+    CodeFence = 2,
+
+    /// <summary>It starts with <c>{</c> and ends with <c>}</c> but is not valid JSON.</summary>
+    MalformedJson = 3,
+
+    /// <summary>Valid JSON whose root is not an object: an array, a string, a number, a literal.</summary>
+    RootNotObject = 4,
+}
+
+/// <summary>
 /// The outcome: the Markdown to post, or the failure category; plus numbers for the log. <paramref name="EvidenceCount"/>
 /// covers every candidate that was checked; <paramref name="SpoilerClaimCount"/> the items published in the hidden section;
 /// the candidate counts are what the model wrote, the shown counts what was rendered;
@@ -87,7 +115,8 @@ public enum SummaryGroundedLimitReason
 /// model wrote none". The published counts (<paramref name="SpoilerClaimCount"/>, the shown counts) are really 0 for a
 /// refused answer.
 /// <paramref name="LimitReason"/> names the bound behind a <see cref="SummaryGroundedFailure.Limit"/> and
-/// <paramref name="LimitValue"/> the size that broke it (a count or a length, never content).
+/// <paramref name="LimitValue"/> the size that broke it (a count or a length, never content);
+/// <paramref name="NotJsonReason"/> says why a <see cref="SummaryGroundedFailure.NotJson"/> answer was not one JSON object.
 /// </summary>
 public sealed record SummaryGroundedResult(
     SummaryGroundedFailure Failure,
@@ -103,7 +132,8 @@ public sealed record SummaryGroundedResult(
     int? AnswerChars = null,
     int? RenderedChars = null,
     SummaryGroundedLimitReason LimitReason = SummaryGroundedLimitReason.None,
-    int? LimitValue = null)
+    int? LimitValue = null,
+    SummaryGroundedNotJsonReason NotJsonReason = SummaryGroundedNotJsonReason.None)
 {
     public bool Succeeded => Failure == SummaryGroundedFailure.None && Markdown is not null;
 }
@@ -182,15 +212,16 @@ public static partial class SummaryGroundedAnswer
         // What a refusal can still say in numbers. Each stays null until the reader has really measured it: an answer refused
         // early has unknown counts, not zero ones.
         int? answerChars = raw?.Length, candidatePoints = null, candidateSpoilers = null, candidatePlans = null, evidence = null, renderedChars = null;
-        SummaryGroundedResult Refuse(SummaryGroundedFailure failure, SummaryGroundedLimitReason limitReason = SummaryGroundedLimitReason.None, int? limitValue = null) =>
+        SummaryGroundedResult Refuse(SummaryGroundedFailure failure, SummaryGroundedLimitReason limitReason = SummaryGroundedLimitReason.None, int? limitValue = null,
+            SummaryGroundedNotJsonReason notJson = SummaryGroundedNotJsonReason.None) =>
             new(failure, null, evidence, 0, candidatePoints, candidatePlans, CandidateSpoilers: candidateSpoilers, AnswerChars: answerChars,
-                RenderedChars: renderedChars, LimitReason: limitReason, LimitValue: limitValue);
+                RenderedChars: renderedChars, LimitReason: limitReason, LimitValue: limitValue, NotJsonReason: notJson);
 
         if (finishReason == "length")
             return Refuse(SummaryGroundedFailure.Truncated);
-        var body = Unwrap(raw);
+        var body = Unwrap(raw, out var notObject);
         if (body is null)
-            return Refuse(SummaryGroundedFailure.NotJson);
+            return Refuse(SummaryGroundedFailure.NotJson, notJson: notObject);
         if (body.Length > MaxAnswerChars)
             return Refuse(SummaryGroundedFailure.Limit, SummaryGroundedLimitReason.AnswerChars, body.Length);
 
@@ -199,7 +230,7 @@ public static partial class SummaryGroundedAnswer
             using var document = JsonDocument.Parse(body);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
-                return Refuse(SummaryGroundedFailure.NotJson);
+                return Refuse(SummaryGroundedFailure.NotJson, notJson: SummaryGroundedNotJsonReason.RootNotObject);
             // The three list sizes as plain numbers, before any item is read: a refusal further down can still say how much
             // the model wrote. Nothing is checked or decided here.
             (candidatePoints, candidateSpoilers, candidatePlans) = (Length(root, "points"), Length(root, "spoilers"), Length(root, "plans"));
@@ -255,7 +286,8 @@ public static partial class SummaryGroundedAnswer
         }
         catch (JsonException)
         {
-            return Refuse(SummaryGroundedFailure.NotJson); // the exception text may quote the answer: never logged
+            // The exception text may quote the answer: never logged, only the category.
+            return Refuse(SummaryGroundedFailure.NotJson, notJson: SummaryGroundedNotJsonReason.MalformedJson);
         }
         catch (Refused refused)
         {
@@ -295,22 +327,52 @@ public static partial class SummaryGroundedAnswer
 
     /// <summary>
     /// The answer as one JSON object: surrounding whitespace and one enclosing code fence are removed, nothing else — text
-    /// before or after the object is a refusal, not something to cut away.
+    /// before or after the object is a refusal, not something to cut away. A refusal says why in <paramref name="reason"/>;
+    /// that is a label for the log and changes nothing about what is returned.
     /// </summary>
-    private static string? Unwrap(string? raw)
+    private static string? Unwrap(string? raw, out SummaryGroundedNotJsonReason reason)
     {
-        if (string.IsNullOrWhiteSpace(raw))
-            return null;
-        var text = raw.Trim();
-        if (text.StartsWith("```", StringComparison.Ordinal) && text.EndsWith("```", StringComparison.Ordinal) && text.Length > 6)
+        reason = SummaryGroundedNotJsonReason.None;
+        var text = raw?.Trim() ?? "";
+        var fenced = text.StartsWith("```", StringComparison.Ordinal);
+        if (fenced && text.EndsWith("```", StringComparison.Ordinal) && text.Length > 6)
         {
             var firstLineEnd = text.IndexOf('\n');
             if (firstLineEnd < 0)
+            {
+                reason = SummaryGroundedNotJsonReason.CodeFence;
                 return null;
+            }
+
             text = text[(firstLineEnd + 1)..^3].Trim();
+            fenced = false; // the one supported fence is gone; what is left is judged as it stands
         }
 
-        return text.StartsWith('{') && text.EndsWith('}') ? text : null;
+        if (text.StartsWith('{') && text.EndsWith('}'))
+            return text;
+        reason = fenced ? SummaryGroundedNotJsonReason.CodeFence
+            : IsJson(text) ? SummaryGroundedNotJsonReason.RootNotObject
+            : SummaryGroundedNotJsonReason.Envelope;
+        return null;
+    }
+
+    /// <summary>
+    /// Whether an already refused text is valid JSON of another kind (an array, a string, a number). Only to label the
+    /// refusal: nothing is read from it, and the parser's message — which may quote the answer — is dropped.
+    /// </summary>
+    private static bool IsJson(string text)
+    {
+        if (text.Length == 0 || text.Length > MaxAnswerChars)
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static string Render(string main, List<Item> points, List<Item> spoilers, List<Item> plans, string atmosphere)
