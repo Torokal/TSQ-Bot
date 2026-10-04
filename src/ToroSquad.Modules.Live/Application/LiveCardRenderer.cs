@@ -14,7 +14,14 @@ namespace ToroSquad.Modules.Live.Application;
 /// </summary>
 public sealed class LiveCardRenderer(ILocalizer localizer)
 {
+    /// <summary>TSQ Live red: the creator is live on more than one platform (multistream); also the fallback.</summary>
     public const uint LiveColor = 0xE91916;
+
+    /// <summary>Twitch purple (#9146FF): live on Twitch only.</summary>
+    public const uint TwitchColor = 0x9146FF;
+
+    /// <summary>Kick green (#53FC18): live on Kick only.</summary>
+    public const uint KickColor = 0x53FC18;
     public const uint EndedColor = 0x747F8D;
 
     /// <summary>Profile picture hosts of Twitch (static-cdn.jtvnw.net) and Kick (kick.com subdomains).</summary>
@@ -39,11 +46,22 @@ public sealed class LiveCardRenderer(ILocalizer localizer)
             [],
             L(language, "live.card.footer", string.Join(", ", live.Select(p => p.Name()))),
             state.SessionStartedAt,
-            LiveColor,
+            LiveColorFor(live),
             Avatar(platforms, live));
         var content = L(language, withEveryone ? "live.card.content_everyone" : "live.card.content", name);
         return new OutgoingMessage(content, embed, withEveryone ? MentionPolicy.EveryoneOnly : MentionPolicy.None, buttons);
     }
+
+    /// <summary>
+    /// Embed accent of a live card (presentation only): the platform's own colour while exactly one platform is live, the
+    /// TSQ Live red for a multistream (and as the fallback).
+    /// </summary>
+    public static uint LiveColorFor(IReadOnlyList<LivePlatform> livePlatforms) => livePlatforms switch
+    {
+        [LivePlatform.Twitch] => TwitchColor,
+        [LivePlatform.Kick] => KickColor,
+        _ => LiveColor,
+    };
 
     /// <summary>The same message after the session ended: no ping, no buttons, how long it lasted and where.</summary>
     public OutgoingMessage Ended(TrackedCreator creator, CreatorState state, IReadOnlyList<PlatformState> platforms, string language)

@@ -49,6 +49,7 @@ public sealed class LiveAnnouncementTests
         message.Message.Embed!.Title.Should().Be("VALHEIM SERVERA GİRİYORUZ");
         message.Message.Embed.Description.Should().Contain("🔴 **CANLI** · Twitch").And.Contain("🎮 Valheim").And.Contain("<t:");
         message.Message.Embed.Url.Should().Be("https://www.twitch.tv/lordtoro");
+        message.Message.Embed.Color.Should().Be(0x9146FFu, "Twitch only = Twitch purple");
         message.Message.Buttons!.Select(b => (b.Label, b.Url)).Should().Equal(("Twitch'te İzle", "https://www.twitch.tv/lordtoro"));
         message.Edits.Should().BeEmpty("an unchanged state never causes an edit");
         (await bed.CreatorAsync(Toro)).Should().Match<CreatorState>(s => s.Phase == CreatorPhase.Live && s.Announced && s.AnnouncementMessageId == message.Id.Value);
@@ -67,6 +68,7 @@ public sealed class LiveAnnouncementTests
         message.Message.Content.Should().Be("@everyone 🔴 **NASILYANI69** yayında!");
         message.Message.Buttons!.Select(b => (b.Label, b.Url)).Should().Equal(("Kick'te İzle", "https://kick.com/nasilyani69"));
         message.Message.Embed!.Description.Should().Contain("🔴 **CANLI** · Kick");
+        message.Message.Embed.Color.Should().Be(0x53FC18u, "Kick only = Kick green");
     }
 
     [Fact]
@@ -84,6 +86,8 @@ public sealed class LiveAnnouncementTests
         edit.Mentions.PingsAnything.Should().BeFalse("edits never ping");
         edit.Buttons!.Select(b => b.Label).Should().Equal("Twitch'te İzle", "Kick'te İzle");
         edit.Embed!.Description.Should().Contain("Twitch + Kick");
+        message.Message.Embed!.Color.Should().Be(0x9146FFu, "first announced on Twitch only");
+        edit.Embed.Color.Should().Be(0xE91916u, "multistream = TSQ Live red, on the same message");
         (await bed.CreatorAsync(Toro)).SessionNumber.Should().Be(1);
     }
 
@@ -99,6 +103,8 @@ public sealed class LiveAnnouncementTests
         var message = bed.Messages.Should().ContainSingle().Subject;
         bed.EveryonePings.Should().Be(1);
         message.Edits[^1].Buttons!.Select(b => b.Label).Should().Equal("Twitch'te İzle", "Kick'te İzle");
+        message.Message.Embed!.Color.Should().Be(0x53FC18u);
+        message.Edits[^1].Embed!.Color.Should().Be(0xE91916u);
     }
 
     [Fact]
@@ -231,6 +237,7 @@ public sealed class LiveAnnouncementTests
         endCard.Content.Should().Be("⚫ **LORDTORO** yayını sona erdi.");
         endCard.Buttons.Should().BeNullOrEmpty();
         endCard.Embed!.Description.Should().Contain("Yayın sona erdi").And.Contain("Süre:");
+        endCard.Embed.Color.Should().Be(0x747F8Du, "the ended colour is unchanged");
 
         bed.Twitch.GoLive(Toro, Stream("t9", bed.Now + TimeSpan.FromMinutes(40), "İkinci yayın"));
         bed.Host.Clock.Advance(TimeSpan.FromMinutes(40));
@@ -404,8 +411,43 @@ public sealed class LiveAnnouncementTests
         var message = bed.Messages.Should().ContainSingle().Subject;
         message.Edits.Should().ContainSingle();
         message.Edits[0].Buttons!.Select(b => b.Label).Should().Equal("Twitch'te İzle");
+        message.Message.Embed!.Color.Should().Be(0xE91916u, "announced as a multistream");
+        message.Edits[0].Embed!.Color.Should().Be(0x9146FFu, "Kick left, Twitch stays = Twitch purple");
         (await bed.CreatorAsync(Toro)).Phase.Should().Be(CreatorPhase.Live);
         bed.EveryonePings.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Card_colour_follows_the_live_platforms_on_the_same_message_without_any_new_ping()
+    {
+        await using var bed = await WatchingAsync();
+        bed.Twitch.GoLive(Toro, Stream("t1", bed.Now, "Renk"));
+        await bed.StepAsync(Poll);                       // Twitch only
+        bed.Kick.GoLive(Toro, Stream("k1", bed.Now, "Renk"));
+        await bed.StepAsync(Poll);                       // Twitch + Kick
+        bed.Twitch.GoOffline(Toro);
+        await bed.StepAsync(Poll);                       // Kick only
+        bed.Kick.GoOffline(Toro);
+        await StepsAsync(bed, 6);                        // grace over, confirmed offline → ended
+
+        var message = bed.Messages.Should().ContainSingle("the colour changes by editing the same Discord message").Subject;
+        message.Message.Embed!.Color.Should().Be(LiveCardRenderer.TwitchColor);
+        message.Edits.Select(e => e.Embed!.Color).Should().Equal(
+            [LiveCardRenderer.LiveColor, LiveCardRenderer.KickColor, LiveCardRenderer.EndedColor],
+            "multistream red → Kick green → ended grey");
+        message.Edits.Should().OnlyContain(e => !e.Mentions.PingsAnything);
+        bed.EveryonePings.Should().Be(1);
+        (await bed.CreatorAsync(Toro)).SessionNumber.Should().Be(1);
+    }
+
+    [Fact]
+    public void Live_colour_is_the_platform_colour_for_one_platform_and_tsq_red_otherwise()
+    {
+        LiveCardRenderer.LiveColorFor([LivePlatform.Twitch]).Should().Be(0x9146FFu);
+        LiveCardRenderer.LiveColorFor([LivePlatform.Kick]).Should().Be(0x53FC18u);
+        LiveCardRenderer.LiveColorFor([LivePlatform.Twitch, LivePlatform.Kick]).Should().Be(0xE91916u);
+        LiveCardRenderer.LiveColorFor([]).Should().Be(0xE91916u, "fallback");
+        LiveCardRenderer.EndedColor.Should().Be(0x747F8Du);
     }
 
     [Fact]

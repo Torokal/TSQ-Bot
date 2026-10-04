@@ -22,6 +22,8 @@ kanal adı yönetimi, kullanıcıların kendi yayınlarını eklemesi.
 - İkinci platformun açılması, başlık/kategori değişmesi, bir platformun kapanması, oturumun bitmesi → **aynı mesaj
   düzenlenir**, düzenlemeler asla ping atmaz (outbox + transport `allowed_mentions` boş gönderir). Yeniden bağlanma
   toleransı sırasında kart hiç değiştirilmez (flap düzenleme bile üretmez).
+- Kart rengi canlı platformlara göre: yalnız Twitch `#9146FF`, yalnız Kick `#53FC18`, çoklu yayın `#E91916`, sona erdi
+  `#747F8D` (yalnızca görünüm; renk değişimi de aynı mesajı pingsiz düzenler).
 - Kart: başlık (en son değişen platform başlığı), `🔴 CANLI · Twitch + Kick`, kategori, Discord göreli başlangıç zamanı,
   profil resmi (yalnızca `static-cdn.jtvnw.net` / `*.kick.com`, `ThumbnailPolicy`), yalnızca canlı platformlar için
   "Twitch'te İzle" / "Kick'te İzle" link butonları (URL'ler yapılandırmadan, sağlayıcıdan değil). Sağlayıcı metni
