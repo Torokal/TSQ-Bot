@@ -8,6 +8,10 @@ namespace ToroSquad.Core.Notifications;
 /// A notification a module wants delivered to a configured guild channel. The logical key
 /// (guild + module + source item + channel + kind) is unique in the outbox, so re-polling, restarts and
 /// "two followed teams in the same match" can never produce a second message for the same thing.
+/// <para><see cref="EarliestDeliveryAt"/> (optional) holds the first send back until that instant; the row is staged at
+/// once and waits durably in the outbox, so a restart neither loses nor shortens the wait. Null (the default, every
+/// existing caller) means "deliver as soon as possible". It only applies when the row is created: staging the same
+/// logical key again never moves the delivery time.</para>
 /// </summary>
 public sealed record NotificationRequest(
     GuildId Guild,
@@ -17,7 +21,8 @@ public sealed record NotificationRequest(
     string Kind,
     OutgoingMessage Message,
     DateTimeOffset ExpiresAt,
-    bool IsDryRun)
+    bool IsDryRun,
+    DateTimeOffset? EarliestDeliveryAt = null)
 {
     public string LogicalKey => BuildLogicalKey(Guild, Module, SourceKey, Channel, Kind, IsDryRun);
 

@@ -263,6 +263,9 @@ public sealed class Formula1NotificationPlanner(
     /// <summary>
     /// Safety Car, red flag and disqualification cards from the persisted race-control history: one card per real phase
     /// start (per disqualified car), only while fresh relative to the provider message time and after the watermark.
+    /// Safety Car and red-flag cards are spoiler-held: staged immediately, delivered no earlier than the provider's event
+    /// time + <see cref="Formula1Options.LiveIncidentSpoilerDelaySeconds"/>. Disqualifications (from the classification,
+    /// after the session) and every other F1 card are not held.
     /// </summary>
     private async Task<(int Created, int Updated)> PlanIncidentsAsync(Formula1GuildConfigEntity config, PlanV2 p, List<F1SessionSnapshotEntity> sessions,
         List<F1RaceControlEventEntity> rows, Dictionary<string, F1ResultSnapshotEntity> resultRows, Formula1Options o, CancellationToken ct)
@@ -272,21 +275,22 @@ public sealed class Formula1NotificationPlanner(
             return (created, updated);
         var fresh = TimeSpan.FromMinutes(o.IncidentFreshMinutes);
         var dsqFresh = TimeSpan.FromHours(o.DisqualificationFreshHours);
+        var spoilerHold = TimeSpan.FromSeconds(o.LiveIncidentSpoilerDelaySeconds); // Safety Car and red flag only
         foreach (var session in sessions)
         {
             var view = Formula1Workflow.ToView(session);
             var history = rows.Where(r => r.SessionKey == session.SessionKey).Select(ToIncident).ToList();
-            var staged = new List<(string Kind, F1RaceControlIncident Incident, TimeSpan Window, OutgoingMessage Message)>();
+            var staged = new List<(string Kind, F1RaceControlIncident Incident, TimeSpan Window, TimeSpan Hold, OutgoingMessage Message)>();
 
             if (config.NotifySafetyCar)
             {
-                staged.AddRange(F1IncidentPhases.SafetyCarStarts(history).Select(start => (SafetyCarPrefix + Ticks(start), start, fresh,
+                staged.AddRange(F1IncidentPhases.SafetyCarStarts(history).Select(start => (SafetyCarPrefix + Ticks(start), start, fresh, spoilerHold,
                     renderer.SafetyCar(view, start, p.Language, lifecycle.AttributionKey))));
             }
 
             if (config.NotifyRedFlag)
             {
-                staged.AddRange(F1IncidentPhases.RedFlagStarts(history).Select(start => (RedFlagPrefix + Ticks(start), start, fresh,
+                staged.AddRange(F1IncidentPhases.RedFlagStarts(history).Select(start => (RedFlagPrefix + Ticks(start), start, fresh, spoilerHold,
                     renderer.RedFlag(view, start, p.Language, lifecycle.AttributionKey))));
             }
 
@@ -294,17 +298,20 @@ public sealed class Formula1NotificationPlanner(
             {
                 var names = resultRows.TryGetValue(session.SessionKey, out var r) ? F1Json.Deserialize<F1SessionResult>(r.PayloadJson) : null;
                 staged.AddRange(F1IncidentPhases.Disqualifications(history).Select(dsq => (
-                    DisqualificationPrefix + dsq.DriverNumber!.Value.ToString(CultureInfo.InvariantCulture), dsq, dsqFresh,
+                    DisqualificationPrefix + dsq.DriverNumber!.Value.ToString(CultureInfo.InvariantCulture), dsq, dsqFresh, TimeSpan.Zero,
                     renderer.Disqualification(view, dsq, names?.Entries.FirstOrDefault(e => e.DriverNumber == dsq.DriverNumber)?.DriverName, p.Language,
                         lifecycle.AttributionKey))));
             }
 
-            foreach (var (kind, incident, window, message) in staged)
+            foreach (var (kind, incident, window, hold, message) in staged)
             {
                 if (incident.OccurredAt < config.WatermarkUtc || p.Now - incident.OccurredAt > window)
                     continue; // before the watermark or no longer fresh: never announced late
+                // Spoiler hold: staged now, deliverable from the provider's event time + hold (not from when we received it;
+                // an event that reached us later than that is not held any further). Deterministic, so it never slides.
+                DateTimeOffset? earliest = hold > TimeSpan.Zero ? incident.OccurredAt + hold : null;
                 Count(await outbox.StageAsync(new NotificationRequest(p.Guild, Formula1Module.ModuleIdTyped, session.SessionKey, p.Channel, kind, message,
-                    incident.OccurredAt + window, p.DryRun), ct), ref created, ref updated);
+                    incident.OccurredAt + window, p.DryRun, earliest), ct), ref created, ref updated);
             }
         }
 

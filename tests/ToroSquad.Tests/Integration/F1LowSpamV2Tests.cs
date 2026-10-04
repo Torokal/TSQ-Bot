@@ -106,6 +106,8 @@ public sealed class F1LowSpamV2Tests
         await StepAsync(host, TimeSpan.FromMinutes(5));
         await StepAsync(host, TimeSpan.FromMinutes(1));
         (await OutboxAsync(host, "safety_car:")).Should().HaveCount(2);
+        host.Transport.Messages.Should().HaveCount(2, "the new phase is staged but spoiler-held for 30 s after the provider's event time");
+        await StepAsync(host, TimeSpan.FromSeconds(30));
         host.Transport.Messages.Should().HaveCount(3);
     }
 
@@ -165,6 +167,7 @@ public sealed class F1LowSpamV2Tests
         await StepAsync(host, TimeSpan.FromMinutes(5));
         await StepAsync(host, TimeSpan.FromMinutes(1));
         (await OutboxAsync(host, "red_flag:")).Should().HaveCount(2);
+        await StepAsync(host, TimeSpan.FromSeconds(30)); // spoiler hold of the second phase
         host.Transport.Messages.Should().HaveCount(3);
     }
 

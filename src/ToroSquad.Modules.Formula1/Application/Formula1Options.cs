@@ -85,6 +85,13 @@ public sealed class Formula1Options
     /// <summary>A Safety Car / red-flag card is only sent this soon after the provider's message time (no late cards).</summary>
     public int IncidentFreshMinutes { get; set; } = 10;
 
+    /// <summary>
+    /// Spoiler protection for live incident cards (Safety Car, red flag): Discord delivery is held until the PROVIDER's
+    /// event time plus this many seconds, because TV and streams run behind the live data. Only the delivery waits (durably,
+    /// in the outbox); ingestion, persistence and dedupe stay immediate. 0 turns the hold off.
+    /// </summary>
+    public int LiveIncidentSpoilerDelaySeconds { get; set; } = 30;
+
     /// <summary>A disqualification card is only sent this soon after the provider's message (stewards may decide after the flag).</summary>
     public int DisqualificationFreshHours { get; set; } = 3;
 
@@ -141,6 +148,9 @@ public sealed class Formula1Options
             errors.Add("Formula1:WeekendScheduleUntilHourUtc must be after WeekendScheduleFromHourUtc");
         Range(nameof(RaceReminderGraceMinutes), RaceReminderGraceMinutes, 1, 10);
         Range(nameof(IncidentFreshMinutes), IncidentFreshMinutes, 1, 60);
+        Range(nameof(LiveIncidentSpoilerDelaySeconds), LiveIncidentSpoilerDelaySeconds, 0, 300);
+        if (LiveIncidentSpoilerDelaySeconds >= IncidentFreshMinutes * 60)
+            errors.Add("Formula1:LiveIncidentSpoilerDelaySeconds must be shorter than IncidentFreshMinutes (a held card must still be fresh when it is due)");
         Range(nameof(DisqualificationFreshHours), DisqualificationFreshHours, 1, 24);
         if (!string.IsNullOrEmpty(AssetBaseUrl) &&
             (!Uri.TryCreate(AssetBaseUrl, UriKind.Absolute, out var assets) || assets.Scheme != Uri.UriSchemeHttps || !AssetBaseUrl.EndsWith('/')))

@@ -319,6 +319,13 @@ Sağlayıcı semantiği (gerçek OpenF1 verisinden, 2024–2026; fixture: `tests
   Yarış sonrası karar sınıflandırma düzeltmesi olarak gelir ve yeni diskalifiye edilen araç için bir kart üretir. Gerekçe alanı
   sağlayıcıda yok; kartta sürücü numarası/adı ve zaman gösterilir.
 
+**Canlı olay spoiler gecikmesi:** Safety Car ve kırmızı bayrak kartları, TV/yayın canlı veriden geride kalabildiği için
+Discord'a en erken **sağlayıcının olay zamanı + 30 sn** sonra gider (`Formula1:LiveIncidentSpoilerDelaySeconds`, 0 = kapalı; alındığı
+andan değil olay zamanından sayılır, olay bize zaten daha geç ulaştıysa ek bekleme yok). Yalnızca teslim bekler: veri alımı, kalıcılık,
+faz/tekrar kontrolü ve outbox kaydı anında yapılır; kart outbox'ta kalıcı olarak (`NextAttemptAt`) beklediği için yeniden başlatma
+gecikmeyi ne kaybettirir ne atlatır, pause/anahtar kapatma bekleyen kartı iptal eder. "Yarış başladı", sonuç/puan durumu, hatırlatma,
+hafta sonu programı ve (sınıflandırmadan gelen) diskalifiye kartları **geciktirilmez**.
+
 Kalıcılık ve tekrar koruması: olaylar `f1_race_control_event` tablosunda (oturum + sağlayıcı mesaj parmak izi benzersiz)
 bir kez saklanır — MQTT, REST mutabakatı veya yeniden bağlanma sonrası tekrar aynı satırı üretemez. Fazlar bu kalıcı geçmişten
 hesaplanır; outbox mantıksal anahtarı (sunucu + seans/hafta sonu + kanal + tür/faz) her kartı en fazla bir mesaj yapar, yeniden

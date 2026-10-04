@@ -62,7 +62,9 @@ public sealed class NotificationOutbox(ToroDbContext db, TimeProvider clock) : I
                 Status = OutboxStatus.Pending,
                 CreatedAt = now,
                 UpdatedAt = now,
-                NextAttemptAt = now,
+                // The dispatcher only picks rows whose NextAttemptAt has passed, so a future earliest-delivery time is a
+                // durable hold. Re-staging this key later (Pending branch below) never touches it: the time cannot slide.
+                NextAttemptAt = request.EarliestDeliveryAt is { } notBefore && notBefore > now ? notBefore : now,
                 ExpiresAt = request.ExpiresAt,
             });
             return StageOutcome.Created;
