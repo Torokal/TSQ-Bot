@@ -170,6 +170,30 @@ yok).
 > **Canary (2026-10-04):** Grounded'i genel olarak açmadan yalnızca açıkça listelenen kanal/thread ID'lerinde kullanmak için
 > `Summary:GroundedCanaryChannelIds` eklendi. Varsayılan liste **boştur**: canary yoktur ve bütün kanallar Legacy'dir. Mekanizmanın
 > deploy edilmesi canlı bir Grounded testi değildir.
+>
+> **Canlı Grounded değerlendirmesi (2026-10-04) — DURDURULDU, üretim Legacy:** Sahibin kararıyla Grounded üretimde genel
+> olarak açıldı (`mode_source=Global`, canary listesi boş). İki gerçek 100 mesajlık deneme yapıldı, ikisi de üretici
+> aşamasında bitti:
+>
+> | | Deneme 1 | Deneme 2 |
+> |---|---|---|
+> | üretici (GLM-5.3-Flash) | zaman aşımı, 35,005 sn | cevap geldi, 31,267 sn (HTTP 200, `finish_reason=stop`, 5983 girdi / 1285 çıktı / 0 reasoning token) |
+> | doğrulama | cevap yok | `validation=Limit` — taslak reddedildi |
+> | denetçi | çağrılmadı | çağrılmadı |
+> | yayımlanan özet | yok | yok |
+>
+> Denetçi iki denemede de çağrılmadı ve herkese açık bir Grounded özet **hiç yayımlanmadı**. Durdurma ölçütü (ilk 10 gerçek
+> denemede 2 işletim hatası) tetiklendi ve üretim elle Legacy'e geri alındı (`TOROSQUAD_Summary__GenerationMode=Legacy`).
+> Aynı pencerede iki komut daha 100 yeni mesaj kuralında bitti; AI isteği yapılmadığı için deneme sayılmaz. İkinci denemede
+> **hangi `Limit` sınırının aşıldığı bilinmiyor**: o sırada log yalnızca genel kategoriyi taşıyordu ve cevap içeriği hiçbir
+> zaman loglanmaz. Bu sonradan da doldurulamaz. İki deneme sentetik denemelerden iki noktada ayrıldı: üretici 31–35+ saniye
+> sürdü (sentetik fixture'larda 5–22 saniye) ve v4 denemelerinde görülmeyen bir `Limit` reddi oldu. Durum:
+> `GROUNDED_LIVE_EVALUATION_STOPPED`, `PRODUCTION_LEGACY`. Grounded'in yeniden açılması, yeni bir canary veya yeni bir model
+> denemesi sahibin ayrı onayına bağlıdır.
+>
+> **`Limit` tanılaması (2026-10-04):** `Limit` reddi artık hangi güvenlik sınırının ilk reddi oluşturduğunu söyler
+> (`limit_reason`, aşağıda "Gizlilik ve loglar"). Yalnızca tanılama görünürlüğüdür: sınırların hiçbiri, prompt, modeller,
+> sözleşme ve zaman aşımları değişmedi; bugün reddedilen bir cevap aynı şekilde reddedilir. Yeni bir model isteği yapılmadı.
 
 `Summary:GenerationMode` her `/ozetle` başında **bir kez** okunur; bir işlem iki yolu birden kullanmaz. Varsayılan `Legacy`'dir.
 
@@ -733,7 +757,9 @@ Log satırlarında yalnızca şunlar bulunur: izleme kodu, guild/kanal/çağıra
 `finish_reason`, `latency_ms`, `generation_mode`, sonuç ve hata kategorisi (HTTP durumu, sağlayıcı hata tipi, `RegionPolicy`).
 Grounded modunda ayrıca: `validation` (kategori), `source_count`, `reply_count`, `reply_unavailable_count`, `context_count`,
 `evidence_count` (kontrol edilen tüm adaylar), `spoiler_claim_count` (spoiler olarak yayımlanan maddeler),
-`candidate_point_count`, `candidate_plan_count`, `shown_point_count`, `shown_plan_count`. `validation` kategorileri arasında
+`candidate_point_count`, `candidate_spoiler_count`, `candidate_plan_count`, `shown_point_count`, `shown_plan_count`,
+`raw_answer_chars` (cevabın alındığı hâliyle uzunluğu), `rendered_chars` (oluşturulan Markdown'un uzunluğu), `limit_reason`
+ve `limit_value`. `validation` kategorileri arasında
 `MissingRequiredSpoiler` de vardır; `spoiler_claim_count` yayımlanan spoiler elemanlarının sayısıdır. Grounded doğrulama satırı
 `stage` (generator \| reviewer) taşır ve ayrı bir satırda iki aşamanın kullanımı loglanır: `inference_count`, `draft_accepted`,
 `generator_model`, `generator_input_tokens`, `generator_output_tokens`, `generator_reasoning_tokens`, `generator_latency_ms`,
@@ -742,6 +768,30 @@ Grounded modunda ayrıca: `validation` (kategori), `source_count`, `reply_count`
 `not_called`. `failed_stage` (none \| generator \| reviewer) hattı hangi aşamanın bitirdiğini, çıkarım satırındaki `mode_source`
 (Legacy \| Global \| Canary) modun nereden geldiğini gösterir. `/bot status` genel modu, canary kanalı **sayısını** (ID'leri değil)
 ve iki Grounded modelini gösterir. Alıntılar, taslak, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
+
+**`Limit` alt nedeni.** `validation=Limit` olduğunda `limit_reason`, okuyucunun sabit okuma sırasında **ilk** karşılaştığı
+güvenlik sınırını adlandırır; `limit_value` o sınırı aşan büyüklüktür (bir sayı veya uzunluk). Diğer bütün sonuçlarda
+`limit_reason=None limit_value=none` yazılır.
+
+| `limit_reason` | Aşılan sınır |
+|---|---|
+| `AnswerChars` | cevabın tamamı 16.000 karakterden uzun |
+| `CandidatePoints` | `points` listesinde 8'den fazla madde |
+| `CandidateSpoilers` | `spoilers` listesinde 4'ten fazla madde |
+| `CandidatePlans` | `plans` listesinde 4'ten fazla madde |
+| `EvidencePerText` | bir metinde 5'ten fazla dayanak |
+| `TextChars` | bir metin (`t`) 500 karakterden uzun |
+| `TopicChars` | bir konu başlığı (`topic`) 80 karakterden uzun |
+| `QuoteChars` | bir alıntı 300 karakterden uzun |
+| `RenderedChars` | oluşturulan özet 3900 karakterden uzun |
+
+Okuma sırası: cevabın toplam uzunluğu → `main` → `points` (liste boyu, sonra her madde: konu, metin, dayanaklar) → `spoilers`
+→ `plans` → `atmosphere` → oluşturulan özetin uzunluğu. Bir cevap birden fazla sınırı aşıyorsa yalnızca ilki yazılır; reddedilen
+cevap baştan sona ikinci kez okunmaz. Sayılar yalnızca gerçekten ölçüldüyse yazılır: okuyucunun reddetmeden önce ulaşmadığı
+değer `unknown` olur, uydurma `0` olmaz. Üç liste boyu (`candidate_*_count`) cevap geçerli bir JSON nesnesiyse madde
+okunmadan bilinir; `evidence_count` yalnızca bütün maddeler okunduysa, `rendered_chars` yalnızca özet oluşturulduysa bilinir.
+`shown_point_count`, `shown_plan_count` ve `spoiler_claim_count` yayımlananı sayar; reddedilen cevapta gerçekten `0`'dır.
+Bu satır yalnızca ad ve sayı taşır: cevap, konu başlığı, alıntı, mesaj metni veya prompt yazılmaz.
 
 **Grounded'de ikinci gönderim.** Grounded modu doğrulamadan geçen bir ilk taslak ürettiğinde, aynı geçici Discord transcript'i
 (aynı kayıtlar) taslakla birlikte ikinci, denetim isteğinde de AI sağlayıcısına gönderilir. Bu veri de veritabanına yazılmaz,
