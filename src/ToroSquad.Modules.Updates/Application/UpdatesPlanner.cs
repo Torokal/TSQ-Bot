@@ -53,7 +53,8 @@ public static class UpdatesWindow
 /// empty first answer establishes nothing. A game that later moves to another place at its provider takes no second
 /// baseline: posts published there before the move are history, posts published after it are new.</item>
 /// <item>Identity is provider + game + the provider's post id. A guild gets a post at most once per kind (dry-run records
-/// never count as live), whatever channel it had then — a channel change never posts again.</item>
+/// never count as live), whatever channel it had then — a channel change (the guild's or the game's own) never posts
+/// again. A card goes to the game's own channel when the guild gave it one, to the guild's Updates channel otherwise.</item>
 /// <item>Only posts classified <see cref="UpdateClassification.Update"/> are planned. A guild gets those first seen AND
 /// published after its window started (first channel, resume, module or game enabled, mode change), published within
 /// <see cref="UpdatesOptions.CatchUpHours"/>, at most <see cref="UpdatesOptions.MaxCardsPerRound"/> per round. A post without a provider
@@ -407,7 +408,8 @@ public sealed class UpdatesPlanner(
             if (!await gate.IsEnabledAsync(guild, UpdatesModule.ModuleIdTyped, ct))
                 continue;
             UpdatesWindow.Enter(config, mode, now);
-            var channel = new ChannelId(config.ChannelId.Value);
+            // The game's own channel when it has one, the guild's Updates channel otherwise.
+            var channel = new ChannelId(subscription.ChannelId ?? config.ChannelId.Value);
             var language = (await guildSettings.GetAsync(guild, ct)).Language;
             DateTimeOffset since;
             if (dryRun)

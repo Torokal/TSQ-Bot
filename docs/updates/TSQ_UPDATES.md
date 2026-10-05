@@ -402,10 +402,26 @@ bağlantı her zaman yer alır.
 | `/tsq-admin modul:updates islem:configure kanal:` | Güncelleme kanalı (bu sunucuda, botun görebildiği metin/duyuru kanalı; View Channel + Send Messages + Embed Links denetlenir) |
 | `/tsq-admin modul:updates islem:games` | Kayıtlı oyunlar ve bu sunucuda açık/kapalı durumu |
 | `/tsq-admin modul:updates islem:game-enable` / `game-disable` | Bir oyunu açar / kapatır: yalnızca kayıtlı oyunları listeleyen özel bir seçim açılır (seçilene kadar hiçbir şey değişmez) |
+| `/tsq-admin modul:updates islem:game-channel [kanal:]` | Bir oyuna **kendi kanalını** verir. `kanal:` verilirse sonra oyun seçilir; verilmezse önce kanal seçimi açılır (içinde "Ortak güncelleme kanalını kullan" düğmesiyle), sonra oyun. Oyun seçilene kadar hiçbir şey kaydedilmez |
 | `/tsq-admin modul:updates islem:pause` / `resume` | Gönderimi duraklatır / sürdürür (duraklatma dönemi telafi edilmez) |
 | `/tsq-admin modul:updates islem:preview` | Seçilen oyunun kayıtlı en son gerçek güncellemesinin veya açıkça **sentetik** (bağlantısız) bir örneğin kartını yalnızca yöneticiye gösterir |
 | `/tsq-admin modul:updates islem:status` | Mod, modül, kanal, açık oyunlar; oyun başına son başarılı kontrol, son sonuç, sonraki kontrol, son bulunan güncelleme, Discord'a gerçekten ulaşan son kart |
 | `/tsq-admin modul:updates islem:doctor` | Mod, modül, kanal ve izinler, oyunlar, kaynak sağlığı, baseline, son cevap (güncelleme/belirsiz/atlanan), kapsama boşluğu, kayıt durumu |
+
+### Oyun başına kanal
+
+Sunucunun **ortak güncelleme kanalı** (`islem:configure`) her oyunun varsayılanıdır. Bir oyuna `islem:game-channel` ile kendi
+kanalı verilebilir; kendi kanalı olmayan oyun ortak kanala gönderir.
+
+- Önce ortak kanal ayarlanmalıdır (oyunların geri düşeceği yer ve gönderim penceresinin sahibi odur).
+- Kanal, oyun açılmadan önce de seçilebilir; oyunu açıp kapatmak kanalını değiştirmez.
+- Bir oyunun kanalını değiştirmek (ya da ortak kanala geri almak) **hiçbir güncellemeyi yeniden göndermez**: gönderim kaydı
+  sunucu + oyun + gönderi başınadır, kanaldan bağımsızdır. Sonraki güncelleme yeni kanala gider; önceki kartlar yerinde
+  kalır ve artık düzenlenmez (düzeltmeler yalnızca oyunun **güncel** kanalındaki kartı düzenler).
+- Kanal değiştiği anda kuyrukta bekleyen kart iptal edilir (ne eski ne yeni kanala gönderilir).
+- Ortak kanalı değiştirmek, kendi kanalı olan oyunu taşımaz. Duraklatma, modül anahtarı ve mod bütün oyunlar için ortaktır.
+- `doctor` her oyunun kendi kanalını ve izinlerini (View Channel + Send Messages + Embed Links) ayrıca denetler; o kanaldaki
+  kalıcı gönderim sorunu o oyunun satırında görünür. `status` ve `games` oyunun kanalını gösterir.
 
 Genel kullanıcı komutu yoktur (ilk sürüm otomatik bildirim + yönetimdir). Komutlar modül kapalıyken de çalışır. Yeni slash
 komutu eklenmez: `/tsq-admin` şeması değişmez, işlemler autocomplete ile görünür.
@@ -472,7 +488,8 @@ yine `pause` → aç → `doctor` ile baseline'ı gör → `resume`'dur (durakla
   sonradan uygulanmaz.
 - Bir oyun açıldıktan sonra ama ilk başarılı cevaptan önce yayımlanan güncelleme baseline'da kalır ve gönderilmez.
 - 24 saatten uzun kesintide daha eski güncellemeler gönderilmez.
-- CS2 kartında yama notu alıntısı yoktur (Steam cevabından özet çıkarılmaz); çeviri ve oyun başına ayrı kanal yoktur.
+- CS2 kartında yama notu alıntısı yoktur (Steam cevabından özet çıkarılmaz); çeviri yoktur. Oyun başına kanal vardır
+  (`islem:game-channel`); oyun başına ayrı duraklatma veya ayrı mod yoktur.
 - **WoW Forever:** yalnızca ABD/İngilizce forum okunur. Ayrı açılmış bir güncelleme konusu, son doğrulanmış
   güncellemesinden sonra 7 gün takip edilir; daha sonra eklenen bir Blizzard yanıtı veya düzeltme görülmez (izlenen
   konuda süre sınırı yoktur). Aynı anda en çok 5 konu takip edilir. Güncelleme olarak doğrulanmamış bir konudaki

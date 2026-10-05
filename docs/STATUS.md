@@ -554,6 +554,15 @@ invite link and no global command registration. The source code is public under 
 - Off by default (`Updates:Mode=Off`, no channel, no followed game); merge, deploy, channel, game activation and live
   posting await the owner's approval. Rollout order: [updates/TSQ_UPDATES.md](updates/TSQ_UPDATES.md).
 
+## TSQ Bot Updates — a channel per game (new, 2026-10-05)
+
+- **IMPLEMENTED / TESTED_OFFLINE:** `/tsq-admin modul:updates islem:game-channel` gives one followed game its own channel;
+  a game without one keeps posting to the guild's Updates channel (Counter-Strike 2 is unchanged unless an admin says
+  otherwise). A channel change never posts an update again, corrections only edit the card in the game's current
+  channel, a card still queued for a former channel is cancelled, and `doctor` checks every game channel's permissions.
+  Additive migration `UpdatesGameChannel` (three nullable columns on `updates_subscription`). The slash command
+  manifest is unchanged (operations are suggested, not registered).
+
 ## TSQ Bot Updates — World of Warcraft: Forever source (new, 2026-10-05)
 
 - **IMPLEMENTED / TESTED_OFFLINE:** second game of the Updates module through the unchanged pipeline — Blizzard forum

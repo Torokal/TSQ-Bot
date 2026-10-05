@@ -28,13 +28,17 @@ public enum UpdatesCheckState
 public sealed record UpdatesCheck(string LabelKey, UpdatesCheckState State, string DetailKey, IReadOnlyList<object> Args);
 
 /// <summary>One registered game as a guild sees it.</summary>
+/// <param name="ChannelId">The game's own channel in this guild; null: it posts to the guild's Updates channel.</param>
+/// <param name="ChannelProblem">The last permanent delivery problem in the game's own channel.</param>
 public sealed record UpdatesGameStatus(
     GameUpdateDefinition Game,
     string ProviderName,
     bool Enabled,
     UpdatesSourceStateEntity? Source,
     UpdatesItemEntity? LastDiscovered,
-    DateTimeOffset? LastCardAt);
+    DateTimeOffset? LastCardAt,
+    ulong? ChannelId = null,
+    string? ChannelProblem = null);
 
 /// <summary>What /tsq-admin modul:updates islem:status shows (no secrets, no user data).</summary>
 public sealed record UpdatesStatus(
@@ -50,7 +54,7 @@ public sealed record UpdatesStatus(
 public sealed record UpdatesPreview(OutgoingMessage Message, bool Synthetic);
 
 /// <summary>
-/// /tsq-admin modul:updates islem:configure|games|game-enable|game-disable|pause|resume|preview|status|doctor. Every method
+/// /tsq-admin modul:updates islem:configure|games|game-enable|game-disable|game-channel|pause|resume|preview|status|doctor. Every method
 /// authorizes the actor (Manage Server) and only touches rows of <c>actor.GuildId</c>. Nothing here requests a provider or
 /// sends to a channel; games can only be chosen from the registered definitions.
 /// </summary>
@@ -154,6 +158,61 @@ public sealed class UpdatesConfigService(
         return OperationResult.Ok(config?.ChannelId is null ? "updates.game.enabled_no_channel" : "updates.game.enabled", name);
     }
 
+    /// <summary>
+    /// Gives a registered game its own channel in this guild, or (<paramref name="channelId"/> null) sends it back to the
+    /// guild's Updates channel. The guild's Updates channel must exist first: it is the default every game falls back to.
+    /// Nothing is posted again because of a channel change, and cards already posted stay where they are. The channel can
+    /// be chosen before the game is turned on.
+    /// </summary>
+    public async Task<OperationResult> SetGameChannelAsync(ActorContext actor, string? gameKey, ulong? channelId, CancellationToken ct)
+    {
+        var auth = Authorize.Require(actor, actor.GuildId, Authorize.ServerSettings);
+        if (!auth.IsAllowed)
+            return OperationResult.Forbidden(auth);
+        if (catalog.Find(gameKey) is not { } game)
+            return OperationResult.Fail(OperationError.InvalidInput, "updates.game.unknown");
+        var config = await ConfigAsync(actor.GuildId, create: false, ct);
+        if (config?.ChannelId is not { } common)
+            return OperationResult.Fail(OperationError.InvalidInput, "updates.config.no_channel");
+
+        BotChannelAccess? access = null;
+        if (channelId is { } requested)
+        {
+            access = await guilds.GetBotChannelAccessAsync(actor.GuildId, new ChannelId(requested), ct);
+            if (!access.Exists || !access.IsTextBased)
+                return OperationResult.Fail(OperationError.InvalidInput, "updates.config.channel_invalid");
+        }
+
+        var now = clock.GetUtcNow();
+        var set = db.Set<UpdatesSubscriptionEntity>();
+        var row = await set.FirstOrDefaultAsync(s => s.GuildId == actor.GuildId.Value && s.GameKey == game.Key, ct);
+        var name = game.DisplayName;
+        var commonMention = Mention(common);
+        if (row?.ChannelId == channelId)
+            return channelId is { } same ? OperationResult.Ok("updates.game.channel_already", name, Mention(same)) : OperationResult.Ok("updates.game.channel_already_common", name, commonMention);
+        if (row is null)
+        {
+            // The channel can be chosen before the game is followed; following stays its own decision.
+            row = new UpdatesSubscriptionEntity { GuildId = actor.GuildId.Value, GameKey = game.Key, CreatedAt = now };
+            set.Add(row);
+        }
+
+        row.ChannelId = channelId;
+        row.ChannelProblem = null;
+        row.ChannelProblemAt = null;
+        row.UpdatedAt = now;
+        await db.SaveChangesAsync(ct);
+
+        if (channelId is not { } chosen)
+            return OperationResult.Ok("updates.game.channel_common", name, commonMention);
+        var missing = RequiredChannelPermissions & ~access!.Permissions;
+        return access.Permissions.Grants(RequiredChannelPermissions)
+            ? OperationResult.Ok(row.Enabled ? "updates.game.channel_saved" : "updates.game.channel_saved_game_off", name, Mention(chosen))
+            : OperationResult.Ok("updates.game.channel_saved_missing_permissions", name, Mention(chosen), missing.ToString());
+    }
+
+    private static string Mention(ulong channel) => "<#" + channel.ToString(CultureInfo.InvariantCulture) + ">";
+
     public async Task<(OperationResult Auth, UpdatesStatus? Status)> StatusAsync(ActorContext actor, CancellationToken ct)
     {
         var auth = Authorize.Require(actor, actor.GuildId, Authorize.ServerSettings);
@@ -161,8 +220,7 @@ public sealed class UpdatesConfigService(
             return (OperationResult.Forbidden(auth), null);
         var config = await ConfigAsync(actor.GuildId, create: false, ct);
         var enabled = await gate.IsEnabledAsync(actor.GuildId, UpdatesModule.ModuleIdTyped, ct);
-        var subscriptions = await db.Set<UpdatesSubscriptionEntity>().AsNoTracking().Where(s => s.GuildId == actor.GuildId.Value && s.Enabled)
-            .Select(s => s.GameKey).ToListAsync(ct);
+        var subscriptions = await db.Set<UpdatesSubscriptionEntity>().AsNoTracking().Where(s => s.GuildId == actor.GuildId.Value).ToListAsync(ct);
         const int update = (int)UpdateClassification.Update;
         var games = new List<UpdatesGameStatus>();
         foreach (var game in catalog.Games)
@@ -176,7 +234,9 @@ public sealed class UpdatesConfigService(
             var lastCard = await db.Outbox.AsNoTracking()
                 .Where(o => o.GuildId == actor.GuildId.Value && o.ModuleId == UpdatesModule.ModuleIdValue && o.Kind == liveKind && o.Status == OutboxStatus.Sent)
                 .OrderByDescending(o => o.SentAt).ThenByDescending(o => o.Id).Select(o => o.SentAt).FirstOrDefaultAsync(ct);
-            games.Add(new UpdatesGameStatus(game, catalog.ProviderOf(game).DisplayName, subscriptions.Contains(game.Key), source, discovered, lastCard));
+            var subscription = subscriptions.FirstOrDefault(s => s.GameKey == game.Key);
+            games.Add(new UpdatesGameStatus(game, catalog.ProviderOf(game).DisplayName, subscription?.Enabled == true, source, discovered, lastCard,
+                subscription?.ChannelId, subscription?.ChannelProblem));
         }
 
         return (OperationResult.Ok("updates.status.title"), new UpdatesStatus(options.Value.Mode, planner.EffectiveMode, enabled, config?.ChannelId,
@@ -253,6 +313,22 @@ public sealed class UpdatesConfigService(
         {
             var name = game.Game.ShortName;
             var source = game.Source;
+            if (game.ChannelId is { } own)
+            {
+                // The game's own channel is checked like the guild's: the card goes there, so the bot must be able to post there.
+                var access = await guilds.GetBotChannelAccessAsync(actor.GuildId, new ChannelId(own), ct);
+                var mention = Mention(own);
+                if (!access.Exists || !access.IsTextBased)
+                    checks.Add(new("updates.doctor.game_channel", UpdatesCheckState.Problem, "updates.doctor.game_channel_gone", [name, mention]));
+                else if (!access.Permissions.Grants(RequiredChannelPermissions))
+                    checks.Add(new("updates.doctor.game_channel", UpdatesCheckState.Problem, "updates.doctor.game_channel_permissions",
+                        [name, mention, (RequiredChannelPermissions & ~access.Permissions).ToString()]));
+                else
+                    checks.Add(new("updates.doctor.game_channel", UpdatesCheckState.Ok, "updates.doctor.game_channel_ok", [name, mention]));
+                if (game.ChannelProblem is { } problem)
+                    checks.Add(new("updates.doctor.game_channel", UpdatesCheckState.Problem, "updates.doctor.game_channel_problem", [name, problem]));
+            }
+
             if (source?.LastAttemptAt is not { } attempt)
             {
                 checks.Add(new("updates.doctor.source", UpdatesCheckState.Info, "updates.doctor.source_never", [name, game.ProviderName]));
@@ -364,7 +440,8 @@ public sealed class UpdatesLifecycle(ToroDbContext db, UpdatesPlanner planner, T
 /// BEFORE the dispatcher looks at IsDryRun). The effective mode applies to cards already queued: Off cancels every Updates
 /// card and drops every queued edit; DryRun (also: Live on a host that does not send) does the same for live cards and lets
 /// dry-run cards through to the simulation. Then
-/// the guild's current state decides: no channel, paused, game no longer followed or channel changed all cancel. Cancelled
+/// the guild's current state decides: no channel, paused, game no longer followed or channel changed (the card's channel
+/// is no longer the game's: its own one, or the guild's Updates channel when it has none) all cancel. Cancelled
 /// cards are terminal — they are not sent when the mode is Live again. A message that already reached Discord is never
 /// taken back.
 /// </summary>
@@ -394,19 +471,34 @@ public sealed class UpdatesDeliveryPolicy(ToroDbContext db, GameUpdateCatalog ca
         if (config.Paused)
             return new DeliveryDecision.Cancel("paused");
         var followed = await db.Set<UpdatesSubscriptionEntity>().AsNoTracking()
-            .AnyAsync(s => s.GuildId == guild.Value && s.GameKey == gameKey && s.Enabled, cancellationToken);
-        if (!followed)
+            .FirstOrDefaultAsync(s => s.GuildId == guild.Value && s.GameKey == gameKey && s.Enabled, cancellationToken);
+        if (followed is null)
             return new DeliveryDecision.Cancel("game_disabled");
-        return config.ChannelId == channel.Value ? DeliveryDecision.Allowed : new DeliveryDecision.Cancel("channel_changed");
+        // The game's own channel when it has one, the guild's Updates channel otherwise — exactly what the planner uses.
+        return (followed.ChannelId ?? config.ChannelId) == channel.Value ? DeliveryDecision.Allowed : new DeliveryDecision.Cancel("channel_changed");
     }
 
     public async Task ReportChannelProblemAsync(GuildId guild, ChannelId channel, PermanentFailureKind kind, CancellationToken cancellationToken)
     {
+        // The problem belongs to whoever uses that channel now: the guild's Updates channel, a game's own channel, or both.
+        var now = clock.GetUtcNow();
+        var reported = false;
         var config = await db.Set<UpdatesGuildConfigEntity>().FirstOrDefaultAsync(c => c.GuildId == guild.Value, cancellationToken);
-        if (config is null || config.ChannelId != channel.Value)
-            return;
-        config.ChannelProblem = kind.ToString();
-        config.ChannelProblemAt = clock.GetUtcNow();
-        await db.SaveChangesAsync(cancellationToken);
+        if (config is not null && config.ChannelId == channel.Value)
+        {
+            config.ChannelProblem = kind.ToString();
+            config.ChannelProblemAt = now;
+            reported = true;
+        }
+
+        foreach (var subscription in await db.Set<UpdatesSubscriptionEntity>().Where(s => s.GuildId == guild.Value && s.ChannelId == channel.Value).ToListAsync(cancellationToken))
+        {
+            subscription.ChannelProblem = kind.ToString();
+            subscription.ChannelProblemAt = now;
+            reported = true;
+        }
+
+        if (reported)
+            await db.SaveChangesAsync(cancellationToken);
     }
 }

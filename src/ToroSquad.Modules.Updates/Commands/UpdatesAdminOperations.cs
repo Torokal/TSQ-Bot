@@ -15,19 +15,27 @@ namespace ToroSquad.Modules.Updates.Commands;
 /// to a channel, and there is deliberately no operation to post an update by hand.
 /// <para>A game is always one of the registered definitions: the game operations open a private select that lists exactly
 /// the registered games, and the picked value is checked against them again.</para>
+/// <para><c>game-channel</c> gives one game its own channel: with <c>kanal</c> the game is picked next; without it a channel
+/// select comes first, with an explicit button for "the common Updates channel" — leaving the option empty never removes a
+/// game's channel by itself. Nothing is saved until the game is picked.</para>
 /// </summary>
 public sealed class UpdatesAdminOperations(UpdatesConfigService config) : IAdminFormHandler
 {
     public const string GameAction = "game";
     private const string EnableOp = "game-enable";
     private const string DisableOp = "game-disable";
+    private const string ChannelOp = "game-channel";
     private const string PreviewOp = "preview";
+
+    /// <summary>The game-channel form: the channel to give the game (null: the common channel) once <see cref="Chosen"/>.</summary>
+    private sealed record GameChannelDraft(ulong? Channel, bool Chosen);
 
     public static readonly AdminModule Definition = AdminModule.For<UpdatesAdminOperations>(UpdatesModule.AdminId, UpdatesModule.ModuleIdTyped)
         .Op("configure", (h, c) => h.ConfigureAsync(c), AdminFields.Channel)
         .Op("games", (h, c) => h.GamesAsync(c))
         .Op(EnableOp, (h, c) => h.GameOperationAsync(c))
         .Op(DisableOp, (h, c) => h.GameOperationAsync(c))
+        .Op(ChannelOp, (h, c) => h.GameChannelAsync(c), AdminFields.Channel)
         .Op("pause", (h, c) => h.PauseAsync(c, true))
         .Op("resume", (h, c) => h.PauseAsync(c, false))
         .Op(PreviewOp, (h, c) => h.GameOperationAsync(c))
@@ -52,8 +60,60 @@ public sealed class UpdatesAdminOperations(UpdatesConfigService config) : IAdmin
     public Task GameOperationAsync(AdminCall call) =>
         AdminForms.ChooseAsync(call, call.T("admin.updates.game.pick"), GameAction, config.RegisteredGames.Select(g => (GameLabel(g), g.Key, false)));
 
+    /// <summary>With <c>kanal</c> the game select at once; without it a channel select with a "common channel" button first.</summary>
+    public Task GameChannelAsync(AdminCall call) => call.Args.ChannelId is { } channel
+        ? PickGameAsync(call, new GameChannelDraft(channel, true), null)
+        : AdminForms.PickChannelAsync(call, "admin.updates.game-channel.pick", "admin.updates.game-channel.common", new GameChannelDraft(null, false));
+
+    private Task PickGameAsync(AdminCall call, GameChannelDraft state, AdminDraft? reuse)
+    {
+        if (reuse is not null)
+            call.UpdateDraft(state);
+        var text = state.Channel is { } channel ? call.T("admin.updates.game-channel.game", AdminForms.Mention(channel)) : call.T("admin.updates.game-channel.game_common");
+        return AdminForms.ChooseAsync(call, text, GameAction, config.RegisteredGames.Select(g => (GameLabel(g), g.Key, false)), state, reuse: reuse);
+    }
+
+    private async Task OnGameChannelFormAsync(AdminCall call, string action)
+    {
+        if (call.Draft?.State is not GameChannelDraft state)
+        {
+            await call.ReplyTextAsync("updates.game.unknown");
+            return;
+        }
+
+        switch (action)
+        {
+            case AdminForms.ClearAction when !state.Chosen:
+                await PickGameAsync(call, new GameChannelDraft(null, true), call.Draft);
+                return;
+            case AdminForms.ChannelAction when !state.Chosen:
+                if (AdminForms.ChosenChannel(call) is not { } picked)
+                {
+                    await call.ReplyTextAsync("admin.error.channel_invalid");
+                    return;
+                }
+
+                await PickGameAsync(call, new GameChannelDraft(picked, true), call.Draft);
+                return;
+            // The value comes back from the client: only a registered game key is accepted (the service checks it again).
+            case GameAction when state.Chosen && call.Input.FirstValue is { } key && config.RegisteredGames.Any(g => g.Key == key):
+                if (await AdminForms.ClaimAsync(call))
+                    await call.FinishAsync(await config.SetGameChannelAsync(call.Actor, key, state.Channel, CancellationToken.None));
+                return;
+            default:
+                await call.ReplyTextAsync("updates.game.unknown");
+                return;
+        }
+    }
+
     public async Task OnFormAsync(AdminCall call, string action)
     {
+        if (call.Operation.Id == ChannelOp)
+        {
+            await OnGameChannelFormAsync(call, action);
+            return;
+        }
+
         if (action == AdminForms.ChannelAction && call.Operation.Id == "configure")
         {
             if (AdminForms.ChosenChannel(call) is not { } channel)
@@ -106,7 +166,7 @@ public sealed class UpdatesAdminOperations(UpdatesConfigService config) : IAdmin
         }
 
         var lines = status.Games.Select(g => call.T(g.Enabled ? "updates.games.line_on" : "updates.games.line_off",
-            g.Game.DisplayName, g.ProviderName, g.Game.Key));
+            g.Game.DisplayName, g.ProviderName, g.Game.Key) + (g.ChannelId is { } own ? call.T("updates.games.own_channel", AdminForms.Mention(own)) : ""));
         await call.ReplyEmbedAsync(new MessageEmbed(call.T("updates.games.title"), string.Join("\n", lines) + "\n\n" + call.T("updates.games.hint"),
             null, [], null, null, ToroInteractionModule.NeutralColor));
     }
@@ -155,8 +215,9 @@ public sealed class UpdatesAdminOperations(UpdatesConfigService config) : IAdmin
                 ? call.T("updates.status.discovered_value", DiscordText.Untrusted(title, 120), DiscordText.Timestamp(item.PublishedAt ?? item.FirstSeenAt, 'R'))
                 : call.T("updates.status.discovered_none");
             var card = game.LastCardAt is { } at ? DiscordText.Timestamp(at, 'R') : "—";
+            var where = game.ChannelId is { } own ? call.T("updates.status.game_channel", AdminForms.Mention(own)) + "\n" : "";
             fields.Add(new(call.T("updates.status.game", game.Game.DisplayName, game.ProviderName),
-                Clip(poll + "\n" + discovered + "\n" + call.T("updates.status.card_value", card), DiscordLimits.EmbedFieldValueMax), false));
+                Clip(where + poll + "\n" + discovered + "\n" + call.T("updates.status.card_value", card), DiscordLimits.EmbedFieldValueMax), false));
         }
 
         await call.ReplyEmbedAsync(new MessageEmbed(call.T("updates.status.title"), null, null, fields, null, null, ToroInteractionModule.NeutralColor));
