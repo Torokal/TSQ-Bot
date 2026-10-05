@@ -82,6 +82,13 @@ TSQ Haber kişisel veri tutmaz: `news_guild_config` (sunucu, kanal, duraklatma, 
 veya görsel yok), `news_delivery` (sunucu + haber + kanal, 365 gün) ve `news_feed_state` (akış durumu ve oyuncu adlarından
 oluşan güncel kadro). `/privacy export/delete` kapsamında kaydı yoktur.
 
+TSQ Bot Updates kişisel veri tutmaz: `updates_guild_config` (sunucu, kanal, duraklatma, pencere zamanları, son planlanan mod
+— kullanıcı ID'si yok), `updates_subscription` (sunucu + oyun, açık/kapalı), `updates_item` (sağlayıcının duyuru kimliği,
+bağlantı, başlık — 90 gün sonra silinir —, yayın zamanı, sınıflandırma kararı; duyuru metni, yazar, etiket veya ham cevap
+yok), `updates_delivery` (sunucu + duyuru + kanal, 365 gün) ve `updates_source_state` (kaynak yoklama durumu). Sunucudan
+ayrılma sonrası saklama süresi dolunca sunucuya ait üç tablo satırı (kanal, oyun, teslim) silinir. Ayrıntı:
+[updates/TSQ_UPDATES.md](updates/TSQ_UPDATES.md).
+
 Discord ID'leri kayıpsız (64-bit) saklanır.
 
 ## Kullanıcı hakları

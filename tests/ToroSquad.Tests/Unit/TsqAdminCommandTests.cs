@@ -25,6 +25,8 @@ using ToroSquad.Modules.Formula1.Application;
 using ToroSquad.Modules.Formula1.Commands;
 using ToroSquad.Modules.Lfg.Application;
 using ToroSquad.Modules.News.Application;
+using ToroSquad.Modules.Updates.Application;
+using ToroSquad.Modules.Updates.Commands;
 using ToroSquad.Modules.Volleyball.Commands;
 using ToroSquad.Tests.Support;
 using ActorContext = ToroSquad.Core.Security.ActorContext;
@@ -102,6 +104,9 @@ public sealed class TsqAdminCommandTests
         ("volleyball-admin configure role", "volleyball", "configure-role", AdminFields.Role, ["ping_reminder", "ping_final", "clear"]),
     ];
 
+    /// <summary>Admin modules that were added to <c>/tsq-admin</c> directly (never an old "-admin" root).</summary>
+    private static readonly string[] AddedLater = ["updates"];
+
     // ================================================================== A. command shape
 
     [Fact]
@@ -171,7 +176,10 @@ public sealed class TsqAdminCommandTests
 
         await using var host = await TestHost.CreateAsync();
         var catalog = host.Services.GetRequiredService<AdminCatalog>();
-        catalog.Modules.SelectMany(m => m.Operations.Select(o => m.Id + " " + o.Id)).Should().BeEquivalentTo(Moves.Select(m => m.Module + " " + m.Op));
+        // Modules added after the merge never had an "-admin" root: they have no former operation (their own tests cover them).
+        catalog.Modules.Where(m => !AddedLater.Contains(m.Id)).SelectMany(m => m.Operations.Select(o => m.Id + " " + o.Id)).Should()
+            .BeEquivalentTo(Moves.Select(m => m.Module + " " + m.Op));
+        catalog.Modules.Select(m => m.Id).Should().BeEquivalentTo(Moves.Select(m => m.Module).Distinct().Concat(AddedLater));
         catalog.Problems(host.Services.GetRequiredService<ToroSquad.Core.Modules.ModuleRegistry>()).Should().BeEmpty();
 
         foreach (var move in Moves)
@@ -207,7 +215,8 @@ public sealed class TsqAdminCommandTests
         await using var host = await TestHost.CreateAsync();
         var service = await ServiceAsync(host);
         (await SuggestAsync(host, service, "modul", "", null, CorePermission.ManageGuild)).Select(r => r.Value).Should()
-            .Equal("birthday", "esports", "f1", "lfg", "live", "news", "volleyball");
+            .Equal("birthday", "esports", "f1", "lfg", "live", "news", "updates", "volleyball");
+        (await SuggestAsync(host, service, "modul", "güncelleme", null, CorePermission.ManageGuild)).Should().ContainSingle().Which.Name.Should().Be("Oyun güncellemeleri — updates");
         var news = await SuggestAsync(host, service, "modul", "haber", null, CorePermission.ManageGuild);
         news.Should().ContainSingle().Which.Name.Should().Be("Haberler — news");
         (await SuggestAsync(host, service, "modul", "NEWS", null, CorePermission.ManageGuild)).Select(r => r.Value).Should().Equal("news");
@@ -305,6 +314,85 @@ public sealed class TsqAdminCommandTests
         (await NewsChannelAsync(host)).Should().Be(Channel.Value);
         (await FormAsync(host, TestHost.Admin(Guild), draft, AdminForms.ChannelAction, Picked(Channel.Value, TextChannel(Channel.Value))))
             .Text.Should().Contain("artık geçerli değil", "a second click does not run it again");
+    }
+
+    [Fact]
+    public async Task Updates_operations_run_through_the_router_and_act_on_the_only_registered_game_directly()
+    {
+        await using var host = await TestHost.CreateAsync();
+        SetChannel(host);
+        var admin = TestHost.Admin(Guild);
+        (await SuggestAsync(host, await ServiceAsync(host), "islem", "", "updates", CorePermission.ManageGuild)).Select(r => r.Value).Should()
+            .Equal("configure", "games", "game-enable", "game-disable", "pause", "resume", "preview", "status", "doctor");
+
+        var games = await RunAsync(host, admin, "updates", "games");
+        games.Sent.Should().OnlyContain(s => s.Ephemeral);
+        games.Embeds.Should().ContainSingle().Which.Description.Should().Contain("**Counter-Strike 2** · Steam · `cs2` — kapalı");
+
+        var configure = await RunAsync(host, admin, "updates", "configure", new AdminArgs(Channel.Value, null, null, null), AdminFields.Channel);
+        configure.Sent.Should().ContainSingle().Which.Components.Should().BeNull("no extra step when the input is complete");
+        (await UpdatesStatusAsync(host))!.ChannelId.Should().Be(Channel.Value);
+
+        var enable = await RunAsync(host, admin, "updates", "game-enable");
+        enable.AllCustomIds().Should().BeEmpty("one registered game: no picker");
+        enable.Text.Should().Contain("Counter-Strike 2 güncellemeleri açıldı");
+        (await UpdatesStatusAsync(host))!.Games.Single().Enabled.Should().BeTrue();
+        (await RunAsync(host, admin, "updates", "games")).Embeds.Single().Description.Should().Contain("`cs2` — açık");
+
+        var preview = await RunAsync(host, admin, "updates", "preview");
+        preview.Sent.Should().OnlyContain(s => s.Ephemeral);
+        preview.Embeds.Should().ContainSingle().Which.Description.Should().Contain("SENTETİK ÖRNEK");
+        (await RunAsync(host, admin, "updates", "status")).Embeds.Should().ContainSingle().Which.Title.Should().Be("TSQ Bot Updates durumu");
+        (await RunAsync(host, admin, "updates", "doctor")).Embeds.Should().ContainSingle().Which.Title.Should().Be("TSQ Bot Updates tanı raporu");
+        (await RunAsync(host, admin, "updates", "pause")).Text.Should().Contain("duraklatıldı");
+        (await RunAsync(host, admin, "updates", "resume")).Text.Should().Contain("yeniden başladı");
+
+        (await RunAsync(host, admin, "updates", "game-disable")).Text.Should().Contain("kapatıldı");
+        (await UpdatesStatusAsync(host))!.Games.Single().Enabled.Should().BeFalse();
+        (await RunAsync(host, TestHost.Member(Guild), "updates", "game-enable")).Text.Should().Contain("yetki");
+        (await UpdatesStatusAsync(host))!.Games.Single().Enabled.Should().BeFalse("a member cannot turn a game on");
+        host.Transport.SendCalls.Should().Be(0, "no admin operation posts to a channel");
+    }
+
+    [Fact]
+    public async Task Updates_configure_without_kanal_opens_a_channel_picker()
+    {
+        await using var host = await TestHost.CreateAsync();
+        SetChannel(host);
+        var open = await RunAsync(host, TestHost.Admin(Guild), "updates", "configure");
+        var draft = DraftId(open.AllCustomIds()[0]);
+        (await UpdatesStatusAsync(host))!.ChannelId.Should().BeNull("nothing is saved by opening the form");
+        (await FormAsync(host, TestHost.Admin(Guild), draft, AdminForms.ChannelAction, Picked(Channel.Value, TextChannel(Channel.Value, guild: 99))))
+            .Text.Should().Contain("metin veya duyuru kanalı");
+        (await FormAsync(host, TestHost.Admin(Guild), draft, AdminForms.ChannelAction, Picked(Channel.Value, TextChannel(Channel.Value)))).Updates.Should().ContainSingle();
+        (await UpdatesStatusAsync(host))!.ChannelId.Should().Be(Channel.Value);
+    }
+
+    [Fact]
+    public async Task With_several_registered_games_the_game_operations_offer_exactly_the_registered_games()
+    {
+        await using var host = await TestHost.CreateAsync(replace: services =>
+        {
+            services.AddSingleton(FakeUpdateProvider.Game);
+            services.AddSingleton<ToroSquad.Modules.Updates.Domain.IGameUpdateProvider>(new FakeUpdateProvider());
+        });
+        var admin = TestHost.Admin(Guild);
+        foreach (var operation in new[] { "game-enable", "game-disable", "preview" })
+            (await RunAsync(host, admin, "updates", operation)).SelectValues().Should().Equal(["cs2", "fakegame"], operation);
+
+        var open = await RunAsync(host, admin, "updates", "game-enable");
+        var draft = DraftId(open.AllCustomIds()[0]);
+        (await UpdatesStatusAsync(host))!.Games.Should().OnlyContain(g => !g.Enabled, "nothing is saved by opening the form");
+        (await FormAsync(host, admin, draft, UpdatesAdminOperations.GameAction, Selected("dota2"))).Text.Should().Contain("desteklenmiyor", "a forged value is not a registered game");
+        (await UpdatesStatusAsync(host))!.Games.Should().OnlyContain(g => !g.Enabled);
+
+        (await FormAsync(host, admin, draft, UpdatesAdminOperations.GameAction, Selected("fakegame"))).Updates.Should().ContainSingle().Which.Text.Should().Contain("Fake Game güncellemeleri açıldı");
+        (await UpdatesStatusAsync(host))!.Games.Select(g => (g.Game.Key, g.Enabled)).Should().Equal(("cs2", false), ("fakegame", true));
+        (await FormAsync(host, admin, draft, UpdatesAdminOperations.GameAction, Selected("cs2"))).Text.Should().Contain("artık geçerli değil", "a second click does not run it again");
+        (await UpdatesStatusAsync(host))!.Games.Single(g => g.Game.Key == "cs2").Enabled.Should().BeFalse();
+
+        var previewDraft = DraftId((await RunAsync(host, admin, "updates", "preview")).AllCustomIds()[0]);
+        (await FormAsync(host, admin, previewDraft, UpdatesAdminOperations.GameAction, Selected("cs2"))).Updates.Should().ContainSingle("the preview replaces the picker");
     }
 
     [Fact]
@@ -727,6 +815,9 @@ public sealed class TsqAdminCommandTests
 
     private static Task<ulong?> NewsChannelAsync(TestHost host) =>
         host.InScopeAsync(async sp => (await sp.GetRequiredService<NewsConfigService>().StatusAsync(TestHost.Admin(Guild), CancellationToken.None)).Status?.ChannelId);
+
+    private static Task<UpdatesStatus?> UpdatesStatusAsync(TestHost host) =>
+        host.InScopeAsync(async sp => (await sp.GetRequiredService<UpdatesConfigService>().StatusAsync(TestHost.Admin(Guild), CancellationToken.None)).Status);
 
     private static Task<ulong?> LfgChannelAsync(TestHost host) =>
         host.InScopeAsync(async sp => (await sp.GetRequiredService<LfgConfigService>().StatusAsync(TestHost.Admin(Guild), CancellationToken.None)).Status?.ChannelId);

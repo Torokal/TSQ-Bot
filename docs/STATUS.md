@@ -539,6 +539,21 @@ invite link and no global command registration. The source code is public under 
 - **NOT_VERIFIED:** Railway-network access, an RSS-specific usage permission in HLTV's terms, HLTV team id 11861, a live card.
 - Off by default (`News:Mode=Off`); merge, deploy, command sync, channel and live posting await the owner's approval.
 
+## TSQ Bot Updates — game update notifications (new, 2026-10-05, branch `feat/updates-module`)
+
+- **IMPLEMENTED / TESTED_OFFLINE:** generic game-update module (game definition + provider + classifier), Steam news
+  provider (fixed public endpoint, no key, no redirects, bounded and validated JSON, every failure class kept apart),
+  conservative Counter-Strike 2 classifier, baseline, per-guild dedup by post id, silent edit on corrections, dry-run
+  separation, mode-change windows (nothing seen under DryRun or published while Off is posted live), pause/resume,
+  channel and game changes, 24 h / 3-card catch-up, retention with a publication-time watermark, module gate, persisted
+  backoff, source cache lifetime, atomic rounds, `/tsq-admin modul:updates`, `updates check` CLI. Additive migration
+  `UpdatesModule` (five `updates_*` tables).
+- **Real source (local network, 2026-10-05):** Steam answer read and parsed (HTTP 200, 20/20 posts usable); classifier
+  on the real list: 17 updates, 1 ambiguous, 2 not an update.
+- **NOT_VERIFIED:** Railway-network access, a live Discord card (only a real update published after going live can show it).
+- Off by default (`Updates:Mode=Off`, no channel, no followed game); merge, deploy, channel, game activation and live
+  posting await the owner's approval. Rollout order: [updates/TSQ_UPDATES.md](updates/TSQ_UPDATES.md).
+
 ## One admin command: `/tsq-admin` (2026-09-30)
 
 - PR #46 (merged, deployed, registered 2026-09-30) put the seven `/<module>-admin` commands under one root as subcommand
