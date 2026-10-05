@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TSQ Bot Updates: one card per official game update / patch notes post, for the games a guild subscribed to. Generic:
+       a game is a GameUpdateDefinition (provider + provider game id + classifier); the first one is Counter-Strike 2 on Steam.
+       Depends on the shared TSQ layers only (never on another feature module). Domain, Providers, Application and Persistence
+       must not use the Discord SDK; Domain and Application never see a provider's own types (architecture tests). -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Infrastructure\ToroSquad.Infrastructure.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Updates.Localization.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

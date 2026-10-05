@@ -22,6 +22,7 @@ using ToroSquad.Modules.Quote;
 using ToroSquad.Modules.Randomizer;
 using ToroSquad.Modules.Summary;
 using ToroSquad.Modules.Timezone;
+using ToroSquad.Modules.Updates;
 using ToroSquad.Modules.Volleyball;
 
 namespace ToroSquad.Bot;
@@ -36,7 +37,7 @@ public static class ToroHost
 
     public static IReadOnlyList<IToroModule> Modules(IConfiguration configuration)
     {
-        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module(), new VolleyballModule(), new LiveModule(), new LfgModule(), new QuoteModule(), new BirthdayModule(), new CurrencyModule(), new RandomizerModule(), new TimezoneModule(), new GiveawayModule(), new SummaryModule(), new PredictionsModule(), new NewsModule() };
+        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module(), new VolleyballModule(), new LiveModule(), new LfgModule(), new QuoteModule(), new BirthdayModule(), new CurrencyModule(), new RandomizerModule(), new TimezoneModule(), new GiveawayModule(), new SummaryModule(), new PredictionsModule(), new NewsModule(), new UpdatesModule() };
         // Example module: development/tests only. Off unless explicitly enabled.
         if (configuration.GetValue("Modules:Example:Enabled", false))
             modules.Add(new ExampleModule());
@@ -102,6 +103,7 @@ public static class ToroHost
             GiveawayModule.AddBackgroundJobs(services);
             PredictionsModule.AddBackgroundJobs(services);
             NewsModule.AddBackgroundJobs(services);
+            UpdatesModule.AddBackgroundJobs(services);
         }
     }
 
@@ -169,6 +171,7 @@ public static class ToroHost
                 new Attribution("FIVB VIS", "https://www.fivb.org/VisSDK/VisWebService/", "about.attr.fivb_terms", "about.attr.fivb"),
                 new Attribution("Twitch API", "https://dev.twitch.tv/docs/api/", "about.attr.twitch_terms", "about.attr.twitch"),
                 new Attribution("Kick Public API", "https://docs.kick.com", "about.attr.kick_terms", "about.attr.kick"),
+                new Attribution("Steam Web API", "https://partner.steamgames.com/doc/webapi/ISteamNews", "about.attr.steam_terms", "about.attr.steam"),
             ]);
     }
 }

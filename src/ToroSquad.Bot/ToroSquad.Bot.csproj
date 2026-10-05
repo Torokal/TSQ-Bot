@@ -26,6 +26,7 @@
     <ProjectReference Include="..\ToroSquad.Modules.Summary\ToroSquad.Modules.Summary.csproj" />
     <ProjectReference Include="..\ToroSquad.Modules.Predictions\ToroSquad.Modules.Predictions.csproj" />
     <ProjectReference Include="..\ToroSquad.Modules.News\ToroSquad.Modules.News.csproj" />
+    <ProjectReference Include="..\ToroSquad.Modules.Updates\ToroSquad.Modules.Updates.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -48,6 +48,7 @@ public static partial class Cli
                 "db" => await DbAsync(rest),
                 "predictions" => await PredictionsAsync(rest),
                 "news" => await NewsAsync(rest),
+                "updates" => await UpdatesAsync(rest),
                 "simulate" => await Simulation.RunAsync(rest),
                 "help" or "--help" or "-h" => PrintUsage(),
                 _ => PrintUsage(),
@@ -102,6 +103,7 @@ public static partial class Cli
               esports provider-check [--team NAME]    READ-ONLY live fetch summary / team key lookup (sends nothing)
               predictions football-check [--odds] [--budget N] [--days D] [--focus CODE] [--preview]  READ-ONLY The Odds API check (N credits max total, default 5; D days, default 7, max 30; CODE = GS|FB|BJK|TR first; local card preview)
               news check [--roster]                   READ-ONLY HLTV RSS check with the per-item Aurora decision (sends nothing)
+              updates check [--game KEY]              READ-ONLY game update source check with the per-post classification (sends nothing)
             """);
         return Usage;
     }
