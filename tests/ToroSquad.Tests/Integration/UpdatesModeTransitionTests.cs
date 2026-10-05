@@ -221,9 +221,9 @@ public sealed class UpdatesModeTransitionTests
         dry.Host.Transport.SendCalls.Should().Be(0);
         var row = (await dry.OutboxAsync()).Should().ContainSingle().Subject;
         (row.IsDryRun, row.Status, row.Kind, row.SourceKey).Should().Be((true, OutboxStatus.Simulated, "update-dry:cs2", "steam:730:20"));
-        var (_, status) = await dry.ConfigAsync(c => c.StatusAsync(TestHost.Admin(Guild), Ct));
-        status!.Games.Single().LastCardAt.Should().BeNull("a simulated card is not a live card");
-        status.Games.Single().LastDiscovered!.ExternalId.Should().Be("20");
+        var status = await dry.GameStatusAsync(Guild);
+        status.LastCardAt.Should().BeNull("a simulated card is not a live card");
+        status.LastDiscovered!.ExternalId.Should().Be("20");
         (await dry.ConfigAsync(c => c.DoctorAsync(TestHost.Admin(Guild), Ct))).Checks.Should().Contain(c => c.DetailKey == "updates.doctor.mode_dry");
     }
 

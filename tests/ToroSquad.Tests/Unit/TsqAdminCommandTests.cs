@@ -317,7 +317,7 @@ public sealed class TsqAdminCommandTests
     }
 
     [Fact]
-    public async Task Updates_operations_run_through_the_router_and_act_on_the_only_registered_game_directly()
+    public async Task Updates_operations_run_through_the_router_and_games_are_picked_from_the_registered_ones()
     {
         await using var host = await TestHost.CreateAsync();
         SetChannel(host);
@@ -327,30 +327,41 @@ public sealed class TsqAdminCommandTests
 
         var games = await RunAsync(host, admin, "updates", "games");
         games.Sent.Should().OnlyContain(s => s.Ephemeral);
-        games.Embeds.Should().ContainSingle().Which.Description.Should().Contain("**Counter-Strike 2** · Steam · `cs2` — kapalı");
+        games.Embeds.Should().ContainSingle().Which.Description.Should().Contain("**Counter-Strike 2** · Steam · `cs2` — kapalı")
+            .And.Contain("**World of Warcraft: Forever** · Blizzard · `wow-forever` — kapalı");
 
         var configure = await RunAsync(host, admin, "updates", "configure", new AdminArgs(Channel.Value, null, null, null), AdminFields.Channel);
         configure.Sent.Should().ContainSingle().Which.Components.Should().BeNull("no extra step when the input is complete");
         (await UpdatesStatusAsync(host))!.ChannelId.Should().Be(Channel.Value);
 
         var enable = await RunAsync(host, admin, "updates", "game-enable");
-        enable.AllCustomIds().Should().BeEmpty("one registered game: no picker");
-        enable.Text.Should().Contain("Counter-Strike 2 güncellemeleri açıldı");
-        (await UpdatesStatusAsync(host))!.Games.Single().Enabled.Should().BeTrue();
-        (await RunAsync(host, admin, "updates", "games")).Embeds.Single().Description.Should().Contain("`cs2` — açık");
+        enable.Sent.Should().OnlyContain(s => s.Ephemeral);
+        enable.SelectValues().Should().Equal("cs2", "wow-forever");
+        (await UpdatesStatusAsync(host))!.Games.Should().OnlyContain(g => !g.Enabled, "nothing is saved by opening the picker");
+        (await FormAsync(host, admin, DraftId(enable.AllCustomIds()[0]), UpdatesAdminOperations.GameAction, Selected("wow-forever"))).Updates.Should().ContainSingle()
+            .Which.Text.Should().Contain("World of Warcraft: Forever güncellemeleri açıldı");
+        var enableCs2 = await RunAsync(host, admin, "updates", "game-enable");
+        (await FormAsync(host, admin, DraftId(enableCs2.AllCustomIds()[0]), UpdatesAdminOperations.GameAction, Selected("cs2"))).Updates.Should().ContainSingle()
+            .Which.Text.Should().Contain("Counter-Strike 2 güncellemeleri açıldı");
+        (await UpdatesStatusAsync(host))!.Games.Should().OnlyContain(g => g.Enabled);
+        (await RunAsync(host, admin, "updates", "games")).Embeds.Single().Description.Should().Contain("`cs2` — açık").And.Contain("`wow-forever` — açık");
 
         var preview = await RunAsync(host, admin, "updates", "preview");
         preview.Sent.Should().OnlyContain(s => s.Ephemeral);
-        preview.Embeds.Should().ContainSingle().Which.Description.Should().Contain("SENTETİK ÖRNEK");
+        (await FormAsync(host, admin, DraftId(preview.AllCustomIds()[0]), UpdatesAdminOperations.GameAction, Selected("wow-forever"))).Updates.Should()
+            .ContainSingle("the preview replaces the picker");
         (await RunAsync(host, admin, "updates", "status")).Embeds.Should().ContainSingle().Which.Title.Should().Be("TSQ Bot Updates durumu");
         (await RunAsync(host, admin, "updates", "doctor")).Embeds.Should().ContainSingle().Which.Title.Should().Be("TSQ Bot Updates tanı raporu");
         (await RunAsync(host, admin, "updates", "pause")).Text.Should().Contain("duraklatıldı");
         (await RunAsync(host, admin, "updates", "resume")).Text.Should().Contain("yeniden başladı");
 
-        (await RunAsync(host, admin, "updates", "game-disable")).Text.Should().Contain("kapatıldı");
-        (await UpdatesStatusAsync(host))!.Games.Single().Enabled.Should().BeFalse();
-        (await RunAsync(host, TestHost.Member(Guild), "updates", "game-enable")).Text.Should().Contain("yetki");
-        (await UpdatesStatusAsync(host))!.Games.Single().Enabled.Should().BeFalse("a member cannot turn a game on");
+        var disable = await RunAsync(host, admin, "updates", "game-disable");
+        (await FormAsync(host, admin, DraftId(disable.AllCustomIds()[0]), UpdatesAdminOperations.GameAction, Selected("cs2"))).Updates.Should().ContainSingle()
+            .Which.Text.Should().Contain("kapatıldı");
+        (await UpdatesStatusAsync(host))!.Games.Select(g => (g.Game.Key, g.Enabled)).Should().Equal(("cs2", false), ("wow-forever", true));
+        var member = await RunAsync(host, TestHost.Member(Guild), "updates", "game-enable");
+        member.Text.Should().Contain("yetki");
+        member.AllCustomIds().Should().BeEmpty("a member does not even get the picker");
         host.Transport.SendCalls.Should().Be(0, "no admin operation posts to a channel");
     }
 
@@ -378,7 +389,7 @@ public sealed class TsqAdminCommandTests
         });
         var admin = TestHost.Admin(Guild);
         foreach (var operation in new[] { "game-enable", "game-disable", "preview" })
-            (await RunAsync(host, admin, "updates", operation)).SelectValues().Should().Equal(["cs2", "fakegame"], operation);
+            (await RunAsync(host, admin, "updates", operation)).SelectValues().Should().Equal(["cs2", "fakegame", "wow-forever"], operation);
 
         var open = await RunAsync(host, admin, "updates", "game-enable");
         var draft = DraftId(open.AllCustomIds()[0]);
@@ -387,7 +398,7 @@ public sealed class TsqAdminCommandTests
         (await UpdatesStatusAsync(host))!.Games.Should().OnlyContain(g => !g.Enabled);
 
         (await FormAsync(host, admin, draft, UpdatesAdminOperations.GameAction, Selected("fakegame"))).Updates.Should().ContainSingle().Which.Text.Should().Contain("Fake Game güncellemeleri açıldı");
-        (await UpdatesStatusAsync(host))!.Games.Select(g => (g.Game.Key, g.Enabled)).Should().Equal(("cs2", false), ("fakegame", true));
+        (await UpdatesStatusAsync(host))!.Games.Select(g => (g.Game.Key, g.Enabled)).Should().Equal(("cs2", false), ("fakegame", true), ("wow-forever", false));
         (await FormAsync(host, admin, draft, UpdatesAdminOperations.GameAction, Selected("cs2"))).Text.Should().Contain("artık geçerli değil", "a second click does not run it again");
         (await UpdatesStatusAsync(host))!.Games.Single(g => g.Game.Key == "cs2").Enabled.Should().BeFalse();
 

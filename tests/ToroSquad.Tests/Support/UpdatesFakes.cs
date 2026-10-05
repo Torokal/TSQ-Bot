@@ -195,13 +195,17 @@ public sealed class UpdatesRig : IAsyncDisposable
     public static readonly DateTimeOffset Start = new(2026, 10, 1, 10, 0, 0, TimeSpan.Zero);
     private static readonly CancellationToken Ct = CancellationToken.None;
 
-    private UpdatesRig(TestHost host, SteamNewsServer steam, FakeUpdateProvider? fake, string dataDirectory)
+    private UpdatesRig(TestHost host, SteamNewsServer steam, WowForum forum, FakeUpdateProvider? fake, string dataDirectory)
     {
         Host = host;
         Steam = steam;
+        Forum = forum;
         Fake = fake;
         DataDirectory = dataDirectory;
     }
+
+    /// <summary>The scripted Blizzard forum (World of Warcraft: Forever).</summary>
+    public WowForum Forum { get; }
 
     /// <summary>Where the database lives: this host's own folder, or the first rig's when the database is shared.</summary>
     public string DataDirectory { get; }
@@ -218,6 +222,7 @@ public sealed class UpdatesRig : IAsyncDisposable
         UpdatesRig? shareWith = null, Action<IServiceCollection>? replace = null, bool enterMode = true)
     {
         var steam = new SteamNewsServer();
+        var forum = new WowForum();
         var fake = fakeGame ? new FakeUpdateProvider() : null;
         var overrides = new Dictionary<string, string?> { ["Updates:Mode"] = mode };
         foreach (var (k, v) in extra ?? [])
@@ -227,6 +232,7 @@ public sealed class UpdatesRig : IAsyncDisposable
         var host = await TestHost.CreateAsync(overrides, shareWith?.Now ?? Start, services =>
         {
             services.AddHttpClient(SteamNewsUpdateProvider.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new ForwardingHandler(steam));
+            services.AddHttpClient(BlizzardForumUpdateProvider.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new ForwardingHandler(forum));
             if (fake is not null)
             {
                 // Exactly what adding a game takes: one definition and (for a new source) one provider.
@@ -236,7 +242,7 @@ public sealed class UpdatesRig : IAsyncDisposable
 
             replace?.Invoke(services);
         });
-        var rig = new UpdatesRig(host, steam, fake, shareWith?.DataDirectory ?? host.Directory);
+        var rig = new UpdatesRig(host, steam, forum, fake, shareWith?.DataDirectory ?? host.Directory);
         rig.AllowChannel(Guild, Channel);
         if (enterMode)
             await rig.Poller.EnterModeAsync(Ct);
@@ -300,6 +306,10 @@ public sealed class UpdatesRig : IAsyncDisposable
 
     public Task<List<UpdatesItemEntity>> ItemsAsync() =>
         Host.InScopeAsync(sp => sp.GetRequiredService<ToroDbContext>().Set<UpdatesItemEntity>().AsNoTracking().OrderBy(a => a.GameKey).ThenBy(a => a.ExternalId).ToListAsync(Ct));
+
+    /// <summary>One game's status as the guild's admin sees it.</summary>
+    public async Task<UpdatesGameStatus> GameStatusAsync(GuildId guild, string game = "cs2") =>
+        (await ConfigAsync(c => c.StatusAsync(TestHost.Admin(guild), Ct))).Status!.Games.Single(g => g.Game.Key == game);
 
     public Task<UpdatesGuildConfigEntity?> GuildConfigAsync(GuildId guild) =>
         Host.InScopeAsync(sp => sp.GetRequiredService<ToroDbContext>().Set<UpdatesGuildConfigEntity>().AsNoTracking().FirstOrDefaultAsync(c => c.GuildId == guild.Value, Ct));

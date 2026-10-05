@@ -343,9 +343,9 @@ public sealed class UpdatesTests
         await using var rig = await BaselinedAsync();
         rig.Steam.Serve([Old, Update(460, rig.Now.AddMinutes(1))]);
         await rig.PollAsync();
-        (await rig.ConfigAsync(c => c.StatusAsync(TestHost.Admin(Guild), Ct))).Status!.Games.Single().LastCardAt.Should().BeNull("planned is not sent");
+        (await rig.GameStatusAsync(Guild)).LastCardAt.Should().BeNull("planned is not sent");
         await rig.DeliverAsync();
-        (await rig.ConfigAsync(c => c.StatusAsync(TestHost.Admin(Guild), Ct))).Status!.Games.Single().LastCardAt.Should().Be(rig.Now);
+        (await rig.GameStatusAsync(Guild)).LastCardAt.Should().Be(rig.Now);
     }
 
     // ---------- pause, channel, module, game ----------
@@ -769,7 +769,7 @@ public sealed class UpdatesTests
             (await data.PurgeGuildAsync(Guild, Ct)).Should().Be(3, "channel row, followed game, delivery record");
         });
         (await rig.GuildConfigAsync(Guild)).Should().BeNull();
-        (await rig.ConfigAsync(c => c.StatusAsync(TestHost.Admin(Guild), Ct))).Status!.Games.Single().Enabled.Should().BeFalse();
+        (await rig.GameStatusAsync(Guild)).Enabled.Should().BeFalse();
         (await rig.ItemsAsync()).Should().HaveCount(2, "posts and the source state are not guild data");
         (await rig.PollAsync()).Should().Be(0);
     }
@@ -793,7 +793,7 @@ public sealed class UpdatesTests
 
             var other = await config.StatusAsync(TestHost.Admin(OtherGuild), Ct);
             other.Status!.ChannelId.Should().BeNull("another guild's settings are never visible");
-            other.Status.Games.Should().ContainSingle().Which.Enabled.Should().BeFalse();
+            other.Status.Games.Should().OnlyContain(g => !g.Enabled);
             (await config.SetPausedAsync(TestHost.Admin(OtherGuild), true, Ct)).Error.Should().Be(OperationError.InvalidInput, "no channel there");
             (await config.SetChannelAsync(TestHost.Admin(Guild), 424242, Ct)).Error.Should().Be(OperationError.InvalidInput, "unknown channel");
             foreach (var game in new[] { "dota2", "CS2", "", "cs2; drop", null })
@@ -834,7 +834,7 @@ public sealed class UpdatesTests
         status.EffectiveMode.Should().Be(UpdatesMode.Live);
         status.ModuleEnabled.Should().BeTrue();
         status.ChannelId.Should().Be(Channel.Value);
-        var game = status.Games.Should().ContainSingle().Subject;
+        var game = status.Games.Single(g => g.Game.Key == "cs2");
         game.Game.Should().BeSameAs(Cs2Game.Definition);
         game.ProviderName.Should().Be("Steam");
         game.Enabled.Should().BeTrue();
@@ -922,7 +922,7 @@ public sealed class UpdatesTests
         (await rig.OutboxAsync()).Select(o => (o.SourceKey, o.Kind)).Should().BeEquivalentTo([("steam:730:1300", "update:cs2"), ("fakestore:g-1:p1", "update:fakegame")]);
 
         var (_, status) = await rig.ConfigAsync(c => c.StatusAsync(TestHost.Admin(Guild), Ct));
-        status!.Games.Select(g => (g.Game.Key, g.ProviderName, g.Enabled)).Should().Equal(("cs2", "Steam", true), ("fakegame", "FakeStore", true));
+        status!.Games.Select(g => (g.Game.Key, g.ProviderName, g.Enabled)).Should().Equal(("cs2", "Steam", true), ("fakegame", "FakeStore", true), ("wow-forever", "Blizzard", false));
 
         // One game's source failing (even by throwing) leaves the other game working.
         fake.Throw = new InvalidOperationException("simulated provider bug");
@@ -999,14 +999,14 @@ public sealed class UpdatesTests
         (options.PollIntervalMinutes, options.CatchUpHours, options.MaxCardsPerRound, options.ItemsPerRequest).Should().Be((5, 24, 3, 20));
         options.Validate().Should().BeEmpty();
         new ToroSquad.Modules.Updates.UpdatesModule().Descriptor.EnabledByDefault.Should().BeFalse();
-        host.Services.GetRequiredService<GameUpdateCatalog>().Games.Should().ContainSingle().Which.Should().BeSameAs(Cs2Game.Definition);
+        host.Services.GetRequiredService<GameUpdateCatalog>().Games.Select(g => g.Key).Should().Equal("cs2", "wow-forever");
 
         await host.InScopeAsync(async sp =>
         {
             var (_, status) = await sp.GetRequiredService<UpdatesConfigService>().StatusAsync(TestHost.Admin(Guild), Ct);
             status!.ModuleEnabled.Should().BeFalse();
             status.ChannelId.Should().BeNull();
-            status.Games.Should().ContainSingle().Which.Enabled.Should().BeFalse("the game is registered, but no guild follows it until an admin says so");
+            status.Games.Should().HaveCount(2).And.OnlyContain(g => !g.Enabled, "the games are registered, but no guild follows one until an admin says so");
         });
         (await host.Services.GetRequiredService<UpdatesPoller>().TickAsync(Ct)).Should().Be(0);
 
