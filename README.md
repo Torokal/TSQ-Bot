@@ -134,7 +134,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Öngörü | predictions channel: `/ongoru yarat` + card buttons (🎯 Tahmin Yap, 🔒 Kilitle, ✅ Sonuçlandır, ↩️ İptal / İade); commands channel: `/ongoru cuzdan\|gunluk\|tahminlerim\|liderlik`, `/ongoru turnuva durum\|bitir` | create: the creator role; card management buttons: its creator (with the role) or Administrator/owner; end tournament: Administrator/owner; the rest: everyone (module on) |
 | TSQ Doğum Günü admin | `/tsq-admin modul:birthday islem:configure\|status\|doctor`; `/tsq-admin modul:birthday islem:set\|show uye:@member [tarih:14.03]` | Manage Server; `set`/`show`: Administrator or server owner |
 | TSQ Haber admin | `/tsq-admin modul:news islem:configure\|pause\|resume\|preview\|status\|doctor` | Manage Server |
-| TSQ Bot Updates admin | `/tsq-admin modul:updates islem:configure\|games\|game-enable\|game-disable\|pause\|resume\|preview\|status\|doctor` | Manage Server |
+| TSQ Bot Updates admin | `/tsq-admin modul:updates islem:configure\|games\|game-enable\|game-disable\|game-channel\|pause\|resume\|preview\|status\|doctor` | Manage Server |
 
 Every module's admin operations share ONE flat command without subcommands:
 `/tsq-admin modul:<module> islem:<operation> [kanal] [uye] [rol] [tarih]` — module and operation are autocompleted options
