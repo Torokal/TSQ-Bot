@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ToroSquad.Infrastructure.Persistence;
 
@@ -10,9 +11,11 @@ using ToroSquad.Infrastructure.Persistence;
 namespace ToroSquad.Bot.Migrations
 {
     [DbContext(typeof(ToroDbContext))]
-    partial class ToroDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005130617_UpdatesGameChannel")]
+    partial class UpdatesGameChannel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");

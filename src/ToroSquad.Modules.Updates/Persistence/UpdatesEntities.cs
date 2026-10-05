@@ -84,7 +84,10 @@ public sealed class UpdatesItemEntity
     public DateTimeOffset? ClassificationChangedAt { get; set; }
 }
 
-/// <summary>The one Updates channel of a guild and its delivery window. No user id is stored.</summary>
+/// <summary>
+/// The Updates channel of a guild — where every followed game posts unless the game has a channel of its own
+/// (<see cref="UpdatesSubscriptionEntity.ChannelId"/>) — and the guild's delivery window. No user id is stored.
+/// </summary>
 public sealed class UpdatesGuildConfigEntity
 {
     public ulong GuildId { get; set; }
@@ -116,6 +119,17 @@ public sealed class UpdatesSubscriptionEntity
 
     /// <summary>Only updates first seen and published at or after the last enabling are posted for this game.</summary>
     public DateTimeOffset? EnabledAt { get; set; }
+
+    /// <summary>
+    /// This game's own channel in the guild. Null: the game posts to the guild's Updates channel
+    /// (<see cref="UpdatesGuildConfigEntity.ChannelId"/>). Changing it never posts an update again.
+    /// </summary>
+    public ulong? ChannelId { get; set; }
+
+    /// <summary>The last permanent delivery problem in this game's own channel (cleared when the channel is set again).</summary>
+    public string? ChannelProblem { get; set; }
+
+    public DateTimeOffset? ChannelProblemAt { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
@@ -177,6 +191,7 @@ public sealed class UpdatesModelContributor : IModelContributor
             e.ToTable("updates_subscription");
             e.HasKey(x => new { x.GuildId, x.GameKey });
             e.Property(x => x.GameKey).HasMaxLength(16);
+            e.Property(x => x.ChannelProblem).HasMaxLength(64);
         });
         modelBuilder.Entity<UpdatesDeliveryEntity>(e =>
         {
