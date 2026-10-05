@@ -323,7 +323,7 @@ public sealed class TsqAdminCommandTests
         SetChannel(host);
         var admin = TestHost.Admin(Guild);
         (await SuggestAsync(host, await ServiceAsync(host), "islem", "", "updates", CorePermission.ManageGuild)).Select(r => r.Value).Should()
-            .Equal("configure", "games", "game-enable", "game-disable", "pause", "resume", "preview", "status", "doctor");
+            .Equal("configure", "games", "game-enable", "game-disable", "game-channel", "pause", "resume", "preview", "status", "doctor");
 
         var games = await RunAsync(host, admin, "updates", "games");
         games.Sent.Should().OnlyContain(s => s.Ephemeral);
@@ -377,6 +377,67 @@ public sealed class TsqAdminCommandTests
             .Text.Should().Contain("metin veya duyuru kanalı");
         (await FormAsync(host, TestHost.Admin(Guild), draft, AdminForms.ChannelAction, Picked(Channel.Value, TextChannel(Channel.Value)))).Updates.Should().ContainSingle();
         (await UpdatesStatusAsync(host))!.ChannelId.Should().Be(Channel.Value);
+    }
+
+    [Fact]
+    public async Task Updates_game_channel_gives_one_game_its_own_channel_and_only_after_the_game_is_picked()
+    {
+        const ulong Own = 7702;
+        await using var host = await TestHost.CreateAsync();
+        SetChannel(host);
+        host.Guilds.SetChannel(Guild, new ChannelId(Own), new BotChannelAccess(true, true, CorePermission.ViewChannel | CorePermission.SendMessages | CorePermission.EmbedLinks));
+        var admin = TestHost.Admin(Guild);
+        async Task<ulong?> OwnChannelAsync(string game) => (await UpdatesStatusAsync(host))!.Games.Single(g => g.Game.Key == game).ChannelId;
+
+        // Without the guild's Updates channel there is nothing a game could fall back to.
+        var early = await RunAsync(host, admin, "updates", "game-channel", new AdminArgs(Own, null, null, null), AdminFields.Channel);
+        (await FormAsync(host, admin, DraftId(early.AllCustomIds()[0]), UpdatesAdminOperations.GameAction, Selected("wow-forever"))).Updates.Should().ContainSingle()
+            .Which.Text.Should().Contain("islem:configure");
+        (await OwnChannelAsync("wow-forever")).Should().BeNull();
+        await RunAsync(host, admin, "updates", "configure", new AdminArgs(Channel.Value, null, null, null), AdminFields.Channel);
+
+        // With kanal: the game is picked next, and only then anything is saved.
+        var withChannel = await RunAsync(host, admin, "updates", "game-channel", new AdminArgs(Own, null, null, null), AdminFields.Channel);
+        withChannel.Sent.Should().OnlyContain(s => s.Ephemeral);
+        withChannel.SelectValues().Should().Equal("cs2", "wow-forever");
+        (await OwnChannelAsync("wow-forever")).Should().BeNull("nothing is saved by opening the picker");
+        var draft = DraftId(withChannel.AllCustomIds()[0]);
+        (await FormAsync(host, admin, draft, UpdatesAdminOperations.GameAction, Selected("dota2"))).Text.Should().Contain("desteklenmiyor", "a forged value is not a registered game");
+        (await FormAsync(host, admin, draft, UpdatesAdminOperations.GameAction, Selected("wow-forever"))).Updates.Should().ContainSingle()
+            .Which.Text.Should().Contain("World of Warcraft: Forever").And.Contain("<#7702>").And.Contain("islem:game-enable", "the game itself is still off");
+        (await OwnChannelAsync("wow-forever")).Should().Be(Own);
+        (await OwnChannelAsync("cs2")).Should().BeNull("the other game keeps the common channel");
+        (await UpdatesStatusAsync(host))!.ChannelId.Should().Be(Channel.Value, "the guild's Updates channel is untouched");
+        (await FormAsync(host, admin, draft, UpdatesAdminOperations.GameAction, Selected("cs2"))).Text.Should().Contain("artık geçerli değil", "a second click does not run it again");
+        (await OwnChannelAsync("cs2")).Should().BeNull();
+        (await RunAsync(host, admin, "updates", "games")).Embeds.Single().Description.Should().Contain("`wow-forever` — kapalı → <#7702>").And.NotContain("`cs2` — kapalı →");
+
+        // Without kanal: a channel select first, then the game.
+        var pick = await RunAsync(host, admin, "updates", "game-channel");
+        var pickDraft = DraftId(pick.AllCustomIds()[0]);
+        pick.AllCustomIds().Should().Contain(id => id.EndsWith(":" + AdminForms.ChannelAction, StringComparison.Ordinal))
+            .And.Contain(id => id.EndsWith(":" + AdminForms.ClearAction, StringComparison.Ordinal));
+        (await FormAsync(host, admin, pickDraft, UpdatesAdminOperations.GameAction, Selected("cs2"))).Text.Should().Contain("desteklenmiyor", "a game cannot be picked before the channel step");
+        (await FormAsync(host, admin, pickDraft, AdminForms.ChannelAction, Picked(Own, TextChannel(Own, guild: 99)))).Text.Should().Contain("metin veya duyuru kanalı");
+        var games = await FormAsync(host, admin, pickDraft, AdminForms.ChannelAction, Picked(Own, TextChannel(Own)));
+        games.Updates.Should().ContainSingle("the same private message turns into the game select").Which.Text.Should().Contain("<#7702>");
+        (await OwnChannelAsync("cs2")).Should().BeNull("still nothing saved");
+        (await FormAsync(host, admin, pickDraft, UpdatesAdminOperations.GameAction, Selected("cs2"))).Updates.Should().ContainSingle().Which.Text.Should().Contain("Counter-Strike 2");
+        (await OwnChannelAsync("cs2")).Should().Be(Own);
+
+        // The explicit button sends a game back to the common channel.
+        var back = await RunAsync(host, admin, "updates", "game-channel");
+        var backDraft = DraftId(back.AllCustomIds()[0]);
+        (await FormAsync(host, admin, backDraft, AdminForms.ClearAction, AdminInput.None)).Updates.Should().ContainSingle().Which.Text.Should().Contain("ortak");
+        (await OwnChannelAsync("cs2")).Should().Be(Own, "nothing is saved until the game is picked");
+        (await FormAsync(host, admin, backDraft, UpdatesAdminOperations.GameAction, Selected("cs2"))).Updates.Should().ContainSingle().Which.Text.Should().Contain("ortak güncelleme kanalına");
+        (await OwnChannelAsync("cs2")).Should().BeNull();
+        (await OwnChannelAsync("wow-forever")).Should().Be(Own);
+
+        var member = await RunAsync(host, TestHost.Member(Guild), "updates", "game-channel", new AdminArgs(Own, null, null, null), AdminFields.Channel);
+        member.Text.Should().Contain("yetki");
+        member.AllCustomIds().Should().BeEmpty("a member does not even get the picker");
+        host.Transport.SendCalls.Should().Be(0, "no admin operation posts to a channel");
     }
 
     [Fact]

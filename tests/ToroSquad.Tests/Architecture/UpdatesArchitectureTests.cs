@@ -220,7 +220,7 @@ public sealed partial class UpdatesArchitectureTests
         module.Descriptor.AdminCommands.Should().Equal("tsq-admin updates");
         module.InteractionModuleTypes.Should().BeEmpty("the first version is automatic delivery plus admin operations");
         ToroSquad.Modules.Updates.Commands.UpdatesAdminOperations.Definition.Operations.Select(o => o.Id).Should()
-            .Equal("configure", "games", "game-enable", "game-disable", "pause", "resume", "preview", "status", "doctor");
+            .Equal("configure", "games", "game-enable", "game-disable", "game-channel", "pause", "resume", "preview", "status", "doctor");
         ToroSquad.Modules.Updates.Commands.UpdatesAdminOperations.Definition.Operations.Should()
             .OnlyContain(o => o.Permission == ToroSquad.Core.Security.Authorize.ServerSettings, "every operation needs Manage Server");
     }
