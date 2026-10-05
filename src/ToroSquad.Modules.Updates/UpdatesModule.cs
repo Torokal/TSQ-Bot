@@ -21,7 +21,7 @@ namespace ToroSquad.Modules.Updates;
 /// TSQ Bot Updates: one card when a followed game publishes an official update / patch notes post
 /// (docs/updates/TSQ_UPDATES.md). Generic by construction: a game is a registered <see cref="GameUpdateDefinition"/>
 /// (provider + provider game id + classifier) and a provider is an <see cref="IGameUpdateProvider"/>. Registered today:
-/// Counter-Strike 2 on Steam, and World of Warcraft: Forever through Blizzard's posts on the official forum. A separate feature module that depends only on the shared TSQ layers. Inert unless
+/// Counter-Strike 2 and Deadlock on Steam, and World of Warcraft: Forever through Blizzard's posts on the official forum. A separate feature module that depends only on the shared TSQ layers. Inert unless
 /// Updates:Mode is DryRun or Live; also gated per guild like every optional module (/modules enable updates), needs a
 /// channel (/tsq-admin modul:updates islem:configure) and an explicitly enabled game (islem:game-enable).
 /// </summary>
@@ -56,6 +56,7 @@ public sealed class UpdatesModule : IToroModule
         // Games and providers: the only place a game or a provider is added.
         services.AddSingleton<ProviderHttp>();
         services.AddSingleton(Cs2Game.Definition);
+        services.AddSingleton(DeadlockGame.Definition);
         services.AddHttpClient(SteamNewsUpdateProvider.HttpClientName).ConfigurePrimaryHttpMessageHandler(ProviderHttp.CreateHandler);
         services.AddSingleton<IGameUpdateProvider, SteamNewsUpdateProvider>();
 

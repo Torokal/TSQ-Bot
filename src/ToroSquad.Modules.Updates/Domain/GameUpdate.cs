@@ -26,6 +26,16 @@ public interface IGameUpdateClassifier
     UpdateClassificationResult Classify(GameUpdateCandidate candidate);
 }
 
+/// <summary>
+/// Reads what a card may show of one game's post from the post's text, for a source that delivers every game's posts in the
+/// same shape but each game writes its notes its own way. Pure and bounded: no I/O, the same text gives the same answer.
+/// </summary>
+public interface IGameUpdateHighlighter
+{
+    /// <summary>The excerpt of a post, or null when the text holds nothing a card should show.</summary>
+    UpdateHighlights? Read(string title, string text);
+}
+
 /// <summary>One titled group of changes of a post ("Bug Fixes" + its first lines). Heading and lines are plain text.</summary>
 public sealed record UpdateSection(string? Heading, IReadOnlyList<string> Items);
 
@@ -57,6 +67,11 @@ public sealed record UpdateHighlights
     public IReadOnlyList<UpdateSection> Sections { get; }
 
     public bool IsEmpty => Version is null && Build is null && ChangeCount == 0 && Sections.Count == 0;
+
+    /// <summary>Everything a card shows of this excerpt, as one string: two excerpts with the same fingerprint render the same.</summary>
+    public string Fingerprint =>
+        string.Join('\u001E', Version, Build, ChangeCount.ToString(CultureInfo.InvariantCulture),
+            string.Join('\u001D', Sections.Select(s => s.Heading + "\u001C" + string.Join('\u001C', s.Items))));
 
     public static UpdateHighlights Create(string? version, string? build, int changeCount, IEnumerable<UpdateSection> sections)
     {
@@ -112,7 +127,8 @@ public static class UpdateLabels
 /// two updates regularly share one). <see cref="Labels"/> are the provider's own tags and the shared
 /// <see cref="UpdateLabels"/>. <see cref="Body"/> is the post text, bounded, used by the classifier in memory only: it is
 /// never stored, logged or shown. <see cref="Highlights"/> is the bounded excerpt a card may show (none for providers that
-/// do not supply one); it is derived from the text, so it is not part of <see cref="ContentHash"/>.
+/// do not supply one). It can be read from more of the post than the bounded <see cref="Body"/> holds (the number of
+/// changes of a very long post), so it is part of <see cref="ContentHash"/>: whatever a card shows, a change of it is seen.
 /// </summary>
 public sealed record GameUpdateCandidate(
     string Provider,
@@ -136,6 +152,9 @@ public sealed record GameUpdateCandidate(
         {
             var text = string.Join('\u001F', Title, CanonicalUrl, PublishedAt?.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture) ?? "",
                 string.Join(',', Labels.Order(StringComparer.Ordinal)), Body);
+            // A post without an excerpt hashes exactly as before there were excerpts.
+            if (Highlights is { IsEmpty: false } highlights)
+                text += '\u001F' + highlights.Fingerprint;
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..32];
         }
     }
@@ -162,6 +181,12 @@ public sealed record GameUpdateDefinition(string Key, string DisplayName, string
     /// posts instead of opening a new thread. Empty for sources without threads.
     /// </summary>
     public IReadOnlyList<string> WatchedThreadIds { get; init; } = [];
+
+    /// <summary>
+    /// Reads the card excerpt of this game's posts where the provider itself has none to offer (a game without one gets the
+    /// card of title and link only).
+    /// </summary>
+    public IGameUpdateHighlighter? Highlighter { get; init; }
 
     public static bool IsValidKey(string? key) =>
         key is { Length: > 0 and <= KeyMax } && key.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-');
