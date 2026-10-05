@@ -554,6 +554,24 @@ invite link and no global command registration. The source code is public under 
 - Off by default (`Updates:Mode=Off`, no channel, no followed game); merge, deploy, channel, game activation and live
   posting await the owner's approval. Rollout order: [updates/TSQ_UPDATES.md](updates/TSQ_UPDATES.md).
 
+## TSQ Bot Updates — Deadlock (new, 2026-10-05)
+
+- **IMPLEMENTED / TESTED_OFFLINE:** third game of the Updates module through the unchanged pipeline — Deadlock on the
+  existing Steam provider (AppID 1422450), with its own deterministic classifier (small patches, gameplay and titled
+  updates, named major updates such as "City Never Sleeps", a hero rollout that ships new systems, several heroes added
+  at once; single hero reveals never post — all 39 official posts of 2024-10 to 2026-10 are classified as expected) and a
+  bounded reader of Valve's patch-notes layout for the card excerpt. The card excerpt is now part of a post's content
+  hash, so a change of what a card shows always edits the card (posts without an excerpt hash as before). No migration;
+  the slash command manifest is unchanged; `game-enable`, `game-channel`, `preview`, `status`, `games` and `doctor` list
+  the game from the catalog.
+- **Source decision:** Steam only. The official Changelog forum (forums.playdeadlock.com) answers an automated client
+  with a browser check on every request, including its RSS feed — **BLOCKED**; it is not read and the check is not
+  worked around. Fixes Valve posts there only as replies, without a Steam announcement, are therefore not seen.
+- **Real source (local network, 2026-10-05, read-only):** `updates check --game deadlock` — 20/20 posts usable; 17
+  updates, 1 ambiguous, 2 not an update.
+- **NOT_VERIFIED live:** the game is registered but no guild follows it until an admin enables it
+  (`/tsq-admin modul:updates islem:game-enable`); a real card is not verified.
+
 ## TSQ Bot Updates — a channel per game (new, 2026-10-05)
 
 - **IMPLEMENTED / TESTED_OFFLINE:** `/tsq-admin modul:updates islem:game-channel` gives one followed game its own channel;

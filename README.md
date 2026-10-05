@@ -94,7 +94,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 - **TSQ Bot Updates — game update notifications** (separate module, off by default and `Updates:Mode=Off`): one card
   when a followed game publishes an official update / patch notes post — original title, link to the notes and publication
   time, once per update, to one configured channel, no pings. Generic by design (a game is a registered definition with a
-  provider and a classifier): Counter-Strike 2 through Steam's public news API (no API key), and World of Warcraft: Forever
+  provider and a classifier): Counter-Strike 2 and Deadlock through Steam's public news API (no API key), and World of Warcraft: Forever
   through Blizzard's own posts on the official forum (Development Notes, Client Updates, patch notes and hotfixes only —
   with version/build and a short excerpt of the changes; no other WoW version, no known issues, maintenance or marketing).
   A conservative, deterministic classifier per game decides what is an update; baseline on first activation, corrections
