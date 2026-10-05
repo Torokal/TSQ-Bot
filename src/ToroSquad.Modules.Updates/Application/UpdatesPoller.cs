@@ -10,8 +10,8 @@ namespace ToroSquad.Modules.Updates.Application;
 /// <summary>
 /// The updates loop. Nothing is requested while Updates:Mode is Off, or for a game no guild would receive cards for (module
 /// enabled, channel set, not paused, game enabled). Otherwise ONE request per game per interval — never per guild — where
-/// the interval is the project default or the cache lifetime the source declared with its answer, whichever is longer
-/// (asking again earlier would only return the same cached answer). Failures back off exponentially (429 honours
+/// the interval is the project default, the provider's own minimum or the cache lifetime the source declared with its
+/// answer, whichever is longest (asking again earlier would only return the same cached answer). Failures back off exponentially (429 honours
 /// Retry-After). The next poll time lives in the database, so a restart neither resets a backoff nor causes an extra
 /// request. Rounds never overlap, and a failing game or provider never stops another game — or anything outside this module.
 /// </summary>
@@ -90,13 +90,18 @@ public sealed class UpdatesPoller(
         }
     }
 
-    /// <summary>Records the running mode once per process (see <see cref="UpdatesWindow.Enter"/>).</summary>
+    /// <summary>
+    /// The startup step, once per process: records the running mode (see <see cref="UpdatesWindow.Enter"/>) and any game that
+    /// was configured to another place at its provider (see <see cref="UpdatesPlanner.EnterSourcesAsync"/>).
+    /// </summary>
     public async Task EnterModeAsync(CancellationToken ct)
     {
         if (_modeEntered)
             return;
         await using var scope = scopes.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<UpdatesPlanner>().EnterModeAsync(ct);
+        var planner = scope.ServiceProvider.GetRequiredService<UpdatesPlanner>();
+        await planner.EnterModeAsync(ct);
+        await planner.EnterSourcesAsync(ct); // a game configured to another place at its provider: the move is recorded now
         _modeEntered = true;
     }
 
@@ -166,8 +171,10 @@ public sealed class UpdatesPoller(
         var now = clock.GetUtcNow();
         if (state.NextPollAt is { } due && now < due)
             return false;
-        // If the round could not be stored (so no next poll time either), still never ask more often than the interval.
-        if (_requestedAt.TryGetValue(game.Key, out var last) && now - last < options.Value.PollInterval && now >= last)
+        // If the round could not be stored (so no next poll time either), still never ask more often than the game's own
+        // interval — the same one the next poll time is computed from.
+        var provider = catalog.ProviderOf(game);
+        if (_requestedAt.TryGetValue(game.Key, out var last) && now - last < Interval(provider.MinimumPollInterval) && now >= last)
             return false;
         _requestedAt[game.Key] = now;
 
@@ -176,23 +183,34 @@ public sealed class UpdatesPoller(
         try
         {
             // Reduced to this game's own posts first, so an answer without any is scheduled as the failure it is.
-            result = (await catalog.ProviderOf(game).FetchAsync(game, ct)).ForGame(game);
+            var context = await planner.FetchContextAsync(game, ct);
+            result = (await provider.FetchAsync(game, context, ct)).ForGame(game);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             result = UpdateFetchResult.Fail(UpdateFetchOutcome.TransportError, null, ex.GetType().Name);
         }
 
-        var next = NextPoll(result, failuresBefore + (result.Succeeded ? 0 : 1));
+        var next = NextPoll(result, failuresBefore + (result.Succeeded ? 0 : 1), provider.MinimumPollInterval);
         var summary = await planner.ApplyAsync(game, result, next, ct);
         Log(game, result, summary, failuresBefore, next);
         return true;
     }
 
-    public DateTimeOffset NextPoll(UpdateFetchResult result, int consecutiveFailures)
+    /// <summary>
+    /// The time between two rounds of a game while its source answers: the module's interval or the provider's own minimum,
+    /// whichever is longer. The one place this is decided — the next poll time, the backoff and the in-memory guard use it.
+    /// </summary>
+    public TimeSpan Interval(TimeSpan? providerMinimum)
+    {
+        var interval = options.Value.PollInterval;
+        return providerMinimum is { } minimum && minimum > interval ? minimum : interval;
+    }
+
+    public DateTimeOffset NextPoll(UpdateFetchResult result, int consecutiveFailures, TimeSpan? providerMinimum = null)
     {
         var now = clock.GetUtcNow();
-        var interval = options.Value.PollInterval;
+        var interval = Interval(providerMinimum);
         if (result.Succeeded)
         {
             if (result.CacheLifetime is { } lifetime && lifetime > interval)

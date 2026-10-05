@@ -197,7 +197,8 @@ public sealed class UpdatesConfigService(
             .OrderByDescending(a => a.PublishedAt ?? a.FirstSeenAt).ThenByDescending(a => a.ExternalId).Take(5).ToListAsync(ct);
         var latest = candidates.FirstOrDefault(a => provider.IsCanonicalUrl(a.Url));
         if (latest is not null)
-            return (OperationResult.Ok("updates.preview.real"), new UpdatesPreview(renderer.Render(game, provider, latest.Url, latest.Title!, latest.PublishedAt, language), false));
+            return (OperationResult.Ok("updates.preview.real"), new UpdatesPreview(
+                renderer.Render(game, provider, latest.Url, latest.Title!, latest.PublishedAt, language, UpdateHighlightsJson.Parse(latest.Highlights)), false));
 
         // No stored update yet: a made-up card in the same layout, without a link.
         return (OperationResult.Ok("updates.preview.synthetic"), new UpdatesPreview(renderer.RenderSample(game, provider, clock.GetUtcNow(), language), true));
@@ -286,9 +287,13 @@ public sealed class UpdatesConfigService(
         return (auth, checks);
     }
 
-    /// <summary>The last result as status and doctor name it: a failure by its kind, a success by whether it brought new posts.</summary>
+    /// <summary>
+    /// The last result as status and doctor name it: a failure by its kind, a success by whether it brought new posts — or
+    /// as partial when the source said it could not do everything in that round (the detail says what).
+    /// </summary>
     public static string OutcomeName(UpdatesSourceStateEntity source) => (UpdateFetchOutcome)source.LastOutcome switch
     {
+        UpdateFetchOutcome.Ok when source.LastDetail?.StartsWith(UpdateFetchResult.PartialDetailPrefix, StringComparison.Ordinal) == true => "SuccessPartial",
         UpdateFetchOutcome.Ok => source.LastNewCount > 0 ? "SuccessItems" : "SuccessNoNewItems",
         UpdateFetchOutcome.Empty => "SuccessEmpty",
         var failure => failure.ToString(),

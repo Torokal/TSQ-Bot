@@ -16,6 +16,11 @@ public sealed class UpdatesSourceStateEntity
     public DateTimeOffset? BaselineAt { get; set; }
 
     public DateTimeOffset? LastAttemptAt { get; set; }
+
+    /// <summary>
+    /// The last round that answered completely — also the catch-up point the next round looks back to. A failed round never
+    /// moves it; neither does a valid answer that could not read something new yet (<c>UpdateFetchResult.Incomplete</c>).
+    /// </summary>
     public DateTimeOffset? LastSuccessAt { get; set; }
     public int LastOutcome { get; set; }
     public int? LastHttpStatus { get; set; }
@@ -37,14 +42,19 @@ public sealed class UpdatesSourceStateEntity
 
     public DateTimeOffset? LastDeliveryStagedAt { get; set; }
 
-    /// <summary>Ids published at or before this time were pruned; a post that old is baseline if it ever shows up again.</summary>
+    /// <summary>
+    /// The history watermark: a post published at or before this time is baseline whenever it is first seen. Two things move
+    /// it forward — pruning (ids that old were dropped and must never count as new again) and a move of the game to another
+    /// place at its provider (everything that existed there at the move is history; what is published afterwards is new).
+    /// </summary>
     public DateTimeOffset? PrunedThroughPublishedAt { get; set; }
 }
 
 /// <summary>
 /// One provider post TSQ has seen (identity: provider + game + the provider's post id — never the title). Only what a card
-/// needs is kept: title (pruned after Updates:TextRetentionDays), canonical link, publication time, and the classification
-/// with its reason. The post text is never stored; <see cref="ContentHash"/> only tells whether it changed.
+/// needs is kept: title and, where the provider supplies one, a bounded excerpt of the change list (both pruned after
+/// Updates:TextRetentionDays), canonical link, publication time, and the classification with its reason. The post text
+/// itself is never stored; <see cref="ContentHash"/> only tells whether it changed.
 /// </summary>
 public sealed class UpdatesItemEntity
 {
@@ -53,6 +63,13 @@ public sealed class UpdatesItemEntity
     public string ExternalId { get; set; } = "";
     public string Url { get; set; } = "";
     public string? Title { get; set; }
+
+    /// <summary>
+    /// The bounded card excerpt of the post (version, build, first change lines) as JSON, for providers that supply one;
+    /// kept and pruned with <see cref="Title"/>. Null for posts whose card is only title and link.
+    /// </summary>
+    public string? Highlights { get; set; }
+
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset FirstSeenAt { get; set; }
     public DateTimeOffset LastSeenAt { get; set; }
@@ -144,6 +161,7 @@ public sealed class UpdatesModelContributor : IModelContributor
             e.Property(x => x.ExternalId).HasMaxLength(64);
             e.Property(x => x.Url).HasMaxLength(300);
             e.Property(x => x.Title).HasMaxLength(300);
+            e.Property(x => x.Highlights).HasMaxLength(4000);
             e.Property(x => x.ContentHash).HasMaxLength(64);
             e.Property(x => x.ClassificationReason).HasMaxLength(48);
             e.HasIndex(x => x.FirstSeenAt);

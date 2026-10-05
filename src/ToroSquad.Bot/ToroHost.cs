@@ -172,6 +172,7 @@ public static class ToroHost
                 new Attribution("Twitch API", "https://dev.twitch.tv/docs/api/", "about.attr.twitch_terms", "about.attr.twitch"),
                 new Attribution("Kick Public API", "https://docs.kick.com", "about.attr.kick_terms", "about.attr.kick"),
                 new Attribution("Steam Web API", "https://partner.steamgames.com/doc/webapi/ISteamNews", "about.attr.steam_terms", "about.attr.steam"),
+                new Attribution("Blizzard Forums (World of Warcraft)", "https://us.forums.blizzard.com/en/wow/", "about.attr.blizzard_forum_terms", "about.attr.blizzard_forum"),
             ]);
     }
 }
