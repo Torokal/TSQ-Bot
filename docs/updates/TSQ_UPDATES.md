@@ -12,6 +12,7 @@ Varsayılan **kapalıdır**: `Updates:Mode=Off` (kaynak isteği yok), her sunucu
 | Oyun | Anahtar | Sağlayıcı | Sağlayıcıdaki kimlik | Sınıflandırıcı |
 |---|---|---|---|---|
 | Counter-Strike 2 | `cs2` | Steam (`steam`) | AppID `730` | `Cs2UpdateClassifier` |
+| Deadlock | `deadlock` | Steam (`steam`) | AppID `1422450` | `DeadlockUpdateClassifier` |
 | World of Warcraft: Forever | `wow-forever` | Blizzard forumu (`blizzard`) | forum kategorisi `349` (ayar) | `WowForeverUpdateClassifier` |
 
 Yalnızca gerçekten uygulanan oyunlar listelenir; arayüzde yer tutucu oyun yoktur. Her oyun sunucuda ayrı açılır.
@@ -111,6 +112,119 @@ Başlıkta bir yerde "update" kelimesinin geçmesi sinyal **değildir**; tek bir
 
 Karar ve kısa gerekçe kodu `updates_item`'da saklanır; `status`/`doctor` ve `updates check` gösterir. Kullanıcıya giden
 kartta gerekçe **gösterilmez**. Baseline sonrası `Ambiguous` çıkan yeni bir duyuru bir kez Warning olarak loglanır.
+
+## Deadlock (Steam, AppID 1422450)
+
+Deadlock, Counter-Strike 2 ile **aynı** Steam sağlayıcısını kullanır (aynı adres, akış, sınırlar, önbellek, bağlantı
+politikası); yalnızca AppID, sınıflandırıcı ve yama notu okuyucusu Deadlock'a özgüdür. Kimlik Steam'in duyuru kimliğidir
+(`steam` + `deadlock` + GID; outbox anahtarı `steam:1422450:<gid>`), kart bağlantısı resmî Steam duyuru bağlantısıdır.
+
+### Kaynak kararı: neden yalnızca Steam
+
+Valve değişiklik günlüklerini ayrıca resmî forumda (`forums.playdeadlock.com`, "Changelog") yayımlıyor ve bazı küçük
+düzeltmeleri oraya yalnızca **yanıt** olarak ekliyor. İki resmî kaynağı tek sağlayıcıda birleştirmek hedeflendi; ancak:
+
+- Forumun `robots.txt` dosyası okunabiliyor ve `/forums/` ile `/threads/` yollarına izin veriyor (`/posts/` yasak).
+- Buna rağmen forum, kendini açıkça tanıtan otomatik bir istemciye **her** istekte (konu listesi ve RSS dahil)
+  `307` ile bir tarayıcı doğrulama sayfası döndürüyor ("Checking your browser"; geçmek çerez kabul edip doğrulama adımını
+  tamamlamayı gerektiriyor). Gözlem: 2026-10-05, yerel ağ, birkaç salt-okuma isteği.
+- Bu bir bot tespitidir. TSQ onu aşmaz, tamamlamaz ve tarayıcı gibi davranmaz. Forum bu yüzden **okunmuyor** (`BLOCKED`);
+  yapısı, gönderi kimlikleri ve "Valve Developer" işareti doğrulanamadı.
+
+Sonuç: Deadlock yalnızca Steam'den okunur. Steam'de duyurusu olmayan, foruma yalnızca yanıt olarak eklenen düzeltmeler
+**görülmez** (bkz. Sınırlar). Forum bir gün doğrulamasız bir makine arayüzü sunarsa kaynak yeniden değerlendirilebilir.
+
+Steam mağazasının olay listesi (`store.steampowered.com/events/ajaxgetpartnereventspageable`) Valve'ın kendi kategorisini
+veriyor (14 = büyük güncelleme, 12 = yama notu, 13 = olağan güncelleme) ve `robots.txt` ile yasaklanmış değil; ancak
+**belgelenmemiş** bir uç nokta ve kahraman tanıtımları da 13 olarak geliyor. Kullanılmıyor.
+
+### Gerçek akışta gözlenenler (2026-10-05, 39 duyuru, 2024-10 → 2026-10)
+
+| Tür | Örnek başlık | `patchnotes` etiketi | Metin |
+|---|---|---|---|
+| Küçük yama | "Minor Update - 09-16-2026" | var | "[ General ]" gibi bölümler + "- " ile başlayan satırlar |
+| Oynanış güncellemesi | "Gameplay Update - 04-30-2026" | çoğunda **yok** | aynı düzen, yüzlerce satır |
+| Başlıklı güncelleme | "Matchmaking Update" | **yok** | düz yazı ("This update includes …") |
+| Adlandırılmış büyük güncelleme | "City Never Sleeps", "Old Gods, New Blood" | **yok** | düz yazı + oyunun kendi sitesindeki güncelleme sayfasına bağlantı |
+| Kahraman tanıtımı | "Listen up, Crumbums! Your King is here." | yok | düz yazı; bazıları aynı güncelleme sayfasına bağlantı verir |
+
+Yani ne etiket ne başlık tek başına yeterli: "City Never Sleeps" başlığında "update" yok, etiketi yok, değişiklik listesi
+yok.
+
+### Deadlock sınıflandırıcısı
+
+Kapsamı sağlayıcı kurar (AppID 1422450'nin resmî duyurusu). TSQ'nun gönderdiği şey: oyunun oynanabilir hâlinde —
+sistemlerinde, haritasında, modlarında, arayüzünde, eşleştirmesinde, kadrosunda, denge değerlerinde — gerçek değişiklik
+yapan resmî duyuru. Tanıtım, kahraman hikâyesi, "yakında" duyurusu ve tek kahraman tanıtımı tek başına güncelleme değildir.
+Sınıflandırıcı gönderinin kendisinden şu işaretleri okur (kahraman ya da güncelleme adı listesi yoktur):
+
+| İşaret | Ne |
+|---|---|
+| etiket | Steam'in `patchnotes` etiketi |
+| başlık | başlıkta kelime olarak "update", "patch", "hotfix" veya "changelog" |
+| liste | Valve düzeninde en az 3 değişiklik satırı |
+| beyan | metin sürümün kendisinden söz eder: "this update", "today's update", "today's … patch" (arada en çok 3 kelime) |
+| sayfa | gönderi oyunun kendi sitesindeki (`https://www.playdeadlock.com/<sayfa>`) bir sayfaya bağlanır; başlık o sayfanın adıyla başlıyorsa gönderi **sayfasının adını taşır** ("Old Gods, New Blood" → `/oldgods`) |
+| beyan edilen değişiklik | beyan, sürümün ne yaptığını söyleyerek devam eder: "today's update **adds** four new heroes to matchmaking", "this update **includes** …" |
+| değişiklik cümleleri | oyundaki bir değişikliği yapılmış olarak bildiren cümleler: "has been updated", "has received a major overhaul", "replaces the existing …", "is now", "no longer" ("available to play now" bunlardan değildir) |
+| başlıklı bölümler | gönderideki başlık satırları ("The Hideout", "Map Update", "[ General ]") |
+
+| Karar | Koşul | Gerekçe kodu |
+|---|---|---|
+| `Update` | etiket + (başlık veya liste veya beyan) | `patch_notes` |
+| `Update` | başlık + (liste veya beyan) | `titled_update` |
+| `Update` | sayfasının adını taşıyor ve metinde "update" geçiyor — ya da beyan + sayfa bağlantısı | `named_update` |
+| `Update` | beyan edilen değişiklik | `declared_update` |
+| `Update` | en az 3 değişiklik cümlesi **ve** en az 2 başlıklı bölüm | `substantial_update` |
+| `Ambiguous` | sayfasının adını taşıyor ama "coming soon" diyor | `named_but_upcoming` |
+| `Ambiguous` | yalnızca bir işaret | `tagged_without_changes`, `update_title_only`, `declared_without_changes`, `list_only`, `change_statements_only` |
+| `NotUpdate` | hiç işaret yok | `no_update_signal` |
+
+**Gerçek akışta ölçüm (39 duyuru, 2024-10 → 2026-10; beklenen karar başlığa değil gönderi metnine bakılarak elle
+belirlendi):**
+
+| Beklenen | `Update` | `Ambiguous` | `NotUpdate` |
+|---|---:|---:|---:|
+| Güncelleme (27) | 27 | 0 | 0 |
+| Güncelleme değil (12 kahraman tanıtımı) | 0 | 2 | 10 |
+
+| İşaret (tek başına) | Güncellemede var | Güncelleme olmayanda var | Güncellemede yok |
+|---|---:|---:|---:|
+| etiket | 15 | 0 | 12 |
+| başlık | 23 | 0 | 4 ("City Never Sleeps", "Old Gods, New Blood", "Six New Heroes", "Holliday, Vyper, Calico, and The Magnificent Sinclair") |
+| liste | 20 | 2 (oy sayısı listeleri) | 7 |
+| beyan | 6 | 0 | 21 |
+| sayfa bağlantısı | 2 | 5 (kahraman tanıtımları aynı sayfaya bağlanıyor) | 25 |
+
+Hiçbir işaret tek başına yetmiyor: başlık dört adlandırılmış güncellemeyi kaçırıyor, sayfa bağlantısı kahraman
+tanıtımlarında da var, liste oy sayılarını da sayıyor. "Six New Heroes" başlıklı bölümler + değişiklik cümleleriyle,
+"Holliday, Vyper, Calico, and The Magnificent Sinclair" beyan edilen değişiklikle yakalanır. İki `Ambiguous`: "Apollo - A
+Cut Above" ve "You Can't Kill Victor" (oy sayısı listesi; gönderilmez). Yapay zekâ kullanılmaz.
+
+Sınıflandırıcı gönderi metninin **sınırlı ilk bölümünü** (16.000 karakter) okur; adlandırılmış güncellemelerin işaretleri
+metnin başındadır. Yalnızca bu sınırın ötesinde duran bir işaret görülmez (tahmin yürütülmez).
+
+### Yama notu okuma ve kart alıntısı
+
+Steam metni (BBCode) küçük, sınırlı bir ileri tarayıcıyla okunur: bilinen etiketler satır sonuna çevrilir ya da atılır,
+görsel adresleri metin sayılmaz, bağlantı hedeflerine yalnızca **bakılır** (hiçbiri istenmez), `[ General ]` gibi satırlar
+bölüm başlığı, "- " ile başlayan satırlar değişikliktir (hem yeni `[p]` düzeni hem eski düz satır düzeni). Girdi 400.000
+karakter, bölüm 64, satır 2.000 karakterle sınırlıdır; bozuk işaretleme hata fırlatmaz.
+
+Kart, mevcut `UpdateHighlights` modeliyle (yeni kolon/biçim yok) en çok 3 bölüm × 3 satır ve "… ve N değişiklik daha"
+gösterir; değişiklik sayısı gönderinin **tamamından** sayılır. Değişiklik listesi olmayan bir güncellemede (adlandırılmış
+büyük güncelleme, "Matchmaking Update") alıntı metnin ilk cümle benzeri satırıdır. Oyunun sitesindeki güncelleme sayfası
+**istenmez** ve karta bağlantı olarak taşınmaz: karttaki tek bağlantı Steam duyurusudur.
+
+Alıntı, gönderinin içerik özetine (`ContentHash`) dahildir: kartın gösterdiği bir şey değişirse — metnin sınırlı kopyasının
+ötesindeki bir düzenleme değişiklik sayısını değiştirse bile — aynı kart düzenlenir. Alıntısı olmayan gönderilerin (CS2)
+özeti eskisiyle birebir aynıdır.
+
+### İstek maliyeti
+
+Tur başına **1** istek (sakin, olağan, kesinti sonrası ve en kötü durum aynıdır; sayfalama yoktur). Steam cevabı ~60
+dakika önbellekte tuttuğunu bildirdiği için fiilen saatte 1 istek; başlık yoksa modül aralığı (5 dk) geçerlidir. Kesinti
+sonrası yetişme, cevabın her zaman en yeni 20 duyuruyu içermesiyle sağlanır (`CatchUpHours` içinde yayımlananlar gönderilir).
 
 ## Kaynak: Blizzard forumu (World of Warcraft: Forever)
 
@@ -495,6 +609,16 @@ yine `pause` → aç → `doctor` ile baseline'ı gör → `resume`'dur (durakla
   konuda süre sınırı yoktur). Aynı anda en çok 5 konu takip edilir. Güncelleme olarak doğrulanmamış bir konudaki
   (ör. `Ambiguous` kalan) Blizzard yanıtları takip edilmez. Alışılmadık başlıklı bir güncelleme (`untyped_title`)
   gönderilmez.
+- **Deadlock — forumdaki düzeltmeler görülmez:** Valve'ın resmî Changelog forumuna yalnızca yanıt olarak eklediği küçük
+  düzeltmeler (Steam duyurusu olmayanlar) bildirilmez; forum otomatik istemcilere tarayıcı doğrulaması döndürdüğü için
+  okunmuyor. Valve Steam duyurusunu düzenleyip değişikliği oraya eklerse mevcut kart düzenlenir.
+- **Deadlock — sınıflandırıcı sezgiseldir (kalan riskler):** gerçek akıştaki 39 duyurunun hepsi doğru sınıflanıyor, ama
+  kurallar bu akıştan çıkarıldı. Gönderilmeyebilecek: başlığında "update" olmayan, sayfasının adını taşımayan, "this /
+  today's update …" demeyen ve bölümlerinde değişiklik cümlesi kurmayan bir güncelleme (`Ambiguous` ya da `NotUpdate`).
+  Yanlışlıkla gönderilebilecek: başlığı bir güncelleme sayfasının adıyla başlayıp o sayfaya bağlanan bir tanıtım, "coming
+  soon" demeden yapılan adlandırılmış bir ön duyuru, ya da "today's update adds <kahraman>" diye yazılmış tek kahraman
+  tanıtımı (gerçek akışta örnekleri yok). Tek kahraman tanıtımları Steam'de de "güncelleme" olarak dosyalanıyor; TSQ
+  bunları bilerek göndermez.
 - **Sınıflandırıcı bilerek temkinli (bilinen risk):** hariç tutulan bir kelime türden önce gelir — "Hotfixes and
   Maintenance", "Weekly Hotfixes", "Patch Notes Preview" gibi karışık başlıklar `NotUpdate` olur ve uyarı üretmez; tür
   adı geçmeyen bir Blizzard başlığı hiç indirilmez; build'siz tek maddelik bir hotfix `no_change_list` (Ambiguous) kalır.
@@ -548,5 +672,17 @@ yine `pause` → aç → `doctor` ile baseline'ı gör → `resume`'dur (durakla
   (`UpdatesForumContentTests`, `UpdatesWowForeverClassifierTests`, `UpdatesBlizzardForumProviderTests`,
   `UpdatesWowForeverTests`). Gerçek kaynak (yerel ağ, 2026-10-05): `updates check --game wow-forever` başarılı. Canlıda
   **doğrulanmadı**: oyun bir sunucuda açılana kadar (`islem:game-enable`) foruma istek yapılmaz; canlı kart yok.
+- **Deadlock — TESTED_OFFLINE:** sınıflandırıcı (küçük yama, oynanış/başlıklı güncelleme, adlandırılmış büyük
+  güncelleme, yeni sistemlerle gelen kahraman dağıtımı, kadroya toplu ekleme, tek kahraman tanıtımları, adlandırılmış ama
+  değişiklik içermeyen tanıtım, tek işaretli belirsizler, sahte site bağlantıları, bozuk/kesik metin, sınırlı kopya), yama notu
+  okuyucusu (iki düzen, kaçışlı köşeli parantez, liste, görsel, bağlantı, sınırlar), kart alıntısı (tam metinden sayım),
+  uçtan uca (ilk çalıştırma, yeni yama tek kart, adlandırılmış güncelleme kartı, kahraman tanıtımı kart değil, düzenleme
+  aynı kartı düzenler, kozmetik işaretleme değişikliği düzenleme üretmez, çok uzun yamanın sonundaki düzenleme karttaki
+  sayıyı günceller, uzun liste, zararlı metin, kesinti ve 429,
+  tur başına tek istek, üç oyun yan yana ve her biri kendi kanalında, CS2 kartı birebir aynı)
+  (`UpdatesDeadlockClassifierTests`, `UpdatesDeadlockTests`). Gerçek kaynak (yerel ağ, 2026-10-05, salt-okuma):
+  `updates check --game deadlock` — 20/20 duyuru kullanılabilir; 17 `Update`, 1 `Ambiguous` (Apollo - A Cut Above),
+  2 `NotUpdate`; akışın tamamı (39 duyuru) sınıflandırıcıdan geçirildi: 27 güncellemenin 27'si `Update`, 12 tanıtımın
+  hiçbiri `Update` değil. Resmî forum: **BLOCKED** (tarayıcı doğrulaması). Canlıda **doğrulanmadı**.
 - **NOT_VERIFIED:** Railway ağından erişim; canlı Discord kartı (ancak canlıya alındıktan sonra yayımlanan gerçek bir
   güncellemeyle doğrulanabilir — eski bir güncellemeyi test için göndermek bu doğrulama sayılmaz).

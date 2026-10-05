@@ -74,7 +74,8 @@ public sealed record SteamParseResult(SteamParseOutcome Outcome, IReadOnlyList<G
 /// appid, tags? } ], count }</c>. The answer must be for the requested AppID; a post must be an official community
 /// announcement of that app with a numeric id, a title and the Steam redirector link of that id — anything else is skipped
 /// and counted, never guessed. <c>is_external_url</c> is true for Steam's own announcements too, so it is not used.
-/// The post text is kept only as bounded classifier input.
+/// The post text is kept only as bounded classifier input; a game that names an <see cref="IGameUpdateHighlighter"/> also
+/// gets a bounded card excerpt read from it.
 /// </summary>
 public static class SteamNewsParser
 {
@@ -182,9 +183,13 @@ public static class SteamNewsParser
         }
 
         var body = Text(element, "contents") ?? "";
+        // The excerpt is read from the whole text (its change count is the post's, not the bounded copy's); a game without a
+        // reader of its own has none, and its card is title and link as before.
+        var highlights = game.Highlighter?.Read(title, body);
         if (body.Length > GameUpdateCandidate.BodyMax)
             body = body[..GameUpdateCandidate.BodyMax];
-        return new GameUpdateCandidate(SteamNewsUpdateProvider.ProviderId, game.Key, gid!, title, url, published, labels, body);
+        return new GameUpdateCandidate(SteamNewsUpdateProvider.ProviderId, game.Key, gid!, title, url, published, labels, body,
+            highlights is { IsEmpty: false } ? highlights : null);
     }
 
     private static string? Text(JsonElement element, string name) =>

@@ -114,16 +114,28 @@ public static class SteamNews
 /// </summary>
 public sealed class SteamNewsServer : HttpMessageHandler
 {
+    private readonly Dictionary<uint, Func<HttpResponseMessage>> _apps = [];
+
     public Func<HttpRequestMessage, HttpResponseMessage> Respond { get; set; } = _ => SteamNews.Status(HttpStatusCode.ServiceUnavailable);
 
     public List<HttpRequestMessage> Requests { get; } = [];
 
-    /// <summary>Serves these posts; <paramref name="expiresIn"/> adds the cache lifetime header pair (none by default).</summary>
-    public void Serve(IEnumerable<SteamPost> posts, TimeSpan? expiresIn = null)
+    /// <summary>
+    /// Serves these posts as the feed of <paramref name="appId"/> (Counter-Strike 2 by default); a request for an app without
+    /// a feed is answered 503. <paramref name="expiresIn"/> adds the cache lifetime header pair (none by default).
+    /// </summary>
+    public void Serve(IEnumerable<SteamPost> posts, TimeSpan? expiresIn = null, uint appId = 730)
     {
-        var json = SteamNews.Json(posts);
-        Respond = _ => SteamNews.Ok(json, expiresIn: expiresIn);
+        var json = SteamNews.Json(posts, appId);
+        _apps[appId] = () => SteamNews.Ok(json, expiresIn: expiresIn);
+        Respond = request => _apps.TryGetValue(AppIdOf(request), out var feed) ? feed() : SteamNews.Status(HttpStatusCode.ServiceUnavailable);
     }
+
+    /// <summary>The <c>appid</c> a request asks for (0 when it names none).</summary>
+    public static uint AppIdOf(HttpRequestMessage request) =>
+        uint.TryParse(System.Web.HttpUtility.ParseQueryString(request.RequestUri!.Query)["appid"], NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : 0;
+
+    public int RequestsFor(uint appId) => Requests.Count(r => AppIdOf(r) == appId);
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
