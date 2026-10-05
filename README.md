@@ -94,9 +94,11 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 - **TSQ Bot Updates — game update notifications** (separate module, off by default and `Updates:Mode=Off`): one card
   when a followed game publishes an official update / patch notes post — original title, link to the notes and publication
   time, once per update, to one configured channel, no pings. Generic by design (a game is a registered definition with a
-  provider and a classifier); the first game is Counter-Strike 2 through Steam's public news API (no API key). A
-  conservative classifier decides what is an update; baseline on first activation, corrections edit the same card. See
-  [docs/updates/TSQ_UPDATES.md](docs/updates/TSQ_UPDATES.md).
+  provider and a classifier): Counter-Strike 2 through Steam's public news API (no API key), and World of Warcraft: Forever
+  through Blizzard's own posts on the official forum (Development Notes, Client Updates, patch notes and hotfixes only —
+  with version/build and a short excerpt of the changes; no other WoW version, no known issues, maintenance or marketing).
+  A conservative, deterministic classifier per game decides what is an update; baseline on first activation, corrections
+  edit the same card. See [docs/updates/TSQ_UPDATES.md](docs/updates/TSQ_UPDATES.md).
 - **Compact match cards**: planned-start reminder, match started (only when the provider reports it), result
   (optional spoiler mode), postponed, cancelled, forfeit. Each is sent once; later corrections edit the same message
   without pinging again — a changed start time updates the existing reminder instead of posting a new card.
