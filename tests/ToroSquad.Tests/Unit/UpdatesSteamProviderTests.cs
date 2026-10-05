@@ -23,8 +23,9 @@ public sealed class UpdatesSteamProviderTests
     private static (SteamNewsUpdateProvider Provider, SteamNewsServer Server) Create(UpdatesOptions? options = null)
     {
         var server = new SteamNewsServer();
-        var provider = new SteamNewsUpdateProvider(new SingleHandlerFactory(server), Options.Create(options ?? new UpdatesOptions()), new FakeTimeProvider(Now),
-            NullLogger<SteamNewsUpdateProvider>.Instance);
+        var settings = Options.Create(options ?? new UpdatesOptions());
+        var clock = new FakeTimeProvider(Now);
+        var provider = new SteamNewsUpdateProvider(new ProviderHttp(new SingleHandlerFactory(server), settings, clock, NullLogger<ProviderHttp>.Instance), settings, clock);
         return (provider, server);
     }
 
@@ -70,7 +71,7 @@ public sealed class UpdatesSteamProviderTests
     [Fact]
     public void The_handler_follows_no_redirects_and_keeps_no_cookies()
     {
-        using var handler = SteamNewsUpdateProvider.CreateHandler();
+        using var handler = ProviderHttp.CreateHandler();
         handler.AllowAutoRedirect.Should().BeFalse();
         handler.UseCookies.Should().BeFalse();
     }

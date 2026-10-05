@@ -84,8 +84,8 @@ oluşan güncel kadro). `/privacy export/delete` kapsamında kaydı yoktur.
 
 TSQ Bot Updates kişisel veri tutmaz: `updates_guild_config` (sunucu, kanal, duraklatma, pencere zamanları, son planlanan mod
 — kullanıcı ID'si yok), `updates_subscription` (sunucu + oyun, açık/kapalı), `updates_item` (sağlayıcının duyuru kimliği,
-bağlantı, başlık — 90 gün sonra silinir —, yayın zamanı, sınıflandırma kararı; duyuru metni, yazar, etiket veya ham cevap
-yok), `updates_delivery` (sunucu + duyuru + kanal, 365 gün) ve `updates_source_state` (kaynak yoklama durumu). Sunucudan
+bağlantı, başlık ve varsa sınırlı kart alıntısı — ikisi de 90 gün sonra silinir —, yayın zamanı, sınıflandırma kararı;
+duyurunun tam metni, yazar, etiket veya ham cevap yok), `updates_delivery` (sunucu + duyuru + kanal, 365 gün) ve `updates_source_state` (kaynak yoklama durumu). Sunucudan
 ayrılma sonrası saklama süresi dolunca sunucuya ait üç tablo satırı (kanal, oyun, teslim) silinir. Ayrıntı:
 [updates/TSQ_UPDATES.md](updates/TSQ_UPDATES.md).
 

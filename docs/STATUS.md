@@ -554,6 +554,29 @@ invite link and no global command registration. The source code is public under 
 - Off by default (`Updates:Mode=Off`, no channel, no followed game); merge, deploy, channel, game activation and live
   posting await the owner's approval. Rollout order: [updates/TSQ_UPDATES.md](updates/TSQ_UPDATES.md).
 
+## TSQ Bot Updates — World of Warcraft: Forever source (new, 2026-10-05)
+
+- **IMPLEMENTED / TESTED_OFFLINE:** second game of the Updates module through the unchanged pipeline — Blizzard forum
+  provider (watched Development Notes thread + new Blizzard threads of the Forever category, Blizzard posts only by the
+  forum's own tracked-post markers, robots-allowed JSON paths only), bounded HTML reader, sections and version/build,
+  deterministic classifier (development notes, client update, patch notes, hotfix; known issues, maintenance, marketing,
+  other WoW versions and player posts never post), card excerpt, provider-specific poll interval, bounded following of
+  verified update threads (7 days after the last verified update, at most 5 threads, derived from the stored posts), and
+  an explicit source move when the forum category changes (posts published before the move are history, later ones are
+  new — no second first-answer baseline). Reliability hardening: an unreadable followed or new thread no longer fails the
+  round (HTTP 429 still does), the list is read back to the last complete round after an outage (capped by
+  `CatchUpHours`, bounded by `MaxListPages`), Blizzard posts between a long thread's first posts and its newest one are
+  read within three requests per thread, the watched thread takes no follow place, and no valid setting allows more than
+  50 forum requests in a round. Additive migration `UpdatesItemHighlights` (one nullable column).
+  Counter-Strike 2 behaviour and card are unchanged; the game operations of `/tsq-admin modul:updates` now always open
+  the game picker.
+- **Real source (local network, 2026-10-05, read-only):** forum answers read and parsed; `updates check --game
+  wow-forever` classifies the two Development Notes posts as updates.
+- **Not implemented:** Battle.net/CDN build watcher (a build number alone is not an update; follow-up).
+- **NOT_VERIFIED live:** the game is registered but no guild follows it until an admin enables it
+  (`/tsq-admin modul:updates islem:game-enable`); until then the forum is never requested. Forum access from the hosting
+  network and a real card are not verified.
+
 ## One admin command: `/tsq-admin` (2026-09-30)
 
 - PR #46 (merged, deployed, registered 2026-09-30) put the seven `/<module>-admin` commands under one root as subcommand

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
@@ -20,7 +21,7 @@ namespace ToroSquad.Modules.Updates;
 /// TSQ Bot Updates: one card when a followed game publishes an official update / patch notes post
 /// (docs/updates/TSQ_UPDATES.md). Generic by construction: a game is a registered <see cref="GameUpdateDefinition"/>
 /// (provider + provider game id + classifier) and a provider is an <see cref="IGameUpdateProvider"/>. Registered today:
-/// Counter-Strike 2 on Steam. A separate feature module that depends only on the shared TSQ layers. Inert unless
+/// Counter-Strike 2 on Steam, and World of Warcraft: Forever through Blizzard's posts on the official forum. A separate feature module that depends only on the shared TSQ layers. Inert unless
 /// Updates:Mode is DryRun or Live; also gated per guild like every optional module (/modules enable updates), needs a
 /// channel (/tsq-admin modul:updates islem:configure) and an explicitly enabled game (islem:game-enable).
 /// </summary>
@@ -53,9 +54,17 @@ public sealed class UpdatesModule : IToroModule
         services.AddSingleton<IModelContributor, UpdatesModelContributor>();
 
         // Games and providers: the only place a game or a provider is added.
+        services.AddSingleton<ProviderHttp>();
         services.AddSingleton(Cs2Game.Definition);
-        services.AddHttpClient(SteamNewsUpdateProvider.HttpClientName).ConfigurePrimaryHttpMessageHandler(SteamNewsUpdateProvider.CreateHandler);
+        services.AddHttpClient(SteamNewsUpdateProvider.HttpClientName).ConfigurePrimaryHttpMessageHandler(ProviderHttp.CreateHandler);
         services.AddSingleton<IGameUpdateProvider, SteamNewsUpdateProvider>();
+
+        services.AddOptions<WowForeverSettings>().Bind(configuration.GetSection(WowForeverSettings.Section));
+        services.AddOptions<BlizzardForumOptions>().Bind(configuration.GetSection(BlizzardForumOptions.Section));
+        services.AddSingleton(sp => WowForeverGame.Create(sp.GetRequiredService<IOptions<WowForeverSettings>>().Value));
+        services.AddHttpClient(BlizzardForumUpdateProvider.HttpClientName).ConfigurePrimaryHttpMessageHandler(ProviderHttp.CreateHandler);
+        services.AddSingleton<IGameUpdateProvider, BlizzardForumUpdateProvider>();
+
         services.AddSingleton<GameUpdateCatalog>();
 
         services.AddSingleton<UpdateCardRenderer>();
@@ -73,5 +82,9 @@ public sealed class UpdatesModule : IToroModule
         services.AddHostedService(sp => sp.GetRequiredService<UpdatesPoller>());
 
     public IReadOnlyList<string> ValidateConfiguration(IConfiguration configuration) =>
-        (configuration.GetSection(UpdatesOptions.Section).Get<UpdatesOptions>() ?? new UpdatesOptions()).Validate();
+    [
+        .. (configuration.GetSection(UpdatesOptions.Section).Get<UpdatesOptions>() ?? new UpdatesOptions()).Validate(),
+        .. (configuration.GetSection(WowForeverSettings.Section).Get<WowForeverSettings>() ?? new WowForeverSettings()).Validate(),
+        .. (configuration.GetSection(BlizzardForumOptions.Section).Get<BlizzardForumOptions>() ?? new BlizzardForumOptions()).Validate(),
+    ];
 }

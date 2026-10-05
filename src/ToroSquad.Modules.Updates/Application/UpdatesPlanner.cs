@@ -50,7 +50,8 @@ public static class UpdatesWindow
 /// transaction fails nothing of it is kept, so a new source state can never hide posts that were not stored.
 /// <list type="bullet">
 /// <item>Baseline: every post of the first valid, non-empty answer is baseline and never posted, in any mode; a failed or
-/// empty first answer establishes nothing.</item>
+/// empty first answer establishes nothing. A game that later moves to another place at its provider takes no second
+/// baseline: posts published there before the move are history, posts published after it are new.</item>
 /// <item>Identity is provider + game + the provider's post id. A guild gets a post at most once per kind (dry-run records
 /// never count as live), whatever channel it had then — a channel change never posts again.</item>
 /// <item>Only posts classified <see cref="UpdateClassification.Update"/> are planned. A guild gets those first seen AND
@@ -123,6 +124,89 @@ public sealed class UpdatesPlanner(
         logger.LogInformation("updates mode is {Mode}: delivery window restarted for {Guilds} guild(s) (nothing from the previous mode is posted)", mode, changed);
     }
 
+    /// <summary>
+    /// Records, for every registered game, that it now lives at another place of its provider (another forum category, another
+    /// app id) — at startup, before anything is requested, because configuration only changes with a restart. See
+    /// <see cref="MoveSource"/>.
+    /// </summary>
+    public async Task EnterSourcesAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var moved = false;
+        foreach (var state in await db.Set<UpdatesSourceStateEntity>().ToListAsync(ct))
+        {
+            if (catalog.Find(state.GameKey) is { } game && game.Provider == state.Provider)
+                moved |= MoveSource(state, game, now);
+        }
+
+        if (moved)
+            await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// A game that was already followed moved to another place at its provider. Nothing is thrown away and no second
+    /// "first answer" baseline is taken (that would swallow a real update published before the first successful answer
+    /// from the new place): the move itself is the line. Whatever was published there up to now is history and never
+    /// posted; whatever is published from now on is new. The old backoff and poll time belonged to the old place.
+    /// A source without a baseline has no history to protect: its first valid answer is its baseline as always.
+    /// </summary>
+    private bool MoveSource(UpdatesSourceStateEntity state, GameUpdateDefinition game, DateTimeOffset now)
+    {
+        if (state.ProviderGameId == game.ProviderGameId)
+            return false;
+        logger.LogInformation("{Game} update source moved at its provider ({From} -> {To}): posts published until now are history, later ones are new",
+            game.Key, state.ProviderGameId, game.ProviderGameId);
+        state.ProviderGameId = game.ProviderGameId;
+        if (state.BaselineAt is not null && (state.PrunedThroughPublishedAt is not { } watermark || watermark < now))
+            state.PrunedThroughPublishedAt = now;
+        state.NextPollAt = null;
+        state.ConsecutiveFailures = 0;
+        return true;
+    }
+
+    /// <summary>
+    /// What a round may use of what the module knows.
+    /// <para>The catch-up point (<see cref="UpdateFetchContext.Since"/>): the last round that answered completely
+    /// (<see cref="UpdatesSourceStateEntity.LastSuccessAt"/>), never further back than <see cref="UpdatesOptions.CatchUpHours"/>
+    /// — nothing older could be posted anyway. A source that only shows its newest posts looks back that far after an
+    /// outage, within its own bounds.</para>
+    /// <para>The threads the provider should keep reading: those of posts verified as updates within the provider's follow
+    /// window, most recent first, at most the provider's maximum — next to the threads the game's definition already names
+    /// (those are read anyway and take none of the places). Derived from the stored posts on every round — a thread retires
+    /// by itself once its last verified update is older than the window. Empty for providers that follow no threads.</para>
+    /// </summary>
+    public async Task<UpdateFetchContext> FetchContextAsync(GameUpdateDefinition game, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var states = db.Set<UpdatesSourceStateEntity>();
+        var state = states.Local.FirstOrDefault(s => s.Provider == game.Provider && s.GameKey == game.Key)
+                    ?? await states.AsNoTracking().FirstOrDefaultAsync(s => s.Provider == game.Provider && s.GameKey == game.Key, ct);
+        var floor = now - TimeSpan.FromHours(options.Value.CatchUpHours);
+        DateTimeOffset? since = state?.LastSuccessAt is { } complete ? (complete > floor ? complete : floor) : null;
+
+        IReadOnlyList<string> threads = [];
+        var provider = catalog.ProviderOf(game);
+        if (provider.ThreadFollow is { MaxThreads: > 0 } rule && rule.Window > TimeSpan.Zero)
+        {
+            var cutoff = now - rule.Window;
+            const int update = (int)UpdateClassification.Update;
+            var recent = await db.Set<UpdatesItemEntity>().AsNoTracking()
+                .Where(a => a.Provider == game.Provider && a.GameKey == game.Key && a.Classification == update && a.PublishedAt != null && a.PublishedAt >= cutoff)
+                .OrderByDescending(a => a.PublishedAt).ThenBy(a => a.ExternalId)
+                .Select(a => a.ExternalId)
+                .Take(MaxFollowScan)
+                .ToListAsync(ct);
+            threads = recent.Select(provider.ThreadIdOf).OfType<string>().Distinct(StringComparer.Ordinal)
+                .Where(thread => !game.WatchedThreadIds.Contains(thread, StringComparer.Ordinal))
+                .Take(rule.MaxThreads).ToList();
+        }
+
+        return threads.Count == 0 && since is null ? UpdateFetchContext.None : new UpdateFetchContext(threads, since);
+    }
+
+    /// <summary>Upper bound of recent update posts looked at to find the threads to follow.</summary>
+    public const int MaxFollowScan = 200;
+
     public async Task<UpdatesSourceStateEntity> StateAsync(GameUpdateDefinition game, CancellationToken ct)
     {
         var set = db.Set<UpdatesSourceStateEntity>();
@@ -160,7 +244,8 @@ public sealed class UpdatesPlanner(
         result = result.ForGame(game);
         var now = clock.GetUtcNow();
         var state = await StateAsync(game, ct);
-        state.ProviderGameId = game.ProviderGameId;
+        MoveSource(state, game, now); // normally done at startup already; here only if that step has not run
+
         state.LastAttemptAt = now;
         state.LastHttpStatus = result.HttpStatus;
         state.NextPollAt = nextPollAt;
@@ -200,6 +285,7 @@ public sealed class UpdatesPlanner(
                         ExternalId = item.ExternalId,
                         Url = item.CanonicalUrl,
                         Title = item.Title,
+                        Highlights = UpdateHighlightsJson.Serialize(item.Highlights),
                         PublishedAt = item.PublishedAt,
                         FirstSeenAt = now,
                         LastSeenAt = now,
@@ -227,12 +313,19 @@ public sealed class UpdatesPlanner(
                 }
 
                 row.LastSeenAt = now;
-                row.Title ??= item.Title; // still listed: a title dropped by retention is known again
+                if (row.Title is null)
+                {
+                    // Still listed: what retention dropped is known again.
+                    row.Title = item.Title;
+                    row.Highlights = UpdateHighlightsJson.Serialize(item.Highlights);
+                }
+
                 if (row.ContentHash == hash)
                     continue;
                 var again = game.Classifier.Classify(item);
                 row.Url = item.CanonicalUrl;
                 row.Title = item.Title;
+                row.Highlights = UpdateHighlightsJson.Serialize(item.Highlights);
                 row.PublishedAt = item.PublishedAt;
                 row.ContentHash = hash;
                 row.ContentChangedAt = now;
@@ -274,7 +367,11 @@ public sealed class UpdatesPlanner(
 
         state.LastOutcome = (int)outcome;
         state.LastDetail = Clip(result.Detail, 300);
-        state.LastSuccessAt = now;
+        // The catch-up point only moves with an answer that is complete. An incomplete one (something new could not be read
+        // yet) is applied like any other, but the next round looks back as far again — so what is still to be read cannot
+        // fall out of the source's window. Without an earlier point there is nothing to keep.
+        if (!result.Incomplete || state.LastSuccessAt is null)
+            state.LastSuccessAt = now;
         state.ConsecutiveFailures = 0;
         state.SourceCacheSeconds = result.CacheLifetime is { } lifetime ? (int)Math.Min(lifetime.TotalSeconds, int.MaxValue) : null;
 
@@ -342,7 +439,7 @@ public sealed class UpdatesPlanner(
                 .ToList();
             foreach (var item in candidates)
             {
-                var message = renderer.Render(game, provider, item.Url, item.Title!, item.PublishedAt, language);
+                var message = renderer.Render(game, provider, item.Url, item.Title!, item.PublishedAt, language, UpdateHighlightsJson.Parse(item.Highlights));
                 var result = await outbox.StageAsync(new NotificationRequest(guild, UpdatesModule.ModuleIdTyped, SourceKey(game, item.ExternalId), channel, kind,
                     message, expiresAt, dryRun), ct);
                 deliveries.Add(new UpdatesDeliveryEntity
@@ -378,7 +475,7 @@ public sealed class UpdatesPlanner(
                 var logicalKey = NotificationRequest.BuildLogicalKey(guild, UpdatesModule.ModuleIdTyped, SourceKey(game, item.ExternalId), channel, record.Kind, dryRun);
                 if (!await db.Outbox.AsNoTracking().AnyAsync(o => o.LogicalKey == logicalKey, ct))
                     continue;
-                var message = renderer.Render(game, provider, item.Url, item.Title, item.PublishedAt, language);
+                var message = renderer.Render(game, provider, item.Url, item.Title, item.PublishedAt, language, UpdateHighlightsJson.Parse(item.Highlights));
                 var result = await outbox.StageAsync(new NotificationRequest(guild, UpdatesModule.ModuleIdTyped, SourceKey(game, item.ExternalId),
                     new ChannelId(record.ChannelId), record.Kind, message, expiresAt, dryRun), ct);
                 if (result is StageOutcome.EditScheduled or StageOutcome.UpdatedPending)
@@ -407,7 +504,10 @@ public sealed class UpdatesPlanner(
         // age is checked once more on the entity (a post that is still listed is never pruned, however long the gap was).
         foreach (var old in (await set.Where(a => a.Provider == game.Provider && a.GameKey == game.Key && a.Title != null && a.LastSeenAt < textCutoff).ToListAsync(ct))
                  .Where(a => a.LastSeenAt < textCutoff))
+        {
             old.Title = null;
+            old.Highlights = null;
+        }
 
         var expired = (await set.Where(a => a.Provider == game.Provider && a.GameKey == game.Key && a.LastSeenAt < idCutoff).ToListAsync(ct))
             .Where(a => a.LastSeenAt < idCutoff).ToList();

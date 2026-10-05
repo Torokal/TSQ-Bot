@@ -285,9 +285,9 @@ Tüm cevaplar ephemeral. Komutlar modül kapalıyken de çalışır. Elle haber/
 |---|---|
 | `/tsq-admin modul:updates islem:configure kanal:` | Güncelleme kanalı (View Channel + Send Messages + Embed Links; yalnızca bundan sonra yayımlanan güncellemeler) |
 | `/tsq-admin modul:updates islem:games` | Kayıtlı oyunlar ve bu sunucudaki açık/kapalı durumu |
-| `/tsq-admin modul:updates islem:game-enable` / `game-disable` | Bir oyunu açar / kapatır (tek kayıtlı oyun varken doğrudan; birden fazlaysa yalnızca kayıtlı oyunları içeren özel seçim) |
+| `/tsq-admin modul:updates islem:game-enable` / `game-disable` | Bir oyunu açar / kapatır (yalnızca kayıtlı oyunları — Counter-Strike 2, World of Warcraft: Forever — içeren özel seçim) |
 | `/tsq-admin modul:updates islem:pause` / `resume` | Gönderimi duraklatır / sürdürür (duraklatma dönemi telafi edilmez) |
-| `/tsq-admin modul:updates islem:preview` | Kayıtlı son gerçek güncellemenin veya açıkça sentetik örneğin kartını yalnızca yöneticiye gösterir |
+| `/tsq-admin modul:updates islem:preview` | Seçilen oyunun kayıtlı son gerçek güncellemesinin veya açıkça sentetik örneğin kartını yalnızca yöneticiye gösterir |
 | `/tsq-admin modul:updates islem:status` · `doctor` | Mod, modül, kanal/izinler, açık oyunlar, kaynak sonucu ve sonraki kontrol, baseline, son bulunan güncelleme, son kart |
 
 Tüm cevaplar ephemeral. Komutlar modül kapalıyken de çalışır. Genel kullanıcı komutu ve elle güncelleme gönderme komutu

@@ -51,6 +51,8 @@ public static partial class Cli
                 Console.WriteLine($"Game: {game.DisplayName} ({game.Key}) — provider {provider.DisplayName}, id {game.ProviderGameId}");
                 var result = await provider.FetchAsync(game, CancellationToken.None);
                 Console.WriteLine($"Result: {result.Outcome} HTTP {result.HttpStatus?.ToString(CultureInfo.InvariantCulture) ?? "-"}{(result.Detail is null ? "" : " — " + result.Detail)}");
+                if (game.WatchedThreadIds.Count > 0)
+                    Console.WriteLine($"Watched threads: {string.Join(", ", game.WatchedThreadIds)}");
                 if (!result.Succeeded)
                 {
                     failed = true;
@@ -66,7 +68,11 @@ public static partial class Cli
                     var verdict = game.Classifier.Classify(item);
                     counts[verdict.Classification] = counts.GetValueOrDefault(verdict.Classification) + 1;
                     var published = item.PublishedAt?.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? "-";
-                    Console.WriteLine($"  {item.ExternalId,-20} | {published,-16} | {verdict.Classification + " (" + verdict.Reason + ")",-39} | {item.Title}");
+                    // Version, build and the size of the change list when the provider supplies them — never the text itself.
+                    var facts = item.Highlights is { IsEmpty: false } h
+                        ? "  [" + string.Join(" · ", new[] { h.Version, h.Build is null ? null : "Build " + h.Build, h.ChangeCount + " changes" }.Where(p => p is not null)) + "]"
+                        : "";
+                    Console.WriteLine($"  {item.ExternalId,-20} | {published,-16} | {verdict.Classification + " (" + verdict.Reason + ")",-39} | {item.Title}{facts}");
                 }
 
                 Console.WriteLine($"{counts.GetValueOrDefault(UpdateClassification.Update)} update(s), {counts.GetValueOrDefault(UpdateClassification.Ambiguous)} ambiguous, " +

@@ -73,8 +73,9 @@ public sealed partial class UpdatesArchitectureTests
                 @"^(Microsoft\.EntityFrameworkCore|ToroSquad\.Infrastructure|ToroSquad\.Discord|System\.Net\.Http|ToroSquad\.Modules\.Updates\.(Providers|Application|Persistence|Commands))(\..*)?$")));
 
     /// <summary>
-    /// Steam is one provider behind <c>IGameUpdateProvider</c>: nothing outside the Providers folder (and the registration in
-    /// UpdatesModule) depends on a provider's own types, so another provider never has to touch the Steam code — or the planner.
+    /// Steam and the Blizzard forum are providers behind <c>IGameUpdateProvider</c>: nothing outside the Providers folder (and
+    /// the registration in UpdatesModule) depends on a provider's own types, so one provider never has to touch another — or
+    /// the planner.
     /// </summary>
     [Fact]
     public void Provider_specific_types_never_leak_out_of_the_providers_folder()
@@ -86,11 +87,11 @@ public sealed partial class UpdatesArchitectureTests
             var relative = Path.GetRelativePath(Root(), file);
             if (relative.StartsWith("Providers", StringComparison.Ordinal) || relative == "UpdatesModule.cs")
                 continue;
-            SteamIdentifier().IsMatch(File.ReadAllText(file)).Should().BeFalse($"{relative} must not name a Steam type");
+            SteamIdentifier().IsMatch(File.ReadAllText(file)).Should().BeFalse($"{relative} must not name a provider's own type");
         }
     }
 
-    /// <summary>A game is a definition: only its own folder and the registration know Counter-Strike 2 exists.</summary>
+    /// <summary>A game is a definition: only its own folder and the registration know which games exist.</summary>
     [Fact]
     public void Only_the_games_folder_and_the_registration_name_a_game()
     {
@@ -134,43 +135,66 @@ public sealed partial class UpdatesArchitectureTests
             .Should().NotDependOnAny(Types().That().ResideInNamespaceMatching(@"^(System\.Net\.Http|Microsoft\.EntityFrameworkCore|ToroSquad\.Infrastructure)(\..*)?$")));
 
     /// <summary>
-    /// One fixed address — the public GetNewsForApp method — requested from exactly one class. No key parameter, no
-    /// Authorization header, no publisher endpoint, and no user-supplied URL ever reaches an HTTP call.
+    /// Every request of the module is made in one place (<c>ProviderHttp</c>: one GET, no key, no credentials) to an address a
+    /// provider builds from numbers. Steam: the public GetNewsForApp method only. Blizzard: the official World of Warcraft
+    /// forum only, and never a path its robots.txt disallows (the group feeds under /g…). No Battle.net endpoint, no
+    /// publisher endpoint, and no user-supplied URL ever reaches an HTTP call.
     /// </summary>
     [Fact]
-    public void The_only_request_is_the_public_steam_news_method_without_a_key()
+    public void Requests_are_made_in_one_place_to_fixed_public_addresses_without_a_key()
     {
-        var provider = Path.Combine("Providers", "SteamNewsUpdateProvider.cs");
+        var gateway = Path.Combine("Providers", "ProviderHttp.cs");
+        var steam = Path.Combine("Providers", "SteamNewsUpdateProvider.cs");
+        var forumAddresses = Path.Combine("Providers", "BlizzardForumParser.cs");
         foreach (var file in SourceFiles(Root()))
         {
             var relative = Path.GetRelativePath(Root(), file);
             var code = File.ReadAllText(file);
-            if (relative != provider)
-            {
-                code.Should().NotContain("api.steampowered.com", relative);
+            if (relative != gateway)
                 code.Should().NotContain("new HttpRequestMessage", relative).And.NotContain(".SendAsync(", relative).And.NotContain("CreateClient(", relative);
-            }
-
+            if (relative != steam)
+                code.Should().NotContain("api.steampowered.com", relative);
+            if (relative != forumAddresses)
+                code.Should().NotContain("forums.blizzard.com", relative);
             code.Should().NotContain("GetStringAsync", relative).And.NotContain("GetStreamAsync", relative).And.NotContain("GetByteArrayAsync", relative);
-            code.Should().NotContain("https://partner.steam-api.com", relative).And.NotContain("Authorization", relative).And.NotContain("&key=", relative).And.NotContain("?key=", relative);
+            code.Should().NotContain("https://partner.steam-api.com", relative).And.NotContain("Authorization", relative).And.NotContain("&key=", relative).And.NotContain("?key=", relative)
+                .And.NotContain("api_key", relative).And.NotContain("battle.net", relative, "a build number alone is not an update: no version endpoint is read");
         }
 
-        var client = File.ReadAllText(Path.Combine(Root(), provider));
-        client.Should().Contain("public const string Endpoint = \"https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/\";");
-        HttpsLiteral().Matches(client).Select(m => m.Value).Distinct().Should().Equal("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/");
-        client.Should().Contain("new HttpRequestMessage(HttpMethod.Get, RequestUri(appId, o.ItemsPerRequest))");
-        Regex.Matches(client, @"new HttpRequestMessage").Should().ContainSingle();
+        var gatewayCode = File.ReadAllText(Path.Combine(Root(), gateway));
+        Regex.Matches(gatewayCode, @"new HttpRequestMessage").Should().ContainSingle();
+        gatewayCode.Should().Contain("new HttpRequestMessage(HttpMethod.Get, address)").And.Contain("AllowAutoRedirect = false").And.Contain("UseCookies = false");
+
+        var steamCode = File.ReadAllText(Path.Combine(Root(), steam));
+        steamCode.Should().Contain("public const string Endpoint = \"https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/\";");
+        HttpsLiteral().Matches(steamCode).Select(m => m.Value).Distinct().Should().Equal("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/");
+
+        var forumCode = File.ReadAllText(Path.Combine(Root(), forumAddresses));
+        forumCode.Should().Contain("public const string Host = \"us.forums.blizzard.com\";").And.Contain("public const string Root = \"https://\" + Host + \"/en/wow\";");
+        // Only these three request shapes exist, all under the allowed forum root.
+        Regex.Matches(forumCode, @"\$""\{Root\}(/[^""{?]*)").Select(m => m.Groups[1].Value).Distinct().Should().BeEquivalentTo(["/latest.json", "/t/"]);
+        forumCode.Should().NotContain("/groups/").And.NotContain("/g/").And.NotContain("/search").And.NotContain(".rss");
 
         var src = Path.Combine(CommandManifestTests.RepoRoot(), "src");
         foreach (var file in SourceFiles(src).Where(f => !f.StartsWith(Root(), StringComparison.Ordinal)))
-            File.ReadAllText(file).Should().NotContain("api.steampowered.com", Path.GetRelativePath(src, file));
+        {
+            var code = File.ReadAllText(file);
+            var name = Path.GetRelativePath(src, file);
+            code.Should().NotContain("api.steampowered.com", name);
+            if (!name.EndsWith("ToroHost.cs", StringComparison.Ordinal)) // the /bot about attribution link
+                code.Should().NotContain("forums.blizzard.com", name);
+        }
     }
 
     [Fact]
     public void The_post_text_is_neither_stored_nor_logged()
     {
         typeof(UpdatesItemEntity).GetProperties().Select(p => p.Name).Should()
-            .NotContain(["Body", "Contents", "Content", "Text", "Labels", "Tags", "Author", "Raw", "Payload"]);
+            .NotContain(["Body", "Contents", "Content", "Text", "Labels", "Tags", "Author", "Raw", "Payload", "Cooked", "Html"]);
+        // The one derived text that is kept is the card excerpt, and its size is bounded by construction.
+        (ToroSquad.Modules.Updates.Domain.UpdateHighlights.MaxSections * ToroSquad.Modules.Updates.Domain.UpdateHighlights.MaxItemsPerSection *
+         ToroSquad.Modules.Updates.Domain.UpdateHighlights.MaxItemLength).Should().BeLessThanOrEqualTo(6000);
+        ToroSquad.Modules.Updates.Application.UpdateHighlightsJson.MaxLength.Should().Be(4000);
         Updates.GetTypes().Where(t => t.Namespace == "ToroSquad.Modules.Updates.Persistence").SelectMany(t => t.GetProperties()).Select(p => p.Name).Should()
             .NotContain(["Body", "Contents", "RawJson", "Response"]);
         foreach (var file in SourceFiles(Root()))
@@ -241,6 +265,10 @@ public sealed partial class UpdatesArchitectureTests
         catalog.Get("tr", "updates.card.line", "Counter-Strike 2").Should().Be("Yeni Counter-Strike 2 güncellemesi yayınlandı.");
         catalog.Get("tr", "updates.card.read_steam").Should().Be("Steam'de Güncelleme Notlarını Gör");
         catalog.Get("tr", "updates.card.footer", "Steam").Should().Be("Kaynak: Steam");
+        catalog.Get("tr", "updates.card.read_blizzard").Should().Be("Blizzard Forumunda Güncelleme Notlarını Gör");
+        catalog.Get("tr", "updates.card.more", 12).Should().Be("… ve 12 değişiklik daha");
+        foreach (var key in new[] { "about.attr.steam", "about.attr.steam_terms", "about.attr.blizzard_forum", "about.attr.blizzard_forum_terms" })
+            tr.Should().ContainKey(key);
     }
 
     private static string Root() => Path.Combine(CommandManifestTests.RepoRoot(), "src", "ToroSquad.Modules.Updates");
@@ -260,16 +288,16 @@ public sealed partial class UpdatesArchitectureTests
     [GeneratedRegex(@"https://[^""\s{]*")]
     private static partial Regex HttpsLiteral();
 
-    [GeneratedRegex(@"\bSteam(News|Parse)[A-Za-z]*\b")]
+    [GeneratedRegex(@"\b(Steam(News|Parse)|BlizzardForum|Forum(Html|Post|Thread|Parse|Block|List|Heading|Paragraph)|ProviderHttp)[A-Za-z]*\b")]
     private static partial Regex SteamIdentifier();
 
-    [GeneratedRegex(@"\bCs2(Game|UpdateClassifier)\b")]
+    [GeneratedRegex(@"\b(Cs2|WowForever)(Game|UpdateClassifier|Settings)\b")]
     private static partial Regex GameIdentifier();
 
     [GeneratedRegex(@"(?<![0-9])[0-9]{17,20}(?![0-9])")]
     private static partial Regex Snowflake();
 
-    [GeneratedRegex(@"\.Log(Trace|Debug|Information|Warning|Error|Critical)\([^;]*\b(Body|Contents|contents|PayloadJson)\b")]
+    [GeneratedRegex(@"\.Log(Trace|Debug|Information|Warning|Error|Critical)\([^;]*\b(Body|Contents|contents|PayloadJson|Cooked|Highlights|Excerpt)\b")]
     private static partial Regex LoggedText();
 
     [GeneratedRegex(@"EveryoneOnly|ExplicitUsers|Everyone\s*:\s*true|Everyone\s*=\s*true|RoleMention|new MentionPolicy\(")]

@@ -13,8 +13,8 @@ namespace ToroSquad.Modules.Updates.Commands;
 /// operation is re-authorized in the service. Works while the module is disabled so the channel and the games can be set and
 /// checked before activation (/modules enable updates). Every answer is private. Nothing here requests a provider or posts
 /// to a channel, and there is deliberately no operation to post an update by hand.
-/// <para>A game is always one of the registered definitions: with a single registered game the game operations act on it
-/// directly; with several they open a private select listing exactly the registered games.</para>
+/// <para>A game is always one of the registered definitions: the game operations open a private select that lists exactly
+/// the registered games, and the picked value is checked against them again.</para>
 /// </summary>
 public sealed class UpdatesAdminOperations(UpdatesConfigService config) : IAdminFormHandler
 {
@@ -48,19 +48,9 @@ public sealed class UpdatesAdminOperations(UpdatesConfigService config) : IAdmin
         await call.ReplyResultAsync(await config.SetChannelAsync(call.Actor, channel, CancellationToken.None));
     }
 
-    /// <summary>game-enable, game-disable and preview: the only registered game at once, otherwise a select of the registered games.</summary>
-    public async Task GameOperationAsync(AdminCall call)
-    {
-        var games = config.RegisteredGames;
-        if (games.Count == 1)
-        {
-            await call.DeferAsync();
-            await RunGameOperationAsync(call, games[0].Key, viaForm: false);
-            return;
-        }
-
-        await AdminForms.ChooseAsync(call, call.T("admin.updates.game.pick"), GameAction, games.Select(g => (GameLabel(g), g.Key, false)));
-    }
+    /// <summary>game-enable, game-disable and preview: a select of the registered games (nothing happens until one is picked).</summary>
+    public Task GameOperationAsync(AdminCall call) =>
+        AdminForms.ChooseAsync(call, call.T("admin.updates.game.pick"), GameAction, config.RegisteredGames.Select(g => (GameLabel(g), g.Key, false)));
 
     public async Task OnFormAsync(AdminCall call, string action)
     {
@@ -85,39 +75,24 @@ public sealed class UpdatesAdminOperations(UpdatesConfigService config) : IAdmin
             return;
         }
 
-        if (await AdminForms.ClaimAsync(call))
-            await RunGameOperationAsync(call, key, viaForm: true);
-    }
-
-    private async Task RunGameOperationAsync(AdminCall call, string gameKey, bool viaForm)
-    {
+        if (!await AdminForms.ClaimAsync(call))
+            return;
         if (call.Operation.Id != PreviewOp)
         {
-            var result = await config.SetGameEnabledAsync(call.Actor, gameKey, call.Operation.Id == EnableOp, CancellationToken.None);
-            if (viaForm)
-                await call.FinishAsync(result);
-            else
-                await call.ReplyResultAsync(result);
+            await call.FinishAsync(await config.SetGameEnabledAsync(call.Actor, key, call.Operation.Id == EnableOp, CancellationToken.None));
             return;
         }
 
-        var (auth, preview) = await config.PreviewAsync(call.Actor, gameKey, call.Language, CancellationToken.None);
+        var (auth, preview) = await config.PreviewAsync(call.Actor, key, call.Language, CancellationToken.None);
         if (preview is null)
         {
-            if (viaForm)
-                await call.FinishAsync(auth);
-            else
-                await call.ReplyResultAsync(auth);
+            await call.FinishAsync(auth);
             return;
         }
 
         var note = call.T(preview.Synthetic ? "updates.preview.synthetic" : "updates.preview.real");
         var card = preview.Message.Embed!;
-        var embed = card with { Description = "_" + note + "_\n\n" + card.Description };
-        if (viaForm)
-            await call.Respond.UpdateAsync(null, AdminCall.EmptyComponents, embed);
-        else
-            await call.ReplyEmbedAsync(embed);
+        await call.Respond.UpdateAsync(null, AdminCall.EmptyComponents, card with { Description = "_" + note + "_\n\n" + card.Description });
     }
 
     public async Task GamesAsync(AdminCall call)
