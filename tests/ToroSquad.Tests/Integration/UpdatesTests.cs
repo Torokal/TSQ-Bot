@@ -922,7 +922,7 @@ public sealed class UpdatesTests
         (await rig.OutboxAsync()).Select(o => (o.SourceKey, o.Kind)).Should().BeEquivalentTo([("steam:730:1300", "update:cs2"), ("fakestore:g-1:p1", "update:fakegame")]);
 
         var (_, status) = await rig.ConfigAsync(c => c.StatusAsync(TestHost.Admin(Guild), Ct));
-        status!.Games.Select(g => (g.Game.Key, g.ProviderName, g.Enabled)).Should().Equal(("cs2", "Steam", true), ("fakegame", "FakeStore", true), ("wow-forever", "Blizzard", false));
+        status!.Games.Select(g => (g.Game.Key, g.ProviderName, g.Enabled)).Should().Equal(("cs2", "Steam", true), ("deadlock", "Steam", false), ("fakegame", "FakeStore", true), ("wow-forever", "Blizzard", false));
 
         // One game's source failing (even by throwing) leaves the other game working.
         fake.Throw = new InvalidOperationException("simulated provider bug");
@@ -999,14 +999,14 @@ public sealed class UpdatesTests
         (options.PollIntervalMinutes, options.CatchUpHours, options.MaxCardsPerRound, options.ItemsPerRequest).Should().Be((5, 24, 3, 20));
         options.Validate().Should().BeEmpty();
         new ToroSquad.Modules.Updates.UpdatesModule().Descriptor.EnabledByDefault.Should().BeFalse();
-        host.Services.GetRequiredService<GameUpdateCatalog>().Games.Select(g => g.Key).Should().Equal("cs2", "wow-forever");
+        host.Services.GetRequiredService<GameUpdateCatalog>().Games.Select(g => g.Key).Should().Equal("cs2", "deadlock", "wow-forever");
 
         await host.InScopeAsync(async sp =>
         {
             var (_, status) = await sp.GetRequiredService<UpdatesConfigService>().StatusAsync(TestHost.Admin(Guild), Ct);
             status!.ModuleEnabled.Should().BeFalse();
             status.ChannelId.Should().BeNull();
-            status.Games.Should().HaveCount(2).And.OnlyContain(g => !g.Enabled, "the games are registered, but no guild follows one until an admin says so");
+            status.Games.Should().HaveCount(3).And.OnlyContain(g => !g.Enabled, "the games are registered, but no guild follows one until an admin says so");
         });
         (await host.Services.GetRequiredService<UpdatesPoller>().TickAsync(Ct)).Should().Be(0);
 
