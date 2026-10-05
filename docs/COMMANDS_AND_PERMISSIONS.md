@@ -29,7 +29,7 @@ Modüllerin yönetici işlemleri **alt komutu ve alt komut grubu olmayan** tek b
 
 | Seçenek | Tür | Ne işe yarar |
 |---|---|---|
-| `modul` | metin, zorunlu, autocomplete | `birthday`, `esports`, `f1`, `lfg`, `live`, `news`, `volleyball` ("Haberler — news" gibi Türkçe etiketle önerilir) |
+| `modul` | metin, zorunlu, autocomplete | `birthday`, `esports`, `f1`, `lfg`, `live`, `news`, `updates`, `volleyball` ("Haberler — news" gibi Türkçe etiketle önerilir) |
 | `islem` | metin, zorunlu, autocomplete | Yalnızca seçili modülün, çağıranın yetkisinin yettiği işlemleri önerilir; modül seçilmeden öneri yoktur |
 | `kanal` | kanal seçici (metin/duyuru), isteğe bağlı | Kanal isteyen işlemler (`configure`, `channel`, `configure-channel`) |
 | `uye` | kullanıcı seçici, isteğe bağlı | `birthday set/show` |
@@ -278,6 +278,20 @@ Add Reactions ve Administrator gerekmez. Ayrıntı: [predictions/TSQ_PREDICTIONS
 
 Tüm cevaplar ephemeral. Komutlar modül kapalıyken de çalışır. Elle haber/bağlantı komutu yoktur. Ayrıntı:
 [news/TSQ_NEWS.md](news/TSQ_NEWS.md).
+
+## TSQ Bot Updates — oyun güncellemeleri (`/tsq-admin modul:updates`, ManageGuild + sunucu tarafı `Authorize.Require`)
+
+| Komut | Ne yapar |
+|---|---|
+| `/tsq-admin modul:updates islem:configure kanal:` | Güncelleme kanalı (View Channel + Send Messages + Embed Links; yalnızca bundan sonra yayımlanan güncellemeler) |
+| `/tsq-admin modul:updates islem:games` | Kayıtlı oyunlar ve bu sunucudaki açık/kapalı durumu |
+| `/tsq-admin modul:updates islem:game-enable` / `game-disable` | Bir oyunu açar / kapatır (tek kayıtlı oyun varken doğrudan; birden fazlaysa yalnızca kayıtlı oyunları içeren özel seçim) |
+| `/tsq-admin modul:updates islem:pause` / `resume` | Gönderimi duraklatır / sürdürür (duraklatma dönemi telafi edilmez) |
+| `/tsq-admin modul:updates islem:preview` | Kayıtlı son gerçek güncellemenin veya açıkça sentetik örneğin kartını yalnızca yöneticiye gösterir |
+| `/tsq-admin modul:updates islem:status` · `doctor` | Mod, modül, kanal/izinler, açık oyunlar, kaynak sonucu ve sonraki kontrol, baseline, son bulunan güncelleme, son kart |
+
+Tüm cevaplar ephemeral. Komutlar modül kapalıyken de çalışır. Genel kullanıcı komutu ve elle güncelleme gönderme komutu
+yoktur; yeni slash komutu eklenmez (`/tsq-admin` şeması aynıdır). Ayrıntı: [updates/TSQ_UPDATES.md](updates/TSQ_UPDATES.md).
 
 ## TSQ Doğum Günü (modül açıkken)
 
