@@ -524,11 +524,17 @@ invite link and no global command registration. The source code is public under 
   reused).
 - Production (2026-09-30): PR #40 merged and deployed, Railway variables `Mode=Live` and the API key (value never shown);
   first discovery logged (catalog + in-season lists, free calls). PR #48 orders the publishing sync batch.
-- Publish 24 h before kickoff (branch `feat/predictions-auto-football-publish-24h`, not pushed): a card opens
+- Publish 24 h before kickoff (PR #68, merged `a0adf24`; deployed 2026-10-08 15:40Z with PR #69): a card opens
   `PublishBeforeKickoffHours` (default 24) before the planned kickoff instead of 09:00 on the match day — pure UTC durations,
   no calendar day; a match first listed later opens at once while at least 15 min remain; 4 odds attempts halve the time
   left (about 24/12/6/3 h before kickoff); rows planned under the old rule and not tried yet are replanned; lock (2 min)
   unchanged; `PublishLocalTime`/`EarlyPublishLeadMinutes` removed. No schema change. **IMPLEMENTED / TESTED_OFFLINE**.
+  Deployed: clean start, first discovery under the new rule at 15:51Z (free calls only, no early odds call).
+  **NOT VERIFIED_LIVE**: the first card opened 24 h before its kickoff.
+- Build fix (PR #69, merged `294e9e6`, 2026-10-08): the Railway build failed on five new advisories for
+  SixLabors.ImageSharp 3.1.12 (fixed only in 4.1.2, which needs a license key). TSQ Quote now decodes avatars with the PNG,
+  JPEG, WebP and GIF decoders only, and exactly those five advisories are suppressed with their reasons (SECURITY.md); NuGet
+  audit stays on. Owner decision.
 - First automatic card (log, 2026-10-02 06:00Z = 09:00 TR): one paid odds call (`x-requests-remaining=499` after the
   monthly renewal), `auto_football_published` prediction #4 (Belgium – Türkiye, lock 21:43 TR). The card's content in
   Discord, entries on it and the manual settlement are **NOT VERIFIED_LIVE** (no owner observation yet).
