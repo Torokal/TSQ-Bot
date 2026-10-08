@@ -26,6 +26,25 @@
     <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
+  <!-- NuGet audit stays on and its warnings stay errors. ONLY these five advisories of SixLabors.ImageSharp 3.1.12 are
+       suppressed (owner decision 2026-10-08): they are fixed only in 4.1.2, which needs a Six Labors license key this
+       repository does not have (see Directory.Packages.props). All five are availability issues in code TSQ Bot does not
+       reach — the bot only decodes avatars and writes one PNG (TSQ Quote):
+         j3p4-wp97-rph4  HistogramEqualization on a float TIFF            - never called
+         jjfr-hcj7-qf5w  TIFF CCITT Group 4 encoder                       - no TIFF is ever written
+         j9gm-c75j-xc9q  TIFF CCITT Group 3 encoder                       - no TIFF is ever written
+         wmxv-xphr-5c9g  BigTIFF metadata reader loop                     - TIFF decoders are not registered for avatars
+         gwg2-r3hj-4w44  ICC profile CLUT allocation (IccProfile.Entries) - the profile entries are never read
+       QuoteImageRenderer.DecodeAvatar registers PNG, JPEG, WebP and GIF only (tested). Remove an entry as soon as a fixed
+       3.x release or a licensed 4.x upgrade exists; a NEW advisory still fails the build. Details: SECURITY.md. -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j3p4-wp97-rph4" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(SourceRevisionId)' == ''">
     <SourceRevisionId Condition="'$(TOROSQUAD_SOURCE_REVISION)' != ''">$(TOROSQUAD_SOURCE_REVISION)</SourceRevisionId>
   </PropertyGroup>
