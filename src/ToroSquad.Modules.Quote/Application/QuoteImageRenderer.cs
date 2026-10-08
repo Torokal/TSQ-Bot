@@ -3,7 +3,10 @@ using SixLabors.Fonts;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Gif;
+using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
@@ -236,17 +239,27 @@ public sealed class QuoteImageRenderer(QuoteFonts fonts) : IQuoteRenderer
             .DrawText(options, initial, FallbackInitial));
     }
 
-    /// <summary>First frame of a real image of sane size, or null (missing, not an image, corrupt, absurd dimensions).</summary>
+    /// <summary>
+    /// The only image formats an avatar is ever decoded from — what Discord's CDN serves (PNG, JPEG, WebP, GIF). Every other
+    /// decoder of the library (TIFF/BigTIFF, BMP, TGA, PBM, QOI…) is not registered here, so bytes in such a format are "not
+    /// an image" before any of their parsing code runs. This closes the reachable part of the ImageSharp 3.1.12 advisories
+    /// suppressed in Directory.Build.props (the TIFF reader); see SECURITY.md.
+    /// </summary>
+    private static readonly Configuration AvatarFormats = new(
+        new PngConfigurationModule(), new JpegConfigurationModule(), new WebpConfigurationModule(), new GifConfigurationModule());
+
+    /// <summary>First frame of a real PNG/JPEG/WebP/GIF image of sane size, or null (missing, another format, corrupt, absurd dimensions).</summary>
     public static Image<Rgba32>? DecodeAvatar(byte[]? bytes)
     {
         if (bytes is not { Length: > 0 })
             return null;
         try
         {
-            var info = Image.Identify(bytes);
+            var options = new DecoderOptions { Configuration = AvatarFormats, MaxFrames = 1 };
+            var info = Image.Identify(options, bytes);
             if (info.Width is < 1 or > MaxAvatarDimension || info.Height is < 1 or > MaxAvatarDimension)
                 return null;
-            return Image.Load<Rgba32>(new DecoderOptions { MaxFrames = 1 }, bytes);
+            return Image.Load<Rgba32>(options, bytes);
         }
         catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
         {
