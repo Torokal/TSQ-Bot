@@ -29,19 +29,19 @@ namespace ToroSquad.Tests.Integration;
 /// </summary>
 public sealed class AutoFootballTests : IAsyncLifetime
 {
-    /// <summary>Monday 5 October 2026, 08:00 in Türkiye.</summary>
-    private static readonly DateTimeOffset Morning = new(2026, 10, 5, 5, 0, 0, TimeSpan.Zero);
+    /// <summary>Sunday 4 October 2026, 08:00 in Türkiye: 36 hours before the kickoff (an early discovery).</summary>
+    private static readonly DateTimeOffset Early = new(2026, 10, 4, 5, 0, 0, TimeSpan.Zero);
 
-    /// <summary>20:00 in Türkiye.</summary>
+    /// <summary>Monday 5 October 2026, 20:00 in Türkiye.</summary>
     private static readonly DateTimeOffset Kickoff = new(2026, 10, 5, 17, 0, 0, TimeSpan.Zero);
 
-    /// <summary>09:00 in Türkiye.</summary>
-    private static readonly DateTimeOffset NineTr = new(2026, 10, 5, 6, 0, 0, TimeSpan.Zero);
+    /// <summary>The publish time: exactly 24 hours before the kickoff (Sunday 20:00 in Türkiye).</summary>
+    private static readonly DateTimeOffset PublishTime = Kickoff - TimeSpan.FromHours(24);
 
     private readonly FakeFootballOdds _odds = new();
     private PredictionTestKit _kit = null!;
 
-    public async ValueTask InitializeAsync() => _kit = await AutoFootballKit.CreateAsync(_odds, "Live", Morning);
+    public async ValueTask InitializeAsync() => _kit = await AutoFootballKit.CreateAsync(_odds, "Live", Early);
 
     public async ValueTask DisposeAsync() => await _kit.DisposeAsync();
 
@@ -51,7 +51,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         _odds.Price(Derby());
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         var prediction = (await _kit.AutoPredictionsAsync()).Should().ContainSingle().Subject;
         return (await _kit.Service(s => s.GetAsync(prediction.Id, Ct)))!;
@@ -63,7 +63,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
     public async Task Disabled_makes_no_request_and_plans_nothing_while_manual_predictions_work()
     {
         var odds = new FakeFootballOdds();
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Disabled", Morning);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Disabled", Early);
         odds.Price(odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff));
         for (var i = 0; i < 3; i++)
         {
@@ -87,11 +87,11 @@ public sealed class AutoFootballTests : IAsyncLifetime
         var extra = problem switch
         {
             "exchange" => new Dictionary<string, string?> { ["Predictions:Automation:BookmakerPriority:0"] = "betfair_ex_eu" },
-            "typo" => new Dictionary<string, string?> { ["Predictions:Automation:PublishLocalTime"] = "nine" },
+            "typo" => new Dictionary<string, string?> { ["Predictions:Automation:PublishBeforeKickoffHours"] = "0" },
             "two-guilds" => new Dictionary<string, string?> { ["Discord:AllowedGuildIds:1"] = "778" },
             _ => null,
         };
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, extra);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime, extra);
         odds.Price(odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff));
         (await kit.PassAsync()).Mode.Should().Be(AutomationMode.Disabled);
         odds.Calls.Should().BeEmpty();
@@ -106,10 +106,10 @@ public sealed class AutoFootballTests : IAsyncLifetime
     public async Task Observe_records_the_decision_in_its_own_rows_only_and_live_later_opens_the_same_match()
     {
         var odds = new FakeFootballOdds();
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Observe", Morning);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Observe", Early);
         odds.Price(odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff));
         await kit.PassAsync();
-        kit.Host.Clock.SetUtcNow(NineTr);
+        kit.Host.Clock.SetUtcNow(PublishTime);
         (await kit.PassAsync()).Observed.Should().Be(1);
 
         var observed = (await kit.AutoRowsAsync()).Should().ContainSingle().Subject;
@@ -121,7 +121,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         kit.Transport.Messages.Should().BeEmpty("nothing is sent to Discord");
 
         // Switching to Live (discovery runs at its next interval): the observed row does not count as published.
-        await using var live = await AutoFootballKit.CreateAsync(odds, "Live", NineTr + TimeSpan.FromMinutes(20), directory: kit.Host.Directory, transport: kit.Transport);
+        await using var live = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime + TimeSpan.FromMinutes(20), directory: kit.Host.Directory, transport: kit.Transport);
         await live.PassAsync();
         (await live.AutoPredictionsAsync()).Should().ContainSingle();
         (await live.AutoRowsAsync()).Select(r => (r.Mode, r.State)).Should().BeEquivalentTo(new[]
@@ -131,16 +131,23 @@ public sealed class AutoFootballTests : IAsyncLifetime
     // ---- live ----
 
     [Fact]
-    public async Task Live_opens_one_card_at_nine_turkiye_time_with_the_fixed_odds_and_no_tournament_on_it()
+    public async Task Live_opens_one_card_exactly_24_hours_before_kickoff_with_the_fixed_odds_and_no_tournament_on_it()
     {
         _odds.Price(Derby());
-        (await _kit.PassAsync()).Discovered.Should().Be(1);
+        (await _kit.PassAsync()).Discovered.Should().Be(1, "found 36 hours ahead");
+        (await _kit.AutoRowsAsync()).Single().PublishAt.Should().Be(Kickoff - TimeSpan.FromMinutes(24 * 60));
+        for (var i = 0; i < 4; i++)
+        {
+            _kit.Host.Clock.Advance(TimeSpan.FromHours(2)); // an early discovery is never an early card
+            await _kit.PassAsync();
+        }
+
         _odds.OddsCalls.Should().Be(0, "before its publish time no odds are fetched");
-        _kit.Host.Clock.SetUtcNow(NineTr - TimeSpan.FromSeconds(1));
+        _kit.Host.Clock.SetUtcNow(PublishTime - TimeSpan.FromSeconds(1));
         await _kit.PassAsync();
         _kit.Transport.Messages.Should().BeEmpty();
 
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         (await _kit.PassAsync()).Published.Should().Be(1);
         var row = (await _kit.AutoPredictionsAsync()).Should().ContainSingle().Subject;
         (row.Origin, row.CreatorUserId, row.CreatorName, row.Status, row.LockAt).Should()
@@ -186,7 +193,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         var rows = await _kit.AutoRowsAsync();
         rows.Select(r => (r.ExternalEventId, r.TrackedTeams)).Should().BeEquivalentTo(new[] { (FakeFootballOdds.Id(1), "GS,FB"), (FakeFootballOdds.Id(5), "BJK") });
 
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         (await _kit.AutoPredictionsAsync()).Select(p => p.Title).Should().BeEquivalentTo("Galatasaray - Fenerbahçe maç sonucu ne olur?", "Samsunspor - Beşiktaş maç sonucu ne olur?");
         _odds.Count("odds").Should().Be(1, "the due matches of one competition share one call");
@@ -198,14 +205,15 @@ public sealed class AutoFootballTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_late_start_opens_todays_missed_card_but_never_yesterdays_or_within_fifteen_minutes()
+    public async Task A_match_first_seen_after_its_publish_time_opens_at_once_but_never_within_fifteen_minutes_or_after_kickoff()
     {
         var odds = new FakeFootballOdds();
         var today = odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff);
         var soon = odds.Add(2, "Besiktas", "Konyaspor", new DateTimeOffset(2026, 10, 5, 7, 10, 0, TimeSpan.Zero));
         odds.Price(today);
         odds.Price(soon);
-        // The bot was down at 09:00 and starts at 10:00 in Türkiye; the second match kicks off at 10:10.
+        // First listed (and the bot first up) at 10:00 in Türkiye on the match day — 14 h after the publish time: a catch-up.
+        // The second match kicks off at 10:10: less than the minimum lead.
         await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", new DateTimeOffset(2026, 10, 5, 7, 0, 0, TimeSpan.Zero));
         await kit.PassAsync();
         (await kit.AutoPredictionsAsync()).Should().ContainSingle().Which.Title.Should().StartWith("Galatasaray");
@@ -222,15 +230,115 @@ public sealed class AutoFootballTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task An_early_kickoff_is_published_two_hours_before_it_on_the_same_day()
+    public async Task Every_kickoff_hour_publishes_24_hours_before_it_never_at_nine_and_never_by_calendar_day()
     {
-        var early = _odds.Add(1, "Galatasaray", "Kasimpasa", new DateTimeOffset(2026, 10, 5, 8, 0, 0, TimeSpan.Zero)); // 11:00 TR → 09:00 TR
-        var morning = _odds.Add(2, "Fenerbahce", "Alanyaspor", new DateTimeOffset(2026, 10, 5, 7, 0, 0, TimeSpan.Zero)); // 10:00 TR → 08:00 TR
-        _odds.Price(early);
-        _odds.Price(morning);
-        await _kit.PassAsync(); // 08:00 TR
-        (await _kit.AutoPredictionsAsync()).Should().ContainSingle().Which.Title.Should().StartWith("Fenerbahçe", "10:00 kickoff: published at 08:00");
-        (await _kit.AutoRowsAsync()).Single(r => r.ExternalEventId == early.Id).PublishAt.Should().Be(NineTr);
+        var morning = _odds.Add(1, "Galatasaray", "Kasimpasa", new DateTimeOffset(2026, 10, 5, 8, 0, 0, TimeSpan.Zero)); // 11:00 TR
+        var night = _odds.Add(2, "Fenerbahce", "Alanyaspor", new DateTimeOffset(2026, 10, 5, 19, 0, 0, TimeSpan.Zero)); // 22:00 TR
+        var afterMidnight = _odds.Add(3, "Besiktas", "Konyaspor", new DateTimeOffset(2026, 10, 5, 21, 30, 0, TimeSpan.Zero)); // 6 Oct 00:30 TR
+        foreach (var match in new[] { morning, night, afterMidnight })
+            _odds.Price(match);
+        await _kit.PassAsync(); // Sunday 08:00 TR
+        (await _kit.AutoRowsAsync()).Select(r => r.KickoffAt - r.PublishAt).Should().OnlyContain(lead => lead == TimeSpan.FromHours(24));
+
+        async Task<List<string>> AtAsync(DateTimeOffset instant)
+        {
+            _kit.Host.Clock.SetUtcNow(instant);
+            await _kit.PassAsync();
+            return [.. (await _kit.AutoPredictionsAsync()).Select(p => p.Title.Split(' ')[0])];
+        }
+
+        (await AtAsync(morning.CommenceTime - TimeSpan.FromHours(24) - TimeSpan.FromSeconds(1))).Should().BeEmpty();
+        (await AtAsync(morning.CommenceTime - TimeSpan.FromHours(24))).Should().Equal("Galatasaray");
+        (await AtAsync(night.CommenceTime - TimeSpan.FromHours(24) - TimeSpan.FromSeconds(1))).Should().Equal(["Galatasaray"], "C: a 22:00 match waits for 22:00 the day before");
+        (await AtAsync(night.CommenceTime - TimeSpan.FromHours(24))).Should().Equal("Galatasaray", "Fenerbahçe");
+        (await AtAsync(afterMidnight.CommenceTime - TimeSpan.FromHours(24))).Should().Equal(["Galatasaray", "Fenerbahçe", "Beşiktaş"], "B: 00:30 → 00:30 the day before");
+        _odds.OddsCalls.Should().Be(3, "one paid call per match, at its publish time");
+    }
+
+    [Theory]
+    [InlineData(12)] // D
+    [InlineData(48)] // E
+    public async Task The_publish_lead_follows_its_setting(int hours)
+    {
+        var odds = new FakeFootballOdds();
+        odds.Price(odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff));
+        var lead = TimeSpan.FromHours(hours);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", Kickoff - lead - TimeSpan.FromHours(12),
+            new Dictionary<string, string?> { ["Predictions:Automation:PublishBeforeKickoffHours"] = hours.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+        await kit.PassAsync();
+        (await kit.AutoRowsAsync()).Should().ContainSingle("discovered before its publish time, whatever the lead").Which.PublishAt.Should().Be(Kickoff - lead);
+
+        kit.Host.Clock.SetUtcNow(Kickoff - lead - TimeSpan.FromMinutes(1));
+        await kit.PassAsync();
+        (await kit.AutoPredictionsAsync()).Should().BeEmpty();
+        kit.Host.Clock.SetUtcNow(Kickoff - lead);
+        await kit.PassAsync();
+        (await kit.AutoPredictionsAsync()).Should().ContainSingle().Which.LockAt.Should().Be(Kickoff - TimeSpan.FromMinutes(2), "the lock does not move with the lead");
+    }
+
+    [Fact]
+    public async Task Missing_odds_at_the_publish_time_open_nothing_and_the_few_attempts_reach_towards_kickoff_until_the_odds_arrive()
+    {
+        var derby = Derby(); // no price yet
+        await _kit.PassAsync();
+        _kit.Host.Clock.SetUtcNow(PublishTime);
+        await _kit.PassAsync();
+        var waiting = (await _kit.AutoRowsAsync()).Single();
+        (waiting.State, waiting.Reason, waiting.OddsAttempts).Should().Be((AutoEventState.WaitingForOdds, AutoBlockReason.NoOdds, 1), "I: no Pinnacle set, no card, no default price");
+        waiting.NextAttemptAt.Should().Be(PublishTime + TimeSpan.FromHours(11.875), "halfway to the last safe moment: about 12 h before kickoff");
+        (await _kit.AutoPredictionsAsync()).Should().BeEmpty();
+
+        for (var i = 0; i < 40; i++)
+        {
+            _kit.Host.Clock.Advance(TimeSpan.FromMinutes(15)); // ten hours of passes: no paid call every 15 minutes
+            await _kit.PassAsync();
+        }
+
+        _odds.OddsCalls.Should().Be(1);
+        _odds.Price(derby); // the odds appear on the match day
+        _kit.Host.Clock.SetUtcNow(waiting.NextAttemptAt!.Value);
+        await _kit.PassAsync();
+        (await _kit.AutoPredictionsAsync()).Should().ContainSingle("J: opened at the next planned attempt, once");
+        (_odds.OddsCalls, (await _kit.AutoRowsAsync()).Single().OddsAttempts).Should().Be((2, 2));
+    }
+
+    [Fact]
+    public async Task A_bot_that_was_down_at_the_publish_time_catches_up_once_after_a_restart()
+    {
+        _odds.Price(Derby());
+        await _kit.PassAsync(); // discovered, planned
+        await using var back = await AutoFootballKit.CreateAsync(_odds, "Live", Kickoff - TimeSpan.FromHours(10), directory: _kit.Host.Directory, transport: _kit.Transport);
+        await back.PassAsync();
+        await back.PassAsync();
+        (await back.AutoPredictionsAsync()).Should().ContainSingle("K: 14 hours late, still well before the minimum lead");
+        back.Transport.Messages.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_match_planned_under_the_old_nine_o_clock_rule_follows_the_24_hour_rule_and_a_published_one_is_never_opened_again()
+    {
+        _odds.Price(Derby());
+        var other = _odds.Add(2, "Besiktas", "Konyaspor", Kickoff + TimeSpan.FromHours(2));
+        _odds.Price(other);
+        await _kit.PassAsync();
+        // As the old schedule left them: both planned for 09:00 Türkiye time on the match day.
+        var nineOnMatchDay = new DateTimeOffset(2026, 10, 5, 6, 0, 0, TimeSpan.Zero);
+        await _kit.Db(db => db.Set<PredictionAutoEventEntity>().ExecuteUpdateAsync(u => u.SetProperty(r => r.PublishAt, nineOnMatchDay).SetProperty(r => r.NextAttemptAt, nineOnMatchDay)));
+
+        _kit.Host.Clock.SetUtcNow(PublishTime);
+        await _kit.PassAsync();
+        (await _kit.AutoPredictionsAsync()).Should().ContainSingle("the derby is due 24 h before its kickoff, not at 09:00").Which.Title.Should().StartWith("Galatasaray");
+        (await _kit.AutoRowsAsync()).Single(r => r.ExternalEventId == other.Id).PublishAt.Should().Be(other.CommenceTime - TimeSpan.FromHours(24));
+
+        // M: the published match is never opened a second time — not by later passes, not at the old 09:00.
+        foreach (var instant in new[] { PublishTime + TimeSpan.FromHours(2), nineOnMatchDay, nineOnMatchDay + TimeSpan.FromHours(1) })
+        {
+            _kit.Host.Clock.SetUtcNow(instant);
+            await _kit.PassAsync();
+        }
+
+        (await _kit.AutoPredictionsAsync()).Select(p => p.Title.Split(' ')[0]).Should().Equal("Galatasaray", "Beşiktaş");
+        _odds.OddsCalls.Should().Be(2);
     }
 
     // ---- the Türkiye men's senior national team ----
@@ -245,7 +353,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         var e = _odds.Add(7, home, away, Kickoff, competition);
         _odds.Price(e, home: 2.10m, draw: 3.30m, away: 3.60m);
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
 
         var prediction = (await _kit.AutoPredictionsAsync()).Should().ContainSingle().Subject;
@@ -271,7 +379,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         foreach (var n in new[] { 1, 2, 3, 4, 5 })
             _odds.Prices[FakeFootballOdds.Id(n)] = (2m, 3m, 4m, "pinnacle", TimeSpan.FromMinutes(5));
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         (await _kit.AutoRowsAsync()).Should().BeEmpty();
         _odds.OddsCalls.Should().Be(0, "no paid request for matches without a followed team");
@@ -283,13 +391,13 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         var odds = new FakeFootballOdds();
         odds.Price(odds.Add(8, "Turkey", "Spain", Kickoff, FakeFootballOdds.WorldCupQualifiers));
-        await using (var observe = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr))
+        await using (var observe = await AutoFootballKit.CreateAsync(odds, "Observe", PublishTime))
         {
             await observe.PassAsync();
             (await observe.AutoRowsAsync()).Single().State.Should().Be(AutoEventState.Observed);
 
-            await using var a = await AutoFootballKit.CreateAsync(odds, "Live", NineTr + TimeSpan.FromMinutes(20), directory: observe.Host.Directory, transport: observe.Transport);
-            await using var b = await AutoFootballKit.CreateAsync(odds, "Live", NineTr + TimeSpan.FromMinutes(20), directory: observe.Host.Directory, transport: observe.Transport);
+            await using var a = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime + TimeSpan.FromMinutes(20), directory: observe.Host.Directory, transport: observe.Transport);
+            await using var b = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime + TimeSpan.FromMinutes(20), directory: observe.Host.Directory, transport: observe.Transport);
             await a.TogetherAsync(() => a.PassAsync(), () => b.PassAsync());
             (await a.AutoPredictionsAsync()).Should().ContainSingle("the observed row did not count as published; two processes open it once");
 
@@ -297,7 +405,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
             var view = (await a.Service(s => s.GetAsync(a.AutoPredictionsAsync().Result.Single().Id, Ct)))!;
             (await a.CancelAsync(Admin(), view)).Result.Succeeded.Should().BeTrue();
             (await a.ConfirmEndAsync(Admin(), (await a.EndTokenAsync(Admin()))!)).Result.Succeeded.Should().BeTrue();
-            await using var restarted = await AutoFootballKit.CreateAsync(odds, "Live", NineTr + TimeSpan.FromMinutes(60), directory: observe.Host.Directory, transport: observe.Transport);
+            await using var restarted = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime + TimeSpan.FromMinutes(60), directory: observe.Host.Directory, transport: observe.Transport);
             await restarted.PassAsync();
             (await restarted.AutoPredictionsAsync()).Should().ContainSingle("restart and a new tournament never reopen the match");
         }
@@ -310,7 +418,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         odds.Active.Remove(FakeFootballOdds.NationsLeague);
         var match = odds.Add(9, "Turkey", "Hungary", Kickoff + TimeSpan.FromDays(1), FakeFootballOdds.NationsLeague);
         odds.Price(match);
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", Morning);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", Early);
         await kit.PassAsync();
         odds.Calls.Should().NotContain(c => c == "events:" + FakeFootballOdds.NationsLeague, "not in season: its list is not read");
         (await kit.AutoRowsAsync()).Should().BeEmpty();
@@ -329,7 +437,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         var odds = new FakeFootballOdds();
         odds.Price(odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff));
-        await using (var live = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.None))
+        await using (var live = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime, rules: FootballMarketRules.None))
         {
             await live.PassAsync();
             odds.OddsCalls.Should().Be(0, "no bookmaker's full-time rule is verified: nothing could be published");
@@ -339,7 +447,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
             health.Should().Contain(h => h.Component == "predictions.health.auto_rule" && h.State == HealthState.Degraded);
         }
 
-        await using var observe = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, rules: FootballMarketRules.None);
+        await using var observe = await AutoFootballKit.CreateAsync(odds, "Observe", PublishTime, rules: FootballMarketRules.None);
         await observe.PassAsync();
         var row = (await observe.AutoRowsAsync()).Single();
         (row.State, row.Reason, row.BookmakerKey, row.HomeOddsX100).Should().Be((AutoEventState.Observed, AutoBlockReason.MarketRuleUnverified, "pinnacle", 185));
@@ -355,7 +463,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         var odds = new FakeFootballOdds();
         odds.Price(BelgiumTurkey(odds), home: 1.62m, draw: 4.10m, away: 5.25m);
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime, rules: FootballMarketRules.Production);
         await kit.PassAsync();
 
         var prediction = (await kit.AutoPredictionsAsync()).Should().ContainSingle().Subject;
@@ -373,7 +481,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         var odds = new FakeFootballOdds();
         odds.Price(BelgiumTurkey(odds), bookmaker: "onexbet");
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime, rules: FootballMarketRules.Production);
         await kit.PassAsync();
 
         odds.OddsCalls.Should().Be(1, "pinnacle is approved, so its set is looked for");
@@ -384,35 +492,38 @@ public sealed class AutoFootballTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_same_team_on_two_days_gives_two_candidates_each_opened_on_its_own_day()
+    public async Task The_same_team_on_two_days_gives_two_candidates_each_opened_24_hours_before_its_own_kickoff()
     {
         var odds = new FakeFootballOdds();
         odds.Price(BelgiumTurkey(odds));
-        odds.Price(odds.Add(21, "Italy", "Turkey", Kickoff + TimeSpan.FromHours(24.75), FakeFootballOdds.NationsLeague)); // next day 20:45 TR
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", Morning, rules: FootballMarketRules.Production);
+        var second = odds.Add(21, "Italy", "Turkey", Kickoff + TimeSpan.FromHours(24.75), FakeFootballOdds.NationsLeague); // the next day, 20:45 TR
+        odds.Price(second);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime - TimeSpan.FromMinutes(30), rules: FootballMarketRules.Production);
+        await kit.PassAsync();
+        kit.Host.Clock.SetUtcNow(PublishTime + TimeSpan.FromHours(1)); // the second match is inside the 48 h discovery horizon by now
         await kit.PassAsync();
         (await kit.AutoRowsAsync()).Select(r => (r.ExternalEventId, r.State)).Should().Equal(
-            [(FakeFootballOdds.Id(20), AutoEventState.Planned), (FakeFootballOdds.Id(21), AutoEventState.Planned)], "one row per provider match, not per team");
-
-        kit.Host.Clock.SetUtcNow(NineTr);
-        await kit.PassAsync();
+            [(FakeFootballOdds.Id(20), AutoEventState.Published), (FakeFootballOdds.Id(21), AutoEventState.Planned)], "one row per provider match, not per team");
         (await kit.AutoPredictionsAsync()).Select(p => p.Title).Should().Equal(["Belçika - Türkiye maç sonucu ne olur?"]);
 
-        kit.Host.Clock.SetUtcNow(NineTr + TimeSpan.FromDays(1));
+        kit.Host.Clock.SetUtcNow(second.CommenceTime - TimeSpan.FromHours(24) - TimeSpan.FromMinutes(1));
+        await kit.PassAsync();
+        (await kit.AutoPredictionsAsync()).Should().ContainSingle("not a day after the first one: 24 h before ITS kickoff");
+        kit.Host.Clock.SetUtcNow(second.CommenceTime - TimeSpan.FromHours(24));
         await kit.PassAsync();
         (await kit.AutoPredictionsAsync()).Select(p => p.Title).Should().Equal(["Belçika - Türkiye maç sonucu ne olur?", "İtalya - Türkiye maç sonucu ne olur?"]);
     }
 
     [Fact]
-    public async Task A_match_after_midnight_in_turkiye_but_on_the_previous_utc_day_is_discovered_and_published_from_local_midnight()
+    public async Task A_kickoff_after_midnight_in_turkiye_is_published_24_hours_before_it_not_at_a_local_midnight()
     {
         var odds = new FakeFootballOdds();
         var late = odds.Add(22, "Turkey", "Italy", new DateTimeOffset(2026, 10, 5, 21, 30, 0, TimeSpan.Zero), FakeFootballOdds.NationsLeague); // 6 Oct 00:30 TR
         odds.Price(late);
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", Early, rules: FootballMarketRules.Production);
         await kit.PassAsync();
         var row = (await kit.AutoRowsAsync()).Single();
-        (row.ExternalEventId, row.PublishAt).Should().Be((late.Id, new DateTimeOffset(2026, 10, 5, 21, 0, 0, TimeSpan.Zero)), "00:00 of its Türkiye day");
+        (row.ExternalEventId, row.PublishAt).Should().Be((late.Id, new DateTimeOffset(2026, 10, 4, 21, 30, 0, TimeSpan.Zero)), "5 Oct 00:30 TR: the same hour one day earlier");
         odds.OddsCalls.Should().Be(0);
 
         kit.Host.Clock.SetUtcNow(row.PublishAt);
@@ -425,7 +536,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         var odds = new FakeFootballOdds();
         odds.Add(23, "France", "Italy", Kickoff, FakeFootballOdds.NationsLeague); // a listed match without a followed team
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr, rules: FootballMarketRules.Production);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime, rules: FootballMarketRules.Production);
         await kit.PassAsync();
         (await kit.AutoRowsAsync()).Should().BeEmpty();
         odds.OddsCalls.Should().Be(0);
@@ -438,7 +549,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         var odds = new FakeFootballOdds();
         odds.Price(BelgiumTurkey(odds));
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, rules: FootballMarketRules.Production);
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Observe", PublishTime, rules: FootballMarketRules.Production);
         (await kit.PassAsync()).Observed.Should().Be(1);
         var row = (await kit.AutoRowsAsync()).Single();
         (row.State, row.Reason, row.BookmakerKey, row.PredictionId).Should().Be((AutoEventState.Observed, AutoBlockReason.None, "pinnacle", (long?)null));
@@ -453,14 +564,14 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         var odds = new FakeFootballOdds();
         odds.Price(BelgiumTurkey(odds));
-        await using var before = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, rules: FootballMarketRules.None);
+        await using var before = await AutoFootballKit.CreateAsync(odds, "Observe", PublishTime, rules: FootballMarketRules.None);
         await before.PassAsync();
         var old = (await before.AutoRowsAsync()).Single();
         (old.State, old.Reason, old.OddsAttempts).Should().Be((AutoEventState.Observed, AutoBlockReason.MarketRuleUnverified, 1));
 
         // Ten minutes later the approval exists; the old snapshot would still be "fresh", but it was not fetched for this rule.
         odds.FailOdds = ProviderCallOutcome.Unavailable;
-        await using var after = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr + TimeSpan.FromMinutes(10), directory: before.Host.Directory,
+        await using var after = await AutoFootballKit.CreateAsync(odds, "Observe", PublishTime + TimeSpan.FromMinutes(10), directory: before.Host.Directory,
             transport: before.Transport, rules: FootballMarketRules.Production);
         await after.PassAsync();
         var waiting = (await after.AutoRowsAsync()).Single();
@@ -485,10 +596,10 @@ public sealed class AutoFootballTests : IAsyncLifetime
         var odds = new FakeFootballOdds();
         odds.Price(BelgiumTurkey(odds));
         var oneAttempt = new Dictionary<string, string?> { ["Predictions:Automation:MaxOddsAttemptsPerEvent"] = "1" };
-        await using var before = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr, oneAttempt, rules: FootballMarketRules.None);
+        await using var before = await AutoFootballKit.CreateAsync(odds, "Observe", PublishTime, oneAttempt, rules: FootballMarketRules.None);
         await before.PassAsync();
 
-        await using var after = await AutoFootballKit.CreateAsync(odds, "Observe", NineTr + TimeSpan.FromMinutes(10), oneAttempt, before.Host.Directory, before.Transport,
+        await using var after = await AutoFootballKit.CreateAsync(odds, "Observe", PublishTime + TimeSpan.FromMinutes(10), oneAttempt, before.Host.Directory, before.Transport,
             FootballMarketRules.Production);
         await after.PassAsync();
         var row = (await after.AutoRowsAsync()).Single();
@@ -551,7 +662,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         var e = Derby();
         _odds.Price(e);
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         _odds.OddsCalls.Should().Be(0);
         (await _kit.AutoRowsAsync()).Single().Reason.Should().Be(AutoBlockReason.QuotaPaused);
@@ -577,14 +688,14 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         Derby(); // no price at all
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         var first = (await _kit.AutoRowsAsync()).Single();
         (first.OddsAttempts, first.Reason, first.State).Should().Be((1, AutoBlockReason.NoOdds, AutoEventState.WaitingForOdds));
-        first.NextAttemptAt.Should().BeAfter(NineTr + TimeSpan.FromMinutes(2), "never in the same second");
+        first.NextAttemptAt.Should().BeAfter(PublishTime + TimeSpan.FromMinutes(2), "never in the same second");
 
         // Restart: a new host on the same database continues the count.
-        await using var restarted = await AutoFootballKit.CreateAsync(_odds, "Live", NineTr, directory: _kit.Host.Directory, transport: _kit.Transport);
+        await using var restarted = await AutoFootballKit.CreateAsync(_odds, "Live", PublishTime, directory: _kit.Host.Directory, transport: _kit.Transport);
         var calls = new List<DateTimeOffset>();
         for (var i = 0; i < 40 && (await restarted.AutoRowsAsync()).Single().State == AutoEventState.WaitingForOdds; i++)
         {
@@ -625,7 +736,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         }
 
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         (await _kit.AutoRowsAsync()).Single().Reason.Should().Be(reason);
         (await _kit.AutoPredictionsAsync()).Should().BeEmpty();
@@ -642,7 +753,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         _odds.Price(e);
         _odds.Price(other);
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         _odds.OddsCalls.Should().Be(1, "51 left: one call (→ 50), then the reserve of 50 stops paid calls");
         (await _kit.AutoPredictionsAsync()).Should().ContainSingle();
@@ -666,12 +777,12 @@ public sealed class AutoFootballTests : IAsyncLifetime
         _odds.Price(e);
         _odds.Price(other);
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         _odds.OddsCalls.Should().Be(1, "usage unknown: one call to learn, not a series of blind calls");
         (await _kit.ProviderRowAsync())!.UnmeasuredCalls.Should().Be(1, "a call without headers is counted as spent");
 
-        await using var restarted = await AutoFootballKit.CreateAsync(_odds, "Live", NineTr + TimeSpan.FromMinutes(30), directory: _kit.Host.Directory, transport: _kit.Transport);
+        await using var restarted = await AutoFootballKit.CreateAsync(_odds, "Live", PublishTime + TimeSpan.FromMinutes(30), directory: _kit.Host.Directory, transport: _kit.Transport);
         await restarted.PassAsync();
         _odds.OddsCalls.Should().Be(1, "the unmeasured call is remembered across a restart");
         _odds.OmitUsageHeaders = false;
@@ -685,12 +796,12 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         _odds.Price(Derby());
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         _odds.FailOdds = ProviderCallOutcome.RateLimited;
         _odds.RetryAfter = TimeSpan.FromMinutes(7);
         await _kit.PassAsync();
         var provider = (await _kit.ProviderRowAsync())!;
-        (provider.PauseReason, provider.PausedUntil).Should().Be(("RATE_LIMITED", NineTr + TimeSpan.FromMinutes(7)));
+        (provider.PauseReason, provider.PausedUntil).Should().Be(("RATE_LIMITED", PublishTime + TimeSpan.FromMinutes(7)));
         _kit.Host.Clock.Advance(TimeSpan.FromMinutes(3));
         var calls = _odds.Calls.Count;
         await _kit.PassAsync();
@@ -720,7 +831,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         _odds.Price(Derby());
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         _odds.FailOdds = failure;
         await _kit.PassAsync();
         var row = (await _kit.AutoRowsAsync()).Single();
@@ -742,9 +853,9 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         _odds.Price(Derby());
         await _kit.PassAsync();
-        await using var second = await AutoFootballKit.CreateAsync(_odds, "Live", Morning, directory: _kit.Host.Directory, transport: _kit.Transport);
-        _kit.Host.Clock.SetUtcNow(NineTr);
-        second.Host.Clock.SetUtcNow(NineTr);
+        await using var second = await AutoFootballKit.CreateAsync(_odds, "Live", Early, directory: _kit.Host.Directory, transport: _kit.Transport);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
+        second.Host.Clock.SetUtcNow(PublishTime);
         await _kit.TogetherAsync(() => _kit.PassAsync(), () => second.PassAsync(), () => _kit.PassAsync());
 
         (await _kit.AutoPredictionsAsync()).Should().ContainSingle();
@@ -759,7 +870,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         await PublishDerbyAsync();
         for (var i = 0; i < 2; i++)
         {
-            await using var restarted = await AutoFootballKit.CreateAsync(_odds, "Live", NineTr + TimeSpan.FromMinutes(20 * (i + 1)), directory: _kit.Host.Directory,
+            await using var restarted = await AutoFootballKit.CreateAsync(_odds, "Live", PublishTime + TimeSpan.FromMinutes(20 * (i + 1)), directory: _kit.Host.Directory,
                 transport: _kit.Transport);
             await restarted.PassAsync();
             await restarted.TickAsync();
@@ -854,7 +965,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         var odds = new FakeFootballOdds();
         odds.Price(odds.Add(1, "Galatasaray", "Fenerbahce", Kickoff));
-        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", NineTr,
+        await using var kit = await AutoFootballKit.CreateAsync(odds, "Live", PublishTime,
             new Dictionary<string, string?> { ["Predictions:TerminalCardRetentionHours"] = "1" });
         await kit.PassAsync();
         var prediction = (await kit.AutoPredictionsAsync()).Single();
@@ -887,7 +998,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         (await _kit.AutoRowsAsync()).Single().State.Should().Be(AutoEventState.Planned);
         (await _kit.EndTokenAsync(Admin())).Should().NotBeNull("a discovered match is not a prediction");
 
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         (await _kit.Economy(e => e.PreviewTournamentEndAsync(Admin(), Commands, Ct))).Result.MessageKey.Should().Be("predictions.tournament.unresolved");
     }
@@ -898,7 +1009,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         await _kit.ParticipateAsync(1);
         _odds.Price(Derby());
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         var token = (await _kit.EndTokenAsync(Admin()))!;
         var results = await _kit.TogetherAsync<object>(async () => await _kit.PassAsync(), async () => await _kit.ConfirmEndAsync(Admin(), token));
 
@@ -928,7 +1039,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         _kit.Transport.ScriptSend(() => new SendOutcome.Ambiguous("timeout"));
         _odds.Price(Derby());
         await _kit.PassAsync();
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         (await _kit.AutoRowsAsync()).Single().State.Should().Be(AutoEventState.Publishing);
         var sent = _kit.Transport.Messages.Count;
@@ -952,11 +1063,11 @@ public sealed class AutoFootballTests : IAsyncLifetime
     {
         var plan = (long id) => new AutoPublishPlan(id, Guild, "Galatasaray - Fenerbahçe maç sonucu ne olur?", "kural",
             [("Galatasaray kazanır", 185), ("Beraberlik", 340), ("Fenerbahçe kazanır", 420)], Kickoff - TimeSpan.FromMinutes(2), Kickoff - TimeSpan.FromMinutes(15),
-            "auto:test" + id, new AutoCardInfo(Kickoff, "Pinnacle", NineTr));
+            "auto:test" + id, new AutoCardInfo(Kickoff, "Pinnacle", PublishTime));
         Derby();
         await _kit.PassAsync();
         var rowId = (await _kit.AutoRowsAsync()).Single().Id;
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         var stopped = await _kit.Service(s => s.PublishAutomaticAsync(plan(rowId), () => false, Ct));
         stopped.Should().Be(AutoPublishOutcome.Blocked(AutoBlockReason.AutomationStopped));
         _kit.Transport.Messages.Should().BeEmpty("nothing was posted");
@@ -974,7 +1085,7 @@ public sealed class AutoFootballTests : IAsyncLifetime
         _odds.Price(Derby());
         await _kit.PassAsync();
         await _kit.SetEnabledAsync(false);
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         _kit.Transport.Messages.Should().BeEmpty();
         _odds.OddsCalls.Should().Be(0, "no paid call for a card that could not be opened");
@@ -997,10 +1108,10 @@ public sealed class AutoFootballTests : IAsyncLifetime
         _odds.Price(e);
         await _kit.PassAsync();
         _odds.Add(1, e.HomeTeam, e.AwayTeam, Kickoff + TimeSpan.FromDays(1)); // moved to tomorrow
-        _kit.Host.Clock.SetUtcNow(NineTr);
+        _kit.Host.Clock.SetUtcNow(PublishTime);
         await _kit.PassAsync();
         (await _kit.AutoPredictionsAsync()).Should().BeEmpty("not today any more");
-        (await _kit.AutoRowsAsync()).Single().PublishAt.Should().Be(NineTr + TimeSpan.FromDays(1));
+        (await _kit.AutoRowsAsync()).Single().PublishAt.Should().Be(PublishTime + TimeSpan.FromDays(1));
     }
 
     [Fact]
