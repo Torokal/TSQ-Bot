@@ -498,7 +498,8 @@ invite link and no global command registration. The source code is public under 
 ## TSQ Öngörü automatic football (PR #40 merged `82b98d2`, deployed 2026-09-30; `Mode=Live` in production)
 
 - Opens fixed-odds predictions for Galatasaray / Fenerbahçe / Beşiktaş matches of five allow-listed competitions on the
-  match day (09:00 Türkiye time, or 2 h before an early kickoff), locks 2 min before the planned kickoff; results stay
+  match day (09:00 Türkiye time, or 2 h before an early kickoff — superseded, see "publish 24 h before kickoff" below),
+  locks 2 min before the planned kickoff; results stay
   manual. The Odds API (h2h, eu, decimal; one call per competition per due batch), modes Disabled (default) / Observe /
   Live; tables `prediction_auto_event`, `prediction_auto_provider`, column `prediction.Origin` (migration
   `PredictionsAutoFootball`, additive). CLI `predictions football-check` (read-only). Docs: docs/predictions/AUTO_FOOTBALL.md.
@@ -523,6 +524,11 @@ invite link and no global command registration. The source code is public under 
   reused).
 - Production (2026-09-30): PR #40 merged and deployed, Railway variables `Mode=Live` and the API key (value never shown);
   first discovery logged (catalog + in-season lists, free calls). PR #48 orders the publishing sync batch.
+- Publish 24 h before kickoff (branch `feat/predictions-auto-football-publish-24h`, not pushed): a card opens
+  `PublishBeforeKickoffHours` (default 24) before the planned kickoff instead of 09:00 on the match day — pure UTC durations,
+  no calendar day; a match first listed later opens at once while at least 15 min remain; 4 odds attempts halve the time
+  left (about 24/12/6/3 h before kickoff); rows planned under the old rule and not tried yet are replanned; lock (2 min)
+  unchanged; `PublishLocalTime`/`EarlyPublishLeadMinutes` removed. No schema change. **IMPLEMENTED / TESTED_OFFLINE**.
 - First automatic card (log, 2026-10-02 06:00Z = 09:00 TR): one paid odds call (`x-requests-remaining=499` after the
   monthly renewal), `auto_football_published` prediction #4 (Belgium – Türkiye, lock 21:43 TR). The card's content in
   Discord, entries on it and the manual settlement are **NOT VERIFIED_LIVE** (no owner observation yet).

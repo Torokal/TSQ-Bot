@@ -455,7 +455,7 @@ futbol durumu (mod, keşif, bugünkü maçlar, kredi, son hata, inceleme).
 
 ## Otomatik futbol öngörüleri
 
-Galatasaray, Fenerbahçe, Beşiktaş ve Türkiye erkek A millî takımının desteklenen organizasyonlardaki maçları için maç günü otomatik açılan sabit
+Galatasaray, Fenerbahçe, Beşiktaş ve Türkiye erkek A millî takımının desteklenen organizasyonlardaki maçları için planlanan başlangıçtan 24 saat önce (yapılandırılabilir) otomatik açılan sabit
 oranlı öngörüler (The Odds API; varsayılan **Disabled**, Observe ve Live modları; sonuç yine elle girilir):
 [AUTO_FOOTBALL.md](AUTO_FOOTBALL.md), sağlayıcı doğrulaması: [PROVIDER_VERIFICATION.md](PROVIDER_VERIFICATION.md).
 Otomatik kartın altbilgisi "TSQ Öngörü #42 · Otomatik · Sabit oran"; ayrıca planlanan başlama ve oran kaynağı gösterilir.

@@ -1,8 +1,8 @@
 # TSQ Öngörü · Otomatik futbol öngörüleri
 
 Dört takip hedefinin — **Galatasaray, Fenerbahçe, Beşiktaş** (erkek A futbol takımları) ve **Türkiye erkek A millî
-futbol takımı** — desteklenen organizasyonlardaki maçları için, maç günü otomatik olarak **sabit oranlı** bir TSQ Öngörü
-açan, mevcut Öngörü modülünün bir uzantısı (millî takım için ayrı worker, kart veya ekonomi yok). Yeni ekonomi, yeni cüzdan
+futbol takımı** — desteklenen organizasyonlardaki maçları için, **maçın planlanan başlama saatinden 24 saat önce**
+(yapılandırılabilir) otomatik olarak **sabit oranlı** bir TSQ Öngörü açan, mevcut Öngörü modülünün bir uzantısı (millî takım için ayrı worker, kart veya ekonomi yok). Yeni ekonomi, yeni cüzdan
 veya ayrı bot yoktur. Açılan kart normal bir öngörüdür: aynı katılım/değiştirme/geri çekme, aynı sonuçlandırma ve
 iptal/iade, aynı turnuva. **Sonuç otomatik girilmez**; ödemeyi her zaman yönetici karttan yapar.
 
@@ -16,7 +16,7 @@ Live yalnızca Pinnacle setini kullanır — aşağıda "Pazar kuralı kapısı"
 | Otomatik | Elle kalan |
 |---|---|
 | Desteklenen organizasyonlarda maç keşfi (dört hedefin iç saha, deplasman ve tarafsız saha maçları) | Sonuç girme (✅ Sonuçlandır) |
-| Maçın Türkiye takvim gününde, 09:00'da (erken maçta başlangıçtan 2 saat önce) kart açma | İptal / iade (↩️) |
+| Planlanan başlangıçtan 24 saat önce kart açma (geç listelenen maçta hemen; başlangıca 15 dakikadan az kala asla) | İptal / iade (↩️) |
 | Gerçek sağlayıcı verisinden normal süre 1-X-2 oranı, yayında sabitlenir | Saat değişince/maç kaybolunca kilitlenen kartın incelenmesi |
 | Başlangıçtan 2 dakika önce otomatik kilit (mevcut kilit worker'ı ve işlem içi saat kontrolü) | Belirsiz teslimi incelemek (`DELIVERY_UNKNOWN`) |
 
@@ -82,21 +82,24 @@ Modül kapalıyken Live hiçbir **ücretli** oran çağrısı yapmaz; maç bekle
 | `Mode` | `Disabled` | `Disabled`, `Observe`, `Live` |
 | `Provider` | `TheOddsApi` | tek desteklenen |
 | `BaseUrl` | `https://api.the-odds-api.com/` | yalnızca resmi host (ipv6-api da kabul) |
-| `PublishLocalTime` | `09:00` | `HH:mm`, `TimeZone` saatiyle |
-| `TimeZone` | `Europe/Istanbul` | |
+| `PublishBeforeKickoffHours` | `24` | **yayın kuralı:** kart, planlanan başlangıçtan bu kadar saat (× 60 dakika; takvim günü değil) önce açılır. 1–168; ör. 12, 24, 36, 48 |
+| `TimeZone` | `Europe/Istanbul` | yalnızca gösterim (kontrol aracı, `/bot status`); zamanlama UTC süreleriyle hesaplanır |
 | `LockBeforeKickoffMinutes` | `2` | |
 | `MinLeadTimeToPublishMinutes` | `15` | yeni kart için başlangıca en az kalan süre |
-| `EarlyPublishLeadMinutes` | `120` | erken maç için başlangıçtan önce |
 | `MaxOddsAgeMinutes` | `30` | bizim ürün eşiğimiz (sağlayıcı garantisi değil) |
 | `DiscoveryIntervalMinutes` | `15` | ücretsiz maç listesi |
 | `CatalogIntervalHours` | `12` | ücretsiz katalog |
-| `DiscoveryHorizonHours` | `48` | |
+| `DiscoveryHorizonHours` | `48` | en az; etkin ufuk her zaman `PublishBeforeKickoffHours + 24` saate ulaşır (maç yayın anından önce bilinir) |
 | `MaxOddsAttemptsPerEvent` | `4` | |
 | `CreditReserve` | `50` | kalan kredi bu değere inince ücretli çağrılar durur |
 | `Region` | `eu` | tek bölge (maliyet 1); başka bölge doğrulanmadı |
 | `TimeoutSeconds` | `15` | |
 | `CompetitionKeys` | (boş = yukarıdaki beş) | allow-list dışı anahtar ayar sorunudur |
 | `BookmakerPriority` | (boş = `pinnacle, onexbet, marathonbet, williamhill, betsson, nordicbet, sport888, unibet_nl, unibet_fr, betclic_fr`) | exchange (`betfair_ex_*`, `matchbook`, …) reddedilir |
+
+Kaldırılan ayarlar: `PublishLocalTime` ve `EarlyPublishLeadMinutes` (eski "maç günü 09:00" kuralı) artık **yoktur**; hâlâ
+tanımlıysa yok sayılır ve `doctor` bunu uyarı olarak yazar. Aynı otomasyon için ikinci bir zamanlama sistemi yoktur. Bu
+değişiklik haftalık liderlik (Pazar 20:00) zamanlamasını etkilemez.
 
 **Secret:** `Predictions:Automation:TheOddsApi:ApiKey` — yerelde `dotnet user-secrets set
 "Predictions:Automation:TheOddsApi:ApiKey" "<anahtar>" --project src/ToroSquad.Bot`, Railway'de
@@ -108,12 +111,16 @@ redaction'a kayıtlıdır ve ayrıca `apiKey=` sorgu desenini her log/doctor ç�
 1. **Döngü:** ayrı `AutoFootballWorker`, yaklaşık dakikada bir (10 sn'lik prediction döngüsünde dış API çağrılmaz). Süreç
    içinde aynı anda tek geçiş; aynı sorgu iki kez eşzamanlı çalışmaz.
 2. **Keşif (ücretsiz):** katalog ~12 saatte bir; sezondaki organizasyonların maç listesi ~15 dakikada bir
-   (`şimdi−3 saat … şimdi+48 saat`). Takip edilen kulüplerin maçları satır olur. Boş liste, API hatası ve kapsam dışı
+   (`şimdi−3 saat … şimdi+48 saat`; yayın süresi uzatılırsa ufuk onunla büyür). Takip edilen takımların maçları satır
+   olur ve yayın anına kadar **bekler**: bir maçı erken keşfetmek erken yayımlamak değildir (o ana kadar oran da sorulmaz). Boş liste, API hatası ve kapsam dışı
    organizasyon ayrı durumlardır; boş liste "maç yok" demektir, hata değil. Liste, sezonun eksiksiz fikstür arşivi değildir.
-3. **Yayın zamanı:** maçın Türkiye takvim günü 09:00 — başlangıç 09:00'dan önce ya da hemen sonraysa başlangıçtan 2 saat
-   önce, ama o günün yerel gece yarısından önce asla. Yeni kart yalnızca başlangıca en az 15 dakika varken; bot 09:00'da
-   kapalıysa açıldığında bugünün kaçan kartını açar, dünün maçını veya başlamış maçı asla. Tek bir test edilebilir hesap:
-   `AutoSchedule`.
+3. **Yayın zamanı:** `PublishAt = planlanan başlangıç − PublishBeforeKickoffHours` (varsayılan 24 saat = 24 × 60
+   dakika). Takvim günü, 09:00 veya gece yarısı yayın anını belirlemez: Cuma 20:00 maçı Perşembe 20:00'de, Pazartesi
+   00:30 maçı Pazar 00:30'da açılır. Hesap UTC anları üzerindendir (makinenin saat dilimi kullanılmaz).
+   **Geç keşif / catch-up:** sağlayıcı maçı yayın anından sonra ilk kez listelerse (veya bot o anda kapalıysa) kart,
+   maç görüldüğü/bot açıldığı ilk turda açılır — yalnızca başlangıca en az 15 dakika (`MinLeadTimeToPublishMinutes`)
+   varken; başlamış veya geçmiş maça asla, eski maçlar toplu açılmaz. Geç açılan kart 24 saatlik süre vaat etmez; geç keşif
+   `auto_football_late_discovery` olarak loglanır. Tek bir test edilebilir hesap: `AutoSchedule`.
 4. **Oran (ücretli):** yayın zamanı gelen maçlar için organizasyon başına **tek** `/odds` çağrısı (`regions=eu`,
    `markets=h2h`, `oddsFormat=decimal`, `eventIds=` yalnızca o maçlar). Yayımlanmış maçın oranı bir daha indirilmez.
 5. **Seçim:** öncelik listesindeki **ilk** bookmaker'ın bu maça ait **tek** `h2h` pazarından tam, geçerli ve taze 1-X-2
@@ -126,7 +133,9 @@ redaction'a kayıtlıdır ve ayrıca `apiKey=` sorgu desenini her log/doctor ç�
    kalkmış) zorunludur; 30 dakikadan eski veya 2 dakikadan fazla gelecekteki zaman reddedilir. Ham fiyatlar
    (`RawPrices`) ve karttaki ×100 değerler ayrı saklanır.
 7. **Oran yoksa:** 2.00 varsayılmaz, AI'ya sorulmaz, eski oran kullanılmaz, eksik set yayımlanmaz. Durum `WaitingForOdds`;
-   en fazla 4 deneme, son güvenli ana kadar yayılmış (en az 3, en fazla 45 dakika arayla; aynı saniyede yığılmaz). Deneme
+   en fazla 4 deneme; her yeni deneme, o an ile son güvenli an arasındaki sürenin **yarısında** yapılır — 24 saatlik
+   pencerede yaklaşık başlangıçtan 24, 12, 6 ve 3 saat önce (en az 3 dakika arayla; 15 dakikada bir ücretli sorgu yok,
+   denemeler ilk saatlerde tüketilmez). Oran maç günü gelirse sıradaki denemede kart açılır. Deneme
    **çağrıdan önce** veritabanına yazılır: restart sayacı sıfırlamaz, ikinci bir süreç aynı denemeyi yapmaz. Süre/deneme
    bitince kart açılmaz, satır nedeniyle `Skipped` olur.
 8. **Yayın (Live):** mevcut Publishing → kart → Open hattı (`PredictionService.PublishAutomaticAsync`, yalnızca bu
@@ -182,7 +191,8 @@ görünmez. Logo, promosyon, affiliate veya "bahis yap" bağlantısı yoktur. Ki
 
 ## Saat değişikliği, erteleme, kaybolan maç
 
-- **Yayından önce:** yeni başlangıç zamanıyla gün/yayın/kilit yeniden hesaplanır; eski oran okuması atılır.
+- **Yayından önce:** yayın anı yeni başlangıçtan yeniden hesaplanır (`yeni başlangıç − 24 saat`), kilit de onunla; eski oran
+  okuması atılır. Yeni yayın anı geçmişse geç yayın kuralları geçerlidir (en az 15 dakika varsa hemen).
 - **Yayından sonra:** otomatik yeniden açma veya süre uzatma yok. Açık kart kilitlenir (`NeedsReview`), satır
   `ReviewRequired / SCHEDULE_CHANGED`; ilk ve son planlanan zaman (`KickoffAt`, `LatestKickoffAt`) saklanır; oranlar ve
   yatırımlar değişmez. Aynı UTC anının farklı gösterimi değişiklik sayılmaz.
@@ -288,5 +298,10 @@ The Odds API, standart maç öncesi `h2h` (ev / `Draw` / deplasman), erkek A tak
    PROVIDER_VERIFICATION.md'yi gözlenen sonuçlarla güncelle.
 3. Pinnacle dar onayı eklendi (kanıt PROVIDER_VERIFICATION.md). Başka bir bookmaker ancak resmî kuralı aynı şekilde
    kanıtlanırsa eklenir.
-4. Ayrı onayla deploy ve `Mode = Observe` (Railway anahtarı ortam değişkeniyle).
-5. Ayrı onayla `Mode = Live`; ilk otomatik kartı canlıda kontrol et (başlık, ev/deplasman, oranlar, kilit, kural).
+4. **Zamanlama değişikliği Live iken deploy edilirse:** başlangıcına 24 saatten az kalmış ve henüz yayımlanmamış maçlar
+   ilk turda (catch-up) hemen açılabilir; eski kuralla planlanmış ve henüz denenmemiş satırlar yeni kurala göre yeniden
+   planlanır; yayımlanmış, gözlenmiş, atlanmış veya denenmiş satırlara dokunulmaz (aynı maça ikinci kart açılmaz). Deploy
+   öncesi `predictions football-check --days 3` her maç için yayın hedefini ve durumunu gösterir (`WAITS` / `DUE NOW` /
+   `TOO LATE`); araç botun veritabanını bilmez, daha önce yayımlananlar loglardan (`auto_football_published`) okunur.
+5. Ayrı onayla deploy ve `Mode = Observe` (Railway anahtarı ortam değişkeniyle).
+6. Ayrı onayla `Mode = Live`; ilk otomatik kartı canlıda kontrol et (başlık, ev/deplasman, oranlar, kilit, kural).
