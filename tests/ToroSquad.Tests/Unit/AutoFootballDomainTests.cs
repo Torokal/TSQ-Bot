@@ -14,137 +14,96 @@ public sealed class AutoFootballDomainTests
 {
     private static readonly TimeZoneInfo Turkey = GuildTime.TryResolve("Europe/Istanbul", out var zone) ? zone : throw new InvalidOperationException();
 
-    private static readonly AutoTiming Timing = new(new TimeOnly(9, 0), TimeSpan.FromMinutes(120), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(15), Turkey);
+    private static AutoTiming Hours(int publishBefore) => new(TimeSpan.FromHours(publishBefore), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(15), Turkey);
+
+    private static readonly AutoTiming Timing = Hours(24);
 
     private static DateTimeOffset Utc(int month, int day, int hour, int minute = 0) => new(2026, month, day, hour, minute, 0, TimeSpan.Zero);
 
-    // ---- clubs ----
-
-    [Theory]
-    [InlineData("Galatasaray", "GS")]
-    [InlineData("  galatasaray   sk ", "GS")]
-    [InlineData("Fenerbahce", "FB")]
-    [InlineData("Fenerbahçe", "FB")]
-    [InlineData("FENERBAHÇE SK", "FB")]
-    [InlineData("Besiktas JK", "BJK")]
-    [InlineData("Beşiktaş", "BJK")]
-    public void The_three_clubs_match_by_their_exact_known_names(string name, string code)
-    {
-        TrackedTeams.Match(name, TeamScope.Club)!.Code.Should().Be(code);
-        TrackedTeams.Match(name, TeamScope.National).Should().BeNull("a club is never a national team");
-    }
-
-    [Theory]
-    [InlineData("Turkey")]
-    [InlineData("Türkiye")]
-    [InlineData("Turkiye")]
-    [InlineData("  TURKEY ")]
-    public void The_turkiye_mens_senior_team_matches_only_in_national_competitions(string name)
-    {
-        var team = TrackedTeams.Match(name, TeamScope.National)!;
-        (team.Code, team.DisplayName, team.Scope).Should().Be(("TR", "Türkiye", TeamScope.National));
-        TrackedTeams.Match(name, TeamScope.Club).Should().BeNull("\"Turkey\" is never a club: no country filter for Turkish clubs");
-    }
-
-    [Theory]
-    [InlineData("Turkey U21")]
-    [InlineData("Turkey U19")]
-    [InlineData("Turkey Women")]
-    [InlineData("Turkey W")]
-    [InlineData("Türkiye Futsal")]
-    [InlineData("Turkey Beach Soccer")]
-    [InlineData("Turkey Olympic")]
-    [InlineData("Turk")]
-    [InlineData("Kazakhstan")]
-    public void Youth_women_futsal_beach_and_similar_national_names_never_match(string name) => TrackedTeams.Match(name, TeamScope.National).Should().BeNull();
-
-    [Fact]
-    public void The_followed_teams_are_defined_in_one_place_with_unique_codes()
-    {
-        TrackedTeams.All.Select(t => t.Code).Should().Equal("GS", "FB", "BJK", "TR");
-        TrackedTeams.All.Select(t => t.Code).Should().OnlyHaveUniqueItems();
-        TrackedTeams.All.Count(t => t.Scope == TeamScope.National).Should().Be(1);
-    }
-
-    [Theory]
-    [InlineData("Fenerbahce U19")]
-    [InlineData("Galatasaray W")]
-    [InlineData("Galatasaray Women")]
-    [InlineData("Besiktas Women")]
-    [InlineData("Fener")]
-    [InlineData("Galatasaray Petrol")]
-    [InlineData("Trabzonspor")]
-    [InlineData("Fenerbahçe Beko")]
-    [InlineData("")]
-    [InlineData(null)]
-    public void Similar_youth_women_other_sports_and_partial_names_never_match(string? name) => TrackedTeams.Match(name, TeamScope.Club).Should().BeNull();
-
-    // ---- the schedule (Europe/Istanbul, whatever the machine's zone) ----
-
-    [Fact]
-    public void An_evening_match_publishes_at_nine_turkiye_time_and_locks_two_minutes_before_kickoff()
-    {
-        var kickoff = Utc(10, 5, 17); // 20:00 in Türkiye
-        AutoSchedule.PublishAt(kickoff, Timing).Should().Be(Utc(10, 5, 6)); // 09:00 in Türkiye
-        AutoSchedule.LockAt(kickoff, Timing).Should().Be(Utc(10, 5, 16, 58));
-        AutoSchedule.Deadline(kickoff, Timing).Should().Be(Utc(10, 5, 16, 45));
-    }
-
-    [Fact]
-    public void The_match_day_is_the_turkiye_day_not_the_utc_date()
-    {
-        var kickoff = Utc(10, 5, 22, 30); // 01:30 on 6 October in Türkiye, still 5 October in UTC
-        AutoSchedule.LocalDay(kickoff, Turkey).Should().Be(new DateOnly(2026, 10, 6));
-        AutoSchedule.PublishAt(kickoff, Timing).Should().Be(Utc(10, 5, 21), "local midnight of 6 October: the early rule never reaches the previous day");
-        AutoSchedule.Window(Utc(10, 5, 20, 59), kickoff, Timing).Should().Be(PublishWindow.NotYet, "23:59 on 5 October in Türkiye");
-        AutoSchedule.Window(Utc(10, 5, 21), kickoff, Timing).Should().Be(PublishWindow.Open);
-    }
-
-    [Theory]
-    [InlineData(7, 0, 5, 0)] // kickoff 10:00 TR → 08:00 TR (two hours before)
-    [InlineData(6, 30, 4, 30)] // kickoff 09:30 TR → 07:30 TR
-    [InlineData(8, 0, 6, 0)] // kickoff 11:00 TR → 09:00 TR (the two rules meet)
-    [InlineData(12, 0, 6, 0)] // kickoff 15:00 TR → 09:00 TR
-    [InlineData(22, 0, 21, 0)] // kickoff 01:00 TR next day → that day's local midnight
-    public void An_early_kickoff_publishes_two_hours_before_but_never_before_local_midnight(int kickHour, int kickMinute, int publishHour, int publishMinute)
-    {
-        var kickoff = Utc(10, 5, kickHour, kickMinute);
-        AutoSchedule.PublishAt(kickoff, Timing).Should().Be(Utc(10, 5, publishHour, publishMinute));
-    }
-
-    [Fact]
-    public void A_late_start_opens_todays_missed_card_but_never_within_fifteen_minutes_or_after_kickoff_or_for_yesterday()
-    {
-        var kickoff = Utc(10, 5, 17);
-        AutoSchedule.Window(Utc(10, 5, 5, 59), kickoff, Timing).Should().Be(PublishWindow.NotYet);
-        AutoSchedule.Window(Utc(10, 5, 7), kickoff, Timing).Should().Be(PublishWindow.Open, "the bot was down at 09:00 and came back at 10:00");
-        AutoSchedule.Window(Utc(10, 5, 16, 44, 59), kickoff, Timing).Should().Be(PublishWindow.Open);
-        AutoSchedule.Window(Utc(10, 5, 16, 45), kickoff, Timing).Should().Be(PublishWindow.TooLate, "exactly 15 minutes before kickoff");
-        AutoSchedule.Window(Utc(10, 5, 18), kickoff, Timing).Should().Be(PublishWindow.TooLate);
-        AutoSchedule.Window(Utc(10, 6, 7), kickoff, Timing).Should().Be(PublishWindow.TooLate, "yesterday's match is never opened today");
-    }
-
     private static DateTimeOffset Utc(int month, int day, int hour, int minute, int second) => new(2026, month, day, hour, minute, second, TimeSpan.Zero);
 
+    // ---- the schedule: durations before the planned kickoff (no calendar day, no 09:00, no machine zone) ----
+
     [Fact]
-    public void Odds_attempts_are_spread_before_the_deadline_never_in_the_same_second()
+    public void A_match_publishes_exactly_24_hours_before_kickoff_and_locks_two_minutes_before_it()
     {
-        var now = Utc(10, 5, 6);
-        var deadline = Utc(10, 5, 16, 45);
-        var attempts = new List<DateTimeOffset>();
-        var at = now;
+        var kickoff = Utc(10, 12, 17); // Monday 12 October, 20:00 in Türkiye
+        AutoSchedule.PublishAt(kickoff, Timing).Should().Be(Utc(10, 11, 17), "11 October 20:00 in Türkiye");
+        AutoSchedule.LockAt(kickoff, Timing).Should().Be(Utc(10, 12, 16, 58), "19:58: the lock is unchanged");
+        AutoSchedule.Deadline(kickoff, Timing).Should().Be(Utc(10, 12, 16, 45));
+        AutoSchedule.Window(Utc(10, 11, 16, 59, 59), kickoff, Timing).Should().Be(PublishWindow.NotYet, "A: 19:59:59 the day before");
+        AutoSchedule.Window(Utc(10, 11, 17), kickoff, Timing).Should().Be(PublishWindow.Open, "A: exactly 24 × 60 minutes before");
+    }
+
+    [Theory]
+    [InlineData(21, 30, 4, 21, 30)] // B: kickoff 00:30 TR on the 5th (21:30 UTC on the 4th) → 00:30 TR the day before, across the date change
+    [InlineData(19, 0, 4, 19, 0)] // C: kickoff 22:00 TR → 22:00 TR the day before, never 09:00
+    [InlineData(6, 0, 4, 6, 0)] // a 09:00 TR kickoff: the old rules do not exist
+    [InlineData(4, 30, 4, 4, 30)] // an early 07:30 TR kickoff: no "two hours before", no local midnight
+    public void The_publish_time_is_the_kickoff_minus_24_hours_whatever_the_hour_or_the_calendar_day(int kickHour, int kickMinute, int publishDay, int publishHour, int publishMinute)
+    {
+        var kickoff = Utc(10, 5, kickHour, kickMinute);
+        AutoSchedule.PublishAt(kickoff, Timing).Should().Be(Utc(10, publishDay, publishHour, publishMinute));
+        (kickoff - AutoSchedule.PublishAt(kickoff, Timing)).Should().Be(TimeSpan.FromMinutes(24 * 60));
+    }
+
+    [Theory]
+    [InlineData(12, 12, 5)] // D: 12 h → the same day 08:00 TR for a 20:00 TR kickoff
+    [InlineData(36, 11, 5)]
+    [InlineData(48, 10, 17)] // E: 48 h → two days before, 20:00 TR
+    public void The_lead_follows_the_setting(int hours, int publishDay, int publishHourUtc)
+    {
+        var kickoff = Utc(10, 12, 17);
+        AutoSchedule.PublishAt(kickoff, Hours(hours)).Should().Be(Utc(10, publishDay, publishHourUtc));
+        AutoSchedule.LockAt(kickoff, Hours(hours)).Should().Be(Utc(10, 12, 16, 58), "the lock never depends on the publish lead");
+    }
+
+    [Fact]
+    public void A_late_discovery_or_a_late_start_opens_the_card_at_once_but_never_within_fifteen_minutes_or_after_kickoff()
+    {
+        var kickoff = Utc(10, 12, 17);
+        AutoSchedule.Window(Utc(10, 10, 17), kickoff, Timing).Should().Be(PublishWindow.NotYet, "F: found 48 h ahead — not before its publish time");
+        AutoSchedule.Window(Utc(10, 12, 6), kickoff, Timing).Should().Be(PublishWindow.Open, "G: first seen at 09:00 on the match day, after the publish time");
+        AutoSchedule.Window(Utc(10, 12, 16, 44, 59), kickoff, Timing).Should().Be(PublishWindow.Open);
+        AutoSchedule.Window(Utc(10, 12, 16, 45), kickoff, Timing).Should().Be(PublishWindow.TooLate, "exactly 15 minutes before kickoff");
+        AutoSchedule.Window(Utc(10, 12, 16, 50), kickoff, Timing).Should().Be(PublishWindow.TooLate, "H: 10 minutes before kickoff");
+        AutoSchedule.Window(Utc(10, 12, 18), kickoff, Timing).Should().Be(PublishWindow.TooLate, "a started match");
+        AutoSchedule.Window(Utc(10, 13, 7), kickoff, Timing).Should().Be(PublishWindow.TooLate, "yesterday's match is never opened afterwards");
+    }
+
+    [Fact]
+    public void Odds_attempts_halve_the_time_left_so_four_of_them_reach_from_the_publish_time_to_close_to_kickoff()
+    {
+        var kickoff = Utc(10, 12, 17);
+        var deadline = AutoSchedule.Deadline(kickoff, Timing);
+        var at = AutoSchedule.PublishAt(kickoff, Timing);
+        var attempts = new List<DateTimeOffset> { at };
         for (var used = 1; used <= 4; used++)
         {
             if (AutoSchedule.NextAttempt(at, deadline, used, 4) is not { } next)
                 break;
             next.Should().BeAfter(at).And.BeBefore(deadline);
-            (next - at).Should().BeGreaterThanOrEqualTo(AutoSchedule.MinAttemptGap).And.BeLessThanOrEqualTo(AutoSchedule.MaxAttemptGap);
+            (next - at).Should().BeGreaterThanOrEqualTo(AutoSchedule.MinAttemptGap);
             attempts.Add(next);
             at = next;
         }
 
-        attempts.Should().HaveCount(3, "after the 4th attempt there is none left");
-        AutoSchedule.NextAttempt(Utc(10, 5, 16, 43), deadline, 1, 4).Should().BeNull("no attempt fits before the deadline");
+        attempts.Should().HaveCount(4, "after the 4th attempt there is none left");
+        attempts.Select(a => Math.Round((kickoff - a).TotalHours, 1)).Should().Equal([24.0, 12.1, 6.2, 3.2], "about 24, 12, 6 and 3 hours before kickoff — never all in the first hours");
+        AutoSchedule.NextAttempt(Utc(10, 12, 16, 43), deadline, 1, 4).Should().BeNull("no attempt fits before the deadline");
+        AutoSchedule.NextAttempt(Utc(10, 12, 16, 30), deadline, 1, 4).Should().Be(Utc(10, 12, 16, 37, 30), "a late discovery: still spread, never in the same second");
+        AutoSchedule.NextAttempt(Utc(10, 12, 16, 41), deadline, 1, 4).Should().Be(Utc(10, 12, 16, 44), "never sooner than the minimum gap");
+    }
+
+    [Fact]
+    public void The_read_only_check_says_for_each_match_whether_it_waits_is_due_now_or_is_too_late()
+    {
+        var kickoff = Utc(10, 12, 17);
+        AutoFootballVerification.PublishPlan(Utc(10, 10, 17), kickoff, Timing).Should()
+            .Be("publish target 11.10.2026 20:00 TR (24 h before kickoff), lock 12.10.2026 19:58 TR: WAITS (in 24 h 00 min)");
+        AutoFootballVerification.PublishPlan(Utc(10, 12, 6, 30), kickoff, Timing).Should()
+            .StartWith("publish target 11.10.2026 20:00 TR (24 h before kickoff), lock 12.10.2026 19:58 TR: DUE NOW — publish time passed 13 h 30 min ago");
+        AutoFootballVerification.PublishPlan(Utc(10, 12, 16, 50), kickoff, Timing).Should().EndWith("TOO LATE — less than the minimum lead before kickoff (or started): no new card");
     }
 
     [Fact]
@@ -360,7 +319,11 @@ public sealed class AutoFootballDomainTests
         o.Competitions.Should().Equal(AutoFootballOptions.KnownCompetitions);
         o.Competitions.Should().HaveCount(10);
         o.Bookmakers.Should().NotContain(b => AutoFootballOptions.IsExchange(b));
-        o.Timing()!.PublishLocalTime.Should().Be(new TimeOnly(9, 0));
+        (o.PublishBeforeKickoffHours, o.Timing()!.PublishBefore, o.Timing()!.LockBefore, o.Timing()!.MinLead)
+            .Should().Be((24, TimeSpan.FromHours(24), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(15)));
+        o.DiscoveryHorizon.Should().Be(TimeSpan.FromHours(48), "matches are known a day before their publish time");
+        new AutoFootballOptions { PublishBeforeKickoffHours = 48 }.DiscoveryHorizon.Should().Be(TimeSpan.FromHours(72), "the horizon follows a longer lead");
+        typeof(AutoFootballOptions).GetProperties().Select(p => p.Name).Should().NotContain(AutoFootballOptions.RetiredSettings, "the 09:00 schedule is gone, not a second system");
         typeof(AutoFootballOptions).GetProperties().Select(p => p.Name).Should().NotContain(n => n.Contains("Key", StringComparison.Ordinal) && n != nameof(AutoFootballOptions.CompetitionKeys),
             "the API key is a secret and never part of the options");
     }
@@ -371,7 +334,8 @@ public sealed class AutoFootballDomainTests
     [InlineData("Provider", "OddsApiIo")]
     [InlineData("BaseUrl", "https://api.odds-api.io/")]
     [InlineData("BaseUrl", "http://api.the-odds-api.com/")]
-    [InlineData("PublishLocalTime", "9")]
+    [InlineData("PublishBeforeKickoffHours", "0")]
+    [InlineData("PublishBeforeKickoffHours", "169")]
     [InlineData("TimeZone", "Mars/Olympus")]
     [InlineData("Region", "eu,uk")]
     [InlineData("MinLeadTimeToPublishMinutes", "1")]

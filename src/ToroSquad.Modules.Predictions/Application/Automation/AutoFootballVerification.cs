@@ -33,6 +33,25 @@ public sealed class AutoFootballVerification(IFootballOddsProvider provider, Aut
 
     public int TrackedMatches => Matches.Count;
 
+    /// <summary>
+    /// Where one match stands under the publish rule right now (what a Live bot would do with it if it has not published it
+    /// yet — the check does not know the bot's database): waiting for its publish time, due now (a catch-up when that time
+    /// has passed), or too late for a new card.
+    /// </summary>
+    public static string PublishPlan(DateTimeOffset now, DateTimeOffset kickoff, AutoTiming timing)
+    {
+        var publishAt = AutoSchedule.PublishAt(kickoff, timing);
+        string Tr(DateTimeOffset t) => TimeZoneInfo.ConvertTime(t, timing.Zone).ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture) + " TR";
+        string Span(TimeSpan s) => s.Days * 24 + s.Hours + " h " + s.Minutes.ToString("00", CultureInfo.InvariantCulture) + " min";
+        var plan = $"publish target {Tr(publishAt)} ({timing.PublishBefore.Days * 24 + timing.PublishBefore.Hours} h before kickoff), lock {Tr(AutoSchedule.LockAt(kickoff, timing))}: ";
+        return AutoSchedule.Window(now, kickoff, timing) switch
+        {
+            PublishWindow.NotYet => plan + "WAITS (in " + Span(publishAt - now) + ")",
+            PublishWindow.Open => plan + "DUE NOW — publish time passed " + Span(now - publishAt) + " ago; if not published yet it opens at once (catch-up) when the odds are valid",
+            _ => plan + "TOO LATE — less than the minimum lead before kickoff (or started): no new card",
+        };
+    }
+
     public async Task<bool> RunAsync(bool withOdds, int budget, CancellationToken ct, int days = 7, string? focus = null)
     {
         budget = Math.Clamp(budget, 0, MaxBudget);
@@ -98,6 +117,8 @@ public sealed class AutoFootballVerification(IFootballOddsProvider provider, Aut
                 var local = zone is null ? "" : " / " + TimeZoneInfo.ConvertTime(e.CommenceTime, zone).ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture) + " TR";
                 var codes = string.Join(',', new[] { TrackedTeams.Match(e.HomeTeam, scope)?.Code, TrackedTeams.Match(e.AwayTeam, scope)?.Code }.OfType<string>());
                 Lines.Add($"  match {e.Id}  {e.CommenceTime:yyyy-MM-dd HH:mm}Z{local}  home: {e.HomeTeam}  away: {e.AwayTeam}  [{codes}]");
+                if (options.Timing() is { } timing)
+                    Lines.Add("    " + PublishPlan(now, e.CommenceTime, timing));
                 Matches.Add(new VerifiedMatch(sport, scope, e, null));
             }
 

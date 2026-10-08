@@ -263,9 +263,11 @@ public sealed class AutoFootballService(
             .Where(x => x.Home is not null || x.Away is not null).ToList();
         var ids = tracked.Select(x => x.Event.Id).ToList();
         var locks = new List<long>();
+        var late = new List<(string Event, DateTimeOffset Kickoff, DateTimeOffset PublishAt)>();
         await PredictionWrites.RunAsync(store.Db, async () =>
         {
             locks.Clear();
+            late.Clear();
             var rows = await store.AutoEvents.Where(a => a.GuildId == pass.Guild.Value && a.Provider == provider.Name && a.MarketKind == Market && a.Mode == pass.Mode &&
                                                          (ids.Contains(a.ExternalEventId) || a.CompetitionKey == sport)).ToListAsync(ct);
             foreach (var (e, home, away) in tracked)
@@ -277,6 +279,8 @@ public sealed class AutoFootballService(
                     if (e.CommenceTime <= pass.Now)
                         continue; // never plan a match that already started
                     var publishAt = AutoSchedule.PublishAt(e.CommenceTime, pass.Timing);
+                    if (publishAt <= pass.Now)
+                        late.Add((e.Id, e.CommenceTime, publishAt)); // first listed after its publish time: opened at once if still safe (catch-up)
                     store.AutoEvents.Add(new PredictionAutoEventEntity
                     {
                         GuildId = pass.Guild.Value,
@@ -305,6 +309,7 @@ public sealed class AutoFootballService(
                 row.MissingCount = 0;
                 if (Follow(pass, row, e, teams) is { } predictionToLock)
                     locks.Add(predictionToLock);
+                Replan(pass, row);
             }
 
             // Known matches of this competition the provider no longer lists: counted, never taken as cancelled.
@@ -328,6 +333,25 @@ public sealed class AutoFootballService(
         }, ct);
         foreach (var id in locks)
             logger.LogWarning("auto_football_review prediction={Prediction}: its match changed or vanished at the provider; entries stopped", id);
+        foreach (var (id, kickoff, publishAt) in late)
+            logger.LogInformation("auto_football_late_discovery event={Event} kickoff={Kickoff:O} planned={PublishAt:O}: first listed after its publish time", id, kickoff, publishAt);
+    }
+
+    /// <summary>
+    /// A match planned under another publish rule (the former "09:00 on the match day", or a changed
+    /// PublishBeforeKickoffHours) and not tried yet follows the current one: its publish time is recomputed from its kickoff.
+    /// Nothing that was tried, published, observed or skipped is touched.
+    /// </summary>
+    private static void Replan(Pass pass, PredictionAutoEventEntity row)
+    {
+        if (row.State != AutoEventState.Planned || row.OddsAttempts != 0)
+            return;
+        var publishAt = AutoSchedule.PublishAt(row.KickoffAt, pass.Timing);
+        if (row.PublishAt == publishAt)
+            return;
+        row.PublishAt = publishAt;
+        row.NextAttemptAt = publishAt;
+        row.UpdatedAt = pass.Now;
     }
 
     /// <summary>A known match seen again. Returns the prediction to lock when a published match changed.</summary>
@@ -743,10 +767,10 @@ public sealed class AutoFootballService(
 
         if (s.Timing is { } timing)
         {
-            var day = AutoSchedule.LocalDay(now, timing.Zone);
-            var from = AutoSchedule.At(day, TimeOnly.MinValue, timing.Zone);
-            var to = AutoSchedule.At(day.AddDays(1), TimeOnly.MinValue, timing.Zone);
-            var today = await store.AutoEvents.AsNoTracking().Where(a => a.Mode == s.ConfiguredMode && a.KickoffAt >= from && a.KickoffAt < to)
+            // The matches of the publish window: kicking off from the start of today (Türkiye) until one publish lead from now.
+            var from = AutoSchedule.At(AutoSchedule.LocalDay(now, timing.Zone), TimeOnly.MinValue, timing.Zone);
+            var to = now + timing.PublishBefore;
+            var today = await store.AutoEvents.AsNoTracking().Where(a => a.Mode == s.ConfiguredMode && a.KickoffAt >= from && a.KickoffAt <= to)
                 .GroupBy(a => a.State).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct);
             int Count(params AutoEventState[] states) => today.Where(t => states.Contains(t.Key)).Sum(t => t.Count);
             entries.Add(new HealthEntry("predictions.health.auto_today", HealthState.Healthy, "predictions.health.auto_today_value",

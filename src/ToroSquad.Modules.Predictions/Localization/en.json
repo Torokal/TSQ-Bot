@@ -301,7 +301,7 @@
   "predictions.health.auto_mode": "Mode: {0}",
   "predictions.health.auto_discovery": "Automatic football discovery",
   "predictions.health.auto_discovery_value": "Last discovery {0} · competitions in season: {1}",
-  "predictions.health.auto_today": "Automatic football today",
+  "predictions.health.auto_today": "Automatic football (publish window)",
   "predictions.health.auto_today_value": "{0} match(es): {1} published, {2} observed, {3} waiting, {4} skipped",
   "predictions.health.auto_quota": "The Odds API credits",
   "predictions.health.auto_quota_value": "{0} left (measured {1}; {2} unmeasured call(s)) · paused: {3}",
