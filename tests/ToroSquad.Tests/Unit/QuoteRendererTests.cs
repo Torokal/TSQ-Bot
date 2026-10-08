@@ -150,6 +150,45 @@ public sealed class QuoteRendererTests
         Renderer.Render(new QuoteRenderModel("avatar yok", "İlker", "ilker", avatar)).Png.Should().NotBeEmpty();
     }
 
+    private static byte[] Encoded(Action<Image<Rgba32>, Stream> save)
+    {
+        using var image = new Image<Rgba32>(32, 32, Color.Gray);
+        using var ms = new MemoryStream();
+        save(image, ms);
+        return ms.ToArray();
+    }
+
+    [Fact]
+    public void An_avatar_is_decoded_from_png_jpeg_webp_and_gif_only()
+    {
+        foreach (var bytes in new[] { Encoded((i, s) => i.SaveAsPng(s)), Encoded((i, s) => i.SaveAsJpeg(s)), Encoded((i, s) => i.SaveAsWebp(s)), Encoded((i, s) => i.SaveAsGif(s)) })
+        {
+            using var decoded = QuoteImageRenderer.DecodeAvatar(bytes);
+            decoded.Should().NotBeNull("the formats Discord's CDN serves");
+        }
+    }
+
+    [Fact]
+    public void Tiff_bigtiff_bmp_tga_and_other_formats_are_not_images_for_the_avatar_decoder()
+    {
+        // The library can read these, but their decoders are not registered for avatars: no TIFF/BigTIFF parsing code runs
+        // (the reachable part of the ImageSharp 3.1.12 advisories suppressed in Directory.Build.props).
+        QuoteImageRenderer.DecodeAvatar(Encoded((i, s) => i.SaveAsTiff(s))).Should().BeNull("TIFF");
+        QuoteImageRenderer.DecodeAvatar(Encoded((i, s) => i.SaveAsBmp(s))).Should().BeNull("BMP");
+        QuoteImageRenderer.DecodeAvatar(Encoded((i, s) => i.SaveAsTga(s))).Should().BeNull("TGA");
+        QuoteImageRenderer.DecodeAvatar(Encoded((i, s) => i.SaveAsPbm(s))).Should().BeNull("PBM");
+        QuoteImageRenderer.DecodeAvatar(Encoded((i, s) => i.SaveAsQoi(s))).Should().BeNull("QOI");
+
+        // A minimal little-endian BigTIFF header (magic 43) claiming a huge directory: refused at once, never read.
+        byte[] bigTiff = [0x49, 0x49, 0x2B, 0x00, 0x08, 0x00, 0x00, 0x00, 0x10, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F];
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        QuoteImageRenderer.DecodeAvatar(bigTiff).Should().BeNull("BigTIFF");
+        System.Diagnostics.Stopwatch.GetElapsedTime(started).Should().BeLessThan(TimeSpan.FromSeconds(2));
+
+        using var card = Renderer.Compose(new QuoteRenderModel("metin", "Ad", "ad", bigTiff)).Canvas;
+        card.Width.Should().BeGreaterThan(0, "the card falls back to the initial, as for any broken avatar");
+    }
+
     [Fact]
     public void An_absurdly_large_image_is_not_decoded()
     {
