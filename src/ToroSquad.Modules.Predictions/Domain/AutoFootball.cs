@@ -182,7 +182,7 @@ public static class TrackedTeams
 }
 
 /// <summary>The configured timing of the automatic opener (validated in <c>AutoFootballOptions</c>).</summary>
-public sealed record AutoTiming(TimeOnly PublishLocalTime, TimeSpan EarlyLead, TimeSpan LockBefore, TimeSpan MinLead, TimeZoneInfo Zone);
+public sealed record AutoTiming(TimeSpan PublishBefore, TimeSpan LockBefore, TimeSpan MinLead, TimeZoneInfo Zone);
 
 /// <summary>Where "now" stands for one match.</summary>
 public enum PublishWindow
@@ -198,13 +198,12 @@ public enum PublishWindow
 }
 
 /// <summary>
-/// THE schedule of an automatic prediction, from the planned kickoff only (UTC instant from the provider):
+/// THE schedule of an automatic prediction, from the planned kickoff only (UTC instant from the provider) — pure durations,
+/// no calendar day, no wall-clock publish time, no machine time zone:
 /// <list type="bullet">
-/// <item>the match day is the Türkiye calendar day of the kickoff (never the UTC date, never the machine's zone);</item>
-/// <item>publish at <see cref="AutoTiming.PublishLocalTime"/> (09:00) of that day — or, for a kickoff before 09:00 or soon
-/// after it, <see cref="AutoTiming.EarlyLead"/> (2 h) before kickoff, but never before that day's local midnight;</item>
-/// <item>a new card only while at least <see cref="AutoTiming.MinLead"/> (15 min) remain (a late start still opens a missed
-/// card of TODAY within that window; yesterday's match or a passed kickoff never);</item>
+/// <item>publish <see cref="AutoTiming.PublishBefore"/> (24 h = 24 × 60 minutes) before the kickoff;</item>
+/// <item>a match first seen (or a bot back) after that moment is opened at once (catch-up) — but a new card only while at
+/// least <see cref="AutoTiming.MinLead"/> (15 min) remain; a passed kickoff never;</item>
 /// <item>entries lock <see cref="AutoTiming.LockBefore"/> (2 min) before the PLANNED kickoff — a lock, not a claim that the
 /// match started.</item>
 /// </list>
@@ -212,7 +211,6 @@ public enum PublishWindow
 public static class AutoSchedule
 {
     public static readonly TimeSpan MinAttemptGap = TimeSpan.FromMinutes(3);
-    public static readonly TimeSpan MaxAttemptGap = TimeSpan.FromMinutes(45);
 
     public static DateOnly LocalDay(DateTimeOffset instant, TimeZoneInfo zone) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
 
@@ -225,14 +223,7 @@ public static class AutoSchedule
         return new DateTimeOffset(local, zone.GetUtcOffset(local)).ToUniversalTime();
     }
 
-    public static DateTimeOffset PublishAt(DateTimeOffset kickoff, AutoTiming timing)
-    {
-        var day = LocalDay(kickoff, timing.Zone);
-        var midnight = At(day, TimeOnly.MinValue, timing.Zone);
-        var normal = At(day, timing.PublishLocalTime, timing.Zone);
-        var target = normal < kickoff - timing.EarlyLead ? normal : kickoff - timing.EarlyLead;
-        return target < midnight ? midnight : target;
-    }
+    public static DateTimeOffset PublishAt(DateTimeOffset kickoff, AutoTiming timing) => kickoff - timing.PublishBefore;
 
     public static DateTimeOffset Deadline(DateTimeOffset kickoff, AutoTiming timing) => kickoff - timing.MinLead;
 
@@ -240,24 +231,23 @@ public static class AutoSchedule
 
     public static PublishWindow Window(DateTimeOffset now, DateTimeOffset kickoff, AutoTiming timing)
     {
-        if (now >= Deadline(kickoff, timing) || LocalDay(now, timing.Zone) > LocalDay(kickoff, timing.Zone))
+        if (now >= Deadline(kickoff, timing))
             return PublishWindow.TooLate;
-        return now >= PublishAt(kickoff, timing) && LocalDay(now, timing.Zone) == LocalDay(kickoff, timing.Zone) ? PublishWindow.Open : PublishWindow.NotYet;
+        return now >= PublishAt(kickoff, timing) ? PublishWindow.Open : PublishWindow.NotYet;
     }
 
     /// <summary>
-    /// When to look for odds again after <paramref name="used"/> of <paramref name="max"/> attempts: the remaining ones are
-    /// spread over the time left before the deadline (at least <see cref="MinAttemptGap"/>, at most <see cref="MaxAttemptGap"/>
-    /// apart), never all in the same second; null when no attempt is left or none fits before the deadline.
+    /// When to look for odds again after <paramref name="used"/> of <paramref name="max"/> attempts: halfway between now and
+    /// the deadline, every time — with a 24 h window and 4 attempts about 24, 12, 6 and 3 hours before kickoff, so the few
+    /// paid calls reach from the publish time to close to the match instead of being spent in the first hours. Never
+    /// sooner than <see cref="MinAttemptGap"/>; null when no attempt is left or none fits before the deadline.
     /// </summary>
     public static DateTimeOffset? NextAttempt(DateTimeOffset now, DateTimeOffset deadline, int used, int max)
     {
-        var left = max - used;
-        if (left <= 0 || now >= deadline)
+        if (max - used <= 0 || now >= deadline)
             return null;
-        var gap = (deadline - now) / (left + 1);
-        gap = gap < MinAttemptGap ? MinAttemptGap : gap > MaxAttemptGap ? MaxAttemptGap : gap;
-        var next = now + gap;
+        var gap = (deadline - now) / 2;
+        var next = now + (gap < MinAttemptGap ? MinAttemptGap : gap);
         return next < deadline ? next : null;
     }
 }

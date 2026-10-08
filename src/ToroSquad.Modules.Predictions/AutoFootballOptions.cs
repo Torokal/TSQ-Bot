@@ -67,6 +67,9 @@ public sealed class AutoFootballOptions
 
     public static readonly IReadOnlyList<string> OfficialHosts = ["api.the-odds-api.com", "ipv6-api.the-odds-api.com"];
 
+    /// <summary>Settings of the former "09:00 on the match day" schedule: ignored when still configured (the doctor says so).</summary>
+    public static readonly IReadOnlyList<string> RetiredSettings = ["PublishLocalTime", "EarlyPublishLeadMinutes"];
+
     /// <summary>Disabled, Observe or Live (text, so a typo is reported instead of failing the configuration binding).</summary>
     public string Mode { get; set; } = nameof(AutomationMode.Disabled);
 
@@ -76,19 +79,25 @@ public sealed class AutoFootballOptions
 
     public string Provider { get; set; } = ProviderName;
     public string BaseUrl { get; set; } = "https://api.the-odds-api.com/";
-    public string PublishLocalTime { get; set; } = "09:00";
+    /// <summary>
+    /// THE publish rule: a match's prediction is opened this many hours (× 60 minutes, a duration — not a calendar day)
+    /// before its planned kickoff. The former PublishLocalTime / EarlyPublishLeadMinutes settings no longer exist.
+    /// </summary>
+    public int PublishBeforeKickoffHours { get; set; } = 24;
+
+    /// <summary>Only for showing times (the read-only check, /bot status); the schedule itself is pure UTC durations.</summary>
     public string TimeZone { get; set; } = TurkeyCalendar.TimeZoneId;
     public int LockBeforeKickoffMinutes { get; set; } = 2;
     public int MinLeadTimeToPublishMinutes { get; set; } = 15;
-
-    /// <summary>A kickoff before (or soon after) the publish time is opened this long before kickoff (same local day only).</summary>
-    public int EarlyPublishLeadMinutes { get; set; } = 120;
 
     public int MaxOddsAgeMinutes { get; set; } = 30;
     public int DiscoveryIntervalMinutes { get; set; } = 15;
     public int CatalogIntervalHours { get; set; } = 12;
 
-    /// <summary>How far ahead matches are discovered (the free events list); only today's ever get odds.</summary>
+    /// <summary>
+    /// How far ahead matches are discovered (the free events list) — at least; <see cref="DiscoveryHorizon"/> always reaches
+    /// a day beyond the publish lead, so a match is known before its publish time. Odds are asked only from that time on.
+    /// </summary>
     public int DiscoveryHorizonHours { get; set; } = 48;
 
     public int MaxOddsAttemptsPerEvent { get; set; } = 4;
@@ -113,16 +122,15 @@ public sealed class AutoFootballOptions
     public TimeSpan MaxOddsAge => TimeSpan.FromMinutes(MaxOddsAgeMinutes);
     public TimeSpan DiscoveryInterval => TimeSpan.FromMinutes(DiscoveryIntervalMinutes);
     public TimeSpan CatalogInterval => TimeSpan.FromHours(CatalogIntervalHours);
-    public TimeSpan DiscoveryHorizon => TimeSpan.FromHours(DiscoveryHorizonHours);
+    public TimeSpan DiscoveryHorizon => TimeSpan.FromHours(Math.Max(DiscoveryHorizonHours, PublishBeforeKickoffHours + 24));
+    public TimeSpan PublishBeforeKickoff => TimeSpan.FromHours(PublishBeforeKickoffHours);
 
     /// <summary>The timing, or null when a value is invalid (then <see cref="Problems"/> says which).</summary>
     public AutoTiming? Timing()
     {
-        if (!TimeOnly.TryParseExact(PublishLocalTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var publish) ||
-            !GuildTime.TryResolve(TimeZone, out var zone))
+        if (PublishBeforeKickoffHours is < 1 or > 168 || PublishBeforeKickoffHours * 60 <= MinLeadTimeToPublishMinutes || !GuildTime.TryResolve(TimeZone, out var zone))
             return null;
-        return new AutoTiming(publish, TimeSpan.FromMinutes(EarlyPublishLeadMinutes), TimeSpan.FromMinutes(LockBeforeKickoffMinutes),
-            TimeSpan.FromMinutes(MinLeadTimeToPublishMinutes), zone);
+        return new AutoTiming(PublishBeforeKickoff, TimeSpan.FromMinutes(LockBeforeKickoffMinutes), TimeSpan.FromMinutes(MinLeadTimeToPublishMinutes), zone);
     }
 
     public static bool IsExchange(string bookmaker) =>
@@ -139,16 +147,16 @@ public sealed class AutoFootballOptions
         if (!Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps || !OfficialHosts.Contains(uri.Host, StringComparer.OrdinalIgnoreCase) ||
             uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query))
             p.Add($"{Section}:BaseUrl must be https://{OfficialHosts[0]}/ (the official API host)");
-        if (!TimeOnly.TryParseExact(PublishLocalTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
-            p.Add($"{Section}:PublishLocalTime must be HH:mm (got {PublishLocalTime})");
+        if (PublishBeforeKickoffHours is < 1 or > 168)
+            p.Add($"{Section}:PublishBeforeKickoffHours must be 1-168 (got {PublishBeforeKickoffHours})");
+        else if (PublishBeforeKickoffHours * 60 <= MinLeadTimeToPublishMinutes)
+            p.Add($"{Section}:PublishBeforeKickoffHours must be longer than MinLeadTimeToPublishMinutes");
         if (!GuildTime.TryResolve(TimeZone, out _))
             p.Add($"{Section}:TimeZone is not an available time zone (got {TimeZone})");
         if (LockBeforeKickoffMinutes is < 1 or > 60)
             p.Add($"{Section}:LockBeforeKickoffMinutes must be 1-60");
         if (MinLeadTimeToPublishMinutes <= LockBeforeKickoffMinutes || MinLeadTimeToPublishMinutes > 240)
             p.Add($"{Section}:MinLeadTimeToPublishMinutes must be greater than LockBeforeKickoffMinutes and at most 240");
-        if (EarlyPublishLeadMinutes <= MinLeadTimeToPublishMinutes || EarlyPublishLeadMinutes > 720)
-            p.Add($"{Section}:EarlyPublishLeadMinutes must be greater than MinLeadTimeToPublishMinutes and at most 720");
         if (MaxOddsAgeMinutes is < 1 or > 180)
             p.Add($"{Section}:MaxOddsAgeMinutes must be 1-180");
         if (DiscoveryIntervalMinutes is < 5 or > 360)

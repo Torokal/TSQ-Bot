@@ -301,7 +301,7 @@
   "predictions.health.auto_mode": "Mod: {0}",
   "predictions.health.auto_discovery": "Otomatik futbol keşfi",
   "predictions.health.auto_discovery_value": "Son keşif {0} · sezondaki organizasyonlar: {1}",
-  "predictions.health.auto_today": "Otomatik futbol bugün",
+  "predictions.health.auto_today": "Otomatik futbol (yayın penceresi)",
   "predictions.health.auto_today_value": "{0} maç: {1} yayımlandı, {2} gözlendi, {3} bekliyor, {4} atlandı",
   "predictions.health.auto_quota": "The Odds API kredisi",
   "predictions.health.auto_quota_value": "Kalan {0} (ölçüm {1}; ölçülemeyen {2} çağrı) · duraklama: {3}",

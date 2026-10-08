@@ -651,6 +651,10 @@ public static partial class Cli
                 "The Odds API key: " + (oddsKeySet ? "set (value hidden)" : "NOT SET (" + AutoFootballOptions.ApiKeySetting + ")"));
             foreach (var problem in problems)
                 Add("WARN", "  " + problem);
+            Add("INFO", $"  publishes {automation.PublishBeforeKickoffHours} h before the planned kickoff ({AutoFootballOptions.Section}:PublishBeforeKickoffHours), " +
+                        $"locks {automation.LockBeforeKickoffMinutes} min before it");
+            foreach (var legacy in AutoFootballOptions.RetiredSettings.Where(k => !string.IsNullOrWhiteSpace(config[AutoFootballOptions.Section + ":" + k])))
+                Add("WARN", $"  {AutoFootballOptions.Section}:{legacy} is set but no longer used (ignored): the publish time is PublishBeforeKickoffHours before kickoff");
         }
 
         var liveEnabled = config.GetValue("Live:Enabled", false);
