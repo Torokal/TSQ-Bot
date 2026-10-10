@@ -17,7 +17,7 @@ using ToroSquad.Modules.Live.Providers;
 
 namespace ToroSquad.Tests.Support;
 
-public sealed record FakeStream(string Id, DateTimeOffset StartedAt, string Title, string? Category = null);
+public sealed record FakeStream(string Id, DateTimeOffset StartedAt, string Title, string? Category = null, string? CategoryId = null);
 
 /// <summary>
 /// Scriptable official-API provider: tests set the "real world" (which channel is live, with which title); the provider
@@ -48,7 +48,7 @@ public sealed class LiveFakeProvider(LivePlatform platform, TimeProvider clock) 
         if (Failure is { } failure)
             return Task.FromResult(LiveProviderResult.Fail(failure, "scripted", at));
         var observations = logins.Where(l => !Undescribed.Contains(l)).Select(l => Live.TryGetValue(l, out var s)
-                ? new LiveObservation(platform, l, ObservationKind.Status, true, at, s.Id, s.StartedAt, s.Title, s.Category)
+                ? new LiveObservation(platform, l, ObservationKind.Status, true, at, s.Id, s.StartedAt, s.Title, s.Category, CategoryId: s.CategoryId)
                 : new LiveObservation(platform, l, ObservationKind.Status, false, at))
             .ToList();
         return Task.FromResult(LiveProviderResult.Ok(observations, at));
@@ -194,7 +194,8 @@ public sealed class LiveBed : IAsyncDisposable
             await Host.DisposeAsync();
     }
 
-    public static FakeStream Stream(string id, DateTimeOffset startedAt, string title, string? category = null) => new(id, startedAt, title, category);
+    public static FakeStream Stream(string id, DateTimeOffset startedAt, string title, string? category = null, string? categoryId = null) =>
+        new(id, startedAt, title, category, categoryId);
 
     /// <summary>All texts a Discord user would see in a message (content, title, description, fields, button labels).</summary>
     public static string Visible(OutgoingMessage m) =>
