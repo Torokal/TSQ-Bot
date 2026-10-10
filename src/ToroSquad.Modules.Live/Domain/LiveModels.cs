@@ -85,7 +85,8 @@ public sealed record LiveObservation(
     string? Title = null,
     string? Category = null,
     string? AvatarUrl = null,
-    string? EventId = null);
+    string? EventId = null,
+    string? CategoryId = null);
 
 /// <summary>Persisted per-creator session state (one row per creator).</summary>
 public sealed class CreatorState
@@ -116,6 +117,12 @@ public sealed class CreatorState
     public ulong? AnnouncementMessageId { get; set; }
     public DateTimeOffset? AnnouncedAt { get; set; }
     public int Replacements { get; set; }
+
+    /// <summary>
+    /// The session was started by a version that records its category history (<see cref="SessionCategory"/>). Only then
+    /// may the ended card say "no category was recorded"; cards of older sessions are left exactly as they were.
+    /// </summary>
+    public bool CategoryTracking { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
     public bool HasPlatformInSession(LivePlatform platform) =>

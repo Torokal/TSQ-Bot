@@ -108,6 +108,7 @@ public sealed class LiveCoordinator(
         var creators = o.TrackedCreators();
         var states = await db.Set<CreatorState>().ToListAsync(ct);
         var platforms = await db.Set<PlatformState>().ToListAsync(ct);
+        var categories = await LoadCurrentCategoriesAsync(db, states, ct);
         var effects = new List<LiveEffect>();
 
         foreach (var creator in creators)
@@ -144,7 +145,7 @@ public sealed class LiveCoordinator(
         // Bring every current card up to date first: a session closed while nothing was planned (tracking switched off)
         // gets its "ended" edit before a new session of the same creator takes its place below.
         var planner = sp.GetRequiredService<LiveAnnouncementPlanner>();
-        await planner.PlanAsync(creators, states, platforms, guild, channelId, ct);
+        await planner.PlanAsync(creators, states, platforms, categories, guild, channelId, ct);
 
         var rules = o.Rules;
         foreach (var observation in observations)
@@ -154,15 +155,74 @@ public sealed class LiveCoordinator(
                 continue; // not a tracked channel (never happens for our own requests)
             var state = states.Single(s => s.CreatorKey == creator.Key);
             effects.AddRange(LiveStateMachine.Apply(state, Channels(platforms, creator), observation, rules, announcementsAllowed, now));
+            RecordCategory(db, categories, state, platforms.First(p => p.CreatorKey == creator.Key && p.Platform == observation.Platform), observation);
         }
 
         var tracked = TrackedPlatforms;
         foreach (var creator in creators)
             effects.AddRange(LiveStateMachine.Tick(states.Single(s => s.CreatorKey == creator.Key), Channels(platforms, creator), tracked, rules, now));
 
-        await planner.PlanAsync(creators, states, platforms, guild, channelId, ct);
+        await planner.PlanAsync(creators, states, platforms, categories, guild, channelId, ct);
         await db.SaveChangesAsync(ct);
+        await PruneCategoriesAsync(db, states, effects, ct);
         return effects;
+    }
+
+    /// <summary>How many sessions per creator keep their category history (older rows are deleted when a session starts).</summary>
+    public const int CategoryHistorySessions = 50;
+
+    /// <summary>The category rows of each creator's CURRENT session (tracked: additions are saved with the state).</summary>
+    private static async Task<List<SessionCategory>> LoadCurrentCategoriesAsync(ToroDbContext db, List<CreatorState> states, CancellationToken ct)
+    {
+        var categories = new List<SessionCategory>();
+        foreach (var state in states.Where(s => s.SessionNumber > 0))
+        {
+            var key = state.CreatorKey;
+            var session = state.SessionNumber;
+            categories.AddRange(await db.Set<SessionCategory>().Where(c => c.CreatorKey == key && c.SessionNumber == session).ToListAsync(ct));
+        }
+
+        return categories;
+    }
+
+    /// <summary>
+    /// Adds the category of a live statement to the creator's current session (first seen first, each once). Only a
+    /// statement that was just applied as the newest one for a channel that is live counts: a stale, failed, malformed or
+    /// offline answer never adds, changes or removes anything. The starting category of a session is recorded by the very
+    /// observation that opened it; a reconnect inside the grace keeps the same session and therefore the same list.
+    /// </summary>
+    private static void RecordCategory(ToroDbContext db, List<SessionCategory> categories, CreatorState state, PlatformState platform, LiveObservation o)
+    {
+        if (o.Category is null && o.CategoryId is null)
+            return;
+        var applied = o.Kind == ObservationKind.Status ? platform.StatusObservedAt == o.ObservedAt : platform.MetadataObservedAt == o.ObservedAt;
+        if (!applied || state.Phase != CreatorPhase.Live || platform.Status != PlatformStatus.Live || state.SessionNumber == 0)
+            return;
+        var session = categories.Where(c => c.CreatorKey == state.CreatorKey && c.SessionNumber == state.SessionNumber).ToList();
+        if (SessionCategories.Record(session, state.CreatorKey, state.SessionNumber, o.Platform, o.CategoryId, o.Category, o.ObservedAt) is { } added)
+        {
+            categories.Add(added);
+            db.Add(added);
+        }
+    }
+
+    /// <summary>Bounded growth: when a session starts, history older than <see cref="CategoryHistorySessions"/> sessions goes.</summary>
+    private async Task PruneCategoriesAsync(ToroDbContext db, List<CreatorState> states, List<LiveEffect> effects, CancellationToken ct)
+    {
+        foreach (var key in effects.Where(e => e.Kind == LiveEffectKind.SessionStarted).Select(e => e.CreatorKey).Distinct(StringComparer.Ordinal))
+        {
+            var oldest = states.Single(s => s.CreatorKey == key).SessionNumber - CategoryHistorySessions;
+            if (oldest <= 0)
+                continue;
+            try
+            {
+                await db.Set<SessionCategory>().Where(c => c.CreatorKey == key && c.SessionNumber <= oldest).ExecuteDeleteAsync(ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "live category history cleanup failed creator={Creator}", key);
+            }
+        }
     }
 
     private static List<PlatformState> Channels(List<PlatformState> platforms, TrackedCreator creator) =>

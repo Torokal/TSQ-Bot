@@ -172,10 +172,12 @@ public static class KickParser
                     continue;
             }
 
-            var category = LiveJson.Obj(item, "category") is { } c ? LiveJson.Str(c, "name") : null;
+            var categoryObject = LiveJson.Obj(item, "category");
+            var category = categoryObject is { } c ? LiveJson.Str(c, "name") : null;
             observations.Add(new LiveObservation(LivePlatform.Kick, slug, ObservationKind.Status, IsLive: true, at,
                 StartedAt: LiveJson.Instant(stream!.Value, "start_time"), Title: LiveJson.Str(item, "stream_title"),
-                Category: string.IsNullOrWhiteSpace(category) ? null : category, AvatarUrl: avatar));
+                Category: string.IsNullOrWhiteSpace(category) ? null : category, AvatarUrl: avatar,
+                CategoryId: categoryObject is { } co ? LiveJson.Id(co, "id") : null));
         }
 
         warnings.AddRange(requested.Where(l => !seen.Contains(l)).Select(l => l + ": channel not in the answer (unknown slug?)"));
