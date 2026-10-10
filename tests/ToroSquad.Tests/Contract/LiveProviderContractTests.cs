@@ -76,6 +76,7 @@ public sealed class LiveProviderContractTests
         live.Should().Match<LiveObservation>(o => o.IsLive && o.Kind == ObservationKind.Status && o.StreamId == "40952121085" &&
                                                   o.Title == "VALHEIM SERVERA GİRİYORUZ" && o.Category == "Valheim" && o.StartedAt == new DateTimeOffset(2026, 9, 26, 17, 48, 12, TimeSpan.Zero));
         live.AvatarUrl.Should().EndWith("abc-profile_image-300x300.png");
+        live.CategoryId.Should().Be("32982", "helix game_id identifies the category on Twitch");
         result.Observations.Single(o => o.Login == "nasilyani69").IsLive.Should().BeFalse("absent from a successful answer = not broadcasting");
 
         streams!.RequestUri!.Query.Should().Contain("user_login=lordtoro").And.Contain("user_login=nasilyani69");
@@ -238,6 +239,7 @@ public sealed class LiveProviderContractTests
         live.Should().Match<LiveObservation>(o => o.IsLive && o.Title == "CS2 FACEIT | !discord" && o.Category == "Counter-Strike 2" &&
                                                   o.StartedAt == new DateTimeOffset(2026, 9, 26, 17, 50, 0, TimeSpan.Zero) && o.Platform == LivePlatform.Kick);
         live.AvatarUrl.Should().EndWith("abc-fullsize.webp");
+        live.CategoryId.Should().Be("101", "category.id identifies the category on Kick");
         var offline = result.Observations.Single(o => o.Login == "nasilyani69");
         offline.IsLive.Should().BeFalse();
         offline.StartedAt.Should().BeNull("placeholder dates are not a start time");
@@ -288,6 +290,33 @@ public sealed class LiveProviderContractTests
             result.Observations.Should().BeEmpty("null/missing stream or a non-boolean is_live is UNKNOWN — never offline");
             result.Warnings.Should().ContainSingle(w => w.Contains("is_live", StringComparison.Ordinal));
         }
+    }
+
+    [Theory]
+    [InlineData("""{"id":0,"name":""}""", null, null)]
+    [InlineData("""null""", null, null)]
+    [InlineData("""{"name":"Just Chatting"}""", "Just Chatting", null)]
+    [InlineData("""{"id":15,"name":"Minecraft","thumbnail":""}""", "Minecraft", "15")]
+    [InlineData("""{"id":"abc","name":7}""", null, "abc")]
+    public async Task Kick_category_fields_are_read_defensively(string category, string? expectedName, string? expectedId)
+    {
+        var (provider, _) = Kick((r, _) => r.RequestUri!.AbsolutePath.EndsWith("/channels", StringComparison.Ordinal)
+            ? Task.FromResult(StubHttpHandler.Json("{\"data\":[{\"slug\":\"lordtoro\",\"broadcaster_user_id\":1,\"stream\":{\"is_live\":true},\"category\":" + category + "}]}"))
+            : KickHappy(r));
+        var live = (await provider.GetStatusAsync(["lordtoro"], CancellationToken.None)).Observations.Should().ContainSingle().Subject;
+        live.Category.Should().Be(expectedName);
+        ToroSquad.Modules.Live.Domain.SessionCategories.CleanId(live.CategoryId).Should().Be(expectedId);
+    }
+
+    [Fact]
+    public async Task Twitch_stream_without_a_category_states_no_category_id()
+    {
+        var (provider, _) = Twitch((r, _) => r.RequestUri!.AbsolutePath.EndsWith("/streams", StringComparison.Ordinal)
+            ? Task.FromResult(StubHttpHandler.Json("""{"data":[{"id":"1","user_login":"lordtoro","type":"live","title":"x","game_id":"","game_name":""}]}"""))
+            : TwitchHappy(r));
+        var live = (await provider.GetStatusAsync(["lordtoro"], CancellationToken.None)).Observations.Should().ContainSingle().Subject;
+        live.Category.Should().BeNull();
+        live.CategoryId.Should().BeNull();
     }
 
     [Theory]

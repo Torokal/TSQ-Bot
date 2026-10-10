@@ -207,6 +207,7 @@ public static class TwitchParser
             observations.Add(new LiveObservation(LivePlatform.Twitch, login, ObservationKind.Status, IsLive: true, at,
                 StreamId: LiveJson.Id(item, "id"), StartedAt: LiveJson.Instant(item, "started_at"),
                 Title: LiveJson.Str(item, "title"), Category: LiveJson.Str(item, "game_name") is { Length: > 0 } game ? game : null,
+                CategoryId: LiveJson.Id(item, "game_id") is { Length: > 0 } gameId ? gameId : null,
                 AvatarUrl: avatars.GetValueOrDefault(login)));
         }
 

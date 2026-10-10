@@ -50,7 +50,7 @@ public sealed class LiveAnnouncementPlanner(
     public static string SourceKey(CreatorState state) => state.CreatorKey + ":" + state.SessionNumber.ToString(CultureInfo.InvariantCulture);
 
     public async Task PlanAsync(IReadOnlyList<TrackedCreator> creators, IReadOnlyList<CreatorState> states, IReadOnlyList<PlatformState> platforms,
-        GuildId? guild, ChannelId? channel, CancellationToken ct)
+        IReadOnlyList<SessionCategory> categories, GuildId? guild, ChannelId? channel, CancellationToken ct)
     {
         var o = options.Value;
         var now = clock.GetUtcNow();
@@ -107,7 +107,8 @@ public sealed class LiveAnnouncementPlanner(
                     break;
                 case CreatorPhase.Offline when state.SessionEndedAt is not null && row is not null:
                     // Edit only: an undelivered announcement is expired by the past expiry, never sent as an "ended" message.
-                    message = renderer.Ended(creator, state, perCreator, language);
+                    message = renderer.Ended(creator, state, perCreator, language,
+                        categories.Where(c => c.CreatorKey == creator.Key && c.SessionNumber == state.SessionNumber).ToList());
                     expiresAt = now - TimeSpan.FromSeconds(1);
                     break;
                 default:

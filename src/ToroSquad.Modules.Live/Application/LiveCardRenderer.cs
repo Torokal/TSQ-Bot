@@ -64,7 +64,8 @@ public sealed class LiveCardRenderer(ILocalizer localizer)
     };
 
     /// <summary>The same message after the session ended: no ping, no buttons, how long it lasted and where.</summary>
-    public OutgoingMessage Ended(TrackedCreator creator, CreatorState state, IReadOnlyList<PlatformState> platforms, string language)
+    public OutgoingMessage Ended(TrackedCreator creator, CreatorState state, IReadOnlyList<PlatformState> platforms, string language,
+        IReadOnlyList<SessionCategory>? categories = null)
     {
         var used = LivePlatforms.All.Where(p => state.HasPlatformInSession(p) && creator.Channel(p) is not null).ToList();
         var main = MainPlatform(platforms, used);
@@ -79,6 +80,7 @@ public sealed class LiveCardRenderer(ILocalizer localizer)
 
         if (used.Count > 0)
             lines.Add(L(language, "live.card.platforms", string.Join(" + ", used.Select(p => p.Name()))));
+        lines.AddRange(Games(state, categories ?? [], language));
         var embed = new MessageEmbed(
             main?.Title is { } title ? DiscordText.UntrustedPlain(title, DiscordLimits.EmbedTitleMax) : DiscordText.UntrustedPlain(creator.DisplayName, 40),
             string.Join("\n", lines),
@@ -89,6 +91,45 @@ public sealed class LiveCardRenderer(ILocalizer localizer)
             EndedColor,
             Avatar(platforms, used));
         return new OutgoingMessage(L(language, "live.card.content_ended", name), embed, MentionPolicy.None, []);
+    }
+
+    /// <summary>At most this many categories are listed on the ended card (the full history stays in the database).</summary>
+    public const int MaxGamesShown = 15;
+
+    /// <summary>Character budget of the listed names, so the section can never approach the embed limits.</summary>
+    public const int MaxGamesChars = 900;
+
+    /// <summary>
+    /// "Played during the stream": the categories the bot observed, first seen first, each once. Shown for sessions whose
+    /// categories were tracked; when none could be recorded it says so (never "nothing was played", never an invented game).
+    /// </summary>
+    private IEnumerable<string> Games(CreatorState state, IReadOnlyList<SessionCategory> categories, string language)
+    {
+        var ordered = SessionCategories.Ordered(categories);
+        if (ordered.Count == 0 && !state.CategoryTracking)
+            yield break; // a session from before category tracking: its card stays as it was
+        yield return "";
+        yield return L(language, "live.card.games_heading");
+        if (ordered.Count == 0)
+        {
+            yield return L(language, "live.card.games_none");
+            yield break;
+        }
+
+        var shown = 0;
+        var used = 0;
+        foreach (var category in ordered)
+        {
+            var line = string.Create(CultureInfo.InvariantCulture, $"{shown + 1}. {DiscordText.Untrusted(category.Name, 80)}");
+            if (shown >= MaxGamesShown || used + line.Length > MaxGamesChars)
+                break;
+            used += line.Length + 1;
+            shown++;
+            yield return line;
+        }
+
+        if (shown < ordered.Count)
+            yield return L(language, "live.card.games_more", (ordered.Count - shown).ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>

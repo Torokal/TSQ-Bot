@@ -259,6 +259,7 @@ public static class LiveStateMachine
         creator.AnnouncementMessageId = null;
         creator.AnnouncedAt = null;
         creator.Replacements = 0;
+        creator.CategoryTracking = true;
         creator.UpdatedAt = now;
 
         string? reason = null;

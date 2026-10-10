@@ -28,7 +28,8 @@ kanal adı yönetimi, kullanıcıların kendi yayınlarını eklemesi.
   profil resmi (yalnızca `static-cdn.jtvnw.net` / `*.kick.com`, `ThumbnailPolicy`), yalnızca canlı platformlar için
   "Twitch'te İzle" / "Kick'te İzle" link butonları (URL'ler yapılandırmadan, sağlayıcıdan değil). Sağlayıcı metni
   (başlık/kategori) güvenilmez kabul edilir: mention, markdown ve link etkisizleştirilir.
-- Oturum bitince kart "⚫ yayını sona erdi" olarak düzenlenir (süre, kullanılan platformlar; buton yok, ping yok).
+- Oturum bitince kart "⚫ yayını sona erdi" olarak düzenlenir (süre, kullanılan platformlar, **yayında oynananlar**;
+  buton yok, ping yok) — bkz. [Yayında oynananlar](#yayında-oynananlar-oturum-kategori-geçmişi).
 - **İlk açılış (bootstrap):** bir kanal ilk kez gözlemlendiğinde zaten canlıysa baseline kaydedilir, duyurulmaz
   (`AnnounceExistingLiveOnBootstrap=false`, varsayılan).
 - **Kesinti sonrası (restart, deploy, sağlayıcı kesintisi):** zaman sınırı yoktur, karar kalıcı durum geçişine dayanır.
@@ -43,6 +44,44 @@ kanal adı yönetimi, kullanıcıların kendi yayınlarını eklemesi.
 - **Geç teslim yok:** ilk duyuru algılandıktan sonra `AnnouncementMaxDelayMinutes` (15 dk) içinde teslim edilemezse
   (ör. Discord kesintisi) süresi dolar; geç bir `@everyone` atılmaz. Biten oturumun kartı hiçbir zaman yeni mesaj olarak
   gönderilmez (yalnızca düzenleme).
+
+## Yayında oynananlar (oturum kategori geçmişi)
+
+Yayın bitince **aynı duyuru mesajı** düzenlenir ve kartın sonuna yayın boyunca gözlemlenen oyunlar/kategoriler eklenir
+(yeni mesaj yok, `allowed_mentions` boş, `@everyone` yok; canlı karta eklenmez):
+
+```
+⚫ **Yayın sona erdi** · 2 dakika önce
+⏱️ Süre: 4 sa 32 dk
+📺 Twitch + Kick
+
+🎮 **Yayında Oynananlar**
+1. Minecraft
+2. Counter-Strike 2
+3. Grand Theft Auto V
+4. Phasmophobia
+```
+
+- **Kaynak:** mevcut uzlaştırma istekleri — Twitch `streams` (`game_id`, `game_name`), Kick `channels` (`category.id`,
+  `category.name`). Yeni istek, kimlik bilgisi, EventSub/webhook veya başka bir botla bağlantı yoktur.
+- **Gözleme dayalıdır, eksiksiz bir geçmiş değildir:** liste, botun yayın sırasında ~30 sn'lik turlarda *görebildiği*
+  kategorilerden oluşur. İki tur arasında kısa süre açılıp kapanan bir kategori veya bot kapalıyken/sağlayıcı cevap
+  vermezken oynananlar listede olmayabilir; tahmin edilmez, başlıktan çıkarım yapılmaz.
+- **Sıra ve tekrar:** ilk görülme sırası, her kategori bir kez (A → B → A → C → B = A, B, C); eşit zamanda ekleme sırası.
+  Oturumu açan ilk canlı gözlemin kategorisi de kaydedilir.
+- **Kimlik:** önce platformun kendi kategori kimliği (Twitch ve Kick kimlikleri ayrı uzaylardır; aynı sayı aynı oyun
+  demek değildir), kimlik yoksa normalize ad (büyük/küçük harf ve boşluk farkı yok sayılır). İki platformda aynı ada sahip
+  oyun tek satırdır ve iki platformun kimliği de saklanır; farklı adlar asla bulanık eşleştirmeyle birleştirilmez. Boş,
+  `unknown`/`null` gibi yer tutucu veya adsız kategori satır oluşturmaz. `Just Chatting`, `IRL` gibi kategoriler
+  filtrelenmez (platform ne diyorsa o).
+- **Oturum:** mevcut `SessionNumber` kullanılır. Tolerans içi yeniden bağlanma ve aynı yayın kimliğiyle yeniden açılan
+  oturum listeyi korur; yeni oturum boş listeyle başlar. Restart/deploy listeyi silmez. `UNKNOWN`/zaman aşımı/bozuk cevap
+  hiçbir satırı silmez. Duyurulmayan (baseline) oturumların kategorileri de kaydedilir ama kart/ping üretmez.
+- **Uzun liste:** veritabanında tümü durur; kartta en fazla 15 satır ve ~900 karakter gösterilir, kalan
+  `… ve X kategori daha` olarak belirtilir.
+- **Kategori yoksa:** `Oyun/kategori bilgisi kaydedilemedi.` yazar ("oyun oynanmadı" iddiası değildir). Bu özellikten
+  önce başlamış oturumların kartları olduğu gibi kalır (geriye dönük düzenleme yok).
+- **Saklama:** yeni oturum başlarken yayıncı başına son 50 oturumdan eski satırlar silinir.
 
 ## @everyone en fazla bir kez (oturum başına)
 
@@ -115,7 +154,10 @@ Ek (additive) migration `LiveModule`: `live_creator_state` (oturum no, faz, tole
 duyuru türü, guild/kanal/mesaj kimliği, duyuru zamanı, yedek sayısı), `live_platform_state` (durum, yayın kimliği,
 `started_at`, başlık + değişim zamanı, kategori, avatar, durum/metadata gözlem filigranları — kesinti sonrası kararın
 dayandığı son güvenilir gözlem zamanı —, son olay kimliği),
-`live_provider_state` (son deneme/başarı/sonuç/hata). Diğer modüllerin tablolarına dokunulmaz.
+`live_provider_state` (son deneme/başarı/sonuç/hata), `live_session_category` (migration `LiveSessionGames`: yayıncı +
+oturum no + sıra, ad ve normalize ad, ilk gören platform, Twitch/Kick kategori kimliği, ilk görülme zamanı; oturum başına
+ad üzerinde tekil indeks). Kategori satırları oturum durumuyla **aynı işlemde** yazılır. Diğer modüllerin tablolarına
+dokunulmaz.
 
 Oturum durumu ve outbox satırı **tek SQLite işleminde** yazılır. Duyuru mesajı outbox'ın tekil mantıksal anahtarıyla
 (`guild|live|<yayıncı>:<oturum>|kanal|announce`) gönderilir: restart, tekrar planlama ve belirsiz gönderim (zaman aşımı)
