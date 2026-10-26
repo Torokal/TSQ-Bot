@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Shared AI provider access (platform layer, no TSQ dependency): the chat request/answer contract, the one OpenCode Go
+       transport (POST chat/completions, one request per call, no retry, no fallback model), answer parsing and error
+       classification. Used by TSQ Özet and TSQ Sor; each module keeps its own prompts, profiles, limits and data rules.
+       MUST NOT reference Discord.Net, EF Core, Infrastructure, Core or any module (architecture tests). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+  </ItemGroup>
+
+</Project>

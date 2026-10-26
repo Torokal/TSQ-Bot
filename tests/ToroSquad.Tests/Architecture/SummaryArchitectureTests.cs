@@ -114,7 +114,10 @@ public sealed partial class SummaryArchitectureTests
         var code = AllCode();
         Regex.Matches(code, @"\bai\.SummarizeAsync\(").Should().HaveCount(2,
             "SummaryService calls the model in exactly two places: the first request of a run, and the grounded review of an accepted draft");
-        Regex.Matches(File.ReadAllText(Path.Combine(Root(), "Providers", "OpenCodeSummaryAiClient.cs")), @"\.SendAsync\(").Should().ContainSingle();
+        // One summary request = one call of the shared transport, whose only HTTP send is in ToroSquad.Ai (AiArchitectureTests).
+        var client = File.ReadAllText(Path.Combine(Root(), "Providers", "OpenCodeSummaryAiClient.cs"));
+        Regex.Matches(client, @"\.CompleteAsync\(").Should().ContainSingle();
+        client.Should().NotContain(".SendAsync(", "the HTTP request is sent by the shared OpenCode Go transport only");
         // No loop around a request, no retry and no fallback anywhere; the second model is named only as the grounded generator.
         var service = File.ReadAllText(Path.Combine(Root(), "Application", "SummaryService.cs"));
         service.Should().NotMatchRegex(@"\b(while|for|foreach|do)\b[^;{]*\{[^}]*ai\.SummarizeAsync", "a request is never inside a loop");

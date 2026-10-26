@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/ToroSquad.Ai/ToroSquad.Ai.csproj" />
     <Project Path="src/ToroSquad.Core/ToroSquad.Core.csproj" />
     <Project Path="src/ToroSquad.Infrastructure/ToroSquad.Infrastructure.csproj" />
     <Project Path="src/ToroSquad.Discord/ToroSquad.Discord.csproj" />

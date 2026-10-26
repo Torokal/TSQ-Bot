@@ -82,4 +82,9 @@ sunucuda yönetici `/modules enable example` diyene kadar kapalıdır. Testler
 7. **Manifesti yenileyin**: `dotnet run --project src/ToroSquad.Bot -- commands export --out docs/commands.manifest.json`
    (üretim ortamında), `.\scripts\Test.ps1`, sonra test sunucusunda `.\scripts\Sync-Commands.ps1 -GuildId … -Apply`.
 
+AI kullanan bir modül sağlayıcıya kendi HTTP istemcisiyle değil, paylaşılan `ToroSquad.Ai` katmanıyla erişir
+(`AddOpenCodeGoApiKey`, `AddOpenCodeGoHttpClient`, `OpenCodeGoChatClient`): aynı anahtar ve uç nokta, modülün kendi
+User-Agent'ı, çağrı başına tek istek. Prompt, model profili, sınırlar ve veri kuralları modülde kalır; başka bir AI
+modülüne (ör. Özet) referans verilmez.
+
 Çekirdeğin iş kurallarını değiştirmek gerekmez; tek zorunlu çekirdek dışı değişiklik composition root'taki kayıttır.

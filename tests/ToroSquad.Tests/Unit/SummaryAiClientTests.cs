@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using ToroSquad.Ai;
 using ToroSquad.Modules.Summary;
 using ToroSquad.Modules.Summary.Application;
 using ToroSquad.Modules.Summary.Providers;
@@ -56,7 +57,7 @@ public sealed class SummaryAiClientTests
     {
         var http = new Recorder(respond);
         var clock = new FakeTimeProvider(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero));
-        return (new OpenCodeSummaryAiClient(new Factory(http), Options.Create(new SummaryOptions()), new SummaryApiKey(key), clock), http, clock);
+        return (new OpenCodeSummaryAiClient(new Factory(http), Options.Create(new SummaryOptions()), new OpenCodeGoApiKey(key), clock), http, clock);
     }
 
     private static Task<HttpResponseMessage> Respond(HttpStatusCode status, string body) =>
@@ -317,7 +318,7 @@ public sealed class SummaryAiClientTests
         client.IsConfigured.Should().BeFalse();
         (await client.SummarizeAsync(Prompt, CancellationToken.None)).Failure.Should().Be(SummaryAiFailure.NotConfigured);
         http.Requests.Should().BeEmpty();
-        new SummaryApiKey(Key).ToString().Should().NotContain(Key);
+        new OpenCodeGoApiKey(Key).ToString().Should().NotContain(Key);
     }
     [Fact]
     public void A_request_with_its_own_profile_uses_that_model_and_reasoning_shape_and_the_legacy_request_is_unchanged()

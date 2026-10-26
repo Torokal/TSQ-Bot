@@ -8,6 +8,7 @@ WORKDIR /src
 # Restore first for layer caching (central package versions + lock files, locked mode = reproducible).
 # .editorconfig carries the analyzer settings: without it the Release build (warnings = errors) uses different rules.
 COPY .editorconfig global.json Directory.Build.props Directory.Packages.props ./
+COPY src/ToroSquad.Ai/ToroSquad.Ai.csproj src/ToroSquad.Ai/packages.lock.json src/ToroSquad.Ai/
 COPY src/ToroSquad.Core/ToroSquad.Core.csproj src/ToroSquad.Core/packages.lock.json src/ToroSquad.Core/
 COPY src/ToroSquad.Infrastructure/ToroSquad.Infrastructure.csproj src/ToroSquad.Infrastructure/packages.lock.json src/ToroSquad.Infrastructure/
 COPY src/ToroSquad.Discord/ToroSquad.Discord.csproj src/ToroSquad.Discord/packages.lock.json src/ToroSquad.Discord/
