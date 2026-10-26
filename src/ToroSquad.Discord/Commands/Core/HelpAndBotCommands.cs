@@ -2,6 +2,7 @@ using System.Globalization;
 using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
+using Microsoft.Extensions.Logging;
 using ToroSquad.Core;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Messaging;
@@ -117,25 +118,47 @@ public sealed class BotCommands(
                 : await T("status.unrestricted")), true),
         };
 
+        var states = new List<(string Name, string State)>();
         foreach (var status in await modules.ListAsync(Actor.GuildId, CancellationToken.None))
-        {
-            var state = await T(status.Enabled ? "modules.state_on" : "modules.state_off");
-            fields.Add(new(Localizer.Get(language, status.Descriptor.NameKey), state, true));
-        }
+            states.Add((Localizer.Get(language, status.Descriptor.NameKey), await T(status.Enabled ? "modules.state_on" : "modules.state_off")));
 
+        var health = new List<EmbedField>();
         foreach (var check in healthChecks)
         {
             var report = await check.CheckAsync(CancellationToken.None);
             foreach (var entry in report.Entries)
-            {
-                var args = entry.Args?.ToArray() ?? [];
-                fields.Add(new(LocalizedOrRaw(language, entry.Component), $"{HealthIcon(entry.State)} {Localizer.Get(language, entry.DetailKey, args)}", false));
-            }
+                health.Add(HealthField(Localizer, language, entry));
         }
 
+        var all = StatusFields(fields, await T("modules.title"), states, health);
+        if (all.Count > MaxEmbedFields)
+            Services.LoggerFactory.CreateLogger<BotCommands>().LogWarning(
+                "bot_status_fields_cut total={Total} shown={Shown}", all.Count, MaxEmbedFields);
         var footer = product.Commit is { Length: > 0 } commit ? $"{product.Version} ({commit[..Math.Min(7, commit.Length)]})" : product.Version;
-        await ReplyEmbedAsync(new MessageEmbed(await T("status.title"), null, null, fields.Take(25).ToList(), footer, null, NeutralColor));
+        await ReplyEmbedAsync(new MessageEmbed(await T("status.title"), null, null, all.Take(MaxEmbedFields).ToList(), footer, null, NeutralColor));
     }
+
+    /// <summary>Discord allows at most 25 fields in one embed.</summary>
+    public const int MaxEmbedFields = 25;
+
+    /// <summary>
+    /// The /bot status fields: the overview, ONE field listing every module's on/off state, then every health line. With one
+    /// field per module (16 modules) the overview, the states and the health lines came to 35 fields, so the last health lines
+    /// — TSQ Özet's among them — were silently cut at Discord's 25.
+    /// </summary>
+    public static List<EmbedField> StatusFields(IReadOnlyList<EmbedField> overview, string modulesTitle, IReadOnlyList<(string Name, string State)> modules,
+        IReadOnlyList<EmbedField> health)
+    {
+        var fields = new List<EmbedField>(overview);
+        if (modules.Count > 0)
+            fields.Add(new(modulesTitle, string.Join("\n", modules.Select(m => m.Name + ": " + m.State)), false));
+        fields.AddRange(health);
+        return fields;
+    }
+
+    /// <summary>One health line as /bot status shows it: the component's name and the icon + localized detail.</summary>
+    public static EmbedField HealthField(ILocalizer localizer, string language, HealthEntry entry) =>
+        new(LocalizedOrRaw(localizer, language, entry.Component), $"{HealthIcon(entry.State)} {localizer.Get(language, entry.DetailKey, entry.Args?.ToArray() ?? [])}", false);
 
     [SlashCommand("about", $"What {ProductInfo.ProductName} is, its version and attributions")]
     public async Task AboutAsync()
@@ -171,8 +194,10 @@ public sealed class BotCommands(
     }
 
     /// <summary>Component names and attribution texts may be localization keys; plain text is shown as-is.</summary>
-    private string LocalizedOrRaw(string language, string keyOrText) =>
-        Localizer.HasKey(language, keyOrText) || Localizer.HasKey(Languages.Fallback, keyOrText) ? Localizer.Get(language, keyOrText) : keyOrText;
+    private string LocalizedOrRaw(string language, string keyOrText) => LocalizedOrRaw(Localizer, language, keyOrText);
+
+    private static string LocalizedOrRaw(ILocalizer localizer, string language, string keyOrText) =>
+        localizer.HasKey(language, keyOrText) || localizer.HasKey(Languages.Fallback, keyOrText) ? localizer.Get(language, keyOrText) : keyOrText;
 
     private static string HealthIcon(HealthState state) => state switch
     {
