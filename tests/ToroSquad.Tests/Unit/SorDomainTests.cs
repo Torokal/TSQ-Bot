@@ -81,10 +81,85 @@ public sealed class SorDomainTests
         Candidate("RPG seviyor.", "RPG seviyorum").Check(question).Should().Be(SorMemoryRefusal.NoEvidence, "not in the current message");
         Candidate(new string('x', 241), "Strateji oyunlarını seviyorum").Check(question).Should().Be(SorMemoryRefusal.TooLong);
         Candidate("Mert FPS seviyor.", "Mert FPS seviyor").Check(question, "Mert").Should().Be(SorMemoryRefusal.AboutSomeoneElse);
-        Candidate("Gayret ediyor.", "Strateji oyunlarını seviyorum").Check(question).Should().Be(SorMemoryRefusal.None, "'gay' inside a word is not a sensitive term");
+        Candidate("Strateji oyunlarına gayret ediyor.", "Strateji oyunlarını seviyorum").Check(question).Should().Be(SorMemoryRefusal.None, "'gay' inside a word is not a sensitive term");
     }
 
     private static SorMemoryCandidate Candidate(string text, string evidence) => new(SorMemoryOp.Add, SorMemoryKind.Game, text, evidence, null);
+
+    [Theory]
+    [InlineData("Mert, ‘Ben strateji oyunlarını seviyorum’ dedi.", "Strateji oyunlarını seviyor.", "Ben strateji oyunlarını seviyorum", SorMemoryRefusal.Quoted)]
+    [InlineData("Mert dedi ki ben strateji oyunlarını seviyorum.", "Strateji oyunlarını seviyor.", "ben strateji oyunlarını seviyorum", SorMemoryRefusal.Quoted)]
+    [InlineData("Farz et C# biliyorum. Bir API nasıl yazılır?", "C# biliyor.", "C# biliyorum", SorMemoryRefusal.Hypothetical)]
+    [InlineData("Şakaydı; beni Galatasaraylı diye kaydetme.", "Galatasaray taraftarı.", "beni Galatasaraylı", SorMemoryRefusal.NotToBeSaved)]
+    [InlineData("aynen", "Strateji oyunlarını seviyor.", "aynen", SorMemoryRefusal.Unsupported)]
+    [InlineData("Artık kısa cevap istemiyorum; ayrıntılı anlat.", "Kısa cevap istiyor.", "kısa cevap istemiyorum", SorMemoryRefusal.Negated)]
+    [InlineData("Strateji oyunları güzel bir tür.", "Strateji oyunlarını seviyor.", "Strateji oyunları güzel", SorMemoryRefusal.NotSelfStated)]
+    [InlineData("Mert’in tavsiyesiyle strateji oyunlarını seviyorum.", "Strateji oyunlarını seviyor.", "strateji oyunlarını seviyorum", SorMemoryRefusal.None)]
+    public void A_quote_in_the_message_is_not_yet_a_self_statement(string question, string note, string evidence, SorMemoryRefusal expected)
+    {
+        var kind = note.Contains("cevap", StringComparison.Ordinal) ? SorMemoryKind.AnswerStyle : SorMemoryKind.Game;
+        SorMemoryRules.CheckCandidate(new SorMemoryCandidate(SorMemoryOp.Add, kind, note, evidence, null), question, [], 240).Should().Be(expected);
+    }
+
+    [Fact]
+    public void A_clear_correction_of_a_style_preference_passes_and_a_plain_request_counts_for_style_only()
+    {
+        const string question = "Artık kısa cevap istemiyorum; ayrıntılı anlat.";
+        SorMemoryRules.CheckCandidate(new SorMemoryCandidate(SorMemoryOp.Update, SorMemoryKind.AnswerStyle, "Ayrıntılı cevap istiyor.", "ayrıntılı anlat", null), question, [], 240)
+            .Should().Be(SorMemoryRefusal.None);
+        SorMemoryRules.CheckCandidate(new SorMemoryCandidate(SorMemoryOp.Add, SorMemoryKind.AnswerStyle, "Kısa cevap istiyor.", "kısa cevap ver", null), "Kısa cevap ver lütfen.", [], 240)
+            .Should().Be(SorMemoryRefusal.None, "a style request to the bot needs no first-person form");
+    }
+
+    // ------------------------------------------------------------------ answer grammar
+
+    [Theory]
+    [InlineData("Cevap.\n<<<HAFIZA>>>\n{\"memory\":[]}", false, SorAnswerProblem.None, "Cevap.")]
+    [InlineData("Cevap.<<<HAFIZA>>>{\"memory\":[]}", false, SorAnswerProblem.None, "Cevap.")]
+    [InlineData("Bu işaret <<<HAFIZA>>> metnin ortasında geçiyor ve cevap devam ediyor.", false, SorAnswerProblem.None, "Bu işaret ‹‹‹HAFIZA››› metnin ortasında geçiyor ve cevap devam ediyor.")]
+    [InlineData("Örnek:\n```\n<<<HAFIZA>>>\n{\"x\":1}\n```\nBitti.", false, SorAnswerProblem.None, "Örnek:\n```\n‹‹‹HAFIZA›››\n{\"x\":1}\n```\nBitti.")]
+    [InlineData("<<<HAFIZA>>>\n{\"memory\":[]}", false, SorAnswerProblem.Empty, "")]
+    [InlineData("   ", false, SorAnswerProblem.Empty, "")]
+    [InlineData("Yarım kalan cevap", true, SorAnswerProblem.Truncated, "Yarım kalan cevap")]
+    [InlineData("Tam cevap.\n<<<HAFIZA>>>\n{\"memory\":[{\"op\":\"add\"", true, SorAnswerProblem.None, "Tam cevap.")]
+    [InlineData("Cevap.\n<<<HAFIZA>>>", false, SorAnswerProblem.None, "Cevap.")]
+    public void The_separator_grammar_never_cuts_a_normal_answer_or_shows_the_block(string text, bool truncated, SorAnswerProblem problem, string answer)
+    {
+        var parsed = SorAnswerFormat.Parse(text, truncated);
+        parsed.Problem.Should().Be(problem);
+        if (problem != SorAnswerProblem.Empty)
+            parsed.Answer.Should().Be(answer);
+        parsed.Answer.Should().NotContain(SorAnswerFormat.Separator).And.NotContain("\"memory\"", "neither the protocol marker nor the memory JSON is ever shown");
+    }
+
+    [Fact]
+    public void A_second_separator_trailing_text_or_an_oversized_block_yields_no_proposals()
+    {
+        const string item = "{\"op\":\"add\",\"kind\":\"oyun\",\"text\":\"Satranç oynuyor.\",\"evidence\":\"satranç oynuyorum\",\"extra\":true}";
+        SorAnswerFormat.Parse("A.\n<<<HAFIZA>>>\n{\"memory\":[" + item + "],\"other\":1}", false).Candidates.Should().ContainSingle("unknown fields are ignored");
+        SorAnswerFormat.Parse("A.\n<<<HAFIZA>>>\n{\"memory\":[" + item + "]}\n<<<HAFIZA>>>\n{\"memory\":[" + item + "]}", false)
+            .Should().Match<SorParsedAnswer>(p => p.Answer == "A." && p.Candidates.Count == 0 && p.CandidatesDropped);
+        SorAnswerFormat.Parse("A.\n<<<HAFIZA>>>\n{\"memory\":[" + item + "]} sonra metin", false).Candidates.Should().BeEmpty();
+        SorAnswerFormat.Parse("A.\n<<<HAFIZA>>>\n{\"memory\":[" + item + "],\"pad\":\"" + new string('x', SorAnswerFormat.MaxBlockLength) + "\"}", false)
+            .Should().Match<SorParsedAnswer>(p => p.IsValid && p.Candidates.Count == 0 && p.CandidatesDropped);
+    }
+
+    [Fact]
+    public void Six_notes_are_chosen_from_thirty_by_style_then_relevance_then_recency_never_by_insertion_order_alone()
+    {
+        var notes = new List<SorNote>();
+        for (var i = 1; i <= 27; i++)
+            notes.Add(Note(100 + i, SorMemoryKind.Hobby, $"Yeni hobi {i}: örgü örüyor."));
+        notes.Add(Note(1, SorMemoryKind.Address, "Ada diye hitap edilmek istiyor."));
+        notes.Add(Note(2, SorMemoryKind.AnswerStyle, "Kısa cevap istiyor."));
+        notes.Add(Note(3, SorMemoryKind.Game, "Strateji oyunlarını seviyor."));
+
+        var chosen = SorPrompt.Rank(notes, "Bu akşam hangi strateji oyununu oynasam?", 6);
+        chosen.Should().HaveCount(6);
+        chosen.Take(3).Select(n => n.Id).Should().BeEquivalentTo([1L, 2L, 3L], "address and style first, then the note sharing words with the question");
+        chosen.Skip(3).Select(n => n.Id).Should().Equal(127, 126, 125);
+        SorPrompt.Rank(notes, "Bu akşam hangi strateji oyununu oynasam?", 6).Select(n => n.Id).Should().Equal(chosen.Select(n => n.Id), "deterministic");
+    }
 
     // ------------------------------------------------------------------ text
 

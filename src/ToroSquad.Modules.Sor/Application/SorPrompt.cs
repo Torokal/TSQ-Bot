@@ -51,24 +51,25 @@ public static class SorPrompt
         Anlık ruh hali, tek günlük durum, şaka, varsayım, rol yapma, alıntı, başkası hakkındaki iddia, parola/token/kimlik numarası ve sağlık gibi hassas bilgiler için öğe yazma. Böyle bir bilgi yoksa <<<HAFIZA>>> satırını hiç yazma.
         """;
 
-    /// <summary>Notes always considered first (they shape every answer).</summary>
+    /// <summary>
+    /// Which notes go into a request, deterministically, from notes ALREADY filtered by owner and scope (the database query):
+    /// address and answer-style notes first (they shape every answer), then notes sharing more content words with the
+    /// question (same word up to Turkish suffixes, <see cref="SorMemoryRules.SameWord"/>), then the most recently updated,
+    /// then the higher id. No embeddings, no randomness: a relevant older preference beats newer unrelated notes.
+    /// </summary>
     public static IReadOnlyList<SorNote> Rank(IReadOnlyList<SorNote> notes, string question, int max)
     {
         if (max <= 0 || notes.Count == 0)
             return [];
-        var words = Words(question);
+        var words = SorMemoryRules.ContentWords(SorMemoryRules.Normalize(question));
         return notes
             .OrderByDescending(n => SorMemoryKinds.IsStyle(n.Kind))
-            .ThenByDescending(n => Words(n.Text).Count(words.Contains))
+            .ThenByDescending(n => SorMemoryRules.ContentWords(SorMemoryRules.Normalize(n.Text)).Count(w => words.Any(q => SorMemoryRules.SameWord(q, w))))
             .ThenByDescending(n => n.UpdatedAt)
             .ThenByDescending(n => n.Id)
             .Take(max)
             .ToList();
     }
-
-    private static HashSet<string> Words(string text) =>
-        SorMemoryRules.Normalize(text).Split([' ', ',', '.', '!', '?', ';', ':', '\'', '"', '(', ')', '/'], StringSplitOptions.RemoveEmptyEntries)
-            .Where(w => w.Length >= 4).Select(w => w.Length > 6 ? w[..6] : w).ToHashSet(StringComparer.Ordinal);
 
     public static SorPromptBuild Build(SorContext context, SorAsk ask, string question, SorOptions options)
     {

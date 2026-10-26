@@ -112,8 +112,8 @@ public static partial class SorText
             at = window.LastIndexOf('\n');
         if (at < room / 2)
             at = window.LastIndexOf(' ');
-        if (at <= 0)
-            at = window.Length;
+        if (at < room / 2)
+            at = window.Length; // no boundary in the second half: fill the part rather than leave a tiny one
 
         // An odd number of "||" before the cut means a spoiler is open: cut before it instead (when that leaves something).
         var head = text[..at];

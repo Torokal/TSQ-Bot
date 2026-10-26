@@ -25,27 +25,77 @@ public sealed record SorParsedAnswer(SorAnswerProblem Problem, string Answer, IR
 
 /// <summary>
 /// The small wire contract of /sor's ONE request: the answer as plain text, then — only when the member said something
-/// lasting about themselves — the line <see cref="Separator"/> and one JSON object <c>{"memory":[…]}</c>. Chosen over a JSON
-/// envelope around the whole answer (no provider JSON/schema mode is verified for this gateway): a broken or cut proposal can
-/// never cost the answer, and the raw JSON is never shown. No repair request is ever made.
+/// lasting about themselves — <see cref="Separator"/> and one JSON object <c>{"memory":[…]}</c>. Chosen over a JSON envelope
+/// around the whole answer (no provider JSON/schema mode is verified for this gateway): a broken or cut proposal can never
+/// cost a complete answer, and neither the separator nor the memory JSON is ever shown. No repair request is ever made.
+/// <para>Grammar:</para>
+/// <list type="bullet">
+/// <item>The PROTOCOL separator is the first occurrence outside a ``` code block that is followed only by whitespace, a
+/// <c>{</c> or a ``` fence. It ends the answer; everything after it is the memory block and is never shown.</item>
+/// <item>Any other occurrence (in prose, a quote or a code example) is answer text and is shown defused
+/// (<see cref="Defused"/>), so the protocol marker never reaches Discord.</item>
+/// <item>The block is at most <see cref="MaxBlockLength"/> characters and exactly one JSON object (optionally fenced) with a
+/// <c>memory</c> array; unknown fields are ignored, only the first <see cref="MaxCandidates"/> valid items are kept, and
+/// anything else — a second separator, trailing text, invalid or cut JSON — yields no proposals.</item>
+/// <item>Cut output (<c>finish_reason=length</c>): with a protocol separator the answer before it is complete and the
+/// block is dropped; without one the answer itself may be cut and the result is <see cref="SorAnswerProblem.Truncated"/>.</item>
+/// <item>No text before the protocol separator: <see cref="SorAnswerProblem.Empty"/>.</item>
+/// </list>
 /// </summary>
 public static class SorAnswerFormat
 {
     public const string Separator = "<<<HAFIZA>>>";
+    public const string Defused = "‹‹‹HAFIZA›››";
     public const int MaxCandidates = 3;
+    public const int MaxBlockLength = 4000;
 
     public static SorParsedAnswer Parse(string text, bool truncated)
     {
-        var index = text.IndexOf(Separator, StringComparison.Ordinal);
-        var answer = (index >= 0 ? text[..index] : StripPartialSeparator(text)).Trim();
-        if (answer.Length == 0)
-            return new SorParsedAnswer(SorAnswerProblem.Empty, "", [], index >= 0);
+        var index = ProtocolSeparator(text);
         if (index < 0)
-            return truncated ? new SorParsedAnswer(SorAnswerProblem.Truncated, answer, [], false) : new SorParsedAnswer(SorAnswerProblem.None, answer, [], false);
+        {
+            var whole = Defuse(StripPartialSeparator(text)).Trim();
+            if (whole.Length == 0)
+                return new SorParsedAnswer(SorAnswerProblem.Empty, "", [], false);
+            return new SorParsedAnswer(truncated ? SorAnswerProblem.Truncated : SorAnswerProblem.None, whole, [], false);
+        }
 
+        var answer = Defuse(text[..index]).Trim();
+        if (answer.Length == 0)
+            return new SorParsedAnswer(SorAnswerProblem.Empty, "", [], true);
         var (candidates, dropped) = ParseCandidates(text[(index + Separator.Length)..], truncated);
         return new SorParsedAnswer(SorAnswerProblem.None, answer, candidates, dropped);
     }
+
+    /// <summary>The first separator outside a code block that is followed only by whitespace, a JSON object or a fence; -1 if none.</summary>
+    private static int ProtocolSeparator(string text)
+    {
+        for (var i = text.IndexOf(Separator, StringComparison.Ordinal); i >= 0; i = text.IndexOf(Separator, i + Separator.Length, StringComparison.Ordinal))
+        {
+            if (CountFences(text.AsSpan(0, i)) % 2 == 1)
+                continue; // inside a code example
+            var rest = text.AsSpan(i + Separator.Length).TrimStart();
+            if (rest.IsEmpty || rest[0] == '{' || rest.StartsWith("```", StringComparison.Ordinal))
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static int CountFences(ReadOnlySpan<char> text)
+    {
+        var count = 0;
+        for (var i = text.IndexOf("```", StringComparison.Ordinal); i >= 0;)
+        {
+            count++;
+            var next = text[(i + 3)..].IndexOf("```", StringComparison.Ordinal);
+            i = next < 0 ? -1 : i + 3 + next;
+        }
+
+        return count;
+    }
+
+    private static string Defuse(string text) => text.Replace(Separator, Defused, StringComparison.Ordinal);
 
     /// <summary>A text cut right inside the separator ends with "&lt;&lt;&lt;HAF"…: that tail is not part of the answer.</summary>
     private static string StripPartialSeparator(string text)
@@ -61,7 +111,7 @@ public static class SorAnswerFormat
 
     private static (IReadOnlyList<SorMemoryCandidate> Candidates, bool Dropped) ParseCandidates(string tail, bool truncated)
     {
-        if (truncated)
+        if (truncated || tail.Length > MaxBlockLength || tail.Contains(Separator, StringComparison.Ordinal))
             return ([], true);
         var json = tail.Trim();
         if (json.StartsWith("```", StringComparison.Ordinal))
