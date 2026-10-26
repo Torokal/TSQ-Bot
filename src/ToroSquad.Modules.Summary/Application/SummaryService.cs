@@ -88,8 +88,13 @@ public enum SummaryOutcome
     HistoryUnknown = 13,
 }
 
-/// <summary>The last run, for /bot status (no ids, no text).</summary>
-public sealed record SummaryLastRun(SummaryOutcome Outcome, SummaryAiFailure AiFailure, DateTimeOffset At);
+/// <summary>
+/// The last run, for /bot status (no ids, no text). A failed AI request also keeps what its log line says — the HTTP status,
+/// the provider's short error code and the run's trace code — so the owner can tell a key/account problem from an outage
+/// without the logs (in memory only: a restart forgets it).
+/// </summary>
+public sealed record SummaryLastRun(SummaryOutcome Outcome, SummaryAiFailure AiFailure, DateTimeOffset At, int? HttpStatus = null, string? ProviderError = null,
+    string? Trace = null);
 
 /// <summary>
 /// /ozetle from start to end, with every check on the server and at most ONE AI request: the member's roles (any one of
@@ -320,14 +325,9 @@ public sealed partial class SummaryService(
         if (summary is null)
         {
             ticket.End(SummaryRunEnd.InferenceFailed);
-            await responder.ReplyPrivateAsync(T(failure switch
-            {
-                SummaryAiFailure.Timeout => "summary.timeout",
-                SummaryAiFailure.RateLimited => "summary.provider_busy",
-                SummaryAiFailure.EmptyOutput or SummaryAiFailure.InvalidResponse => "summary.empty_output",
-                _ => "summary.provider_unavailable",
-            }) + TraceLine(request, trace));
-            return Remember(SummaryOutcome.AiFailed, failure);
+            await responder.ReplyPrivateAsync(T(FailureMessageKey(failure)) + TraceLine(request, trace));
+            Volatile.Write(ref _last, new SummaryLastRun(SummaryOutcome.AiFailed, failure, clock.GetUtcNow(), decisive.HttpStatus, decisive.ProviderError, trace));
+            return SummaryOutcome.AiFailed;
         }
 
         var parts = SummaryOutput.Split(summary);
@@ -343,6 +343,20 @@ public sealed partial class SummaryService(
         LogPosted(logger, trace, parts.Count, ids.Guild, ids.Channel);
         return Remember(SummaryOutcome.Posted);
     }
+
+    /// <summary>
+    /// The member's message for a failed AI request. The provider refusing the key or the account (401/403) or the request
+    /// itself (any other 4xx: unknown model, plan or usage limit, region, bad request) does not go away by waiting, so it
+    /// is told apart from a network problem or a provider outage (5xx), which usually does. The trace code follows either way.
+    /// </summary>
+    public static string FailureMessageKey(SummaryAiFailure failure) => failure switch
+    {
+        SummaryAiFailure.Timeout => "summary.timeout",
+        SummaryAiFailure.RateLimited => "summary.provider_busy",
+        SummaryAiFailure.EmptyOutput or SummaryAiFailure.InvalidResponse => "summary.empty_output",
+        SummaryAiFailure.Unauthorized or SummaryAiFailure.Rejected => "summary.provider_refused",
+        _ => "summary.provider_unavailable",
+    };
 
     private SummaryOutcome Remember(SummaryOutcome outcome, SummaryAiFailure failure = SummaryAiFailure.None)
     {

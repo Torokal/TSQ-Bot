@@ -445,6 +445,16 @@ invite link and no global command registration. The source code is public under 
 - **NOT VERIFIED_LIVE**: the 2000-character split, thread handling, the role gate, the 100-message gate and the 120 s
   channel cooldown.
 
+## TSQ Özet failure messages and /bot status (2026-10-26, branch `fix/f1-delay-daily-reward-summary`)
+
+- A member saw "Özet servisi şu anda kullanılamıyor … Takip kodu: TS-2RPEUU59". That message means the AI request ended in
+  Network, HTTP 5xx, 401/403 or another 4xx (not a timeout, 429, empty/invalid answer, Discord read or post). The log line
+  for that code could not be read (Railway CLI login expired, no new login started), so the cause is NOT_VERIFIED; no
+  summary code changed between 2026-10-04 and this branch.
+- Change (no provider, model, mode, timeout, retry or fallback change): 401/403 and other 4xx now answer "Özet servisi
+  isteği reddetti (erişim, hesap veya yapılandırma sorunu) …" instead of the "try again later" text; 5xx and network keep
+  it. `/bot status` shows the last failure's HTTP status, provider code and trace code (memory only). TESTED_OFFLINE.
+
 ## TSQ Öngörü (2026-09-29, PR #37 merged, deployed, `/ongoru` synced; module off until enabled)
 
 - Module `predictions`, command group `/ongoru` (no default member permissions; every subcommand authorizes itself):

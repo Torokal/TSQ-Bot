@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Options;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Modules;
@@ -24,7 +25,8 @@ public sealed class SummaryHealthCheck(SummaryService summaries, IOptions<Summar
             {
                 null => new HealthEntry(Component, HealthState.Healthy, "summary.health.idle"),
                 { Outcome: SummaryOutcome.AiFailed } last => new HealthEntry(Component, HealthState.Degraded, "summary.health.ai_failed",
-                    [last.AiFailure.ToString(), DiscordText.Timestamp(last.At, 'R')]),
+                    [last.AiFailure.ToString(), last.HttpStatus?.ToString(CultureInfo.InvariantCulture) ?? "—", last.ProviderError ?? "—", last.Trace ?? "—",
+                        DiscordText.Timestamp(last.At, 'R')]),
                 { Outcome: SummaryOutcome.FetchFailed or SummaryOutcome.PostFailed } last => new HealthEntry(Component, HealthState.Degraded,
                     "summary.health.discord_failed", [DiscordText.Timestamp(last.At, 'R')]),
                 var last => new HealthEntry(Component, HealthState.Healthy, "summary.health.ok", [DiscordText.Timestamp(last.At, 'R')]),
