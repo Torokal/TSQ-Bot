@@ -448,9 +448,14 @@ invite link and no global command registration. The source code is public under 
 ## TSQ Özet failure messages and /bot status (2026-10-26, branch `fix/f1-delay-daily-reward-summary`)
 
 - A member saw "Özet servisi şu anda kullanılamıyor … Takip kodu: TS-2RPEUU59". That message means the AI request ended in
-  Network, HTTP 5xx, 401/403 or another 4xx (not a timeout, 429, empty/invalid answer, Discord read or post). The log line
-  for that code could not be read (Railway CLI login expired, no new login started), so the cause is NOT_VERIFIED; no
-  summary code changed between 2026-10-04 and this branch.
+  Network, HTTP 5xx, 401/403 or another 4xx (not a timeout, 429, empty/invalid answer, Discord read or post). Railway log
+  (read-only, 2026-10-26): `Summary [TS-2RPEUU59] inference failed failure=Unauthorized status=401
+  provider_error=authentication_error model=deepseek-v4.1-flash latency_ms=328 generation_mode=Legacy` — the history scan
+  had succeeded (100 messages). Every /ozetle inference of the current deployment (since 2026-10-10 21:54Z) since
+  2026-10-19 13:52Z failed the same way (8 runs, ~300 ms, 0 successes): OpenCode Go rejects the configured API key (the
+  key is set — an unset key answers "not configured" without a request). Cause = key/account side (revoked, expired,
+  rotated or subscription ended); which of these is NOT_VERIFIED. No summary code changed between 2026-10-04 and this
+  branch. Fix is the owner's: a valid key in `OPENCODE_GO_API_KEY` (Railway), no code change needed for that.
 - Change (no provider, model, mode, timeout, retry or fallback change): 401/403 and other 4xx now answer "Özet servisi
   isteği reddetti (erişim, hesap veya yapılandırma sorunu) …" instead of the "try again later" text; 5xx and network keep
   it. `/bot status` shows the last failure's HTTP status, provider code and trace code (memory only). TESTED_OFFLINE.
