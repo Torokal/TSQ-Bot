@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core.Messaging;
 using ToroSquad.Core.Notifications;
@@ -11,12 +12,13 @@ namespace ToroSquad.Tests.Integration;
 
 /// <summary>
 /// Spoiler hold for live incident cards: Safety Car and red-flag cards reach Discord no earlier than the provider's event
-/// time + 30 s, while ingestion, persistence, dedupe and staging stay immediate. Real poller, workflow, planner, outbox and
+/// time + 70 s (disqualifications: first-recorded time + 40 s), while ingestion, persistence, dedupe and staging stay immediate. Real poller, workflow, planner, outbox and
 /// SQLite; incidents arrive through the live listener (as from MQTT) and are also visible to REST reconciliation.
 /// </summary>
 public sealed class F1SpoilerDelayTests
 {
-    private static readonly TimeSpan Hold = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Hold = TimeSpan.FromSeconds(70);
+    private static readonly TimeSpan DsqHold = TimeSpan.FromSeconds(40);
 
     private static Task EnableAsync(TestHost host, F1NotificationChanges changes) => host.InScopeAsync(async sp =>
         (await sp.GetRequiredService<Formula1ConfigService>().SetNotificationsAsync(TestHost.Admin(Guild), changes, CancellationToken.None)).Succeeded.Should().BeTrue());
@@ -75,14 +77,14 @@ public sealed class F1SpoilerDelayTests
         var row = (await OutboxAsync(host, kindPrefix)).Should().ContainSingle().Subject;
         row.Status.Should().Be(OutboxStatus.Pending);
         row.CreatedAt.Should().Be(t.AddSeconds(3), "staged immediately");
-        row.NextAttemptAt.Should().Be(t + Hold, "provider event time + 30 s, not receipt + 30 s");
+        row.NextAttemptAt.Should().Be(t + Hold, "provider event time + 70 s, not receipt + 70 s");
         row.ExpiresAt.Should().BeAfter(row.NextAttemptAt!.Value);
         Cards(host, headline).Should().Be(0);
 
-        await StepAsync(host, TimeSpan.FromSeconds(26)); // event + 29 s
-        Cards(host, headline).Should().Be(0, "29 s after the event is still too early");
+        await StepAsync(host, Hold - TimeSpan.FromSeconds(4)); // event + 69 s
+        Cards(host, headline).Should().Be(0, "69 s after the event is still too early");
 
-        await StepAsync(host, TimeSpan.FromSeconds(1)); // event + 30 s
+        await StepAsync(host, TimeSpan.FromSeconds(1)); // event + 70 s
         Cards(host, headline).Should().Be(1);
 
         // Replays (REST reconciliation, repeated live message) never add a card or a second row.
@@ -98,7 +100,7 @@ public sealed class F1SpoilerDelayTests
         await IncidentAsync(host, world, reference, open, t2, lap: 20);
         await StepAsync(host, TimeSpan.FromSeconds(2));
         (await OutboxAsync(host, kindPrefix)).Should().HaveCount(2).And.Contain(r => r.Status == OutboxStatus.Pending && r.NextAttemptAt == t2 + Hold);
-        await StepAsync(host, TimeSpan.FromSeconds(27));
+        await StepAsync(host, Hold - TimeSpan.FromSeconds(3)); // t2 + 69 s
         Cards(host, headline).Should().Be(1);
         await StepAsync(host, TimeSpan.FromSeconds(1));
         Cards(host, headline).Should().Be(2);
@@ -120,7 +122,9 @@ public sealed class F1SpoilerDelayTests
         }
 
         Cards(host, "SAFETY CAR").Should().Be(0);
-        await StepAsync(host, TimeSpan.FromSeconds(7));
+        await StepAsync(host, Hold - TimeSpan.FromSeconds(24)); // +69
+        Cards(host, "SAFETY CAR").Should().Be(0);
+        await StepAsync(host, TimeSpan.FromSeconds(1)); // +70
         Cards(host, "SAFETY CAR").Should().Be(1);
     }
 
@@ -135,14 +139,14 @@ public sealed class F1SpoilerDelayTests
         await StepAsync(host, TimeSpan.FromSeconds(15));
         await IncidentAsync(host, world, reference, F1IncidentKind.RedFlag, t.AddSeconds(15), lap: 30);
         await StepAsync(host, TimeSpan.FromSeconds(1));
-        (await OutboxAsync(host, "safety_car:")).Single().NextAttemptAt.Should().Be(t.AddSeconds(30));
-        (await OutboxAsync(host, "red_flag:")).Single().NextAttemptAt.Should().Be(t.AddSeconds(45));
+        (await OutboxAsync(host, "safety_car:")).Single().NextAttemptAt.Should().Be(t + Hold);
+        (await OutboxAsync(host, "red_flag:")).Single().NextAttemptAt.Should().Be(t.AddSeconds(15) + Hold);
 
-        await StepAsync(host, TimeSpan.FromSeconds(14)); // +30
+        await StepAsync(host, Hold - TimeSpan.FromSeconds(16)); // +70
         (Cards(host, "SAFETY CAR"), Cards(host, "KIRMIZI BAYRAK")).Should().Be((1, 0));
-        await StepAsync(host, TimeSpan.FromSeconds(14)); // +44
+        await StepAsync(host, TimeSpan.FromSeconds(14)); // +84
         Cards(host, "KIRMIZI BAYRAK").Should().Be(0);
-        await StepAsync(host, TimeSpan.FromSeconds(1)); // +45
+        await StepAsync(host, TimeSpan.FromSeconds(1)); // +85
         (Cards(host, "SAFETY CAR"), Cards(host, "KIRMIZI BAYRAK")).Should().Be((1, 1));
         host.Transport.Messages.Select(m => m.Message.Embed!.Description!.Split('\n')[0]).Skip(1).Should().Equal("🚗 **SAFETY CAR**", "🚩 **KIRMIZI BAYRAK**");
     }
@@ -165,9 +169,9 @@ public sealed class F1SpoilerDelayTests
         (await OutboxAsync(second, "safety_car:")).Single().Should().Match<ToroSquad.Infrastructure.Persistence.OutboxMessageEntity>(r =>
             r.Status == OutboxStatus.Pending && r.NextAttemptAt == t + Hold);
 
-        await StepAsync(second, TimeSpan.FromSeconds(11)); // +29
+        await StepAsync(second, Hold - TimeSpan.FromSeconds(19)); // +69
         Cards(host, "SAFETY CAR").Should().Be(0);
-        await StepAsync(second, TimeSpan.FromSeconds(1)); // +30
+        await StepAsync(second, TimeSpan.FromSeconds(1)); // +70
         for (var i = 0; i < 3; i++)
             await StepAsync(second, TimeSpan.FromSeconds(20));
         Cards(host, "SAFETY CAR").Should().Be(1, "exactly one card after the restart");
@@ -181,11 +185,11 @@ public sealed class F1SpoilerDelayTests
         await using var _ = host;
         var t = host.Clock.GetUtcNow();
 
-        host.Clock.Advance(TimeSpan.FromSeconds(45)); // the provider delivered it 45 s late
+        host.Clock.Advance(Hold + TimeSpan.FromSeconds(15)); // the provider delivered it 85 s late (still fresh)
         await IncidentAsync(host, world, reference, F1IncidentKind.RedFlag, t, lap: 2);
         await StepAsync(host, TimeSpan.Zero);
 
-        Cards(host, "KIRMIZI BAYRAK").Should().Be(1, "event time + 30 s has already passed");
+        Cards(host, "KIRMIZI BAYRAK").Should().Be(1, "event time + 70 s has already passed: no second wait");
     }
 
     [Fact]
@@ -204,7 +208,7 @@ public sealed class F1SpoilerDelayTests
         await host.InScopeAsync(async sp =>
             (await sp.GetRequiredService<Formula1ConfigService>().PauseAsync(TestHost.Admin(Guild), true, CancellationToken.None)).Succeeded.Should().BeTrue());
         await host.Services.GetRequiredService<ToroSquad.Infrastructure.Delivery.OutboxProcessor>().ProcessOnceAsync(CancellationToken.None);
-        host.Clock.Advance(TimeSpan.FromSeconds(40));
+        host.Clock.Advance(Hold + TimeSpan.FromSeconds(10));
         await DeliverAsync(host);
 
         host.Transport.Messages.Should().ContainSingle("only the earlier start card");
@@ -213,7 +217,7 @@ public sealed class F1SpoilerDelayTests
     }
 
     [Fact]
-    public async Task Race_start_and_disqualification_cards_are_not_held()
+    public async Task Race_start_is_not_held_and_a_disqualification_waits_its_own_forty_seconds()
     {
         var (host, world, race) = await RaceWeekendAsync();
         await using var _ = host;
@@ -241,9 +245,27 @@ public sealed class F1SpoilerDelayTests
         host.Clock.Advance(TimeSpan.FromMinutes(61));
         await host.Services.GetRequiredService<Formula1Poller>().TickAsync(CancellationToken.None);
         await host.Services.GetRequiredService<Formula1Poller>().TickAsync(CancellationToken.None);
+        var recorded = await host.InScopeAsync(async sp => await sp.GetRequiredService<ToroSquad.Infrastructure.Persistence.ToroDbContext>()
+            .Set<ToroSquad.Modules.Formula1.Persistence.F1RaceControlEventEntity>().AsNoTracking()
+            .Where(e => e.Kind == (int)F1IncidentKind.Disqualified).Select(e => e.OccurredAt).SingleAsync());
         var dsq = (await OutboxAsync(host, "disqualification:")).Single();
-        dsq.NextAttemptAt.Should().Be(dsq.CreatedAt, "disqualifications come from the classification and are not held");
-        (await OutboxAsync(host, "result:")).Single().Should().Match<ToroSquad.Infrastructure.Persistence.OutboxMessageEntity>(r => r.NextAttemptAt == r.CreatedAt);
+        dsq.Status.Should().Be(OutboxStatus.Pending);
+        dsq.NextAttemptAt.Should().Be(recorded + DsqHold, "its own 40 s from when the disqualification was first recorded, not the SC/red-flag 70 s");
+        (await OutboxAsync(host, "result:")).Single().Should().Match<ToroSquad.Infrastructure.Persistence.OutboxMessageEntity>(r => r.NextAttemptAt == r.CreatedAt,
+            "the result card (with its DSQ line) is not held");
+
+        host.Clock.Advance(recorded + DsqHold - TimeSpan.FromSeconds(1) - host.Clock.GetUtcNow());
+        await DeliverAsync(host);
+        host.Transport.Messages.Count(m => m.Message.Embed!.Description!.Contains("DİSKALİFİYE", StringComparison.Ordinal)).Should().Be(0, "39 s is too early");
+        host.Clock.Advance(TimeSpan.FromSeconds(1));
+        await DeliverAsync(host);
+        host.Transport.Messages.Count(m => m.Message.Embed!.Description!.Contains("DİSKALİFİYE", StringComparison.Ordinal)).Should().Be(1);
+
+        // Planning again (poller ticks) never slides the time and never adds a second card.
+        for (var i = 0; i < 3; i++)
+            await host.Services.GetRequiredService<Formula1Poller>().TickAsync(CancellationToken.None);
+        await DeliverAsync(host);
+        (await OutboxAsync(host, "disqualification:")).Should().ContainSingle().Which.Status.Should().Be(OutboxStatus.Sent);
     }
 
     [Fact]
@@ -264,9 +286,13 @@ public sealed class F1SpoilerDelayTests
     }
 
     [Fact]
-    public void Hold_setting_defaults_to_thirty_seconds_and_is_validated()
+    public void Hold_settings_default_to_seventy_and_forty_seconds_and_are_validated()
     {
-        new Formula1Options().LiveIncidentSpoilerDelaySeconds.Should().Be(30);
+        new Formula1Options().LiveIncidentSpoilerDelaySeconds.Should().Be(70, "was 30, +40");
+        new Formula1Options().DisqualificationDelaySeconds.Should().Be(40, "was not held, +40");
+        new Formula1Options { DisqualificationDelaySeconds = 0 }.Validate().Should().BeEmpty();
+        new Formula1Options { DisqualificationDelaySeconds = -1 }.Validate().Should().Contain(e => e.Contains("DisqualificationDelaySeconds", StringComparison.Ordinal));
+        new Formula1Options { DisqualificationDelaySeconds = 301 }.Validate().Should().Contain(e => e.Contains("DisqualificationDelaySeconds", StringComparison.Ordinal));
         new Formula1Options().Validate().Should().BeEmpty();
         new Formula1Options { LiveIncidentSpoilerDelaySeconds = 0 }.Validate().Should().BeEmpty();
         new Formula1Options { LiveIncidentSpoilerDelaySeconds = 301 }.Validate().Should().Contain(e => e.Contains("LiveIncidentSpoilerDelaySeconds", StringComparison.Ordinal));

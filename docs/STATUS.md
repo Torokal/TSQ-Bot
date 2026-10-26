@@ -23,6 +23,9 @@ invite link and no global command registration. The source code is public under 
   against the public APIs (read-only) on 2026-09-25.
 - **BLOCKED**: OpenF1 live access needs a paid sponsor account (owner decision); until then start notifications are
   honestly `NOT_CONFIGURED`. Details and usage terms: [FORMULA1.md](FORMULA1.md).
+- Spoiler hold (2026-10-26, branch `fix/f1-delay-daily-reward-summary`): Safety Car / red-flag cards provider event time
+  + 70 s (`Formula1:LiveIncidentSpoilerDelaySeconds`, was 30), disqualification cards first-recorded time + 40 s (new
+  `Formula1:DisqualificationDelaySeconds`, was not held). Rows already in the outbox keep their time. TESTED_OFFLINE only.
 
 ## Volleyball module — Filenin Sultanları (new, 2026-09-26, branch `feat/volleyball-turkey-women`)
 

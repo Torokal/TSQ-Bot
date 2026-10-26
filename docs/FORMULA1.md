@@ -303,7 +303,7 @@ anında kendi anahtarı kontrol edilir (kapatılırsa bekleyen kart iptal edilir
 | Yarış hatırlatması (`race_reminder`) | Jolpica takvimi | yarış başına 1 | Planlanan yarış başlangıcından tam 15 dk önce; en geç 3 dk içinde (`RaceReminderGraceMinutes`), sonra hiç. Yalnızca Yarış (sprint/sıralama/antrenman yok). Gerçek "yarış başladı" kartı ayrı ve yaşam döngüsüne bağlı kalır |
 | Safety Car (`safety_car:<faz>`) | OpenF1 race_control | gerçek SC fazı başına 1 | Sağlayıcı mesaj zamanından en fazla 10 dk sonra (`IncidentFreshMinutes`) |
 | Kırmızı bayrak (`red_flag:<faz>`) | OpenF1 race_control | gerçek kırmızı bayrak fazı başına 1 | Aynı tazelik kuralı |
-| Diskalifiye (`disqualification:<araç>`) | OpenF1 session_result `dsq: true` | araç başına 1 | İlk görüldükten en fazla 3 saat sonra (`DisqualificationFreshHours`) |
+| Diskalifiye (`disqualification:<araç>`) | OpenF1 session_result `dsq: true` | araç başına 1 | İlk görülmesinden 40 sn sonra (`DisqualificationDelaySeconds`), en fazla 3 saat sonra (`DisqualificationFreshHours`) |
 
 Sağlayıcı semantiği (gerçek OpenF1 verisinden, 2024–2026; fixture: `tests/ToroSquad.Tests/Fixtures/f1/openf1-race-control-*.json`):
 
@@ -320,11 +320,16 @@ Sağlayıcı semantiği (gerçek OpenF1 verisinden, 2024–2026; fixture: `tests
   sağlayıcıda yok; kartta sürücü numarası/adı ve zaman gösterilir.
 
 **Canlı olay spoiler gecikmesi:** Safety Car ve kırmızı bayrak kartları, TV/yayın canlı veriden geride kalabildiği için
-Discord'a en erken **sağlayıcının olay zamanı + 30 sn** sonra gider (`Formula1:LiveIncidentSpoilerDelaySeconds`, 0 = kapalı; alındığı
-andan değil olay zamanından sayılır, olay bize zaten daha geç ulaştıysa ek bekleme yok). Yalnızca teslim bekler: veri alımı, kalıcılık,
-faz/tekrar kontrolü ve outbox kaydı anında yapılır; kart outbox'ta kalıcı olarak (`NextAttemptAt`) beklediği için yeniden başlatma
-gecikmeyi ne kaybettirir ne atlatır, pause/anahtar kapatma bekleyen kartı iptal eder. "Yarış başladı", sonuç/puan durumu, hatırlatma,
-hafta sonu programı ve (sınıflandırmadan gelen) diskalifiye kartları **geciktirilmez**.
+Discord'a en erken **sağlayıcının olay zamanı + 70 sn** sonra gider (`Formula1:LiveIncidentSpoilerDelaySeconds`, varsayılan 70 —
+2026-10-26'dan önce 30; 0 = kapalı; alındığı andan değil olay zamanından sayılır, olay bize zaten daha geç ulaştıysa ek bekleme yok).
+Diskalifiye kartları kendi ayarıyla, sınıflandırmada **ilk görüldükleri an + 40 sn** sonra gider
+(`Formula1:DisqualificationDelaySeconds`, varsayılan 40 — önceden bekletilmiyordu; 0 = kapalı; sağlayıcı sınıflandırmada olay zamanı
+vermediği için zaman tabanı ilk kayıt anıdır). İki ayar da 0–300 sn ve kartın tazelik penceresinden kısa olmalıdır (yoksa bot
+açılmaz). Yalnızca teslim bekler: veri alımı, kalıcılık, faz/tekrar kontrolü ve outbox kaydı anında yapılır; kart outbox'ta kalıcı
+olarak (`NextAttemptAt`, satır oluşturulurken bir kez yazılır) beklediği için yeniden planlama, yeniden deneme veya yeniden başlatma
+gecikmeyi ne kaydırır ne kaybettirir ne atlatır; pause/anahtar kapatma bekleyen kartı iptal eder. Değişiklikten önce kuyruğa girmiş
+satırlar eski zamanlarıyla gider. "Yarış başladı", sonuç/puan durumu (diskalifiye satırı dahil), hatırlatma ve hafta sonu programı
+kartları **geciktirilmez**.
 
 Kalıcılık ve tekrar koruması: olaylar `f1_race_control_event` tablosunda (oturum + sağlayıcı mesaj parmak izi benzersiz)
 bir kez saklanır — MQTT, REST mutabakatı veya yeniden bağlanma sonrası tekrar aynı satırı üretemez. Fazlar bu kalıcı geçmişten

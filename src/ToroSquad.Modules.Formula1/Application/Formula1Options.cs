@@ -88,12 +88,19 @@ public sealed class Formula1Options
     /// <summary>
     /// Spoiler protection for live incident cards (Safety Car, red flag): Discord delivery is held until the PROVIDER's
     /// event time plus this many seconds, because TV and streams run behind the live data. Only the delivery waits (durably,
-    /// in the outbox); ingestion, persistence and dedupe stay immediate. 0 turns the hold off.
+    /// in the outbox); ingestion, persistence and dedupe stay immediate. 0 turns the hold off. 70 since 2026-10-26 (was 30).
     /// </summary>
-    public int LiveIncidentSpoilerDelaySeconds { get; set; } = 30;
+    public int LiveIncidentSpoilerDelaySeconds { get; set; } = 70;
 
     /// <summary>A disqualification card is only sent this soon after the provider's message (stewards may decide after the flag).</summary>
     public int DisqualificationFreshHours { get; set; } = 3;
+
+    /// <summary>
+    /// Spoiler hold for disqualification cards, separate from <see cref="LiveIncidentSpoilerDelaySeconds"/>: delivery waits
+    /// until the moment the disqualification was first recorded plus this many seconds (durably, in the outbox). 0 turns
+    /// the hold off. 40 since 2026-10-26 (was not held).
+    /// </summary>
+    public int DisqualificationDelaySeconds { get; set; } = 40;
 
     /// <summary>
     /// HTTPS base URL of the in-house card thumbnails (assets/formula1 in the repository). Empty = no thumbnails.
@@ -152,6 +159,7 @@ public sealed class Formula1Options
         if (LiveIncidentSpoilerDelaySeconds >= IncidentFreshMinutes * 60)
             errors.Add("Formula1:LiveIncidentSpoilerDelaySeconds must be shorter than IncidentFreshMinutes (a held card must still be fresh when it is due)");
         Range(nameof(DisqualificationFreshHours), DisqualificationFreshHours, 1, 24);
+        Range(nameof(DisqualificationDelaySeconds), DisqualificationDelaySeconds, 0, 300); // always inside the ≥ 1 h freshness window
         if (!string.IsNullOrEmpty(AssetBaseUrl) &&
             (!Uri.TryCreate(AssetBaseUrl, UriKind.Absolute, out var assets) || assets.Scheme != Uri.UriSchemeHttps || !AssetBaseUrl.EndsWith('/')))
             errors.Add("Formula1:AssetBaseUrl must be an absolute https URL ending with '/' (or empty)");
