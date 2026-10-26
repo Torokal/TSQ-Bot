@@ -67,6 +67,12 @@ public sealed class RecordingSorResponder : ISorResponder
 
     public SorDelivery Outcome { get; set; } = SorDelivery.Delivered;
 
+    /// <summary>Runs right after a confirmed delivery, before anything is saved (a change "between Discord and the database").</summary>
+    public Func<Task>? AfterDelivery { get; set; }
+
+    /// <summary>The "saved" line edit fails on Discord (it must not repeat any saving or generation).</summary>
+    public bool FooterFails { get; set; }
+
     public Task RefuseAsync(string text)
     {
         Refusals.Add(text);
@@ -85,15 +91,22 @@ public sealed class RecordingSorResponder : ISorResponder
         return Task.CompletedTask;
     }
 
-    public Task<SorDelivery> DeliverAsync(SorReply reply)
+    public async Task<SorDelivery> DeliverAsync(SorReply reply)
     {
         if (Outcome == SorDelivery.Delivered)
+        {
             Delivered.Add(reply);
-        return Task.FromResult(Outcome);
+            if (AfterDelivery is { } after)
+                await after();
+        }
+
+        return Outcome;
     }
 
     public Task AddFooterAsync(SorReply reply, string line)
     {
+        if (FooterFails)
+            throw new InvalidOperationException("Discord refused the edit (test)");
         Footers.Add(line);
         return Task.CompletedTask;
     }
@@ -127,14 +140,19 @@ public sealed class SorKit : IAsyncDisposable
     public TestHost Host { get; }
     public FakeSorAi Ai { get; }
 
-    public static async Task<SorKit> CreateAsync(Dictionary<string, string?>? overrides = null, string? directory = null, FakeSorAi? ai = null)
+    public static async Task<SorKit> CreateAsync(Dictionary<string, string?>? overrides = null, string? directory = null, FakeSorAi? ai = null,
+        Action<IServiceCollection>? replace = null)
     {
         ai ??= new FakeSorAi();
         var settings = new Dictionary<string, string?>(overrides ?? []);
         settings.TryAdd("Sor:UserCooldownSeconds", "0"); // the fake clock stands still; cooldown tests set their own
         if (directory is not null)
             settings["Bot:DataDirectory"] = directory;
-        var host = await TestHost.CreateAsync(settings, replace: s => s.AddKeyedSingleton<IAiChatClient>(SorModule.ModuleIdValue, ai));
+        var host = await TestHost.CreateAsync(settings, replace: s =>
+        {
+            s.AddKeyedSingleton<IAiChatClient>(SorModule.ModuleIdValue, ai);
+            replace?.Invoke(s);
+        });
         var kit = new SorKit(host, ai);
         foreach (var guild in new[] { Guild, OtherGuild })
             await host.InScopeAsync(async sp => (await sp.GetRequiredService<ModuleManagementService>().SetEnabledAsync(TestHost.Admin(guild), SorModule.ModuleIdValue, true, CancellationToken.None))

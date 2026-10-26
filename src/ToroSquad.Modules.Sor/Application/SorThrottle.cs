@@ -13,7 +13,7 @@ public enum SorAdmission
     /// <summary>A generation for this same conversation is running.</summary>
     ConversationBusy = 1,
 
-    /// <summary><see cref="SorOptions.MaxConcurrentRequests"/> generations are running bot-wide (no queue).</summary>
+    /// <summary><see cref="SorOptions.MaxConcurrentRequests"/> Sor generations are running (all Sor calls together; TSQ Özet is not counted; no queue).</summary>
     AtCapacity = 2,
 
     /// <summary>The provider answered 429 a moment ago: no new request until its Retry-After passed.</summary>
@@ -22,7 +22,7 @@ public enum SorAdmission
 
 /// <summary>
 /// In-memory admission for running generations only: one per conversation, at most <see cref="SorOptions.MaxConcurrentRequests"/>
-/// bot-wide (Sor's own share of the shared OpenCode Go key — TSQ Özet has its own), refused at once when full. After a 429
+/// across all Sor calls (Sor's own share of the shared OpenCode Go key — TSQ Özet keeps its own SummaryThrottle), refused at once when full. After a 429
 /// no request is sent until the provider's Retry-After (or <see cref="DefaultBackoff"/>) has passed. Cooldowns and daily
 /// limits are NOT here: they are persistent and checked in the database. Thread-safe.
 /// </summary>

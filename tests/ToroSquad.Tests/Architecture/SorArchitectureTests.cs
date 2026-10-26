@@ -89,11 +89,11 @@ public sealed partial class SorArchitectureTests
     [Fact]
     public void Replies_never_ping_and_logs_never_carry_text()
     {
-        foreach (var file in new[] { "SorCommands.cs", "SorMemoryCommands.cs" })
+        foreach (var file in new[] { "SorCommands.cs", "SorMemoryCommands.cs", "SorInteractionResponder.cs" })
         {
             var commands = File.ReadAllText(Path.Combine(Root("ToroSquad.Modules.Sor"), "Commands", file));
-            commands.Should().NotMatchRegex(@"\bRespondAsync\(", "replies go through ToroInteractionModule or set NoPings");
-            Regex.Count(commands, @"\bFollowupAsync\(").Should().Be(Regex.Count(commands, @"allowedMentions: NoPings"), file);
+            foreach (Match call in Regex.Matches(commands, @"\b(RespondAsync|FollowupAsync)\((?<args>[^;]*)\);"))
+                call.Groups["args"].Value.Should().Contain("allowedMentions: NoPings", file + ": " + call.Value);
             Regex.Count(commands, @"m\.AllowedMentions = NoPings;").Should().BeGreaterThanOrEqualTo(Regex.Count(commands, @"ModifyOriginalResponseAsync\("), file);
         }
 
@@ -101,6 +101,63 @@ public sealed partial class SorArchitectureTests
         code.Should().NotContain("MentionPolicy.EveryoneOnly").And.NotContain("ExplicitUsers");
         foreach (Match call in Regex.Matches(code, @"\b(logger\.Log\w+)\((?<args>[^;]*)\);"))
             Regex.Replace(call.Groups["args"].Value, @"""[^""]*""", "\"\"").Should().NotMatchRegex(@"\b(question|Question|answer|Answer|Text|prompt|Messages|Content|AskerName|DisplayName|note)\b", call.Value);
+    }
+
+    [Fact]
+    public void Forms_open_as_the_first_answer_after_the_owner_check_and_the_memory_button_carries_nothing()
+    {
+        var commands = File.ReadAllText(Path.Combine(Root("ToroSquad.Modules.Sor"), "Commands", "SorCommands.cs"));
+        string Body(string start, string end) => commands[commands.IndexOf(start, StringComparison.Ordinal)..commands.IndexOf(end, StringComparison.Ordinal)];
+        var open = Body("private async Task OpenFormAsync", "private async Task SubmitAsync");
+        open.IndexOf("SorConversationGate.RefusalAsync", StringComparison.Ordinal).Should().BeLessThan(open.IndexOf("RespondWithModalAsync", StringComparison.Ordinal));
+        open.Should().NotContain("Defer", "a modal must be the first answer to the click");
+        var submit = Body("private async Task SubmitAsync", "private async Task RunAsync");
+        submit.IndexOf("SorConversationGate.RefusalAsync", StringComparison.Ordinal).Should().BeLessThan(submit.IndexOf("RunAsync(", StringComparison.Ordinal),
+            "the submit is checked again");
+        commands.Should().Contain("new SorInteractionResponder(Context.Interaction", "every answer goes through the tested adapter");
+
+        SorUi.MemoryId.Should().Be("tsq:sor:mem:open").And.NotContain("*");
+        var button = typeof(SorMemoryCommands).GetMethods().Single(m => m.GetCustomAttribute<global::Discord.Interactions.ComponentInteractionAttribute>()?.CustomId == SorUi.MemoryId);
+        button.GetParameters().Should().BeEmpty("the button has no owner or target: it opens the clicker's own memory");
+        File.ReadAllText(Path.Combine(Root("ToroSquad.Modules.Sor"), "Commands", "SorMemoryCommands.cs")).Should().Contain("memory.PanelAsync(Actor,");
+    }
+
+    [Fact]
+    public async Task A_submitted_form_and_a_button_click_pass_the_module_gate_again_in_the_real_router()
+    {
+        await using var host = await TestHost.CreateAsync();
+        var interactions = host.Services.GetRequiredService<InteractionHost>();
+        (await interactions.InitializeAsync(host.Services)).LoadErrors.Should().BeEmpty();
+        var user = InterfaceFake.Create<IGuildUser>(new()
+        {
+            ["Id"] = 9UL,
+            ["GuildId"] = SorKit.Guild.Value,
+            ["GuildPermissions"] = new GuildPermissions(0),
+            ["RoleIds"] = (IReadOnlyCollection<ulong>)Array.Empty<ulong>(),
+        });
+        var guild = InterfaceFake.Create<IGuild>(new() { ["Id"] = SorKit.Guild.Value, ["OwnerId"] = 1UL });
+        IInteractionContext Context(IDiscordInteraction interaction) =>
+            InterfaceFake.Create<IInteractionContext>(new() { ["Guild"] = guild, ["User"] = user, ["Interaction"] = interaction });
+
+        var modal = InterfaceFake.Create<IModalInteraction>(new()
+        {
+            ["Type"] = InteractionType.ModalSubmit,
+            ["Data"] = InterfaceFake.Create<IModalInteractionData>(new()
+            {
+                ["CustomId"] = SorUi.NewModalPrefix + "1:9:c",
+                ["Components"] = (IReadOnlyCollection<IComponentInteractionData>)Array.Empty<IComponentInteractionData>(),
+            }),
+        });
+        var click = InterfaceFake.Create<IComponentInteraction>(new()
+        {
+            ["Type"] = InteractionType.MessageComponent,
+            ["Data"] = InterfaceFake.Create<IComponentInteractionData>(new() { ["CustomId"] = SorUi.ContinuePrefix + "1:9:c" }),
+        });
+
+        await using var scope = host.Scope();
+        (await interactions.Service.ExecuteCommandAsync(Context(modal), scope.ServiceProvider)).ErrorReason.Should().Be(ToroModuleAttribute.ModuleDisabledError,
+            "a form opened while the module was on is refused once it is off");
+        (await interactions.Service.ExecuteCommandAsync(Context(click), scope.ServiceProvider)).ErrorReason.Should().Be(ToroModuleAttribute.ModuleDisabledError);
     }
 
     [Fact]

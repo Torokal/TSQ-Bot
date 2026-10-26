@@ -71,6 +71,12 @@ public static class SorUi
         return builder.Build();
     }
 
+    /// <summary>The "Devam et" / "Yeni sohbet" form for a conversation (<paramref name="args"/> as in its button).</summary>
+    public static Modal FormFor(string args, bool isNew, Func<string, string> L, int maxLength) =>
+        QuestionModal((isNew ? NewModalPrefix : ContinueModalPrefix) + args,
+            L(isNew ? "sor.form.new_title" : "sor.form.continue_title"), L("sor.form.label"),
+            L(isNew ? "sor.form.new_placeholder" : "sor.form.continue_placeholder"), maxLength);
+
     public static Modal QuestionModal(string customId, string title, string label, string placeholder, int maxLength) => new ModalBuilder()
         .WithTitle(Cut(title, MaxTitleLength))
         .WithCustomId(customId)
