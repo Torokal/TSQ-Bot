@@ -49,7 +49,7 @@ public sealed class SorOptions
     /// <summary>The longest question (Discord's own option and modal limits are set to the same value).</summary>
     public int MaxQuestionLength { get; set; } = 4000;
 
-    /// <summary>Generations running at the same time across the bot; more are refused at once (no queue).</summary>
+    /// <summary>Sor generations running at the same time (all Sor calls together; TSQ Özet has its own limit); more are refused at once (no queue).</summary>
     public int MaxConcurrentRequests { get; set; } = 1;
 
     /// <summary>Default member cooldown between two questions (per guild; /tsq-admin can change it).</summary>
@@ -86,12 +86,13 @@ public sealed class SorOptions
 
     public SorLimits DefaultLimits => new(UserCooldownSeconds, UserDailyLimit, GuildDailyLimit, MaxContextTurns, ConversationIdleMinutes, HistoryRetentionHours);
 
-    /// <summary>The one request profile of /sor.</summary>
-    public AiChatRequest Request(IReadOnlyList<AiMessage> messages) => new(
+    /// <summary>The one request profile of /sor; <paramref name="sessionId"/> is the conversation's (<see cref="Application.SorSession"/>).</summary>
+    public AiChatRequest Request(IReadOnlyList<AiMessage> messages, string? sessionId = null) => new(
         Model, messages, MaxOutputTokens, Temperature, TopP,
         DisableThinking ? AiThinking.Disabled : AiThinking.Enabled,
         DisableThinking ? null : ReasoningEffort,
-        RequestTimeout);
+        RequestTimeout,
+        sessionId);
 
     public IReadOnlyList<string> Validate()
     {

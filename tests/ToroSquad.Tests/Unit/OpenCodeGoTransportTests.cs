@@ -31,9 +31,18 @@ public sealed class OpenCodeGoTransportTests
         var code = Code("ToroSquad.Ai");
         Regex.Matches(code, @"\.SendAsync\(").Should().ContainSingle("one HTTP send: one request per call, no retry loop");
         code.Should().NotMatchRegex(@"\b(while|for|foreach|do)\b[^;{]*\{[^}]*SendAsync").And.NotContain("Log");
-        Regex.Matches(code, @"SessionHeader, Guid\.NewGuid\(\)").Should().ContainSingle("x-opencode-session is a random GUID — never an id, name or text");
+        Regex.Matches(code, @"SessionHeader, OpenCodeGo\.SessionFor\(request\)").Should().ContainSingle("x-opencode-session: the request's validated session id or a random GUID");
+        code.Should().NotMatchRegex(@"\b(SemaphoreSlim|Lock|Interlocked)\b", "no shared limiter: each feature keeps its own concurrency share");
+        OpenCodeGo.SessionFor(Request(null)).Should().MatchRegex("^[0-9a-f-]{36}$");
+        OpenCodeGo.SessionFor(Request(null)).Should().NotBe(OpenCodeGo.SessionFor(Request(null)), "a one-off request gets a new GUID each time");
+        OpenCodeGo.SessionFor(Request("6f1c2d3e-0000-4000-8000-123456789abc")).Should().Be("6f1c2d3e-0000-4000-8000-123456789abc");
+        foreach (var invalid in new[] { "kisa", "user 12345678", "ada@example.com", new string('a', 65) })
+            OpenCodeGo.SessionFor(Request(invalid)).Should().NotBe(invalid, "an invalid id is never sent as is");
         References(typeof(SummaryModule).Assembly).Should().Contain("ToroSquad.Ai");
     }
+
+    private static AiChatRequest Request(string? session) =>
+        new("m", [new AiMessage(AiRole.User, "x")], 10, 0.3, 0.9, AiThinking.Disabled, null, TimeSpan.FromSeconds(5), session);
 
     [Fact]
     public void Summary_requests_are_byte_for_byte_what_they_were_before_the_shared_transport()

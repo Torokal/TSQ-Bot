@@ -98,7 +98,10 @@ public sealed record AiMessage(AiRole Role, string Content);
 
 /// <summary>
 /// One complete chat request: the exact model, messages and generation settings, and that request's own deadline. Nothing
-/// here is a fallback: a request has exactly one model and is sent once.
+/// here is a fallback: a request has exactly one model and is sent once. <paramref name="SessionId"/> is the
+/// <see cref="OpenCodeGo.SessionHeader"/> value for a feature that keeps a conversation (stable for that conversation,
+/// random, never an id, name or text — see <see cref="OpenCodeGo.IsValidSessionId"/>); null sends a new random GUID, as
+/// one-off requests always did. It is routing/caching information only: the provider keeps no conversation for TSQ.
 /// </summary>
 public sealed record AiChatRequest(
     string Model,
@@ -108,7 +111,8 @@ public sealed record AiChatRequest(
     double TopP,
     AiThinking Thinking,
     string? ReasoningEffort,
-    TimeSpan Timeout);
+    TimeSpan Timeout,
+    string? SessionId = null);
 
 /// <summary>
 /// One chat completion. Implementations send exactly one inference request per call — no retry, no fallback model — and never

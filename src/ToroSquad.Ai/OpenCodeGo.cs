@@ -34,10 +34,19 @@ public static class OpenCodeGo
     public const string DefaultBaseUrl = "https://opencode.ai/zen/go/v1/";
 
     /// <summary>
-    /// A new random GUID per request — never a guild, channel, member, name or text. Not a conversation memory: TSQ features
-    /// keep their own context and send it in the messages.
+    /// "Send a stable session ID in x-opencode-session for each conversation" (OpenCode Go docs): a conversation's own random
+    /// id (<see cref="AiChatRequest.SessionId"/>), otherwise a new random GUID per request — never a guild, channel, member,
+    /// name or text. Not a conversation memory: TSQ features keep their own context and send it in the messages.
     /// </summary>
     public const string SessionHeader = "x-opencode-session";
+
+    /// <summary>A session id as a feature may send it: 8–64 ASCII letters, digits or dashes (a GUID fits).</summary>
+    public static bool IsValidSessionId(string? value) =>
+        value is { Length: >= 8 and <= 64 } && value.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
+
+    /// <summary>The header value of one request: the conversation's id when it is valid, otherwise a new random GUID.</summary>
+    public static string SessionFor(AiChatRequest request) =>
+        IsValidSessionId(request.SessionId) ? request.SessionId! : Guid.NewGuid().ToString();
 
     /// <summary>The largest answer accepted (an answer is a few KB).</summary>
     public const int MaxResponseBytes = 512 * 1024;
@@ -232,7 +241,8 @@ public static class OpenCodeGo
 
 /// <summary>
 /// <see cref="IAiChatClient"/> over OpenCode Go: one request per call, <c>stream: false</c>, no tools, no web access. Every
-/// request carries a new random <see cref="OpenCodeGo.SessionHeader"/> and the key only in the Authorization header. No retry of
+/// request carries <see cref="OpenCodeGo.SessionFor"/> as <see cref="OpenCodeGo.SessionHeader"/> and the key only in the
+/// Authorization header. There is no limiter here: each feature keeps its own concurrency share. No retry of
 /// any kind: a 4xx, a 429, a 5xx, a network error or a timeout is returned as a failure. (The only resend .NET itself does is a
 /// request that never left on a pooled connection the server had already closed — not a second inference.) The answer's text
 /// is returned to the caller and never logged; nothing is logged here at all.
@@ -258,7 +268,7 @@ public sealed class OpenCodeGoChatClient(IHttpClientFactory http, string httpCli
             };
             message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key.Value);
-            message.Headers.TryAddWithoutValidation(OpenCodeGo.SessionHeader, Guid.NewGuid().ToString());
+            message.Headers.TryAddWithoutValidation(OpenCodeGo.SessionHeader, OpenCodeGo.SessionFor(request));
 
             using var response = await http.CreateClient(httpClientName).SendAsync(message, HttpCompletionOption.ResponseContentRead, linked.Token);
             var body = await response.Content.ReadAsByteArrayAsync(linked.Token);

@@ -154,7 +154,7 @@ public sealed class SorService(
         var snapshot = new SorSnapshot(context.AskerStamp, context.AskerMemory, context.Other?.UserId, context.OtherStamp, context.ConversationId,
             context.ConversationStamp, prompt.UsedNotes.Select(n => new SorNoteVersion(n.Id, n.Stamp)).ToList());
 
-        var result = await ai.CompleteAsync(settings.Request(prompt.Messages), ct);
+        var result = await ai.CompleteAsync(settings.Request(prompt.Messages, SorSession.For(context.ConversationId, context.ConversationStamp)), ct);
         if (!result.Succeeded)
         {
             var trace = TraceCodes.New();
