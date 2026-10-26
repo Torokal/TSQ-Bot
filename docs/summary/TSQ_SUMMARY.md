@@ -105,6 +105,13 @@ thinking'i kapatan tek sinyal `thinking: {"type": "disabled"}`'dır. İkisini bi
 - Yalnızca `disabled` (bugünkü istek): 0 reasoning, 757 cevap token'ı, 8,4 sn, `stop`, biçim eksiksiz. Bu tek bir teşhis
   çağrısıdır; kararlılık canlıda izlenir.
 
+**Paylaşılan taşıma (2026-10-26).** İstek gövdesi, HTTP gönderimi, cevap ayrıştırma ve hata sınıflandırması TSQ Sor ile
+ortak `ToroSquad.Ai` katmanına taşındı (`OpenCodeGoChatClient`); `OpenCodeSummaryAiClient` artık yalnız özet promptunu bu
+modülün profiline (legacy, grounded generator veya reviewer) çevirir. Anahtar, uç nokta, istek baytları, zaman aşımları,
+User-Agent (`SummaryModule`), retry'sızlık ve hata kategorileri değişmedi (regresyon testleri bayt bayt karşılaştırır).
+Promptlar, kaynak/spoiler doğrulaması, rol ve mesaj eşikleri, cooldown'lar ve legacy/grounded davranışı bu modülde kalır;
+Özet hâlâ tablo kullanmaz ve Sor'a referans vermez.
+
 `Summary:DisableThinking=false` ayarı thinking'i açar: `thinking: {"type": "enabled"}` ve `reasoning_effort: <ReasoningEffort>`
 gönderilir.
 

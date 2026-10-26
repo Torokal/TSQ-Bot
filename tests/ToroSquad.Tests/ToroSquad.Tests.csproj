@@ -25,6 +25,8 @@
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Timezone\ToroSquad.Modules.Timezone.csproj" />
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Giveaway\ToroSquad.Modules.Giveaway.csproj" />
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Summary\ToroSquad.Modules.Summary.csproj" />
+    <ProjectReference Include="..\..\src\ToroSquad.Modules.Sor\ToroSquad.Modules.Sor.csproj" />
+    <ProjectReference Include="..\..\src\ToroSquad.Ai\ToroSquad.Ai.csproj" />
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Predictions\ToroSquad.Modules.Predictions.csproj" />
     <ProjectReference Include="..\..\src\ToroSquad.Modules.News\ToroSquad.Modules.News.csproj" />
     <ProjectReference Include="..\..\src\ToroSquad.Modules.Updates\ToroSquad.Modules.Updates.csproj" />

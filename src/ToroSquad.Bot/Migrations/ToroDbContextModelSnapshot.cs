@@ -2528,6 +2528,374 @@ namespace ToroSquad.Bot.Migrations
                     b.ToTable("prediction_weekly_board", (string)null);
                 });
 
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorConversationEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPrivate")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastActivityAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("OwnerUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Stamp")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LastActivityAt");
+
+                    b.HasIndex("GuildId", "OwnerUserId", "ChannelId", "IsPrivate", "State");
+
+                    b.ToTable("sor_conversation", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorGuildConfigEntity", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AllowedChannelIds")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AllowedRoleIds")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("GuildDailyLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("HistoryHours")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("IdleMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("MaxContextTurns")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedBy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("UserCooldownSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("UserDailyLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("GuildId");
+
+                    b.ToTable("sor_guild_config", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorGuildUsageEntity", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DayKey")
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CachedInputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Completed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DeliveryFailures")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Discarded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("InputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("OutputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ParseFailures")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ProviderFailures")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ReasoningTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Requests")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Timeouts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UnknownUsage")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("GuildId", "DayKey");
+
+                    b.ToTable("sor_guild_usage", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorMemoryEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SourceChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SourceConversationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SourceInteractionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Stamp")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceConversationId");
+
+                    b.HasIndex("GuildId", "UserId");
+
+                    b.ToTable("sor_memory", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorMemoryUseEntity", b =>
+                {
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("MemoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ConversationId", "MemoryId");
+
+                    b.HasIndex("MemoryId");
+
+                    b.ToTable("sor_memory_use", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorRequestEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CachedInputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ConversationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DayKey")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Failure")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("InputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("InteractionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPrivate")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("OutputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PendingAnswer")
+                        .HasMaxLength(12000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PendingContext")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PendingMemory")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ReasoningTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TraceCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("InteractionId")
+                        .IsUnique();
+
+                    b.HasIndex("State", "UpdatedAt");
+
+                    b.HasIndex("GuildId", "UserId", "DayKey");
+
+                    b.ToTable("sor_request", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorTurnEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Answer")
+                        .IsRequired()
+                        .HasMaxLength(12000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Seq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId", "Seq")
+                        .IsUnique();
+
+                    b.HasIndex("GuildId", "UserId");
+
+                    b.ToTable("sor_turn", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorUserEntity", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("MemoryEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("NoticeShownAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Stamp")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("GuildId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("sor_user", (string)null);
+                });
+
             modelBuilder.Entity("ToroSquad.Modules.Updates.Persistence.UpdatesDeliveryEntity", b =>
                 {
                     b.Property<long>("GuildId")
@@ -3115,6 +3483,24 @@ namespace ToroSquad.Bot.Migrations
                         .WithMany()
                         .HasForeignKey("TournamentId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorMemoryUseEntity", b =>
+                {
+                    b.HasOne("ToroSquad.Modules.Sor.Persistence.SorConversationEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Sor.Persistence.SorTurnEntity", b =>
+                {
+                    b.HasOne("ToroSquad.Modules.Sor.Persistence.SorConversationEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

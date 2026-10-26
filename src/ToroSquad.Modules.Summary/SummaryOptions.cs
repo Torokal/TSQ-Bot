@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using ToroSquad.Ai;
 using ToroSquad.Modules.Summary.Application;
 
 namespace ToroSquad.Modules.Summary;
@@ -108,7 +109,7 @@ public sealed class SummaryOptions
         : new(SummaryGenerationMode.Legacy, SummaryModeSource.Legacy);
 
     /// <summary>The OpenCode Go API key: an environment variable (Railway Variables), or a user-secrets key of the same name.</summary>
-    public const string ApiKeyVariable = "OPENCODE_GO_API_KEY";
+    public const string ApiKeyVariable = OpenCodeGo.ApiKeyVariable;
 
     /// <summary>A canary is a short explicit list, not a rollout system.</summary>
     public const int MaxCanaryChannels = 20;
@@ -117,7 +118,7 @@ public sealed class SummaryOptions
     public const ulong MinSnowflake = 1UL << 22;
 
     /// <summary>OpenCode Go's OpenAI-compatible endpoint; "chat/completions" is read relative to it.</summary>
-    public string BaseUrl { get; set; } = "https://opencode.ai/zen/go/v1/";
+    public string BaseUrl { get; set; } = OpenCodeGo.DefaultBaseUrl;
 
     /// <summary>The API model id (the <c>model</c> field, without the CLI's "opencode-go/" provider prefix).</summary>
     public string Model { get; set; } = "deepseek-v4.1-flash";

@@ -243,6 +243,23 @@ retler ve hatalar (yapılandırma yok, desteklenmeyen kanal, üyenin veya botun 
 özet kontrol edilemedi, AI hatası, zaman aşımı) de yalnızca kullanana görünür. Retry ve yedek model yoktur. Kanalda bot izni:
 View Channel, Read Message History. Ayrıntı: [summary/TSQ_SUMMARY.md](summary/TSQ_SUMMARY.md).
 
+## TSQ Sor (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/sor soru:<metin> [gizli:evet/hayır] [yeni:evet/hayır] [kisi:<üye>]` | Herkes (yönetici kanal/rol sınırı koymadıysa): her konuda tek AI isteğiyle cevap; varsayılan kanalda, `gizli:evet` yalnız sorana. `yeni` yeni sohbet (notlar kalır), `kisi` sorunun ilgili olduğu üye (yalnız onun paylaştığı notlar; erişim yetkisi vermez) |
+| `/hafizam` | Kendi notlarını gör, ekle, düzelt, sil, önizleyerek paylaş / geri al, hafızayı aç/kapat, sohbetlerini ve hafızanı sil (özel) |
+
+Cevap düğmeleri: **Devam et** ve **Yeni sohbet** yalnız konuşmanın sahibine form açar; **Hafızam** her zaman tıklayanın
+kendi hafızasını açar. Retler (kanal/rol, bekleme 10 sn, üye 30/gün, sunucu 300/gün, Sor çağrıları toplamı eşzamanlı 1, 429 bekleme) AI
+isteğinden önce ve yalnız kullanana görünür. Hiçbir gönderim ping atmaz. Kanalda bot izni gerekmez (cevaplar etkileşim
+yanıtıdır).
+
+Yönetim: `/tsq-admin modul:sor islem:status|limits|context|allow-channel|remove-channel|allow-role|remove-role|usage|doctor`
+(Sunucuyu Yönet + sunucu tarafı `Authorize.Require`; modül kapalıyken de çalışır). Model/sağlayıcı yalnız yapılandırmadan
+değişir; hiçbir yönetim işlemi üyelerin sohbetlerini veya notlarını göstermez. `doctor` ücretli istek yapmaz. Ayrıntı:
+[sor/TSQ_SOR.md](sor/TSQ_SOR.md).
+
 ## TSQ Öngörü (modül açıkken; `/ongoru`, grup izni yok — her alt komut kendi yetkisini denetler)
 
 | Komut | Kanal | Kim | Görünürlük |

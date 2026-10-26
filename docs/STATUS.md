@@ -474,6 +474,25 @@ invite link and no global command registration. The source code is public under 
   health lines (positions 30–31) were never shown. The module states are now one field (20 fields in total); a test
   checks the production wiring fits. TESTED_OFFLINE.
 
+## TSQ Sor — AI questions, conversation memory, member identity (new, 2026-10-26, branch `feat/sor-module`)
+
+- `/sor soru:… [gizli] [yeni] [kisi]`, `/hafizam`, `/tsq-admin modul:sor` (status, limits, context, allow/remove channel and
+  role, usage, doctor). Module `sor`, off by default; migration `SorModule` (8 additive `sor_*` tables). One request per
+  question to the SAME OpenCode Go key/endpoint as TSQ Özet; Sor's own explicit profile starts equal to Özet's legacy one
+  (`deepseek-v4.1-flash`, thinking disabled, no reasoning_effort, 0.3/0.9, 1200 tokens, 25 s). The OpenCode Go wire format
+  and transport moved to the shared `ToroSquad.Ai` project; Özet's request bytes are unchanged (regression tests).
+  Details: [sor/TSQ_SOR.md](sor/TSQ_SOR.md). IMPLEMENTED, TESTED_OFFLINE (fake provider, real SQLite, fake clock).
+- Closing review (same branch): stable per-conversation `x-opencode-session` for Sor (Özet unchanged), separator grammar
+  that never cuts an answer or shows the block, conservative self-statement checks (quote, reported speech, hypothetical,
+  joke/don't-save, negation, first person, support), deterministic note selection, Discord calls behind a testable adapter.
+  IMPLEMENTED, TESTED_OFFLINE.
+- NOT done: push, PR, deploy, command sync, live Discord test, real-provider quality/latency check. The production model
+  override (if any) was not checked.
+- OPEN external condition: the OpenCode Terms of Use allow use only for "your own internal use" and "not on behalf of or for
+  the benefit of any third party"; Go is described as designed for coding agents. A community bot (Sor, and Özet alike)
+  needs the provider's written clarification or a suitable plan before live use — not only an owner decision. The Özet
+  `401 authentication_error` entry below is a separate access issue.
+
 ## TSQ Öngörü (2026-09-29, PR #37 merged, deployed, `/ongoru` synced; module off until enabled)
 
 - Module `predictions`, command group `/ongoru` (no default member permissions; every subcommand authorizes itself):

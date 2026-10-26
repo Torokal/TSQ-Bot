@@ -4,8 +4,10 @@
        cache, no storage) and asks one AI model (OpenCode Go, configured model) for one short Turkish summary, posted publicly.
        Stateless: no tables, no migration, no background jobs. Depends on the shared TSQ layers only (never on another feature
        module). The Application and Providers namespaces must not use the Discord SDK (architecture tests); only Commands talks
-       to Discord.Net. -->
+       to Discord.Net. The OpenCode Go wire format and transport are shared (ToroSquad.Ai); prompts, profiles, limits and
+       the grounded chain stay here. -->
   <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Ai\ToroSquad.Ai.csproj" />
     <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
     <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
   </ItemGroup>

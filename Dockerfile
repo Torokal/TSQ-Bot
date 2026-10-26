@@ -8,6 +8,7 @@ WORKDIR /src
 # Restore first for layer caching (central package versions + lock files, locked mode = reproducible).
 # .editorconfig carries the analyzer settings: without it the Release build (warnings = errors) uses different rules.
 COPY .editorconfig global.json Directory.Build.props Directory.Packages.props ./
+COPY src/ToroSquad.Ai/ToroSquad.Ai.csproj src/ToroSquad.Ai/packages.lock.json src/ToroSquad.Ai/
 COPY src/ToroSquad.Core/ToroSquad.Core.csproj src/ToroSquad.Core/packages.lock.json src/ToroSquad.Core/
 COPY src/ToroSquad.Infrastructure/ToroSquad.Infrastructure.csproj src/ToroSquad.Infrastructure/packages.lock.json src/ToroSquad.Infrastructure/
 COPY src/ToroSquad.Discord/ToroSquad.Discord.csproj src/ToroSquad.Discord/packages.lock.json src/ToroSquad.Discord/
@@ -24,6 +25,7 @@ COPY src/ToroSquad.Modules.Randomizer/ToroSquad.Modules.Randomizer.csproj src/To
 COPY src/ToroSquad.Modules.Timezone/ToroSquad.Modules.Timezone.csproj src/ToroSquad.Modules.Timezone/packages.lock.json src/ToroSquad.Modules.Timezone/
 COPY src/ToroSquad.Modules.Giveaway/ToroSquad.Modules.Giveaway.csproj src/ToroSquad.Modules.Giveaway/packages.lock.json src/ToroSquad.Modules.Giveaway/
 COPY src/ToroSquad.Modules.Summary/ToroSquad.Modules.Summary.csproj src/ToroSquad.Modules.Summary/packages.lock.json src/ToroSquad.Modules.Summary/
+COPY src/ToroSquad.Modules.Sor/ToroSquad.Modules.Sor.csproj src/ToroSquad.Modules.Sor/packages.lock.json src/ToroSquad.Modules.Sor/
 COPY src/ToroSquad.Modules.Predictions/ToroSquad.Modules.Predictions.csproj src/ToroSquad.Modules.Predictions/packages.lock.json src/ToroSquad.Modules.Predictions/
 COPY src/ToroSquad.Modules.News/ToroSquad.Modules.News.csproj src/ToroSquad.Modules.News/packages.lock.json src/ToroSquad.Modules.News/
 COPY src/ToroSquad.Modules.Updates/ToroSquad.Modules.Updates.csproj src/ToroSquad.Modules.Updates/packages.lock.json src/ToroSquad.Modules.Updates/

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/ToroSquad.Ai/ToroSquad.Ai.csproj" />
     <Project Path="src/ToroSquad.Core/ToroSquad.Core.csproj" />
     <Project Path="src/ToroSquad.Infrastructure/ToroSquad.Infrastructure.csproj" />
     <Project Path="src/ToroSquad.Discord/ToroSquad.Discord.csproj" />
@@ -16,6 +17,7 @@
     <Project Path="src/ToroSquad.Modules.Timezone/ToroSquad.Modules.Timezone.csproj" />
     <Project Path="src/ToroSquad.Modules.Giveaway/ToroSquad.Modules.Giveaway.csproj" />
     <Project Path="src/ToroSquad.Modules.Summary/ToroSquad.Modules.Summary.csproj" />
+    <Project Path="src/ToroSquad.Modules.Sor/ToroSquad.Modules.Sor.csproj" />
     <Project Path="src/ToroSquad.Modules.Predictions/ToroSquad.Modules.Predictions.csproj" />
     <Project Path="src/ToroSquad.Modules.News/ToroSquad.Modules.News.csproj" />
     <Project Path="src/ToroSquad.Modules.Updates/ToroSquad.Modules.Updates.csproj" />

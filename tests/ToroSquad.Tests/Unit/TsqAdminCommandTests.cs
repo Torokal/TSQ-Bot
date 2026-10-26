@@ -105,7 +105,7 @@ public sealed class TsqAdminCommandTests
     ];
 
     /// <summary>Admin modules that were added to <c>/tsq-admin</c> directly (never an old "-admin" root).</summary>
-    private static readonly string[] AddedLater = ["updates"];
+    private static readonly string[] AddedLater = ["updates", "sor"];
 
     // ================================================================== A. command shape
 
@@ -215,7 +215,7 @@ public sealed class TsqAdminCommandTests
         await using var host = await TestHost.CreateAsync();
         var service = await ServiceAsync(host);
         (await SuggestAsync(host, service, "modul", "", null, CorePermission.ManageGuild)).Select(r => r.Value).Should()
-            .Equal("birthday", "esports", "f1", "lfg", "live", "news", "updates", "volleyball");
+            .Equal("birthday", "esports", "f1", "lfg", "live", "news", "sor", "updates", "volleyball");
         (await SuggestAsync(host, service, "modul", "güncelleme", null, CorePermission.ManageGuild)).Should().ContainSingle().Which.Name.Should().Be("Oyun güncellemeleri — updates");
         var news = await SuggestAsync(host, service, "modul", "haber", null, CorePermission.ManageGuild);
         news.Should().ContainSingle().Which.Name.Should().Be("Haberler — news");
@@ -833,7 +833,9 @@ public sealed class TsqAdminCommandTests
             }
         }
 
-        after.Should().HaveCount(25);
+        // Added since: TSQ Sor's /sor and /hafizam (new commands, nothing above changed).
+        after.Select(c => c.Name).Except(Doc("manifest-grouped-tsq-admin.json").Select(c => c.Name)).Should().BeEquivalentTo("sor", "hafizam");
+        after.Should().HaveCount(27);
     }
 
     // ================================================================== G. sync
@@ -851,7 +853,9 @@ public sealed class TsqAdminCommandTests
         plan.IsBlocked.Should().BeFalse(string.Join(" | ", plan.BlockingErrors));
         plan.Items.Where(i => i.Action == SyncAction.Update).Select(i => i.Name).Should().Equal(AdminCatalog.Name);
         plan.Items.Where(i => i.Action == SyncAction.Update).Single().RemoteId.Should().Be(managed[AdminCatalog.Name], "the same command id is updated, not re-created");
-        plan.Items.Should().NotContain(i => i.Action == SyncAction.Create || i.Action == SyncAction.DeleteManaged);
+        // The only creations are commands added after the grouping (TSQ Sor); nothing is deleted.
+        plan.Items.Where(i => i.Action == SyncAction.Create).Select(i => i.Name).Should().BeEquivalentTo("sor", "hafizam");
+        plan.Items.Should().NotContain(i => i.Action == SyncAction.DeleteManaged);
         plan.Items.Count(i => i.Action == SyncAction.Unchanged).Should().Be(24);
         plan.Items.Where(i => i.Action == SyncAction.KeepManagedNotInManifest).Select(i => i.Name).Should().BeEquivalentTo(legacy.Select(c => c.Name));
 

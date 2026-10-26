@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TSQ Sor: /sor answers any question with ONE request to the shared OpenCode Go provider (ToroSquad.Ai), keeps a short,
+       bounded conversation per member/channel/visibility and a small memory of what members say about themselves (/hafizam).
+       Depends on the shared TSQ layers only (never on another feature module, never on TSQ Özet). Domain/Application/
+       Persistence must not use the Discord SDK and never send HTTP themselves (architecture tests); only Commands talks to
+       Discord.Net. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Ai\ToroSquad.Ai.csproj" />
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Infrastructure\ToroSquad.Infrastructure.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Sor.Localization.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

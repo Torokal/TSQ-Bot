@@ -15,6 +15,12 @@ indirilmeden yer tutucu) **tek bir istekle üçüncü taraf AI işleyicisine**, 
 yalnızca o isteğin belleğinde yaşar; veritabanına, dosyaya, önbelleğe ve loglara yazılmaz. Loglarda yalnızca kimlikler,
 sayılar, token kullanımı, süre ve sonuç bulunur ([summary/TSQ_SUMMARY.md](summary/TSQ_SUMMARY.md)).
 
+Üçüncü durum TSQ Sor'dur: `/sor` sorusunu, o üyenin aynı kanal/thread ve görünürlükteki son (en fazla 8) soru-cevabını,
+izin verilen kısa notlarını, görünen adını ve — `kisi`/etiketle sorulan üye için — o üyenin **açıkça paylaştığı** notları
+**tek bir istekle** aynı üçüncü taraf AI işleyicisine (OpenCode Go ve üst sağlayıcısı) gönderir. Discord ID'si gönderilmez.
+Sor kendi sınırlı verisini **saklar** (aşağıda); Özet'in saklamama sözleşmesi değişmez ve Özet çıktıları, kanal
+geçmişleri veya diğer modüllerin kayıtları Sor hafızasına kaynak olmaz ([sor/TSQ_SOR.md](sor/TSQ_SOR.md)).
+
 ## Tutulan kayıtlar
 
 | Tablo | İçerik | Kimin | Silinme |
@@ -76,6 +82,17 @@ mesajıdır; kanaldan Discord'da silinir).
 TSQ Özet tablo kullanmaz; `/privacy export/delete` kapsamında kaydı yoktur. Cooldown'lar yalnızca bellekte tutulan
 kullanıcı/kanal ID'si ve süreden ibarettir ve yeniden başlatmada silinir. Gönderilen özet normal bir kanal mesajıdır;
 Discord'da silinir.
+
+TSQ Sor kişisel veri tutar, hepsi (sunucu, üye) ile sınırlıdır ve `/privacy export/delete` kapsamındadır:
+`sor_user` (hafıza açık/kapalı, ilk kullanım notu), `sor_conversation` + `sor_turn` (teslim edilmiş soru-cevaplar; son
+etkinlikten **24 saat** sonra silinir, en fazla 8 tur), `sor_memory_use` (konuşma ↔ not), `sor_memory` (üyenin kendisi
+hakkındaki en fazla 30 kısa not, kapsamı ve asgari kaynak kimlikleri; üye silene veya `/privacy delete`'e kadar),
+`sor_request` (interaction benzersizliği, durum, hata sınıfı, token sayıları; bekleyen cevap en fazla 15 dakika; kayıt
+48 saat). `sor_guild_usage` sunucu günlük toplamlarıdır (üye ID'si yok, 35 gün) ve kişisel silmeyle sunucu sınırı
+yenilenmesin diye kalır. `/privacy delete` üyenin bu sunucudaki tüm Sor kayıtlarını (istek kayıtları dahil) siler ve
+üyenin paylaşılmış notunu kullanmış diğer konuşmaları geçersizleştirir; `/hafizam`'daki "Sohbetlerimi ve hafızamı sil"
+ise içerikleri siler ama günlük kullanım kayıtlarını (yalnız sayı) bırakır. Veritabanından silmek, Discord'a gönderilmiş
+cevapları ve sağlayıcıdaki/yedeklerdeki kopyaları silmez. Loglarda soru, cevap, not veya isim yoktur.
 
 TSQ Haber kişisel veri tutmaz: `news_guild_config` (sunucu, kanal, duraklatma, zamanlar — kullanıcı ID'si yok), `news_article`
 (HLTV haber kimliği, bağlantı, başlık — başlık 30 gün sonra silinir —, yayın zamanı, eşleşme nedeni; açıklama, makale metni

@@ -1,7 +1,7 @@
-using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ToroSquad.Ai;
 using ToroSquad.Core;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
@@ -44,27 +44,17 @@ public sealed class SummaryModule : IToroModule
         services.AddOptions<SummaryOptions>().Bind(configuration.GetSection(SummaryOptions.Section));
         services.AddSingleton(new LocalizationSource(typeof(SummaryModule).Assembly, "ToroSquad.Modules.Summary.Localization"));
 
-        // The key: user-secrets/configuration first (development), then the plain environment variable (Railway Variables).
-        services.AddSingleton(new SummaryApiKey(configuration[SummaryOptions.ApiKeyVariable] ?? Environment.GetEnvironmentVariable(SummaryOptions.ApiKeyVariable)));
+        // The key (shared with every OpenCode Go feature): user-secrets/configuration first (development), then the plain
+        // environment variable (Railway Variables).
+        services.AddOpenCodeGoApiKey(configuration[SummaryOptions.ApiKeyVariable]);
 
-        // Fixed base URL from configuration, no redirects (a moved endpoint is a visible failure), no cookies, bounded answer
-        // size; the per-request timeout is applied by OpenCodeSummaryAiClient on the injected clock (this one is a backstop).
-        services.AddHttpClient(OpenCodeSummaryAiClient.HttpClientName, (sp, client) =>
-            {
-                var options = sp.GetRequiredService<IOptions<SummaryOptions>>().Value;
-                client.BaseAddress = new Uri(options.BaseUrl);
-                client.Timeout = options.LongestRequestTimeout + TimeSpan.FromSeconds(5);
-                client.MaxResponseContentBufferSize = OpenCodeSummaryAiClient.MaxResponseBytes;
-                client.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent(sp.GetService<ProductInfo>()?.Version));
-            })
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                AllowAutoRedirect = false,
-                UseCookies = false,
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
-                PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-                ConnectTimeout = TimeSpan.FromSeconds(10),
-            });
+        // The shared transport settings (fixed base URL, no redirects, no cookies, bounded answer size) with this module's own
+        // User-Agent; the per-request timeout is applied on the injected clock (the client's timeout is a backstop).
+        services.AddOpenCodeGoHttpClient(OpenCodeSummaryAiClient.HttpClientName, sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<SummaryOptions>>().Value;
+            return (options.BaseUrl, options.LongestRequestTimeout + TimeSpan.FromSeconds(5), UserAgent(sp.GetService<ProductInfo>()?.Version));
+        });
 
         services.AddSingleton<ISummaryAiClient, OpenCodeSummaryAiClient>();
         services.AddSingleton<SummaryThrottle>();
