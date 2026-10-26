@@ -63,11 +63,24 @@ baştan doğrulanır (sahip, sunucu, kanal, görünürlük, modül kapısı).
 ## Cevap sözleşmesi
 
 Sağlayıcının JSON/şema modu bu ağ geçidi için doğrulanmadığından `response_format` gönderilmez. Model önce yalnız
-cevabı düz metin yazar; üye son mesajında kendisi hakkında kalıcı bir şey söylediyse ardından `<<<HAFIZA>>>` satırı ve
-tek satırlık `{"memory":[{"op":"add|update|forget","kind":"…","text":"…","evidence":"…","target":"…"}]}` gelir (en fazla 3).
-Bozuk/kesik öneriler atılır, cevap yine gösterilir; ham JSON asla gösterilmez. Cevabın kendisi kesikse
-(`finish_reason=length` ve ayırıcı yok) veya boşsa cevap gösterilmez. Çıktı bütçesi (1.200 token) cevap ve önerileri
-birlikte kapsar.
+cevabı düz metin yazar; üye son mesajında kendisi hakkında kalıcı bir şey söylediyse ardından `<<<HAFIZA>>>` ve tek
+satırlık `{"memory":[{"op":"add|update|forget","kind":"…","text":"…","evidence":"…","target":"…"}]}` gelir. Çıktı bütçesi
+(1.200 token) cevap ve önerileri birlikte kapsar. Gramer (`SorAnswerFormat`):
+
+| Durum | Sonuç |
+|---|---|
+| Ayıraç kod bloğu dışında ve ardından yalnız boşluk, `{` veya ``` geliyor | **Protokol ayıracı**: cevap orada biter, sonrası hafıza bloğudur ve hiç gösterilmez |
+| Ayıraç metnin ortasında, alıntıda veya kod örneğinde | Cevabın parçası; `‹‹‹HAFIZA›››` olarak etkisizleştirilip gösterilir (cevap kesilmez) |
+| Blok: tek JSON nesnesi (isteğe bağlı ``` içinde), `memory` dizisi | Bilinmeyen alanlar yok sayılır; ilk 3 geçerli öğe alınır |
+| Blokta ikinci ayıraç, JSON sonrası metin, bozuk/kesik JSON, 4.000 karakterden uzun blok | Öneri yok; cevap gösterilir |
+| `finish_reason=length` + protokol ayıracı var | Cevap ayıraçtan önce bittiği için gösterilir; blok atılır |
+| `finish_reason=length` + ayıraç yok | **Eksik** (`Truncated`): gösterilmez, kotadan düşer |
+| Ayıraçtan önce metin yok / yalnız hafıza bölümü / boş içerik | **Boş**: gösterilmez |
+| Sağlayıcı boş içerik veya geçersiz gövde döndü | `EmptyOutput` / `InvalidResponse`: gösterilmez |
+| Üye sorusunda ayıraç | Prompta girmeden etkisizleştirilir (`SorText.Inert`), model bunu protokol sanmaz |
+
+Hiçbir durumda ikinci istek, JSON tamiri veya gizli yeniden deneme yapılmaz; ayıraç ve hafıza JSON'u hata yolundan da
+Discord'a gitmez.
 
 ## Kimlik
 
@@ -93,12 +106,33 @@ hareketsizlikte yeni sohbet; sohbetler son etkinlikten **24 saat** sonra silinir
 ### Kalıcı notlar
 
 Üyenin **kendisi hakkında** doğrudan söylediği kısa bilgiler: hitap, kısa/ayrıntılı cevap tercihi, oyun, hobi, ilgi alanı,
-devam eden hedef, kalıcı tercih. En fazla **30** not, not başına **240** karakter; istek başına en fazla **6** not (hitap ve
-cevap tarzı önce, sonra soruyla ilgisine ve tazeliğine göre).
+devam eden hedef, kalıcı tercih. En fazla **30** not, not başına **240** karakter; istek başına en fazla **6** not.
+Seçim deterministiktir (`SorPrompt.Rank`) ve **kapsam süzgecinden sonra** (veritabanı sorgusu) yapılır: önce hitap ve
+cevap tarzı, sonra soruyla ortak içerik kelimesi (Türkçe ekler için ilk dört harf) daha çok olan, sonra en son
+güncellenen, sonra büyük ID. Rastgele seçim veya embedding yok; ilgili eski bir tercih, ilgisiz yeni notların önüne geçer.
+Sorulan başka üyenin paylaşılmış notları bu altı notun en fazla üçünü alır. Bir istek en fazla **bir** başka üyeyi
+(`kisi` veya sorudaki ilk etiket) kapsar.
 
 Uygulamanın kuralları (model yalnız önerir):
 
 - Dayanak (`evidence`) üyenin **o anki** mesajından birebir alıntı olmalı; eski turlardan yeniden çıkarım yapılmaz.
+- Birebir alıntı tek başına öz-beyan değildir. Yüzeysel ve **muhafazakâr** ek denetimler (`SorMemoryRules`) şüpheli
+  öneriyi kaydetmez:
+
+  | Örnek | Ret |
+  |---|---|
+  | "Mert, ‘Ben strateji oyunlarını seviyorum’ dedi." | `Quoted` (dayanağın cümlesinde tırnak/‘…’ veya "dedi/diyor/söyledi…") |
+  | "Farz et C# biliyorum." | `Hypothetical` ("farz et, varsay, diyelim, rol yap, sanki…" mesajın herhangi bir yerinde) |
+  | "Şakaydı; beni Galatasaraylı diye kaydetme." | `NotToBeSaved` ("şaka, dalga geçiyorum, kaydetme, hatırlama…") |
+  | Önceki iddiaya tek başına "aynen" | `Unsupported` (dayanak ile not arasında ortak içerik kelimesi yok) |
+  | "kısa cevap istemiyorum" → "Kısa cevap istiyor." | `Negated` (olumsuz dayanak, olumlu not) |
+  | "Strateji oyunları güzel bir tür." → oyun notu | `NotSelfStated` (oyun/hobi/ilgi/hedef/tercih için birinci tekil biçim yok) |
+
+  "Artık kısa cevap istemiyorum; ayrıntılı anlat." mesajında `ayrıntılı anlat` dayanağıyla cevap tarzı güncellemesi
+  geçer (hitap ve cevap tarzı bota yönelik istek olabileceği için birinci tekil biçim aranmaz). Bunlar Türkçe için birkaç
+  kalıptır; anlamın tamamını çözmez, yanlış bir adayı her zaman yakalayamaz ve bazı doğru adayları da reddedebilir.
+  Belirsiz aday kaydedilmez; ikinci bir model çağrısı yapılmaz. Gerçek modelin hatırlama kalitesi çevrimdışı
+  fixture'larla **doğrulanamaz**.
 - Parola, token, anahtar, kimlik/kart/hesap numarası, e-posta, telefon asla kaydedilmez (elle eklenen notlarda da).
 - Sağlık, din, siyaset, cinsellik gibi hassas ayrıntılar otomatik kaydedilmez.
 - Sorunun ilgili olduğu üyenin adını içeren öneri reddedilir; A'nın "B şunu sever" demesi B'nin hafızasını asla
@@ -151,7 +185,7 @@ Model çağrısı hiçbir veritabanı işleminin içinde beklemez.
 | Üye bekleme süresi | 10 sn | `Sor:UserCooldownSeconds`, sunucu bazında `/tsq-admin … islem:limits` |
 | Üye başına günlük üretim | 30 | `Sor:UserDailyLimit`, `limits` (1–500) |
 | Sunucu başına günlük üretim | 300 | `Sor:GuildDailyLimit`, `limits` (1–5000) |
-| Eşzamanlı üretim (bot geneli) | 1 | `Sor:MaxConcurrentRequests` |
+| Eşzamanlı üretim (Sor çağrılarının toplamı; Özet ayrı) | 1 | `Sor:MaxConcurrentRequests` |
 | Soru uzunluğu | 4.000 karakter | `Sor:MaxQuestionLength` |
 | Girdi bütçesi | ~6.000 token | `Sor:MaxInputTokens` |
 | Çıktı bütçesi | 1.200 token | `Sor:MaxOutputTokens` |
@@ -176,9 +210,14 @@ kullanılamayan cevap dahil); yalnız AI isteğinden önce veritabanı hatasıyl
   `thinking: {"type":"disabled"}` ve `reasoning_effort` yok, temperature 0.3, top_p 0.9, `max_tokens` 1200, 25 sn. Değerler
   Sor'a kopyalanmıştır (Özet'ten okunmaz): bir modülün yapılandırması diğerinin modelini sessizce değiştiremez. Üyeler ve
   yöneticiler modeli değiştiremez. Grounded generator/reviewer zinciri Sor'a taşınmamıştır.
-- `x-opencode-session` her istekte yeni rastgele bir GUID'dir; sunucu tarafı hafıza sayılmaz, içine kimlik/isim/metin
-  yazılmaz. Hafızayı uygulama yönetir.
-- Ortak anahtar limiti: Sor'un kendi payı en fazla 1 eşzamanlı istek (Özet'in kendi 2'lik sınırı ayrıdır). 429'dan sonra
+- `x-opencode-session`: Go belgesi konuşma başına sabit bir oturum kimliği ister. Sor bunu konuşma satırının ID'si ve
+  rastgele damgasından türetilen bir GUID olarak gönderir (`SorSession`): aynı konuşmanın her turunda ve restart
+  sonrasında aynı; yeni sohbette, başka üyede, başka sunucuda ve diğer görünürlükte farklı; kimlik, isim veya metin
+  içermez. Bu yalnız yönlendirme/önbellek bilgisidir, sunucu tarafı hafıza sayılmaz: geçmişi uygulama gönderir. Özet
+  her istekte yeni bir GUID göndermeye devam eder (davranışı değişmedi).
+- Ortak anahtar limiti: paylaşılan katmanda (`ToroSquad.Ai`) sınırlayıcı **yoktur**. `SorThrottle` yalnız Sor
+  çağrılarının toplamını 1 ile sınırlar; Özet kendi `SummaryThrottle` sınırlarıyla (en fazla 2) bundan bağımsız çalışır —
+  bekleyen bir Sor çağrısı Özet'i durdurmaz (test edildi). 429'dan sonra
   sağlayıcının Retry-After süresi (yoksa 30 sn, en fazla 1 saat) dolana kadar yeni istek gönderilmez. Bot, hesabın bütün
   dış tüketimini göremez; `usage` ekranı yalnız Sor'un kendi sayılarını gösterir. Dolar maliyeti hesaplanmaz.
 - Web araması, link indirme veya araç yoktur; model canlı erişimi varmış gibi konuşmaz, kaynak uydurmaz. Kullanıcı
@@ -216,6 +255,9 @@ sağlayıcıdaki veya yedeklerdeki kopyaları silmez.
 
 - Her gönderim, düzenleme ve follow-up `MentionPolicy.None` (allowed mentions boş); modelin yazdığı @everyone/@here ve
   kullanıcı/rol etiketleri bildirim üretmez.
+- Tüm Discord çağrıları `SorInteractionResponder` üzerinden yapılır (`IDiscordInteraction` arayüzü; çağrı sırası ve
+  payload'ı çevrimdışı testle gözlenir): ret ilk yanıt olarak ve gizli; defer son görünürlükle; cevap orijinal yanıtı
+  düzenler; devam parçaları ve notlar aynı veya gizli görünürlükte follow-up'tır.
 - Uzun cevap en fazla 3 parçaya (≤ 3.800 karakter, embed açıklaması 4.096) paragraf/satır sınırından bölünür; kod bloğu
   bölünürse kapatılıp aynı dille yeniden açılır, spoiler (`||`) bölünmez; sığmayan kısım "…" ile kesilir.
 - Kanalda defer edildikten sonraki hata: orijinal cevap kısa, kişisel içerik taşımayan bir satırla kapanır, ayrıntı özel
@@ -245,8 +287,43 @@ Sor [TS-…] <Outcome> guild=… private=… failure=<AiFailure> http=<status> p
 (değerini değil), uç noktayı, model profilini, ayarları ve tabloları **ücretli istek yapmadan** denetler; `usage` son 7
 günün toplamlarını ve hata sınıflarını gösterir. Yönetim ekranları kimsenin sohbetini veya notunu göstermez.
 
+## Teslim ve kayıt aralıkları
+
+| Aralık | Davranış |
+|---|---|
+| AI döndü, Discord reddetti | `Failed`; tur ve not yok; özel bilgi; yeniden üretim yok |
+| AI döndü, teslim doğrulanamadı | Orijinale bir kez bakılır; bulunamazsa `Unknown`; tur ve not yok |
+| AI çalışırken / teslimden önce silme, kapatma, paylaşım daraltma | Damga değişir → `Discarded`; cevap gösterilmez |
+| Teslim ile kayıt arasında silme | Cevap Discord'da kalır (geri alınamaz); kayıtta damga kontrolü → tur ve not yazılmaz (`stale-after-delivery`) |
+| Teslim sonrası DB hatası | Kayıt adımı en fazla 2 kez, modelsiz; olmazsa istek `Generated` kalır, 15 dk sonra temizlikte `Unknown` olur ve bekleyen içerik silinir; kotadan düşmüş kalır |
+| "Kaydedildi" satırı düzenlemesi başarısız | Kayıt ve üretim tekrarlanmaz |
+| Üretim sırasında restart | `Generating` istek zaman aşımı + 2 dk sonra `Unknown`; yeni üretim yok, kota iade edilmez |
+| Kullanıcı kaydı silinip yeniden oluşturuldu | Yeni rastgele damga: eski istek geçerli olmaz |
+
+Discord'a gönderilmiş bir istek geri alınamaz; Discord ile SQLite arasında atomiklik veya uçtan uca exactly-once
+garantisi yoktur. Aynı interaction ikinci kez işlenmez (benzersiz anahtar), bir tur/not/kota iki kez kesinleşmez.
+
+## Sağlayıcı kullanım koşulları (açık dış koşul)
+
+Kaynaklar 2026-10-26'da okundu; kod bu konuyla değişmedi, başka bir istemci gibi görünülmez (User-Agent `SorModule`).
+
+- **OpenCode Go belgesi**: Go "OpenCode ve benzer istekler üreten diğer kodlama ajanları" için tasarlanmıştır; trafik
+  kötüye kullanım için izlenir; konuşma başına sabit `x-opencode-session` istenir; doğrudan çağıran uygulamalar için AI
+  SDK paketleri ve API uç noktaları belgelenir. Yani harici API kullanımı belgelenmiş, ama ürün odağı kodlama ajanlarıdır.
+- **API Overview**: anahtarlar "scripts and integrations" için; entegrasyonlar için service account anahtarı önerilir.
+- **Terms of Use**: hizmet yalnız kullanıcının "own internal use" için ve "not on behalf of or for the benefit of any
+  third party" kullanılabilir. Bir Discord topluluğunun üyelerine cevap veren bot (Sor ve aynı şekilde Özet) bu
+  hükümle **çelişebilir**.
+
+Bu nedenle canlı kullanım yalnız "sahip karar verir" diyerek onaylanmış sayılmaz: sağlayıcıdan yazılı açıklama veya
+topluluk kullanımına izin veren bir plan/koşul bekleyen **dış koşul** olarak açıktır. `docs/STATUS.md`'deki Özet
+`401 authentication_error` kaydı ayrı bir erişim konusudur ve güncel erişimin durumunu tek başına kanıtlamaz.
+
 ## Doğrulama durumu
 
-Çevrimdışı testler: sahte sağlayıcı, gerçek SQLite, kontrol edilebilir saat (`tests/ToroSquad.Tests/**/Sor*`).
-Gerçek sağlayıcıyla cevap kalitesi, kişilik, hatırlama kalitesi ve gecikme **denenmedi**; Discord'da canlı akış
-(defer, modal, düğmeler, ephemeral paneller) **gözlenmedi**.
+Çevrimdışı testler: sahte sağlayıcı, gerçek SQLite, kontrol edilebilir saat, kayıt tutan `IDiscordInteraction`
+(`tests/ToroSquad.Tests/**/Sor*`). Gerçek komut gövdesi (`SocketInteractionContext`) çevrimdışı çalıştırılamaz; testler
+yönlendirici + modül kapısını ve adaptörün çağrılarını kapsar. Gerçek sağlayıcıyla cevap kalitesi, kişilik, hatırlama
+kalitesi ve gecikme **denenmedi**; Discord'da canlı akış (defer, modal, düğmeler, ephemeral paneller, görünüm)
+**gözlenmedi**. Önerilen sonraki adım: kullanım koşulu netleştikten sonra test sunucusunda veya tek kanal + tek rol
+pilotuyla (`allow-channel`, `allow-role`) sınırlı canlı doğrulama.

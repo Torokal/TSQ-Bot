@@ -251,7 +251,7 @@ View Channel, Read Message History. Ayrıntı: [summary/TSQ_SUMMARY.md](summary/
 | `/hafizam` | Kendi notlarını gör, ekle, düzelt, sil, önizleyerek paylaş / geri al, hafızayı aç/kapat, sohbetlerini ve hafızanı sil (özel) |
 
 Cevap düğmeleri: **Devam et** ve **Yeni sohbet** yalnız konuşmanın sahibine form açar; **Hafızam** her zaman tıklayanın
-kendi hafızasını açar. Retler (kanal/rol, bekleme 10 sn, üye 30/gün, sunucu 300/gün, eşzamanlı 1, 429 bekleme) AI
+kendi hafızasını açar. Retler (kanal/rol, bekleme 10 sn, üye 30/gün, sunucu 300/gün, Sor çağrıları toplamı eşzamanlı 1, 429 bekleme) AI
 isteğinden önce ve yalnız kullanana görünür. Hiçbir gönderim ping atmaz. Kanalda bot izni gerekmez (cevaplar etkileşim
 yanıtıdır).
 
