@@ -78,7 +78,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   no real money, no transfers, no shop). The card itself carries 🔒 Kilitle / ✅ Sonuçlandır / ↩️ İptal / İade for its creator
   (while holding the role) or an administrator, each with a private confirmation; payouts (stake × fixed odds, rounded
   down) and refunds are booked in one SQLite write transaction. Every tournament starts each member at 1000 TSQ Coin
-  (there is no coin reset command; only a new tournament starts from 1000); a daily reward of 10–100 per Türkiye calendar
+  (there is no coin reset command; only a new tournament starts from 1000); a daily reward of 80–200 per Türkiye calendar
   day; administrators end a tournament with `/ongoru turnuva bitir` (frozen top 3, public announcement without pings).
   Member commands (`cuzdan`, `gunluk`, `tahminlerim`, `liderlik`, `turnuva`) only in the commands channel.
 - **TSQ Özet** (separate module, off by default): `/ozetle` reads the latest 100 member messages of the channel or thread

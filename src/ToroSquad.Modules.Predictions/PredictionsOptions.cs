@@ -30,8 +30,9 @@ public sealed class PredictionsOptions
     /// <summary>Every member's balance at the start of each tournament (whole TSQ Coin).</summary>
     public int InitialBalanceCoins { get; set; } = 1000;
 
-    public int DailyMinCoins { get; set; } = 10;
-    public int DailyMaxCoins { get; set; } = 100;
+    /// <summary>The daily reward range (whole TSQ Coin, both ends included, uniform). 80–200 since 2026-10-26 (was 10–100).</summary>
+    public int DailyMinCoins { get; set; } = 80;
+    public int DailyMaxCoins { get; set; } = 200;
 
     /// <summary>The odds of an outcome written without one ("Beraberlik" instead of "Beraberlik | 2.30").</summary>
     public decimal DefaultOdds { get; set; } = 2.00m;

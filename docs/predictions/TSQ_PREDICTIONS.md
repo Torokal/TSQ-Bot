@@ -39,7 +39,7 @@ başlangıçta doğrulanır, hatalı değer botu açık bir CONFIG satırıyla d
 | `Predictions:CommandsChannelId` | `689814679056547857` | Üye komutlarının ve `/ongoru turnuva bitir`'in **tek** kanalı; kapanış duyurusu buraya gider |
 | `Predictions:CreatorRoleId` | `1233057768408350741` | Öngörü yaratabilen rol (yalnızca yaratma ve kişinin kendi öngörülerini yönetme) |
 | `Predictions:InitialBalanceCoins` | `1000` | Her turnuvanın başlangıç bakiyesi |
-| `Predictions:DailyMinCoins` / `DailyMaxCoins` | `10` / `100` | Günlük ödül aralığı (iki uç dahil) |
+| `Predictions:DailyMinCoins` / `DailyMaxCoins` | `80` / `200` | Günlük ödül aralığı (iki uç dahil; 2026-10-26 öncesi 10 / 100). 1 ≤ min ≤ max ≤ 1.000.000, yoksa bot açılmaz |
 | `Predictions:DefaultOdds` | `2.00` | Oranı yazılmayan seçeneğin oranı (1.01–1000.00, en fazla iki ondalık) |
 | `Predictions:MaxOutcomes` | `25` | Öngörü başına en fazla seçenek (2–25) |
 | `Predictions:TerminalCardRetentionHours` | `12` | Sonuçlanmış/iptal edilmiş öngörünün kartı bu kadar saat sonra kanaldan kaldırılır (1–168; yalnız Discord mesajı) |
@@ -260,10 +260,11 @@ TSQ Öngörü #42
 
 ## Günlük ödül
 
-`/ongoru gunluk`: Europe/Istanbul takvim gününe göre günde bir (yeni hak 00:00'da), 10–100 eşit olasılıklı tam sayı
-(`RandomNumberGenerator`). "Günlük ödülün: 47 TSQ Coin / Yeni bakiyen: 1047 TSQ Coin". Hak anahtarı sunucu + kullanıcı + yerel
-gün (turnuvadan bağımsız: aynı gün turnuva bitse de ikinci ödül yok). Çift tıklama/paralel komut tek ödeme; tekrar deneme tutarı
-yeniden çekmez. Günlük ödül cüzdanı **sıfırlamaz** ve liderlik uygunluğu **sağlamaz**.
+`/ongoru gunluk`: Europe/Istanbul takvim gününe göre günde bir (yeni hak 00:00'da), 80–200 eşit olasılıklı tam sayı, iki
+uç dahil (`RandomNumberGenerator.GetInt32(min, max + 1)`: reddetmeli örnekleme, modulo sapması yok). Hak anahtarı sunucu +
+kullanıcı + yerel gün (turnuvadan bağımsız: aynı gün turnuva bitse de ikinci ödül yok). Çift tıklama/paralel komut tek ödeme;
+tekrar deneme tutarı yeniden çekmez. Aralık değişikliği eski hak ve hareket kayıtlarını değiştirmez; yalnızca yeni haklara
+uygulanır. Günlük ödül cüzdanı **sıfırlamaz** ve liderlik uygunluğu **sağlamaz**.
 
 ## Normal kullanıcı coinini sıfırlayamaz
 
