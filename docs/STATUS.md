@@ -456,9 +456,23 @@ invite link and no global command registration. The source code is public under 
   key is set — an unset key answers "not configured" without a request). Cause = key/account side (revoked, expired,
   rotated or subscription ended); which of these is NOT_VERIFIED. No summary code changed between 2026-10-04 and this
   branch. Fix is the owner's: a valid key in `OPENCODE_GO_API_KEY` (Railway), no code change needed for that.
-- Change (no provider, model, mode, timeout, retry or fallback change): 401/403 and other 4xx now answer "Özet servisi
-  isteği reddetti (erişim, hesap veya yapılandırma sorunu) …" instead of the "try again later" text; 5xx and network keep
-  it. `/bot status` shows the last failure's HTTP status, provider code and trace code (memory only). TESTED_OFFLINE.
+  Official context (to investigate, not proven for our account): OpenCode moved to a v2 Console; keys from the old console
+  were imported as `Legacy: <email>` service accounts, expired keys return 401 and cannot be renewed (create a new
+  personal key under Account → Personal API keys). `https://opencode.ai/zen/go/v1` is still supported and routes to the
+  same backend as the canonical `https://opencode.ai/inference/go/openai/v1` (no removal date). The Go docs describe Go as
+  meant for OpenCode and other coding agents ("typical coding-agent traffic", stable session id); Discord summaries are
+  not that, so the usage terms are unclear for this module.
+- Still open, separate from the 401: Codex finding B5 — when the first part of a multi-part summary is posted and a later
+  part fails, the history scan can treat the first part as a completed summary and start the 100-new-messages rule. Not
+  addressed here.
+- Change (no provider, model, mode, timeout, retry or fallback change): each failure has its own member message — 401
+  authentication refused, 403 access/permission/policy refused (new category `Forbidden`; not necessarily a bad key),
+  other 4xx request/model/account setting, 429 a limit (with the provider's Retry-After when sent, shown only, capped at
+  1 h), 408 and timeouts "not ready in time", 5xx/network "try again later". `/bot status` shows the last failure's HTTP
+  status, provider code (sanitized short code, never the body) and trace code (memory only). TESTED_OFFLINE.
+- `/bot status` cut its fields at Discord's 25: with one field per module (16) the list came to 35 and TSQ Özet's two
+  health lines (positions 30–31) were never shown. The module states are now one field (20 fields in total); a test
+  checks the production wiring fits. TESTED_OFFLINE.
 
 ## TSQ Öngörü (2026-09-29, PR #37 merged, deployed, `/ongoru` synced; module off until enabled)
 
