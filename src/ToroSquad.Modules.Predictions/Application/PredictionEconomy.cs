@@ -158,7 +158,8 @@ public sealed class PredictionEconomy(
         if (!result.New)
             return OperationResult.Fail(OperationError.Conflict, "predictions.daily.already", Coins.Format(result.Amount, language), next);
         logger.LogInformation("prediction_daily guild={Guild} user={User} day={Day} amount={Amount}", actor.GuildId, actor.UserId, today, result.Amount);
-        return OperationResult.Ok("predictions.daily.done", Coins.Format(result.Amount, language), Coins.Format(result.Balance, language), next);
+        return new PredictionReply(OperationResult.Ok("predictions.daily.done", Coins.Format(result.Amount, language), Coins.Format(result.Balance, language), next),
+            Announcement: messages.DailyAnnouncement(displayName, result.Amount, language));
     }
 
     // ---- my entries ----

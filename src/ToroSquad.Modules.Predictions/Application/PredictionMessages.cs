@@ -354,6 +354,13 @@ public sealed class PredictionMessages(ILocalizer localizer, IOptions<Prediction
         ? L(language, "predictions.leaderboard.correct_none", Number(r.CorrectCount))
         : L(language, "predictions.leaderboard.correct_value", Number(r.CorrectCount), Number(r.SettledCount), Percent(r.CorrectCount, r.SettledCount));
 
+    /// <summary>The public line of a successful /ongoru gunluk: the member's display name as untrusted text and the amount; never pings.</summary>
+    public OutgoingMessage DailyAnnouncement(string displayName, long amountMinor, string language) =>
+        new(L(language, "predictions.daily.public",
+                string.IsNullOrWhiteSpace(displayName) ? L(language, "predictions.card.creator_unknown") : "**" + DiscordText.Untrusted(displayName, 100) + "**",
+                Coins.Format(amountMinor, language)),
+            null, MentionPolicy.None);
+
     private string Name(StandingRow row, string language) =>
         string.IsNullOrWhiteSpace(row.DisplayName) ? L(language, "predictions.card.creator_unknown") : "**" + DiscordText.Untrusted(row.DisplayName, 200) + "**";
 

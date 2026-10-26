@@ -498,6 +498,14 @@ invite link and no global command registration. The source code is public under 
   settlement in one transaction. No schema change. **IMPLEMENTED / TESTED_OFFLINE**, deployed with a clean start.
   **NOT VERIFIED_LIVE**: a real announcement in Discord (winner pings, multi-part messages).
 
+## TSQ Öngörü daily reward 80–200, public announcement (2026-10-26, branch `fix/f1-delay-daily-reward-summary`)
+
+- `Predictions:DailyMinCoins` / `DailyMaxCoins` default 80 / 200 (was 10 / 100; both ends included, same secure RNG). Old
+  claims and ledger rows are unchanged. A new claim is announced with one public bot message in the commands channel (name
+  as untrusted text, no pings, never retried); repeats, the wrong channel, a disabled module and the ceiling stay private; a
+  failed announcement is reported privately after the coins were committed (no second credit). TESTED_OFFLINE only; the
+  public line needs the bot's Send Messages permission in the commands channel (NOT_VERIFIED live).
+
 ## TSQ Öngörü automatic football (PR #40 merged `82b98d2`, deployed 2026-09-30; `Mode=Live` in production)
 
 - Opens fixed-odds predictions for Galatasaray / Fenerbahçe / Beşiktaş matches of five allow-listed competitions on the

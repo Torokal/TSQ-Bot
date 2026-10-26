@@ -248,7 +248,8 @@ View Channel, Read Message History. Ayrıntı: [summary/TSQ_SUMMARY.md](summary/
 | Komut | Kanal | Kim | Görünürlük |
 |---|---|---|---|
 | `/ongoru yarat` | öngörü kanalı | yaratıcı rolü (Administrator tek başına yetmez) | form + özel önizleme; kart herkese açık |
-| `/ongoru cuzdan`, `/ongoru gunluk`, `/ongoru tahminlerim` | komut kanalı | herkes | özel |
+| `/ongoru cuzdan`, `/ongoru tahminlerim` | komut kanalı | herkes | özel |
+| `/ongoru gunluk` | komut kanalı | herkes | yeni ödül: tek satır herkese açık duyuru (ping'siz) + özel ayrıntı; tekrar/yanlış kanal/kapalı modül: özel |
 | `/ongoru liderlik`, `/ongoru turnuva durum` | komut kanalı | herkes | herkese açık, ping'siz |
 | `/ongoru turnuva bitir` | komut kanalı | Administrator veya sunucu sahibi (yaratıcı rolü yetmez) | özel önizleme + [🏁 Turnuvayı Bitir]; kapanış duyurusu herkese açık, ping'siz |
 | Kart: 🎯 Tahmin Yap → form (sonuç + tutar) → Submit = tahmin | öngörü kanalı | herkes (botlar hariç) | özel makbuz (ikinci onay yok) |

@@ -65,6 +65,7 @@ public sealed class PredictionsModule : IToroModule
         services.AddScoped<PredictionCardSync>();
         services.AddScoped<PredictionService>();
         services.AddScoped<PredictionEconomy>();
+        services.AddScoped<PredictionDailyFlow>();
         services.AddScoped<IUserDataContributor, PredictionUserData>();
         services.AddScoped<IDeliveryPolicy, PredictionDeliveryPolicy>();
         services.AddSingleton<IModuleHealthCheck, PredictionHealthCheck>();

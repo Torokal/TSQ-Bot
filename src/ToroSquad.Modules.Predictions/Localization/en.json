@@ -140,6 +140,8 @@
   "predictions.daily.done": "🎁 Your daily reward: **{0} TSQ Coin**\n💰 Your new balance: **{1} TSQ Coin**\nNext claim: {2}",
   "predictions.daily.already": "You already claimed today's reward (**{0} TSQ Coin**). Your next claim opens at 00:00 Türkiye time: {1}",
   "predictions.daily.ceiling": "Your balance is at the TSQ Coin ceiling; the daily reward could not be added.",
+  "predictions.daily.done_unannounced": "🎁 Your daily reward: **{0} TSQ Coin**\n💰 Your new balance: **{1} TSQ Coin**\nNext claim: {2}\n⚠️ The coins were added to your wallet, but the channel announcement could not be posted.",
+  "predictions.daily.public": "🪙 {0} claimed their daily reward: **+{1} TSQ Coin**!",
   "predictions.wallet.title": "💰 TSQ Coin Wallet · Tournament {0}",
   "predictions.wallet.available": "Available",
   "predictions.wallet.pending": "Pending (staked)",

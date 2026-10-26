@@ -14,7 +14,7 @@ proje `ToroSquad.Modules.Predictions`, komut kökü `/ongoru`.
 |---|---|---|---|
 | `/ongoru yarat` | öngörü kanalı | yaratıcı rolü (Administrator tek başına yetmez) | form + özel önizleme; kart herkese açık |
 | `/ongoru cuzdan` | komut kanalı | herkes | özel |
-| `/ongoru gunluk` | komut kanalı | herkes | özel |
+| `/ongoru gunluk` | komut kanalı | herkes | yeni ödül: tek satır herkese açık duyuru (ping'siz) + özel ayrıntı; tekrar/hata: özel |
 | `/ongoru tahminlerim` | komut kanalı | herkes | özel (10'ar sayfa, ◀ ▶) |
 | `/ongoru liderlik` | komut kanalı | herkes | herkese açık, ping'siz |
 | `/ongoru turnuva durum` | komut kanalı | herkes | herkese açık, ping'siz |
@@ -265,6 +265,14 @@ uç dahil (`RandomNumberGenerator.GetInt32(min, max + 1)`: reddetmeli örnekleme
 kullanıcı + yerel gün (turnuvadan bağımsız: aynı gün turnuva bitse de ikinci ödül yok). Çift tıklama/paralel komut tek ödeme;
 tekrar deneme tutarı yeniden çekmez. Aralık değişikliği eski hak ve hareket kayıtlarını değiştirmez; yalnızca yeni haklara
 uygulanır. Günlük ödül cüzdanı **sıfırlamaz** ve liderlik uygunluğu **sağlamaz**.
+
+Görünürlük: etkileşim önce **özel** olarak onaylanır (Discord'un 3 sn sınırı; özel onay sonradan herkese açık cevaba
+dönüşemez). Yeni ödül, komutun kullanıldığı kanala botun **tek** bir herkese açık mesajıyla duyurulur — "🪙 **Ad** günlük
+ödülünü aldı: **+137 TSQ Coin**!" (ad güvenilmeyen metin olarak işlenir, mention/markdown etkisiz, allowed_mentions boş) — ve
+üye ayrıntıyı (yeni bakiye, sonraki hak) özel görür. Bugün zaten alınmış hak, yanlış kanal, kapalı modül ve üst sınır **yalnızca
+özel** cevaptır, kanala bir şey yazılmaz. Coin, duyurudan önce kaydedilir: duyuru gönderilemezse (izin, hız sınırı, Discord
+hatası) yeniden denenmez (ikinci duyuru yok), üye "Coin hesabına eklendi, ancak kanal duyurusu gönderilemedi" notunu özel görür
+ve coin tekrar eklenmez. Belirsiz gönderim (Discord kabul etti ama cevap kayboldu) son 10 bot mesajında aranır.
 
 ## Normal kullanıcı coinini sıfırlayamaz
 

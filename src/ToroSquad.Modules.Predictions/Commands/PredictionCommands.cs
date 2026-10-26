@@ -13,14 +13,15 @@ namespace ToroSquad.Modules.Predictions.Commands;
 /// (channel, creator role, administrator). Predictions channel: yarat (the prediction is then managed from its card's
 /// buttons, see <see cref="PredictionComponents"/>). Commands channel: cuzdan, gunluk, tahminlerim, liderlik, turnuva
 /// durum|bitir (bitir: Administrator or server owner only). There is no command that resets a member's coins. Private
-/// answers except the leaderboard and the tournament status; nothing here ever pings.
+/// answers except the leaderboard, the tournament status and the one-line announcement of a new daily reward
+/// (<see cref="PredictionDailyFlow"/>); nothing here ever pings.
 /// </summary>
 [ToroModule(PredictionsModule.ModuleIdValue)]
 [Group("ongoru", "TSQ Öngörü: fixed-odds community predictions with virtual TSQ Coin")]
 [CommandContextType(InteractionContextType.Guild)]
 [IntegrationType(ApplicationIntegrationType.GuildInstall)]
-public sealed class PredictionCommands(InteractionServices services, PredictionService predictions, PredictionEconomy economy)
-    : PredictionInteractionModule(services)
+public sealed class PredictionCommands(InteractionServices services, PredictionService predictions, PredictionEconomy economy, PredictionDailyFlow daily)
+    : PredictionInteractionModule(services), IPredictionDailyResponder
 {
     [SlashCommand("yarat", "Create a prediction in this channel (opens a form)")]
     public async Task CreateAsync()
@@ -50,9 +51,12 @@ public sealed class PredictionCommands(InteractionServices services, PredictionS
     {
         if (await RefuseBotAsync())
             return;
-        await DeferEphemeralAsync();
-        await ReplyResultAsync((await economy.ClaimDailyAsync(Actor, Here, DisplayName(), CancellationToken.None)).Result);
+        await daily.RunAsync(Actor, Here, DisplayName(), this, CancellationToken.None);
     }
+
+    Task IPredictionDailyResponder.DeferPrivateAsync() => DeferEphemeralAsync();
+
+    Task IPredictionDailyResponder.ReplyPrivateAsync(OperationResult result) => ReplyResultAsync(result);
 
     [SlashCommand("tahminlerim", "Your entries in the current tournament")]
     public async Task MineAsync()
