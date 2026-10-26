@@ -372,15 +372,16 @@ public sealed partial class SummaryFlowTests
     }
 
     [Theory]
-    [InlineData(SummaryAiFailure.Rejected, 400, "Özet servisi isteği reddetti (erişim, hesap veya yapılandırma sorunu).")]
-    [InlineData(SummaryAiFailure.Rejected, 404, "Özet servisi isteği reddetti (erişim, hesap veya yapılandırma sorunu).")]
-    [InlineData(SummaryAiFailure.RateLimited, 429, "Özet servisi şu anda yoğun.")]
+    [InlineData(SummaryAiFailure.Rejected, 400, "Özet servisi isteği kabul etmedi (istek, model veya hesap ayarı sorunu).")]
+    [InlineData(SummaryAiFailure.Rejected, 404, "Özet servisi isteği kabul etmedi (istek, model veya hesap ayarı sorunu).")]
+    [InlineData(SummaryAiFailure.RateLimited, 429, "Özet servisi şu anda yoğun. Birazdan tekrar deneyin.")]
     [InlineData(SummaryAiFailure.ServerError, 500, "Özet servisi şu anda kullanılamıyor. Daha sonra tekrar deneyin.")]
     [InlineData(SummaryAiFailure.ServerError, 503, "Özet servisi şu anda kullanılamıyor. Daha sonra tekrar deneyin.")]
     [InlineData(SummaryAiFailure.Network, null, "Özet servisi şu anda kullanılamıyor. Daha sonra tekrar deneyin.")]
     [InlineData(SummaryAiFailure.Timeout, null, "Özet zamanında hazırlanamadı.")]
-    [InlineData(SummaryAiFailure.Unauthorized, 401, "Özet servisi isteği reddetti (erişim, hesap veya yapılandırma sorunu).")]
-    [InlineData(SummaryAiFailure.Unauthorized, 403, "Özet servisi isteği reddetti (erişim, hesap veya yapılandırma sorunu).")]
+    [InlineData(SummaryAiFailure.Timeout, 408, "Özet zamanında hazırlanamadı.")]
+    [InlineData(SummaryAiFailure.Unauthorized, 401, "Özet servisi kimlik doğrulamayı reddetti (HTTP 401: API anahtarı geçersiz, süresi dolmuş veya iptal edilmiş olabilir).")]
+    [InlineData(SummaryAiFailure.Forbidden, 403, "Özet servisi erişimi reddetti (HTTP 403: anahtarın yetkisi veya hesap/sağlayıcı politikası bu isteğe izin vermiyor).")]
     public async Task A_failed_inference_is_not_retried_posts_nothing_and_locks_only_briefly(SummaryAiFailure failure, int? status, string message)
     {
         var world = new World();
@@ -403,6 +404,20 @@ public sealed partial class SummaryFlowTests
         world.Ai.Respond = _ => Task.FromResult(new SummaryAiResult(SummaryAiFailure.None, Answer, "stop", SummaryAiUsage.None, TimeSpan.FromSeconds(5), 200));
         (await world.RunAsync(new FakeResponder())).Should().Be(SummaryOutcome.Posted, "but not the full 30/60 seconds");
         world.Ai.Calls.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task A_limit_with_retry_after_tells_the_member_how_long_to_wait_and_is_not_retried()
+    {
+        var world = new World();
+        world.Ai.Respond = _ => Task.FromResult(SummaryAiResult.Failed(SummaryAiFailure.RateLimited, TimeSpan.FromSeconds(1), 429, "rate_limit", TimeSpan.FromSeconds(90)));
+        var responder = new FakeResponder();
+
+        (await world.RunAsync(responder)).Should().Be(SummaryOutcome.AiFailed);
+
+        responder.Private.Single().Should().StartWith("Özet servisi şu anda yoğun (istek sınırı). 1 dk 30 sn sonra tekrar deneyin.").And.Contain("TS-");
+        world.Ai.Calls.Should().Be(1);
+        responder.Public.Should().BeEmpty();
     }
 
     [Fact]

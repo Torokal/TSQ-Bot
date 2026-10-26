@@ -325,7 +325,10 @@ public sealed partial class SummaryService(
         if (summary is null)
         {
             ticket.End(SummaryRunEnd.InferenceFailed);
-            await responder.ReplyPrivateAsync(T(FailureMessageKey(failure)) + TraceLine(request, trace));
+            var message = failure == SummaryAiFailure.RateLimited && decisive.RetryAfter is { } wait
+                ? T("summary.provider_busy_retry", Duration(request.Language, clock.GetUtcNow() + wait))
+                : T(FailureMessageKey(failure));
+            await responder.ReplyPrivateAsync(message + TraceLine(request, trace));
             Volatile.Write(ref _last, new SummaryLastRun(SummaryOutcome.AiFailed, failure, clock.GetUtcNow(), decisive.HttpStatus, decisive.ProviderError, trace));
             return SummaryOutcome.AiFailed;
         }
@@ -345,16 +348,19 @@ public sealed partial class SummaryService(
     }
 
     /// <summary>
-    /// The member's message for a failed AI request. The provider refusing the key or the account (401/403) or the request
-    /// itself (any other 4xx: unknown model, plan or usage limit, region, bad request) does not go away by waiting, so it
-    /// is told apart from a network problem or a provider outage (5xx), which usually does. The trace code follows either way.
+    /// The member's message for a failed AI request. A refused key (401), a refused permission or policy (403) and a refused
+    /// request (other 4xx: unknown model, region or plan setting, bad request) do not go away by waiting, so each is told apart
+    /// from a limit (429, temporary), a timeout (also the provider's 408) and a network problem or outage (5xx). The trace code
+    /// follows either way.
     /// </summary>
     public static string FailureMessageKey(SummaryAiFailure failure) => failure switch
     {
         SummaryAiFailure.Timeout => "summary.timeout",
         SummaryAiFailure.RateLimited => "summary.provider_busy",
         SummaryAiFailure.EmptyOutput or SummaryAiFailure.InvalidResponse => "summary.empty_output",
-        SummaryAiFailure.Unauthorized or SummaryAiFailure.Rejected => "summary.provider_refused",
+        SummaryAiFailure.Unauthorized => "summary.provider_auth",
+        SummaryAiFailure.Forbidden => "summary.provider_forbidden",
+        SummaryAiFailure.Rejected => "summary.provider_refused",
         _ => "summary.provider_unavailable",
     };
 

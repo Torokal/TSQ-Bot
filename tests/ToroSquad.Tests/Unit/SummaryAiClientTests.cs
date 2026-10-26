@@ -155,7 +155,9 @@ public sealed class SummaryAiClientTests
     [InlineData(HttpStatusCode.BadRequest, SummaryAiFailure.Rejected)]
     [InlineData(HttpStatusCode.NotFound, SummaryAiFailure.Rejected)]
     [InlineData(HttpStatusCode.Unauthorized, SummaryAiFailure.Unauthorized)]
-    [InlineData(HttpStatusCode.Forbidden, SummaryAiFailure.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden, SummaryAiFailure.Forbidden)]
+    [InlineData(HttpStatusCode.RequestTimeout, SummaryAiFailure.Timeout)]
+    [InlineData(HttpStatusCode.UnprocessableEntity, SummaryAiFailure.Rejected)]
     [InlineData(HttpStatusCode.TooManyRequests, SummaryAiFailure.RateLimited)]
     [InlineData(HttpStatusCode.InternalServerError, SummaryAiFailure.ServerError)]
     [InlineData(HttpStatusCode.BadGateway, SummaryAiFailure.ServerError)]
@@ -170,6 +172,48 @@ public sealed class SummaryAiClientTests
         result.HttpStatus.Should().Be((int)status);
         result.ProviderError.Should().Be("server_error");
         http.Requests.Should().ContainSingle("no retry of any kind");
+    }
+
+    public static TheoryData<string?, int?> RetryAfters => new()
+    {
+        { null, null },
+        { "30", 30 },
+        { "0", null },
+        { "Tue, 29 Sep 2026 12:02:00 GMT", 120 }, // an HTTP date: the wait from the injected clock (12:00)
+        { "Tue, 29 Sep 2026 11:59:00 GMT", null }, // already past
+        { "86400", 3600 }, // capped at an hour
+    };
+
+    [Theory]
+    [MemberData(nameof(RetryAfters))]
+    public async Task A_429_carries_its_retry_after_and_is_not_retried(string? header, int? seconds)
+    {
+        var (client, http, _) = Create((_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests) { Content = new StringContent("""{"error":{"type":"rate_limit"}}""") };
+            if (header is not null)
+                response.Headers.TryAddWithoutValidation("Retry-After", header);
+            return Task.FromResult(response);
+        });
+
+        var result = await client.SummarizeAsync(Prompt, CancellationToken.None);
+
+        (result.Failure, result.ProviderError).Should().Be((SummaryAiFailure.RateLimited, "rate_limit"));
+        result.RetryAfter.Should().Be(seconds is { } s ? TimeSpan.FromSeconds(s) : null);
+        http.Requests.Should().ContainSingle("Retry-After is shown, never acted on");
+    }
+
+    [Fact]
+    public async Task Only_a_429_keeps_a_retry_after()
+    {
+        var (client, _, _) = Create((_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("{}") };
+            response.Headers.TryAddWithoutValidation("Retry-After", "30");
+            return Task.FromResult(response);
+        });
+
+        (await client.SummarizeAsync(Prompt, CancellationToken.None)).Should().Match<SummaryAiResult>(r => r.Failure == SummaryAiFailure.ServerError && r.RetryAfter == null);
     }
 
     [Fact]

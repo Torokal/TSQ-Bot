@@ -8,22 +8,22 @@ public enum SummaryAiFailure
     /// <summary>No API key configured: no request was sent.</summary>
     NotConfigured = 1,
 
-    /// <summary>No answer within <see cref="SummaryOptions.RequestTimeoutSeconds"/>.</summary>
+    /// <summary>No answer within <see cref="SummaryOptions.RequestTimeoutSeconds"/>, or HTTP 408 from the provider.</summary>
     Timeout = 2,
 
     /// <summary>DNS, connect, TLS or a dropped connection.</summary>
     Network = 3,
 
-    /// <summary>HTTP 429.</summary>
+    /// <summary>HTTP 429: a request or usage limit (with the provider's Retry-After when it sent one). Not a key problem.</summary>
     RateLimited = 4,
 
     /// <summary>HTTP 5xx.</summary>
     ServerError = 5,
 
-    /// <summary>HTTP 401/403: the key or the account's access (e.g. the workspace region setting).</summary>
+    /// <summary>HTTP 401: authentication refused — the key is invalid, expired or revoked.</summary>
     Unauthorized = 6,
 
-    /// <summary>Any other 4xx: unknown model, invalid request, provider policy.</summary>
+    /// <summary>Any other 4xx (not 401, 403, 408, 429): unknown model, invalid request, region or plan setting.</summary>
     Rejected = 7,
 
     /// <summary>A success status whose body is not the expected JSON.</summary>
@@ -31,6 +31,9 @@ public enum SummaryAiFailure
 
     /// <summary>A valid answer without any text.</summary>
     EmptyOutput = 9,
+
+    /// <summary>HTTP 403: the request is outside the key's permissions or an account/provider policy — not necessarily a bad key.</summary>
+    Forbidden = 10,
 }
 
 /// <summary>Token counts as the provider reported them (null when it did not).</summary>
@@ -44,7 +47,8 @@ public sealed record SummaryAiUsage(int? InputTokens, int? OutputTokens, int? Re
 
 /// <summary>
 /// The outcome of the one request. <paramref name="ProviderError"/> is a short provider error code (never the message text of
-/// a request or answer); <paramref name="HttpStatus"/> the status when there was one.
+/// a request or answer); <paramref name="HttpStatus"/> the status when there was one; <paramref name="RetryAfter"/> the wait a
+/// 429 asked for (only shown to the member — nothing retries).
 /// </summary>
 public sealed record SummaryAiResult(
     SummaryAiFailure Failure,
@@ -53,12 +57,13 @@ public sealed record SummaryAiResult(
     SummaryAiUsage Usage,
     TimeSpan Latency,
     int? HttpStatus = null,
-    string? ProviderError = null)
+    string? ProviderError = null,
+    TimeSpan? RetryAfter = null)
 {
     public bool Succeeded => Failure == SummaryAiFailure.None;
 
-    public static SummaryAiResult Failed(SummaryAiFailure failure, TimeSpan latency, int? status = null, string? providerError = null) =>
-        new(failure, null, null, SummaryAiUsage.None, latency, status, providerError);
+    public static SummaryAiResult Failed(SummaryAiFailure failure, TimeSpan latency, int? status = null, string? providerError = null, TimeSpan? retryAfter = null) =>
+        new(failure, null, null, SummaryAiUsage.None, latency, status, providerError, retryAfter);
 }
 
 /// <summary>How one request tells the model about hidden reasoning. The two shapes were each checked against the gateway.</summary>
