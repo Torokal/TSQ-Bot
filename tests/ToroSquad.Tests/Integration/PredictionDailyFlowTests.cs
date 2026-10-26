@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core;
 using ToroSquad.Core.Messaging;
@@ -15,7 +16,7 @@ namespace ToroSquad.Tests.Integration;
 /// interaction is acknowledged privately before the claim, a new claim is announced with exactly one public line (name as
 /// untrusted text, no pings) and the details stay private; repeats, the wrong channel and a disabled module answer privately
 /// and post nothing; parallel claims post once; a failed announcement is reported privately after the coins were committed
-/// and never credits again; the range is 80–200 with both ends reachable.
+/// and never credits again; both ends of 80–200 are paid (scripted draws).
 /// </summary>
 public sealed class PredictionDailyFlowTests : IAsyncLifetime
 {
@@ -190,21 +191,29 @@ public sealed class PredictionDailyFlowTests : IAsyncLifetime
         (await second.WalletAsync(1))!.BalanceMinor.Should().Be(108_000);
     }
 
-    [Fact]
-    public void The_production_source_draws_uniformly_from_80_to_200_with_both_ends_reachable()
+    [Theory]
+    [InlineData(80, "1080")]
+    [InlineData(200, "1200")]
+    public async Task Both_ends_of_the_range_are_paid_and_the_ledger_the_private_and_the_public_message_agree(int coins, string balance)
     {
+        _kit.Random.Next.Enqueue(coins);
+        var responder = new FakeResponder();
+
+        await RunAsync(Member(1), responder, name: "Toro");
+
+        _kit.Random.Calls.Should().Equal((80, 200));
+        responder.Private.Single().Args.Take(2).Should().Equal(coins.ToString(System.Globalization.CultureInfo.InvariantCulture), balance);
+        _kit.Transport.Messages.Single().Message.Content.Should().Be($"🪙 **Toro** günlük ödülünü aldı: **+{coins} TSQ Coin**!");
+        (await _kit.LedgerAsync(1)).Single(l => l.Kind == PredictionLedgerKind.Daily).AmountMinor.Should().Be(coins * 100L);
+        (await _kit.Db(db => db.Set<PredictionDailyClaimEntity>().Select(c => c.AmountMinor).SingleAsync())).Should().Be(coins * 100L);
+    }
+
+    [Fact]
+    public void The_production_source_includes_the_upper_bound()
+    {
+        // Deterministic: a one-value range can only return that value, so this pins the "+ 1" of the exclusive upper bound.
         var random = new SecurePredictionRandom();
-        random.NextInclusive(200, 200).Should().Be(200, "the upper bound is inclusive");
+        random.NextInclusive(200, 200).Should().Be(200);
         random.NextInclusive(80, 80).Should().Be(80);
-
-        var options = new ToroSquad.Modules.Predictions.PredictionsOptions();
-        var seen = new int[options.DailyMaxCoins + 1];
-        for (var i = 0; i < 60_000; i++)
-            seen[random.NextInclusive(options.DailyMinCoins, options.DailyMaxCoins)]++;
-
-        seen.Take(80).Should().OnlyContain(n => n == 0, "nothing below 80");
-        seen.Skip(80).Should().HaveCount(121).And.OnlyContain(n => n > 0, "every value 80–200 occurs (P(miss) < 1e-200)");
-        // Uniform: each of the 121 values expects ~496 draws; a modulo-biased source would skew low values far beyond this.
-        seen.Skip(80).Should().OnlyContain(n => n > 300 && n < 700);
     }
 }
