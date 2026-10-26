@@ -25,6 +25,7 @@ COPY src/ToroSquad.Modules.Randomizer/ToroSquad.Modules.Randomizer.csproj src/To
 COPY src/ToroSquad.Modules.Timezone/ToroSquad.Modules.Timezone.csproj src/ToroSquad.Modules.Timezone/packages.lock.json src/ToroSquad.Modules.Timezone/
 COPY src/ToroSquad.Modules.Giveaway/ToroSquad.Modules.Giveaway.csproj src/ToroSquad.Modules.Giveaway/packages.lock.json src/ToroSquad.Modules.Giveaway/
 COPY src/ToroSquad.Modules.Summary/ToroSquad.Modules.Summary.csproj src/ToroSquad.Modules.Summary/packages.lock.json src/ToroSquad.Modules.Summary/
+COPY src/ToroSquad.Modules.Sor/ToroSquad.Modules.Sor.csproj src/ToroSquad.Modules.Sor/packages.lock.json src/ToroSquad.Modules.Sor/
 COPY src/ToroSquad.Modules.Predictions/ToroSquad.Modules.Predictions.csproj src/ToroSquad.Modules.Predictions/packages.lock.json src/ToroSquad.Modules.Predictions/
 COPY src/ToroSquad.Modules.News/ToroSquad.Modules.News.csproj src/ToroSquad.Modules.News/packages.lock.json src/ToroSquad.Modules.News/
 COPY src/ToroSquad.Modules.Updates/ToroSquad.Modules.Updates.csproj src/ToroSquad.Modules.Updates/packages.lock.json src/ToroSquad.Modules.Updates/

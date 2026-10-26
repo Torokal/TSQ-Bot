@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "8d68a359040ca81b5a6baa4ec5bd03501e0208d85804e12af75cbe9c7348d9fc",
+  "hash": "052bf751c4cd034486d7ca4e3b5418cb32db2bfcecf0b2a9c7b577e5529fddae",
   "commands": [
     {
       "module": "quote",
@@ -650,6 +650,26 @@
       }
     },
     {
+      "module": "sor",
+      "payload": {
+        "type": 1,
+        "name": "hafizam",
+        "description": "See and manage what TSQ Sor remembers about you (only you see it)",
+        "description_localizations": {
+          "tr": "TSQ Sor'un senin hakkında hatırladıklarını gör ve yönet (yalnız sen görürsün)."
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": []
+      }
+    },
+    {
       "module": "core",
       "payload": {
         "type": 1,
@@ -1086,6 +1106,97 @@
           0
         ],
         "options": []
+      }
+    },
+    {
+      "module": "sor",
+      "payload": {
+        "type": 1,
+        "name": "sor",
+        "description": "Ask TSQ Sor anything",
+        "description_localizations": {
+          "tr": "TSQ Sor'a istediğini sor."
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 3,
+            "name": "soru",
+            "description": "Your question",
+            "description_localizations": {
+              "tr": "Sorun"
+            },
+            "required": true,
+            "min_length": 1,
+            "max_length": 4000
+          },
+          {
+            "type": 3,
+            "name": "gizli",
+            "description": "Only you see the answer (default: no)",
+            "description_localizations": {
+              "tr": "Cevabı yalnız sen gör (varsayılan: hayır)"
+            },
+            "required": false,
+            "choices": [
+              {
+                "name": "evet",
+                "name_localizations": {
+                  "tr": "evet"
+                },
+                "value": "evet"
+              },
+              {
+                "name": "hayır",
+                "name_localizations": {
+                  "tr": "hayır"
+                },
+                "value": "hayir"
+              }
+            ]
+          },
+          {
+            "type": 3,
+            "name": "yeni",
+            "description": "Start a new conversation; your memory is kept (default: no)",
+            "description_localizations": {
+              "tr": "Yeni bir sohbet başlat; hafızan korunur (varsayılan: hayır)"
+            },
+            "required": false,
+            "choices": [
+              {
+                "name": "evet",
+                "name_localizations": {
+                  "tr": "evet"
+                },
+                "value": "evet"
+              },
+              {
+                "name": "hayır",
+                "name_localizations": {
+                  "tr": "hayır"
+                },
+                "value": "hayir"
+              }
+            ]
+          },
+          {
+            "type": 6,
+            "name": "kisi",
+            "description": "The member your question is about (optional)",
+            "description_localizations": {
+              "tr": "Sorunun ilgili olduğu üye (isteğe bağlı)"
+            },
+            "required": false
+          }
+        ]
       }
     },
     {

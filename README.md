@@ -15,7 +15,9 @@ and gram gold buy/sell prices with `/dolar`, `/euro` and `/altın` ([docs/curren
 `/sec` and `/yazitura` ([docs/randomizer/TSQ_RANDOMIZER.md](docs/randomizer/TSQ_RANDOMIZER.md)). **TSQ Çekiliş** runs reaction
 giveaways: `/giveaway create` opens a form, members enter with 🎉, winners are drawn automatically
 ([docs/giveaway/TSQ_GIVEAWAY.md](docs/giveaway/TSQ_GIVEAWAY.md)). **TSQ Özet** summarizes the latest messages of a channel
-in Turkish with `/ozetle` ([docs/summary/TSQ_SUMMARY.md](docs/summary/TSQ_SUMMARY.md)). **TSQ Öngörü** runs fixed-odds
+in Turkish with `/ozetle` ([docs/summary/TSQ_SUMMARY.md](docs/summary/TSQ_SUMMARY.md)). **TSQ Sor** answers questions on
+any topic with `/sor`, continues a short conversation and remembers what members choose to share about themselves
+(`/hafizam`) ([docs/sor/TSQ_SOR.md](docs/sor/TSQ_SOR.md)). **TSQ Öngörü** runs fixed-odds
 community predictions with purely virtual TSQ Coin under `/ongoru` ([docs/predictions/TSQ_PREDICTIONS.md](docs/predictions/TSQ_PREDICTIONS.md)).
 
 TSQ Bot is an independent project. The esports module is inspired by the user experience of the discontinued
@@ -87,6 +89,13 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   retry, no fallback model; refusals are private. Only members with at least one of the configured roles
   (`Summary:AllowedRoleIds`) may use it; in a channel or thread that already has a TSQ summary, at least 100 new member
   messages are required, and successful summaries of the same channel or thread are at least 2 minutes apart.
+- **TSQ Sor** (separate module, off by default): `/sor soru:… [gizli] [yeni] [kisi]` answers any question with ONE request
+  to the same OpenCode Go key and endpoint as TSQ Özet (own explicit profile, `deepseek-v4.1-flash`, no retry, no second
+  model, no web access). It continues the asker's own recent conversation in the same channel/thread and visibility (8
+  pairs, 60 min idle, kept 24 h) and keeps up to 30 short notes members state about themselves, in explicit scopes
+  (private, this channel, shared by the member in `/hafizam`). Identity is (guild, user); scopes are applied in the
+  database queries; deletions and switches are version-checked before an answer is shown or saved; quotas are persistent
+  and race-free; `/privacy` covers it.
 - **TSQ Haber — Aurora · HLTV** (separate module, off by default and `News:Mode=Off`): HLTV news about Aurora's main CS2
   team from the official HLTV RSS feed only — headline, link and publication time, once per article, to one configured
   channel; matching by team name and current players in the RSS headline/description (the full article is never read);
@@ -131,6 +140,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Randomizer | `/zarat zar:…`, `/randomsayi maksimum:… [minimum:…]`, `/sec seçenekler:…`, `/yazitura` (public answer) | everyone (module on) |
 | TSQ Çekiliş | `/giveaway create` (form → card → 🎉 → automatic draw), `/giveaway end\|cancel\|reroll giveaway:<#number \| message link \| id>` | Manage Server (module on); entering: everyone, with 🎉 |
 | TSQ Özet | `/ozetle` (no options; public summary of this channel's latest messages) | members with any one of the configured roles (module on) |
+| TSQ Sor | `/sor soru:… [gizli:evet] [yeni:evet] [kisi:@member]` (answer card with Devam et / Yeni sohbet / Hafızam), `/hafizam` (own memory, private) | everyone (module on; optional channel/role limits) |
 | TSQ Öngörü | predictions channel: `/ongoru yarat` + card buttons (🎯 Tahmin Yap, 🔒 Kilitle, ✅ Sonuçlandır, ↩️ İptal / İade); commands channel: `/ongoru cuzdan\|gunluk\|tahminlerim\|liderlik`, `/ongoru turnuva durum\|bitir` | create: the creator role; card management buttons: its creator (with the role) or Administrator/owner; end tournament: Administrator/owner; the rest: everyone (module on) |
 | TSQ Doğum Günü admin | `/tsq-admin modul:birthday islem:configure\|status\|doctor`; `/tsq-admin modul:birthday islem:set\|show uye:@member [tarih:14.03]` | Manage Server; `set`/`show`: Administrator or server owner |
 | TSQ Haber admin | `/tsq-admin modul:news islem:configure\|pause\|resume\|preview\|status\|doctor` | Manage Server |
@@ -245,7 +255,9 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Randomizer` | TSQ Randomizer (`/zarat`, `/randomsayi`, `/sec`, `/yazitura`: dice notation and option parsers, one secure random source) |
 | `ToroSquad.Modules.Giveaway` | TSQ Çekiliş (`/giveaway`: form and duration parser, restart-safe draw worker, paged 🎉 reaction reading, unbiased winner draw, card sync, winner announcement via the outbox) |
 | `ToroSquad.Modules.Predictions` | TSQ Öngörü (`/ongoru`: form parser, fixed-odds integer coin math, atomic entries/settlement/refunds, tournaments, daily reward, leaderboards, card sync, lock worker) |
+| `ToroSquad.Ai` | Shared AI provider access (no TSQ dependency): chat request/answer contract, the one OpenCode Go transport, parsing and error classes |
 | `ToroSquad.Modules.Summary` | TSQ Özet (`/ozetle`: on-demand channel read, transcript normalization, one OpenCode Go request, deterministic clean-up and split, in-memory cooldowns) |
+| `ToroSquad.Modules.Sor` | TSQ Sor (`/sor`, `/hafizam`: one request per question, bounded conversations, scoped self-stated notes, version-checked finalization, persistent quotas, retention worker) |
 | `ToroSquad.Modules.Birthday` | TSQ Doğum Günü (day + month registrations, restart-safe daily reconciliation: one announcement, temporary role) |
 | `ToroSquad.Modules.Example` | Minimal example module (proves modules plug in without touching others) |
 | `ToroSquad.Bot` | Composition root, CLI, migrations |
