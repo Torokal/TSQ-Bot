@@ -265,7 +265,8 @@ public sealed class Formula1NotificationPlanner(
     /// start (per disqualified car), only while fresh relative to the provider message time and after the watermark.
     /// Safety Car and red-flag cards are spoiler-held: staged immediately, delivered no earlier than the provider's event
     /// time + <see cref="Formula1Options.LiveIncidentSpoilerDelaySeconds"/>. Disqualifications (from the classification,
-    /// after the session) and every other F1 card are not held.
+    /// after the session) are held by their own <see cref="Formula1Options.DisqualificationDelaySeconds"/> from the moment
+    /// they were first recorded. Every other F1 card is not held.
     /// </summary>
     private async Task<(int Created, int Updated)> PlanIncidentsAsync(Formula1GuildConfigEntity config, PlanV2 p, List<F1SessionSnapshotEntity> sessions,
         List<F1RaceControlEventEntity> rows, Dictionary<string, F1ResultSnapshotEntity> resultRows, Formula1Options o, CancellationToken ct)
@@ -275,7 +276,8 @@ public sealed class Formula1NotificationPlanner(
             return (created, updated);
         var fresh = TimeSpan.FromMinutes(o.IncidentFreshMinutes);
         var dsqFresh = TimeSpan.FromHours(o.DisqualificationFreshHours);
-        var spoilerHold = TimeSpan.FromSeconds(o.LiveIncidentSpoilerDelaySeconds); // Safety Car and red flag only
+        var spoilerHold = TimeSpan.FromSeconds(o.LiveIncidentSpoilerDelaySeconds); // Safety Car and red flag
+        var dsqHold = TimeSpan.FromSeconds(o.DisqualificationDelaySeconds); // its own setting, never the SC/red-flag total
         foreach (var session in sessions)
         {
             var view = Formula1Workflow.ToView(session);
@@ -298,7 +300,7 @@ public sealed class Formula1NotificationPlanner(
             {
                 var names = resultRows.TryGetValue(session.SessionKey, out var r) ? F1Json.Deserialize<F1SessionResult>(r.PayloadJson) : null;
                 staged.AddRange(F1IncidentPhases.Disqualifications(history).Select(dsq => (
-                    DisqualificationPrefix + dsq.DriverNumber!.Value.ToString(CultureInfo.InvariantCulture), dsq, dsqFresh, TimeSpan.Zero,
+                    DisqualificationPrefix + dsq.DriverNumber!.Value.ToString(CultureInfo.InvariantCulture), dsq, dsqFresh, dsqHold,
                     renderer.Disqualification(view, dsq, names?.Entries.FirstOrDefault(e => e.DriverNumber == dsq.DriverNumber)?.DriverName, p.Language,
                         lifecycle.AttributionKey))));
             }

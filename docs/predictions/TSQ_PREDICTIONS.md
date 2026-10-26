@@ -14,7 +14,7 @@ proje `ToroSquad.Modules.Predictions`, komut kökü `/ongoru`.
 |---|---|---|---|
 | `/ongoru yarat` | öngörü kanalı | yaratıcı rolü (Administrator tek başına yetmez) | form + özel önizleme; kart herkese açık |
 | `/ongoru cuzdan` | komut kanalı | herkes | özel |
-| `/ongoru gunluk` | komut kanalı | herkes | özel |
+| `/ongoru gunluk` | komut kanalı | herkes | yeni ödül: tek satır herkese açık duyuru (ping'siz) + özel ayrıntı; tekrar/hata: özel |
 | `/ongoru tahminlerim` | komut kanalı | herkes | özel (10'ar sayfa, ◀ ▶) |
 | `/ongoru liderlik` | komut kanalı | herkes | herkese açık, ping'siz |
 | `/ongoru turnuva durum` | komut kanalı | herkes | herkese açık, ping'siz |
@@ -39,7 +39,7 @@ başlangıçta doğrulanır, hatalı değer botu açık bir CONFIG satırıyla d
 | `Predictions:CommandsChannelId` | `689814679056547857` | Üye komutlarının ve `/ongoru turnuva bitir`'in **tek** kanalı; kapanış duyurusu buraya gider |
 | `Predictions:CreatorRoleId` | `1233057768408350741` | Öngörü yaratabilen rol (yalnızca yaratma ve kişinin kendi öngörülerini yönetme) |
 | `Predictions:InitialBalanceCoins` | `1000` | Her turnuvanın başlangıç bakiyesi |
-| `Predictions:DailyMinCoins` / `DailyMaxCoins` | `10` / `100` | Günlük ödül aralığı (iki uç dahil) |
+| `Predictions:DailyMinCoins` / `DailyMaxCoins` | `80` / `200` | Günlük ödül aralığı (iki uç dahil; 2026-10-26 öncesi 10 / 100). 1 ≤ min ≤ max ≤ 1.000.000, yoksa bot açılmaz |
 | `Predictions:DefaultOdds` | `2.00` | Oranı yazılmayan seçeneğin oranı (1.01–1000.00, en fazla iki ondalık) |
 | `Predictions:MaxOutcomes` | `25` | Öngörü başına en fazla seçenek (2–25) |
 | `Predictions:TerminalCardRetentionHours` | `12` | Sonuçlanmış/iptal edilmiş öngörünün kartı bu kadar saat sonra kanaldan kaldırılır (1–168; yalnız Discord mesajı) |
@@ -260,10 +260,19 @@ TSQ Öngörü #42
 
 ## Günlük ödül
 
-`/ongoru gunluk`: Europe/Istanbul takvim gününe göre günde bir (yeni hak 00:00'da), 10–100 eşit olasılıklı tam sayı
-(`RandomNumberGenerator`). "Günlük ödülün: 47 TSQ Coin / Yeni bakiyen: 1047 TSQ Coin". Hak anahtarı sunucu + kullanıcı + yerel
-gün (turnuvadan bağımsız: aynı gün turnuva bitse de ikinci ödül yok). Çift tıklama/paralel komut tek ödeme; tekrar deneme tutarı
-yeniden çekmez. Günlük ödül cüzdanı **sıfırlamaz** ve liderlik uygunluğu **sağlamaz**.
+`/ongoru gunluk`: Europe/Istanbul takvim gününe göre günde bir (yeni hak 00:00'da), 80–200 eşit olasılıklı tam sayı, iki
+uç dahil (`RandomNumberGenerator.GetInt32(min, max + 1)`: reddetmeli örnekleme, modulo sapması yok). Hak anahtarı sunucu +
+kullanıcı + yerel gün (turnuvadan bağımsız: aynı gün turnuva bitse de ikinci ödül yok). Çift tıklama/paralel komut tek ödeme;
+tekrar deneme tutarı yeniden çekmez. Aralık değişikliği eski hak ve hareket kayıtlarını değiştirmez; yalnızca yeni haklara
+uygulanır. Günlük ödül cüzdanı **sıfırlamaz** ve liderlik uygunluğu **sağlamaz**.
+
+Görünürlük: etkileşim önce **özel** olarak onaylanır (Discord'un 3 sn sınırı; özel onay sonradan herkese açık cevaba
+dönüşemez). Yeni ödül, komutun kullanıldığı kanala botun **tek** bir herkese açık mesajıyla duyurulur — "🪙 **Ad** günlük
+ödülünü aldı: **+137 TSQ Coin**!" (ad güvenilmeyen metin olarak işlenir, mention/markdown etkisiz, allowed_mentions boş) — ve
+üye ayrıntıyı (yeni bakiye, sonraki hak) özel görür. Bugün zaten alınmış hak, yanlış kanal, kapalı modül ve üst sınır **yalnızca
+özel** cevaptır, kanala bir şey yazılmaz. Coin, duyurudan önce kaydedilir: duyuru gönderilemezse (izin, hız sınırı, Discord
+hatası) yeniden denenmez (ikinci duyuru yok), üye "Coin hesabına eklendi, ancak kanal duyurusu gönderilemedi" notunu özel görür
+ve coin tekrar eklenmez. Belirsiz gönderim (Discord kabul etti ama cevap kayboldu) son 10 bot mesajında aranır.
 
 ## Normal kullanıcı coinini sıfırlayamaz
 

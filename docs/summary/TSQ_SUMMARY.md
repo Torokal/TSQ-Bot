@@ -93,6 +93,7 @@ Discord'da `||…||` ile gizlenmiş bilgi özette de gizli kalır; spoiler dış
 | User-Agent | `TSQBot/<sürüm> SummaryModule (+https://github.com/Torokal/TSQ-Bot)` (dürüst tanıtım; kodlama ajanı taklidi yok) |
 | Zaman aşımı | 25 sn; aşılırsa istek iptal edilir ve kanala hiçbir şey gönderilmez |
 | Retry | **Yok.** 400/401/403/404, 429, 5xx, ağ hatası ve zaman aşımı olduğu gibi döner. Tekrar denemek isteyen üye `/ozetle`'yi yeniden çalıştırır. |
+| Üye mesajı (her birinde takip kodu) | 401 (`Unauthorized`) → kimlik doğrulama reddi (anahtar geçersiz, süresi dolmuş veya iptal edilmiş olabilir); 403 (`Forbidden`) → erişim/yetki/politika reddi (anahtarın geçersiz olduğu anlamına gelmez); diğer 4xx (`Rejected`: 400, 404, 422 …) → istek, model veya hesap ayarı sorunu; 429 → "yoğun", sağlayıcı `Retry-After` gönderdiyse "… {süre} sonra tekrar deneyin" (en fazla 1 saat gösterilir; otomatik yeniden deneme yok); 408 ve zaman aşımı → "zamanında hazırlanamadı"; 5xx ve ağ hatası → "Özet servisi şu anda kullanılamıyor. Daha sonra tekrar deneyin."; boş/geçersiz cevap → "özet oluşturulamadı" |
 
 **Thinking kapalı ve `reasoning_effort` yok.** DeepSeek'te `reasoning_effort` (low/high/max) thinking modunun ayarıdır;
 thinking'i kapatan tek sinyal `thinking: {"type": "disabled"}`'dır. İkisini birlikte göndermek çelişkili bir istektir.
@@ -778,7 +779,10 @@ Grounded modunda ayrıca: `validation` (kategori), `source_count`, `reply_count`
 `total_ai_latency_ms`. Sağlayıcının döndürmediği bir sayı `unknown` yazılır (uydurma sıfır değil); denetçi çağrılmadıysa
 `not_called`. `failed_stage` (none \| generator \| reviewer) hattı hangi aşamanın bitirdiğini, çıkarım satırındaki `mode_source`
 (Legacy \| Global \| Canary) modun nereden geldiğini gösterir. `/bot status` genel modu, canary kanalı **sayısını** (ID'leri değil)
-ve iki Grounded modelini gösterir. Alıntılar, taslak, JSON içeriği, isimler ve ayrıştırma hatasının metni loglanmaz.
+ve iki Grounded modelini gösterir; son AI isteği başarısızsa kategorisini, HTTP durumunu, sağlayıcının kısa hata kodunu ve o
+çalıştırmanın takip kodunu da (yalnızca bellekte; yeniden başlatma unutturur). Üyenin gördüğü takip kodu (`TS-XXXXXXXX`), logda
+`Summary [TS-XXXXXXXX] inference failed failure=… status=… provider_error=…` satırını bulur. Alıntılar, taslak, JSON içeriği,
+isimler ve ayrıştırma hatasının metni loglanmaz.
 
 **`Limit` alt nedeni.** `validation=Limit` olduğunda `limit_reason`, okuyucunun sabit okuma sırasında **ilk** karşılaştığı
 güvenlik sınırını adlandırır; `limit_value` o sınırı aşan büyüklüktür (bir sayı veya uzunluk). Diğer bütün sonuçlarda

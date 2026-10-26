@@ -14,7 +14,7 @@ namespace ToroSquad.Tests.Integration;
 /// <summary>
 /// The TSQ Öngörü economy on the real SQLite database: no way for a member to reset their own coins (repeated commands,
 /// restarts, leaving and rejoining, daily rewards, cancels and results never bring the starting balance back — only
-/// /ongoru turnuva bitir does, as a new tournament), the daily reward (10–100, one per Türkiye calendar day, atomic under
+/// /ongoru turnuva bitir does, as a new tournament), the daily reward (80–200, one per Türkiye calendar day, atomic under
 /// parallel claims), the tournament cycle (administrators only, blocked by unresolved predictions, one close under
 /// simultaneous confirmations, stale and expired confirmations, both podiums frozen with names, fresh starting balances,
 /// archived old wallets, the announcement rendered from the snapshot and retried unchanged, consistent with a daily claim or
@@ -50,7 +50,7 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         (await ClaimAsync(1)).Result.Succeeded.Should().BeTrue();
 
         (await InitialGrantsAsync(1)).Should().Be(1);
-        (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(100_000 + 1_000 - 30_000 + 1_000);
+        (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(100_000 + 8_000 - 30_000 + 8_000);
     }
 
     [Fact]
@@ -61,18 +61,18 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         (await _kit.SettleAsync(Admin(), lost, 2)).Result.Succeeded.Should().BeTrue();
         (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(90_000);
 
-        _kit.Random.Next.Enqueue(10);
-        (await ClaimAsync(1)).Result.Args.Take(2).Should().Equal("10", "910");
+        _kit.Random.Next.Enqueue(80);
+        (await ClaimAsync(1)).Result.Args.Take(2).Should().Equal("80", "980");
 
         var cancelled = await _kit.CreatePredictionAsync(title: "İptal edilen öngörü başlığı");
         (await _kit.EnterAsync(Member(1), cancelled, 3, "50")).Result.Succeeded.Should().BeTrue();
         (await _kit.CancelAsync(Creator(), cancelled)).Result.Succeeded.Should().BeTrue();
-        (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(91_000, "only the 50 staked came back — never 1000");
+        (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(98_000, "only the 50 staked came back — never 1000");
 
         var won = await _kit.CreatePredictionAsync(title: "Kazanılan öngörü başlığı");
         (await _kit.EnterAsync(Member(1), won, 1, "100")).Result.Succeeded.Should().BeTrue();
         (await _kit.SettleAsync(Admin(), won, 1)).Result.Succeeded.Should().BeTrue();
-        (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(92_000, "910 − 100 + 110: a normal payout, not a reset");
+        (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(99_000, "980 − 100 + 110: a normal payout, not a reset");
         (await InitialGrantsAsync(1)).Should().Be(1);
     }
 
@@ -85,7 +85,7 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         await using var second = await PredictionTestKit.CreateAsync(TestHost.T0.AddDays(1), directory: _kit.Host.Directory, transport: _kit.Transport);
         (await second.ClaimDailyAsync(Member(1))).Result.Succeeded.Should().BeTrue();
         (await second.Db(db => db.Set<PredictionLedgerEntity>().CountAsync(l => l.UserId == 1 && l.Kind == PredictionLedgerKind.Initial))).Should().Be(1);
-        (await second.WalletAsync(1))!.BalanceMinor.Should().Be(100_000 - 100 + 1_000 + 1_000); // the participation lost its 1 coin
+        (await second.WalletAsync(1))!.BalanceMinor.Should().Be(100_000 - 100 + 8_000 + 8_000); // the participation lost its 1 coin
     }
 
     [Fact]
@@ -110,35 +110,55 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
     // ---- daily ----
 
     [Fact]
-    public async Task The_daily_reward_is_10_to_100_coins_credited_with_its_journal_row()
+    public async Task The_daily_reward_is_80_to_200_coins_credited_with_its_journal_row()
     {
-        _kit.Random.Next.Enqueue(10);
+        _kit.Random.Next.Enqueue(80);
         var first = await ClaimAsync(1);
         first.Result.MessageKey.Should().Be("predictions.daily.done");
-        first.Result.Args.Take(2).Should().Equal("10", "1010");
-        _kit.Random.Calls.Should().Equal((10, 100));
+        first.Result.Args.Take(2).Should().Equal("80", "1080");
+        _kit.Random.Calls.Should().Equal((80, 200));
 
         _kit.Host.Clock.Advance(TimeSpan.FromDays(1));
-        _kit.Random.Next.Enqueue(100);
-        (await ClaimAsync(1)).Result.Args.Take(2).Should().Equal("100", "1110");
+        _kit.Random.Next.Enqueue(200);
+        (await ClaimAsync(1)).Result.Args.Take(2).Should().Equal("200", "1280");
+        _kit.Random.Calls.Should().Equal((80, 200), (80, 200));
         (await _kit.LedgerAsync(1)).Select(l => (l.Kind, l.AmountMinor, l.BalanceAfterMinor)).Should().Equal(
-            (PredictionLedgerKind.Initial, 100_000L, 100_000L), (PredictionLedgerKind.Daily, 1_000L, 101_000L), (PredictionLedgerKind.Daily, 10_000L, 111_000L));
+            (PredictionLedgerKind.Initial, 100_000L, 100_000L), (PredictionLedgerKind.Daily, 8_000L, 108_000L), (PredictionLedgerKind.Daily, 20_000L, 128_000L));
+    }
+
+    [Fact]
+    public async Task Claims_made_under_the_old_range_keep_their_amount_and_ledger_rows()
+    {
+        await using (var old = await PredictionTestKit.CreateAsync(directory: null, settings: new() { ["Predictions:DailyMinCoins"] = "10", ["Predictions:DailyMaxCoins"] = "100" }))
+        {
+            old.Random.Next.Enqueue(37);
+            (await old.ClaimDailyAsync(Member(1))).Result.Args[0].Should().Be("37");
+            old.Random.Calls.Should().Equal((10, 100));
+
+            await using var now = await PredictionTestKit.CreateAsync(TestHost.T0.AddDays(1), directory: old.Host.Directory, transport: old.Transport);
+            (await now.ClaimDailyAsync(Member(1))).Result.Args[0].Should().Be("80", "the new default range applies to new claims only");
+            now.Random.Calls.Should().Equal((80, 200));
+            (await now.Db(db => db.Set<PredictionDailyClaimEntity>().AsNoTracking().OrderBy(c => c.Id).Select(c => c.AmountMinor).ToListAsync()))
+                .Should().Equal(3_700L, 8_000L);
+            (await now.LedgerAsync(1)).Select(l => (l.Kind, l.AmountMinor, l.BalanceAfterMinor)).Should().Equal(
+                (PredictionLedgerKind.Initial, 100_000L, 100_000L), (PredictionLedgerKind.Daily, 3_700L, 103_700L), (PredictionLedgerKind.Daily, 8_000L, 111_700L));
+        }
     }
 
     [Fact]
     public async Task Two_simultaneous_claims_pay_once_and_the_repeat_shows_the_same_amount()
     {
-        _kit.Random.Next.Enqueue(47);
-        _kit.Random.Next.Enqueue(99);
+        _kit.Random.Next.Enqueue(147);
+        _kit.Random.Next.Enqueue(199);
         var results = await _kit.TogetherAsync(() => ClaimAsync(1), () => ClaimAsync(1));
 
         results.Count(r => r.Result.Succeeded).Should().Be(1);
         var repeat = results.Single(r => !r.Result.Succeeded).Result;
-        (repeat.MessageKey, repeat.Args[0]).Should().Be(("predictions.daily.already", (object)"47"));
+        (repeat.MessageKey, repeat.Args[0]).Should().Be(("predictions.daily.already", (object)"147"));
         _kit.Random.Calls.Should().ContainSingle("the second claim found the first one and drew nothing");
-        (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(104_700);
+        (await _kit.WalletAsync(1))!.BalanceMinor.Should().Be(114_700);
         (await _kit.CountAsync<PredictionDailyClaimEntity>()).Should().Be(1);
-        (await ClaimAsync(1)).Result.Args[0].Should().Be("47", "a retry never draws a new amount");
+        (await ClaimAsync(1)).Result.Args[0].Should().Be("147", "a retry never draws a new amount");
     }
 
     [Fact]
@@ -367,9 +387,9 @@ public sealed class PredictionEconomyTests : IAsyncLifetime
         var frozen = await _kit.Db(db => db.Set<PredictionStandingEntity>().SingleAsync(s => s.Board == PredictionBoard.Coins && s.UserId == 1));
         frozen.BalanceMinor.Should().Be(archived.BalanceMinor + archived.PendingMinor, "the frozen value is the archived one");
         if (claim.TournamentId == old.Id)
-            archived.BalanceMinor.Should().Be(100_900); // 1000 - the lost 1 coin + the 10-coin claim
+            archived.BalanceMinor.Should().Be(107_900); // 1000 - the lost 1 coin + the 80-coin claim
         else
-            ((await _kit.WalletAsync(1, tournaments[1].Id))!.BalanceMinor, archived.BalanceMinor).Should().Be((101_000L, 99_900L));
+            ((await _kit.WalletAsync(1, tournaments[1].Id))!.BalanceMinor, archived.BalanceMinor).Should().Be((108_000L, 99_900L));
     }
 
     [Fact]

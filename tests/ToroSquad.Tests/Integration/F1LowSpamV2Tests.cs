@@ -17,6 +17,12 @@ namespace ToroSquad.Tests.Integration;
 /// </summary>
 public sealed class F1LowSpamV2Tests
 {
+    /// <summary>Spoiler hold of Safety Car / red-flag cards (Formula1:LiveIncidentSpoilerDelaySeconds default).</summary>
+    private static readonly TimeSpan Hold = TimeSpan.FromSeconds(70);
+
+    /// <summary>Advances the fake clock to an absolute time (poller tick + outbox delivery, as <c>StepAsync</c>).</summary>
+    private static Task StepToAsync(TestHost host, DateTimeOffset at) => StepAsync(host, at - host.Clock.GetUtcNow());
+
     private static Task EnableAsync(TestHost host, F1NotificationChanges changes) => host.InScopeAsync(async sp =>
         (await sp.GetRequiredService<Formula1ConfigService>().SetNotificationsAsync(TestHost.Admin(Guild), changes, CancellationToken.None)).Succeeded.Should().BeTrue());
 
@@ -85,6 +91,7 @@ public sealed class F1LowSpamV2Tests
         world.AddIncident(reference, F1IncidentKind.SafetyCarDeployed, T0.AddMinutes(40), lap: 5);
         await StepAsync(host, TimeSpan.FromMinutes(9));
         (await OutboxAsync(host, "safety_car:")).Should().ContainSingle();
+        await StepToAsync(host, T0.AddMinutes(40) + Hold); // the spoiler hold has elapsed
         var card = host.Transport.Messages[1];
         card.Pinged.Should().BeFalse("incident cards never ping");
         card.Message.Embed!.Description.Should().Contain("SAFETY CAR").And.Contain("5");
@@ -106,8 +113,10 @@ public sealed class F1LowSpamV2Tests
         await StepAsync(host, TimeSpan.FromMinutes(5));
         await StepAsync(host, TimeSpan.FromMinutes(1));
         (await OutboxAsync(host, "safety_car:")).Should().HaveCount(2);
-        host.Transport.Messages.Should().HaveCount(2, "the new phase is staged but spoiler-held for 30 s after the provider's event time");
-        await StepAsync(host, TimeSpan.FromSeconds(30));
+        host.Transport.Messages.Should().HaveCount(2, "the new phase is staged but spoiler-held for 70 s after the provider's event time");
+        await StepToAsync(host, T0.AddMinutes(50) + Hold - TimeSpan.FromSeconds(1));
+        host.Transport.Messages.Should().HaveCount(2);
+        await StepAsync(host, TimeSpan.FromSeconds(1));
         host.Transport.Messages.Should().HaveCount(3);
     }
 
@@ -132,6 +141,7 @@ public sealed class F1LowSpamV2Tests
         await using var _ = host;
         world.AddIncident(reference, F1IncidentKind.SafetyCarDeployed, T0.AddMinutes(40), lap: 5);
         await StepAsync(host, TimeSpan.FromMinutes(9));
+        await StepToAsync(host, T0.AddMinutes(40) + Hold);
         host.Transport.Messages.Should().HaveCount(2);
 
         await using var second = await RestartAsync(host, world, host.Clock.GetUtcNow().AddMinutes(1));
@@ -154,6 +164,7 @@ public sealed class F1LowSpamV2Tests
         await StepAsync(host, TimeSpan.FromMinutes(9));
         var cards = await OutboxAsync(host, "red_flag:");
         cards.Should().ContainSingle();
+        await StepToAsync(host, T0.AddMinutes(40) + Hold);
         host.Transport.Messages[1].Message.Embed!.ThumbnailUrl.Should().EndWith("red-flag.png");
 
         // Repeated red-flag rows of the same stoppage (flag row + "RED FLAG - RACE SUSPENDED") → nothing new.
@@ -167,7 +178,8 @@ public sealed class F1LowSpamV2Tests
         await StepAsync(host, TimeSpan.FromMinutes(5));
         await StepAsync(host, TimeSpan.FromMinutes(1));
         (await OutboxAsync(host, "red_flag:")).Should().HaveCount(2);
-        await StepAsync(host, TimeSpan.FromSeconds(30)); // spoiler hold of the second phase
+        host.Transport.Messages.Should().HaveCount(2, "the second phase is still spoiler-held");
+        await StepToAsync(host, T0.AddMinutes(48) + Hold); // spoiler hold of the second phase
         host.Transport.Messages.Should().HaveCount(3);
     }
 

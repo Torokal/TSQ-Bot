@@ -534,12 +534,16 @@ public sealed class PredictionDomainTests
     {
         var options = new PredictionsOptions();
         (options.ChannelId, options.CommandsChannelId, options.CreatorRoleId).Should().Be((1048525775919390840UL, 689814679056547857UL, 1233057768408350741UL));
-        (options.InitialBalanceMinor, options.DailyMinCoins, options.DailyMaxCoins, options.DefaultOddsX100, options.MaxOutcomes).Should().Be((100_000L, 10, 100, 200, 25));
+        (options.InitialBalanceMinor, options.DailyMinCoins, options.DailyMaxCoins, options.DefaultOddsX100, options.MaxOutcomes).Should().Be((100_000L, 80, 200, 200, 25));
         options.Validate().Should().BeEmpty();
         new PredictionsOptions { DefaultOdds = 1.005m }.Validate().Should().ContainSingle();
         new PredictionsOptions { DefaultOdds = 1.00m }.Validate().Should().ContainSingle();
         new PredictionsOptions { MaxOutcomes = 26 }.Validate().Should().ContainSingle();
         new PredictionsOptions { DailyMinCoins = 50, DailyMaxCoins = 10 }.Validate().Should().ContainSingle();
+        new PredictionsOptions { DailyMinCoins = 201 }.Validate().Should().ContainSingle("min above the default max");
+        new PredictionsOptions { DailyMinCoins = 0 }.Validate().Should().ContainSingle();
+        new PredictionsOptions { DailyMaxCoins = 1_000_001 }.Validate().Should().ContainSingle();
+        new PredictionsOptions { DailyMinCoins = 200, DailyMaxCoins = 200 }.Validate().Should().BeEmpty("a single value is a valid range");
         new PredictionsOptions { ChannelId = 5 }.Validate().Should().ContainSingle();
     }
 }

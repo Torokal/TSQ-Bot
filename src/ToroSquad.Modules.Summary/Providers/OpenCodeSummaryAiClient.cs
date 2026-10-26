@@ -64,7 +64,11 @@ public sealed class OpenCodeSummaryAiClient(
             var latency = clock.GetElapsedTime(started);
             var status = (int)response.StatusCode;
             if (!response.IsSuccessStatusCode)
-                return SummaryAiResult.Failed(Classify(response.StatusCode), latency, status, ProviderErrorCode(body));
+            {
+                var failure = Classify(response.StatusCode);
+                return SummaryAiResult.Failed(failure, latency, status, ProviderErrorCode(body),
+                    failure == SummaryAiFailure.RateLimited ? RetryAfterOf(response.Headers.RetryAfter, clock.GetUtcNow()) : null);
+            }
             return Parse(body, latency, status);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -78,13 +82,26 @@ public sealed class OpenCodeSummaryAiClient(
         }
     }
 
+    /// <summary>401 authentication, 403 permission/policy, 408 the provider's own timeout, 429 a limit, 5xx an outage, other 4xx the request or its settings.</summary>
     public static SummaryAiFailure Classify(HttpStatusCode status) => (int)status switch
     {
-        401 or 403 => SummaryAiFailure.Unauthorized,
+        401 => SummaryAiFailure.Unauthorized,
+        403 => SummaryAiFailure.Forbidden,
+        408 => SummaryAiFailure.Timeout,
         429 => SummaryAiFailure.RateLimited,
         >= 500 => SummaryAiFailure.ServerError,
         _ => SummaryAiFailure.Rejected,
     };
+
+    /// <summary>The longest Retry-After shown to a member; a longer one is shown as this.</summary>
+    public static readonly TimeSpan MaxRetryAfter = TimeSpan.FromHours(1);
+
+    /// <summary>A 429's Retry-After (seconds or an HTTP date) as a wait from now; null when absent, invalid or already past.</summary>
+    public static TimeSpan? RetryAfterOf(RetryConditionHeaderValue? header, DateTimeOffset now)
+    {
+        var wait = header?.Delta ?? (header?.Date is { } at ? at - now : null);
+        return wait is { } w && w > TimeSpan.Zero ? (w > MaxRetryAfter ? MaxRetryAfter : w) : null;
+    }
 
     /// <summary>The request body: the two prompt messages and the generation settings. Nothing else (no tools, no user id).</summary>
     public static byte[] RequestBody(SummaryPromptMessages prompt, SummaryOptions settings)

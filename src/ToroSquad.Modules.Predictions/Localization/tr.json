@@ -140,6 +140,8 @@
   "predictions.daily.done": "🎁 Günlük ödülün: **{0} TSQ Coin**\n💰 Yeni bakiyen: **{1} TSQ Coin**\nSonraki hak: {2}",
   "predictions.daily.already": "Bugünkü ödülünü zaten aldın (**{0} TSQ Coin**). Yeni hak Türkiye saatiyle 00:00'da: {1}",
   "predictions.daily.ceiling": "Bakiyen TSQ Coin üst sınırında; günlük ödül eklenemedi.",
+  "predictions.daily.done_unannounced": "🎁 Günlük ödülün: **{0} TSQ Coin**\n💰 Yeni bakiyen: **{1} TSQ Coin**\nSonraki hak: {2}\n⚠️ Coin hesabına eklendi, ancak kanal duyurusu gönderilemedi.",
+  "predictions.daily.public": "🪙 {0} günlük ödülünü aldı: **+{1} TSQ Coin**!",
   "predictions.wallet.title": "💰 TSQ Coin Cüzdanı · Turnuva {0}",
   "predictions.wallet.available": "Kullanılabilir",
   "predictions.wallet.pending": "Bekleyen (yatırılan)",

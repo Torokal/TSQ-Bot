@@ -23,6 +23,9 @@ invite link and no global command registration. The source code is public under 
   against the public APIs (read-only) on 2026-09-25.
 - **BLOCKED**: OpenF1 live access needs a paid sponsor account (owner decision); until then start notifications are
   honestly `NOT_CONFIGURED`. Details and usage terms: [FORMULA1.md](FORMULA1.md).
+- Spoiler hold (2026-10-26, branch `fix/f1-delay-daily-reward-summary`): Safety Car / red-flag cards provider event time
+  + 70 s (`Formula1:LiveIncidentSpoilerDelaySeconds`, was 30), disqualification cards first-recorded time + 40 s (new
+  `Formula1:DisqualificationDelaySeconds`, was not held). Rows already in the outbox keep their time. TESTED_OFFLINE only.
 
 ## Volleyball module — Filenin Sultanları (new, 2026-09-26, branch `feat/volleyball-turkey-women`)
 
@@ -442,6 +445,35 @@ invite link and no global command registration. The source code is public under 
 - **NOT VERIFIED_LIVE**: the 2000-character split, thread handling, the role gate, the 100-message gate and the 120 s
   channel cooldown.
 
+## TSQ Özet failure messages and /bot status (2026-10-26, branch `fix/f1-delay-daily-reward-summary`)
+
+- A member saw "Özet servisi şu anda kullanılamıyor … Takip kodu: TS-2RPEUU59". That message means the AI request ended in
+  Network, HTTP 5xx, 401/403 or another 4xx (not a timeout, 429, empty/invalid answer, Discord read or post). Railway log
+  (read-only, 2026-10-26): `Summary [TS-2RPEUU59] inference failed failure=Unauthorized status=401
+  provider_error=authentication_error model=deepseek-v4.1-flash latency_ms=328 generation_mode=Legacy` — the history scan
+  had succeeded (100 messages). Every /ozetle inference of the current deployment (since 2026-10-10 21:54Z) since
+  2026-10-19 13:52Z failed the same way (8 runs, ~300 ms, 0 successes): OpenCode Go rejects the configured API key (the
+  key is set — an unset key answers "not configured" without a request). Cause = key/account side (revoked, expired,
+  rotated or subscription ended); which of these is NOT_VERIFIED. No summary code changed between 2026-10-04 and this
+  branch. Fix is the owner's: a valid key in `OPENCODE_GO_API_KEY` (Railway), no code change needed for that.
+  Official context (to investigate, not proven for our account): OpenCode moved to a v2 Console; keys from the old console
+  were imported as `Legacy: <email>` service accounts, expired keys return 401 and cannot be renewed (create a new
+  personal key under Account → Personal API keys). `https://opencode.ai/zen/go/v1` is still supported and routes to the
+  same backend as the canonical `https://opencode.ai/inference/go/openai/v1` (no removal date). The Go docs describe Go as
+  meant for OpenCode and other coding agents ("typical coding-agent traffic", stable session id); Discord summaries are
+  not that, so the usage terms are unclear for this module.
+- Still open, separate from the 401: Codex finding B5 — when the first part of a multi-part summary is posted and a later
+  part fails, the history scan can treat the first part as a completed summary and start the 100-new-messages rule. Not
+  addressed here.
+- Change (no provider, model, mode, timeout, retry or fallback change): each failure has its own member message — 401
+  authentication refused, 403 access/permission/policy refused (new category `Forbidden`; not necessarily a bad key),
+  other 4xx request/model/account setting, 429 a limit (with the provider's Retry-After when sent, shown only, capped at
+  1 h), 408 and timeouts "not ready in time", 5xx/network "try again later". `/bot status` shows the last failure's HTTP
+  status, provider code (sanitized short code, never the body) and trace code (memory only). TESTED_OFFLINE.
+- `/bot status` cut its fields at Discord's 25: with one field per module (16) the list came to 35 and TSQ Özet's two
+  health lines (positions 30–31) were never shown. The module states are now one field (20 fields in total); a test
+  checks the production wiring fits. TESTED_OFFLINE.
+
 ## TSQ Öngörü (2026-09-29, PR #37 merged, deployed, `/ongoru` synced; module off until enabled)
 
 - Module `predictions`, command group `/ongoru` (no default member permissions; every subcommand authorizes itself):
@@ -494,6 +526,14 @@ invite link and no global command registration. The source code is public under 
   net gains, total payout, pings only for the listed winners, "nobody won", up to 5 parts of 15 winners), staged with the
   settlement in one transaction. No schema change. **IMPLEMENTED / TESTED_OFFLINE**, deployed with a clean start.
   **NOT VERIFIED_LIVE**: a real announcement in Discord (winner pings, multi-part messages).
+
+## TSQ Öngörü daily reward 80–200, public announcement (2026-10-26, branch `fix/f1-delay-daily-reward-summary`)
+
+- `Predictions:DailyMinCoins` / `DailyMaxCoins` default 80 / 200 (was 10 / 100; both ends included, same secure RNG). Old
+  claims and ledger rows are unchanged. A new claim is announced with one public bot message in the commands channel (name
+  as untrusted text, no pings, never retried); repeats, the wrong channel, a disabled module and the ceiling stay private; a
+  failed announcement is reported privately after the coins were committed (no second credit). TESTED_OFFLINE only; the
+  public line needs the bot's Send Messages permission in the commands channel (NOT_VERIFIED live).
 
 ## TSQ Öngörü automatic football (PR #40 merged `82b98d2`, deployed 2026-09-30; `Mode=Live` in production)
 
