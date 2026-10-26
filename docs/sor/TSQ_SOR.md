@@ -69,8 +69,8 @@ satırlık `{"memory":[{"op":"add|update|forget","kind":"…","text":"…","evid
 
 | Durum | Sonuç |
 |---|---|
-| Ayıraç kod bloğu dışında ve ardından yalnız boşluk, `{` veya ``` geliyor | **Protokol ayıracı**: cevap orada biter, sonrası hafıza bloğudur ve hiç gösterilmez |
-| Ayıraç metnin ortasında, alıntıda veya kod örneğinde | Cevabın parçası; `‹‹‹HAFIZA›››` olarak etkisizleştirilip gösterilir (cevap kesilmez) |
+| Ayıraç kod bloğu dışında ve ondan sonra ya metnin sonuna kadar yalnız boşluk var ya da ilk boşluk dışı karakter `{` veya ``` | **Protokol ayıracı**: cevap orada biter, sonrası hafıza bloğudur ve hiç gösterilmez |
+| Ayıraç metnin ortasında (ardından boşluk + normal metin gelir), alıntıda veya kod örneğinde | Cevabın parçası; `‹‹‹HAFIZA›››` olarak etkisizleştirilip gösterilir (cevap kesilmez). Örnek: "Bu örnekte <<<HAFIZA>>> ifadesi bir ayıraç adıdır. …" `stop` ile tamamı gösterilir, `length` ile protokol ayıracı olmadığı için **eksik** sayılır |
 | Blok: tek JSON nesnesi (isteğe bağlı ``` içinde), `memory` dizisi | Bilinmeyen alanlar yok sayılır; ilk 3 geçerli öğe alınır |
 | Blokta ikinci ayıraç, JSON sonrası metin, bozuk/kesik JSON, 4.000 karakterden uzun blok | Öneri yok; cevap gösterilir |
 | `finish_reason=length` + protokol ayıracı var | Cevap ayıraçtan önce bittiği için gösterilir; blok atılır |
@@ -294,13 +294,13 @@ günün toplamlarını ve hata sınıflarını gösterir. Yönetim ekranları ki
 | AI döndü, Discord reddetti | `Failed`; tur ve not yok; özel bilgi; yeniden üretim yok |
 | AI döndü, teslim doğrulanamadı | Orijinale bir kez bakılır; bulunamazsa `Unknown`; tur ve not yok |
 | AI çalışırken / teslimden önce silme, kapatma, paylaşım daraltma | Damga değişir → `Discarded`; cevap gösterilmez |
-| Teslim ile kayıt arasında silme | Cevap Discord'da kalır (geri alınamaz); kayıtta damga kontrolü → tur ve not yazılmaz (`stale-after-delivery`) |
+| Teslim ile kayıt arasında silme | Cevap Discord'da kalır (daha önce görülmüş içeriğin geri alınması garanti edilemez); kayıtta damga kontrolü → tur ve not yazılmaz (`stale-after-delivery`) |
 | Teslim sonrası DB hatası | Kayıt adımı en fazla 2 kez, modelsiz; olmazsa istek `Generated` kalır, 15 dk sonra temizlikte `Unknown` olur ve bekleyen içerik silinir; kotadan düşmüş kalır |
 | "Kaydedildi" satırı düzenlemesi başarısız | Kayıt ve üretim tekrarlanmaz |
 | Üretim sırasında restart | `Generating` istek zaman aşımı + 2 dk sonra `Unknown`; yeni üretim yok, kota iade edilmez |
 | Kullanıcı kaydı silinip yeniden oluşturuldu | Yeni rastgele damga: eski istek geçerli olmaz |
 
-Discord'a gönderilmiş bir istek geri alınamaz; Discord ile SQLite arasında atomiklik veya uçtan uca exactly-once
+Discord'a gönderilmiş ve daha önce görülmüş içeriğin geri alınması garanti edilemez; Discord ile SQLite arasında atomiklik veya uçtan uca exactly-once
 garantisi yoktur. Aynı interaction ikinci kez işlenmez (benzersiz anahtar), bir tur/not/kota iki kez kesinleşmez.
 
 ## Sağlayıcı kullanım koşulları (açık dış koşul)
