@@ -26,8 +26,8 @@
     <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
-  <!-- NuGet audit stays on and its warnings stay errors. ONLY these five advisories of SixLabors.ImageSharp 3.1.12 are
-       suppressed (owner decision 2026-10-08): they are fixed only in 4.1.2, which needs a Six Labors license key this
+  <!-- NuGet audit stays on and its warnings stay errors. ONLY these five advisories of SixLabors.ImageSharp 3.1.12 (and the
+       single scoped one below) are suppressed (owner decision 2026-10-08): they are fixed only in 3.2.0 / 4.1.2, which enforce a Six Labors license key this
        repository does not have (see Directory.Packages.props). All five are availability issues in code TSQ Bot does not
        reach — the bot only decodes avatars and writes one PNG (TSQ Quote):
          j3p4-wp97-rph4  HistogramEqualization on a float TIFF            - never called
@@ -43,6 +43,19 @@
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
+  </ItemGroup>
+
+  <!-- GHSA-v76p-62qx-wwq2 (owner decision 2026-10-28): heap out-of-bounds write in the TIFF decoder (tiled fax TIFF), fixed in
+       3.2.0, which adds build-time license enforcement; the package version is kept. Suppressed ONLY in the three projects
+       whose restore graph contains ImageSharp (Quote references it, Bot and Tests reach it through Quote): any other project
+       that ever pulls it in fails the build again. Basis: the only ImageSharp decode of untrusted bytes is
+       QuoteImageRenderer.DecodeAvatar, whose Configuration registers the PNG, JPEG, WebP and GIF modules only, so a TIFF or
+       BigTIFF is detected by its content as an unknown format before any TIFF code runs (QuoteRendererTests
+       Tiff_bigtiff_bmp_tga_and_other_formats_are_not_images_for_the_avatar_decoder); no extension or Content-Type is involved
+       (QuoteAvatarClientTests Invalid_image_bytes_download_fine_and_the_renderer_falls_back). Re-evaluate whenever an image
+       is decoded anywhere else, the decoder configuration changes or the package version changes. Details: SECURITY.md. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'ToroSquad.Modules.Quote' or '$(MSBuildProjectName)' == 'ToroSquad.Bot' or '$(MSBuildProjectName)' == 'ToroSquad.Tests'">
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-v76p-62qx-wwq2" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(SourceRevisionId)' == ''">

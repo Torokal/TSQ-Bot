@@ -594,6 +594,10 @@ invite link and no global command registration. The source code is public under 
   SixLabors.ImageSharp 3.1.12 (fixed only in 4.1.2, which needs a license key). TSQ Quote now decodes avatars with the PNG,
   JPEG, WebP and GIF decoders only, and exactly those five advisories are suppressed with their reasons (SECURITY.md); NuGet
   audit stays on. Owner decision.
+- Build fix (2026-10-28, local commit, not pushed or deployed): GHSA-v76p-62qx-wwq2 (TIFF decoder, high) failed restore on main `35d5f56`
+  as well. The package version was kept: 3.2.0 fixes it but enforces a license key. This advisory alone is suppressed, only in
+  Quote, Bot and Tests, on the basis that TSQ Quote's only decoder configuration excludes TIFF (SECURITY.md, with test
+  references and re-evaluation triggers). Owner decision. Not a fix; NuGet audit stays on.
 - First automatic card (log, 2026-10-02 06:00Z = 09:00 TR): one paid odds call (`x-requests-remaining=499` after the
   monthly renewal), `auto_football_published` prediction #4 (Belgium – Türkiye, lock 21:43 TR). The card's content in
   Discord, entries on it and the manual settlement are **NOT VERIFIED_LIVE** (no owner observation yet).
