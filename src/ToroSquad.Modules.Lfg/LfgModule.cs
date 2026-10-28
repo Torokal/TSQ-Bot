@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ToroSquad.Core.Agenda;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Privacy;
@@ -63,6 +64,7 @@ public sealed class LfgModule : IToroModule
         services.AddScoped<LfgNoticePlanner>();
         services.AddScoped<LfgConfigService>();
         services.AddScoped<IUserDataContributor, LfgUserData>();
+        services.AddScoped<IAgendaSource, LfgAgendaSource>();
     }
 
     /// <summary>Expiry + card recovery loop, registered only in the long-running host (never by one-shot CLI verbs or tests).</summary>

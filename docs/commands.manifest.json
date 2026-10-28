@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "d8ea82b7342750957be1baff96d42101a0e14812ead3cd1ce3b2ddd8a4d349e3",
+  "hash": "d925827758a66be6177c56caf52afa51fe56a28a0a64df20a182b9b218bef047",
   "commands": [
     {
       "module": "quote",
@@ -18,6 +18,105 @@
           0
         ],
         "options": []
+      }
+    },
+    {
+      "module": "agenda",
+      "payload": {
+        "type": 1,
+        "name": "ajanda",
+        "description": "Upcoming F1, CS2 and volleyball programme",
+        "description_localizations": {
+          "tr": "Yaklaşan F1, CS2 ve voleybol programı (sonuç göstermez)."
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": [
+          {
+            "type": 3,
+            "name": "spor",
+            "description": "Which sport (default: all sports)",
+            "description_localizations": {
+              "tr": "Hangi spor (varsayılan: tüm sporlar)"
+            },
+            "required": false,
+            "choices": [
+              {
+                "name": "Tüm sporlar",
+                "name_localizations": {
+                  "tr": "Tüm sporlar"
+                },
+                "value": "tum"
+              },
+              {
+                "name": "Formula 1",
+                "name_localizations": {
+                  "tr": "Formula 1"
+                },
+                "value": "f1"
+              },
+              {
+                "name": "CS2",
+                "name_localizations": {
+                  "tr": "CS2"
+                },
+                "value": "cs2"
+              },
+              {
+                "name": "Voleybol",
+                "name_localizations": {
+                  "tr": "Voleybol"
+                },
+                "value": "voleybol"
+              }
+            ]
+          },
+          {
+            "type": 3,
+            "name": "donem",
+            "description": "Which period (default: the next 7 days)",
+            "description_localizations": {
+              "tr": "Hangi dönem (varsayılan: önümüzdeki 7 gün)"
+            },
+            "required": false,
+            "choices": [
+              {
+                "name": "Bugün",
+                "name_localizations": {
+                  "tr": "Bugün"
+                },
+                "value": "bugun"
+              },
+              {
+                "name": "Yarın",
+                "name_localizations": {
+                  "tr": "Yarın"
+                },
+                "value": "yarin"
+              },
+              {
+                "name": "Önümüzdeki 7 gün",
+                "name_localizations": {
+                  "tr": "Önümüzdeki 7 gün"
+                },
+                "value": "7-gun"
+              },
+              {
+                "name": "Önümüzdeki 14 gün",
+                "name_localizations": {
+                  "tr": "Önümüzdeki 14 gün"
+                },
+                "value": "14-gun"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -709,6 +808,26 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "module": "agenda",
+      "payload": {
+        "type": 1,
+        "name": "gundem",
+        "description": "Today's rest and tomorrow: sports and LFG in one card",
+        "description_localizations": {
+          "tr": "Bugünün kalanı ve yarın: spor ve LFG tek kartta."
+        },
+        "default_member_permissions": null,
+        "nsfw": false,
+        "contexts": [
+          0
+        ],
+        "integration_types": [
+          0
+        ],
+        "options": []
       }
     },
     {

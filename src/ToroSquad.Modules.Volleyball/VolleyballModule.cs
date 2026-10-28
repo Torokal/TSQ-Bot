@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ToroSquad.Core.Agenda;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
@@ -112,6 +113,7 @@ public sealed class VolleyballModule : IToroModule
         services.AddScoped<IDeliveryPolicy, VolleyballDeliveryPolicy>();
         services.AddScoped<IModuleLifecycleHandler, VolleyballLifecycle>();
         services.AddScoped<IUserDataContributor, VolleyballUserData>();
+        services.AddScoped<IAgendaSource, VolleyballAgendaSource>();
         services.AddSingleton<IModuleHealthCheck, VolleyballHealthCheck>();
         services.AddScoped<IModuleSetupFlow, VolleyballSetupFlow>();
     }

@@ -126,6 +126,26 @@ public interface IGuildGateway
     /// could not join themselves.
     /// </summary>
     Task<VoiceMoveOutcome> MoveMemberToVoiceAsync(GuildId guild, UserId user, ChannelId channel, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Who can read <paramref name="channel"/>, as far as the gateway cache proves it (no member list is downloaded). Used
+    /// before content of one channel is shown publicly in another: only <see cref="ChannelAudience.IsOpenToEveryone"/> counts.
+    /// </summary>
+    Task<ChannelAudience> GetChannelAudienceAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// A channel's readership. <see cref="IsOpenToEveryone"/> only when the channel is known, @everyone may view it, no role or
+/// member overwrite takes View Channel away from anyone, it is not a thread (private threads and inherited thread access are
+/// not provable here) and it is not age-restricted. Anything unknown counts as closed.
+/// </summary>
+public sealed record ChannelAudience(bool Known, bool EveryoneCanView, bool Narrowed, bool IsThread, bool IsAgeRestricted)
+{
+    public static ChannelAudience Unknown { get; } = new(false, false, false, false, false);
+
+    public static ChannelAudience Open { get; } = new(true, true, false, false, false);
+
+    public bool IsOpenToEveryone => Known && EveryoneCanView && !Narrowed && !IsThread && !IsAgeRestricted;
 }
 
 public enum MemberLookupOutcome

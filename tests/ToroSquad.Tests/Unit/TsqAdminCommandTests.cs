@@ -833,9 +833,9 @@ public sealed class TsqAdminCommandTests
             }
         }
 
-        // Added since: TSQ Sor's /sor and /hafizam, TSQ Profil Görseli's /pfp and /banner (new commands, nothing above changed).
-        after.Select(c => c.Name).Except(Doc("manifest-grouped-tsq-admin.json").Select(c => c.Name)).Should().BeEquivalentTo("sor", "hafizam", "pfp", "banner");
-        after.Should().HaveCount(29);
+        // Added since: TSQ Sor's /sor and /hafizam, TSQ Profil Görseli's /pfp and /banner, TSQ Ajanda's /ajanda and /gundem (new commands, nothing above changed).
+        after.Select(c => c.Name).Except(Doc("manifest-grouped-tsq-admin.json").Select(c => c.Name)).Should().BeEquivalentTo("sor", "hafizam", "pfp", "banner", "ajanda", "gundem");
+        after.Should().HaveCount(31);
     }
 
     // ================================================================== G. sync
@@ -853,8 +853,8 @@ public sealed class TsqAdminCommandTests
         plan.IsBlocked.Should().BeFalse(string.Join(" | ", plan.BlockingErrors));
         plan.Items.Where(i => i.Action == SyncAction.Update).Select(i => i.Name).Should().Equal(AdminCatalog.Name);
         plan.Items.Where(i => i.Action == SyncAction.Update).Single().RemoteId.Should().Be(managed[AdminCatalog.Name], "the same command id is updated, not re-created");
-        // The only creations are commands added after the grouping (TSQ Sor, TSQ Profil Görseli); nothing is deleted.
-        plan.Items.Where(i => i.Action == SyncAction.Create).Select(i => i.Name).Should().BeEquivalentTo("sor", "hafizam", "pfp", "banner");
+        // The only creations are commands added after the grouping (TSQ Sor, TSQ Profil Görseli, TSQ Ajanda); nothing is deleted.
+        plan.Items.Where(i => i.Action == SyncAction.Create).Select(i => i.Name).Should().BeEquivalentTo("sor", "hafizam", "pfp", "banner", "ajanda", "gundem");
         plan.Items.Should().NotContain(i => i.Action == SyncAction.DeleteManaged);
         plan.Items.Count(i => i.Action == SyncAction.Unchanged).Should().Be(24);
         plan.Items.Where(i => i.Action == SyncAction.KeepManagedNotInManifest).Select(i => i.Name).Should().BeEquivalentTo(legacy.Select(c => c.Name));

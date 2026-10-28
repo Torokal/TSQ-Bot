@@ -90,6 +90,35 @@ public sealed class DiscordGuildGateway(DiscordSocketClient client) : IGuildGate
         return Task.FromResult(new VoiceChannelAccess(true, IsGuildVoice(c), (CorePermission)g.CurrentUser.GetPermissions(c).RawValue));
     }
 
+    public Task<ChannelAudience> GetChannelAudienceAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken)
+    {
+        var g = client.GetGuild(guild.Value);
+        var c = g?.GetChannel(channel.Value);
+        if (g is null || c is null)
+            return Task.FromResult(ChannelAudience.Unknown);
+        if (c is IThreadChannel)
+            return Task.FromResult(new ChannelAudience(true, false, false, true, false));
+        return Task.FromResult(Audience(g.EveryoneRole.Id, g.EveryoneRole.Permissions.RawValue, c.PermissionOverwrites, c is ITextChannel { IsNsfw: true }));
+    }
+
+    /// <summary>
+    /// @everyone's View Channel in a channel (guild permission, then the channel's @everyone overwrite; Administrator grants
+    /// everything) and whether any other role or member overwrite denies View Channel (a narrower audience).
+    /// </summary>
+    public static ChannelAudience Audience(ulong everyoneRoleId, ulong everyoneGuildPermissions, IEnumerable<Overwrite> overwrites, bool ageRestricted)
+    {
+        const ulong view = (ulong)CorePermission.ViewChannel;
+        const ulong admin = (ulong)CorePermission.Administrator;
+        var list = overwrites.ToList();
+        var permissions = everyoneGuildPermissions;
+        var everyone = list.FirstOrDefault(o => o.TargetType == PermissionTarget.Role && o.TargetId == everyoneRoleId);
+        if (everyone.Permissions.AllowValue != 0 || everyone.Permissions.DenyValue != 0)
+            permissions = (permissions & ~everyone.Permissions.DenyValue) | everyone.Permissions.AllowValue;
+        var canView = (everyoneGuildPermissions & admin) != 0 || (permissions & view) != 0;
+        var narrowed = list.Any(o => !(o.TargetType == PermissionTarget.Role && o.TargetId == everyoneRoleId) && (o.Permissions.DenyValue & view) != 0);
+        return new ChannelAudience(true, canView, narrowed, false, ageRestricted);
+    }
+
     public async Task<VoiceMoveOutcome> MoveMemberToVoiceAsync(GuildId guild, UserId user, ChannelId channel, CancellationToken cancellationToken)
     {
         var g = client.GetGuild(guild.Value);

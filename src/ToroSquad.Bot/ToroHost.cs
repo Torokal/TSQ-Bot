@@ -8,6 +8,7 @@ using ToroSquad.Core.Modules;
 using ToroSquad.Discord;
 using ToroSquad.Infrastructure;
 using ToroSquad.Infrastructure.Hosting;
+using ToroSquad.Modules.Agenda;
 using ToroSquad.Modules.Birthday;
 using ToroSquad.Modules.Currency;
 using ToroSquad.Modules.Esports;
@@ -39,7 +40,7 @@ public static class ToroHost
 
     public static IReadOnlyList<IToroModule> Modules(IConfiguration configuration)
     {
-        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module(), new VolleyballModule(), new LiveModule(), new LfgModule(), new QuoteModule(), new BirthdayModule(), new CurrencyModule(), new RandomizerModule(), new TimezoneModule(), new PfpModule(), new GiveawayModule(), new SummaryModule(), new SorModule(), new PredictionsModule(), new NewsModule(), new UpdatesModule() };
+        var modules = new List<IToroModule> { new CoreBotModule(), new EsportsModule(), new Formula1Module(), new VolleyballModule(), new LiveModule(), new LfgModule(), new QuoteModule(), new BirthdayModule(), new CurrencyModule(), new RandomizerModule(), new TimezoneModule(), new PfpModule(), new GiveawayModule(), new SummaryModule(), new SorModule(), new PredictionsModule(), new NewsModule(), new UpdatesModule(), new AgendaModule() };
         // Example module: development/tests only. Off unless explicitly enabled.
         if (configuration.GetValue("Modules:Example:Enabled", false))
             modules.Add(new ExampleModule());

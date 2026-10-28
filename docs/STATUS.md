@@ -493,6 +493,31 @@ invite link and no global command registration. The source code is public under 
   needs the provider's written clarification or a suitable plan before live use — not only an owner decision. The Özet
   `401 authentication_error` entry below is a separate access issue.
 
+## TSQ Ajanda — /ajanda, /gundem (new, 2026-10-28, branch `feat/agenda-gundem`)
+
+- Module `agenda`, two flat commands: `/ajanda [spor] [donem]` (F1, CS2, volleyball; today, tomorrow, 7 or 14 local days;
+  never LFG) and `/gundem` (today's rest + tomorrow: sports and LFG). Off by default (`/modules enable agenda`), no admin
+  operations. A view only: no table, migration, worker, configuration, package, provider call, outbox write or AI.
+  Sources implement the Core `IAgendaSource` contract in their own modules (F1, esports, volleyball, LFG); Core's
+  `IGuildGateway` gained `GetChannelAudienceAsync` (who can read a channel, from the gateway cache) for the LFG rule.
+  In the manifest (31 commands; guild sync needed).
+- **IMPLEMENTED / TESTED_OFFLINE**: local days per IANA zone (DST, skipped midnights, month/year ends), one "now", the
+  shared status rules (no live from old data or from a passed time), placement (date-only, undated, running since before
+  midnight, LFG now/passed), module gates, isolated source failures, staleness/coverage/demo/undated/unverifiable lines,
+  esports server filters with fail-closed VRS, the followed volleyball team only, F1 sessions without results or race
+  control, links only to Sent non-dry-run cards of this guild and module (programme cards only; newest card of a kind;
+  not when the outbox recorded the message or its channel gone; only in this card's channel or a provably public one,
+  else the official page or command — the last known delivery state, not a live check), LFG active/full/joined
+  counting and the public-audience rule (same channel or provably open; nothing of a hidden listing leaks), one paged
+  card within Discord limits with "(devam)" and "➕ N more" lines, /gundem's first page showing both days, one audience
+  check per distinct channel (gateway cache, bound 250; an unchecked channel hides its listings and marks LFG incomplete
+  without a count), owner-only stateless buttons with 30 min lifetime and
+  a 3 s cooldown, refresh after midnight, zero provider calls and no database change on first cards, page changes or
+  refresh (EF command capture + SQLite data_version + every row and value compared) (`AgendaTests`, `AgendaUnitTests`,
+  `AgendaArchitectureTests`).
+- **NOT VERIFIED_LIVE**: everything in Discord (card rendering on desktop and mobile, timestamps, buttons, real channel
+  audiences, real card links). Live checklist: [agenda/TSQ_AGENDA.md](agenda/TSQ_AGENDA.md).
+
 ## TSQ Profil Görseli — /pfp, /banner (new, 2026-10-27)
 
 - Module `pfp`, commands `/pfp [uye] [tur]`, `/banner [uye] [tur]` (native USER option; `tur` Otomatik/Genel/Sunucu).

@@ -534,6 +534,13 @@
           "ToroSquad.Core": "[0.1.0-dev, )"
         }
       },
+      "torosquad.modules.agenda": {
+        "type": "Project",
+        "dependencies": {
+          "ToroSquad.Core": "[0.1.0-dev, )",
+          "ToroSquad.Discord": "[0.1.0-dev, )"
+        }
+      },
       "torosquad.modules.birthday": {
         "type": "Project",
         "dependencies": {

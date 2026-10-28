@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ToroSquad.Core.Agenda;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
@@ -122,6 +123,7 @@ public sealed class Formula1Module : IToroModule
         services.AddScoped<IDeliveryPolicy, Formula1DeliveryPolicy>();
         services.AddScoped<IModuleLifecycleHandler, Formula1Lifecycle>();
         services.AddScoped<IUserDataContributor, Formula1UserData>();
+        services.AddScoped<IAgendaSource, Formula1AgendaSource>();
         services.AddSingleton<IModuleHealthCheck, Formula1HealthCheck>();
         services.AddScoped<IModuleSetupFlow, Formula1SetupFlow>();
     }
