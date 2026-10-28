@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ToroSquad.Core.Agenda;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
@@ -111,6 +112,7 @@ public sealed class EsportsModule : IToroModule
         services.AddScoped<IDeliveryPolicy, EsportsDeliveryPolicy>();
         services.AddScoped<IModuleLifecycleHandler, EsportsLifecycle>();
         services.AddScoped<IUserDataContributor, EsportsUserData>();
+        services.AddScoped<IAgendaSource, EsportsAgendaSource>();
         services.AddSingleton<IModuleHealthCheck, EsportsHealthCheck>();
         services.AddScoped<IModuleSetupFlow, EsportsSetupFlow>();
         services.AddSingleton<EsportsPoller>();
