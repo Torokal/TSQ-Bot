@@ -1,6 +1,6 @@
 {
   "format": "torosquad-command-manifest/v1",
-  "hash": "d925827758a66be6177c56caf52afa51fe56a28a0a64df20a182b9b218bef047",
+  "hash": "97302768330287bd5cf1951051da0eb60dc8f9dc571fbc20092b7423a9be8595",
   "commands": [
     {
       "module": "quote",
@@ -815,9 +815,9 @@
       "payload": {
         "type": 1,
         "name": "gundem",
-        "description": "Today's rest and tomorrow: sports and LFG in one card",
+        "description": "Today's rest and tomorrow: sports, LFG and predictions in one card",
         "description_localizations": {
-          "tr": "Bugünün kalanı ve yarın: spor ve LFG tek kartta."
+          "tr": "Bugünün kalanı ve yarın: spor, LFG ve öngörüler tek kartta."
         },
         "default_member_permissions": null,
         "nsfw": false,

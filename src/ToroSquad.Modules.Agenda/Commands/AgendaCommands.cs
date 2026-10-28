@@ -32,7 +32,7 @@ public sealed class AgendaCommands(InteractionServices services, AgendaFlow flow
          Choice("Önümüzdeki 14 gün", AgendaOptions.PeriodTwoWeeks)] string? donem = null) =>
         flow.CommandAsync(Request(AgendaView.Agenda, AgendaOptions.Sport(spor), AgendaOptions.Period(donem)), this, CancellationToken.None);
 
-    [SlashCommand("gundem", "Today's rest and tomorrow: sports and LFG in one card")]
+    [SlashCommand("gundem", "Today's rest and tomorrow: sports, LFG and predictions in one card")]
     public Task DigestAsync() =>
         flow.CommandAsync(Request(AgendaView.Digest, AgendaSport.All, AgendaPeriod.Today), this, CancellationToken.None);
 

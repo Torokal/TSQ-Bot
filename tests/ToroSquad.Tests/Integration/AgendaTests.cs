@@ -23,6 +23,8 @@ using ToroSquad.Modules.Formula1.Domain;
 using ToroSquad.Modules.Formula1.Providers;
 using ToroSquad.Modules.Lfg.Domain;
 using ToroSquad.Modules.Lfg.Persistence;
+using ToroSquad.Modules.Predictions.Domain;
+using ToroSquad.Modules.Predictions.Persistence;
 using ToroSquad.Modules.Volleyball.Application;
 using ToroSquad.Modules.Volleyball.Domain;
 using ToroSquad.Modules.Volleyball.Providers;
@@ -748,6 +750,93 @@ public sealed partial class AgendaTests : IAsyncLifetime
         // The weekend card's channel turns private: F1 items fall back to the command.
         _host.Guilds.SetChannelAudience(Guild, CardChannel, ChannelAudience.Open with { EveryoneCanView = false });
         ItemLines(await AllPagesAsync(AgendaView.Digest), "Azerbaycan GP — Yarış").Should().NotContain("/5001)").And.EndWith("`/f1 next`");
+    }
+
+    // ---------------------------------------------------------------- predictions
+
+    [Fact]
+    public async Task Gundem_lists_this_guilds_open_and_closed_predictions_of_today_and_tomorrow_but_never_an_outcome()
+    {
+        var off = await AllPagesAsync(AgendaView.Digest);
+        off.Should().Contain("🔮 Öngörü: modül bu sunucuda kapalı").And.NotContain("Öngörü ·");
+
+        await SetModuleAsync("predictions", true);
+        await _host.InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<ToroDbContext>();
+            var tournament = new PredictionTournamentEntity { GuildId = Guild.Value, Number = 1, Status = PredictionTournamentStatus.Active, StartedAt = T0.AddDays(-3) };
+            var foreign = new PredictionTournamentEntity { GuildId = OtherGuild.Value, Number = 1, Status = PredictionTournamentStatus.Active, StartedAt = T0.AddDays(-3) };
+            db.Set<PredictionTournamentEntity>().AddRange(tournament, foreign);
+            await db.SaveChangesAsync();
+
+            PredictionEntity P(string title, PredictionStatus status, DateTimeOffset? lockAt, ulong? message, ChannelId? channel = null, PredictionTournamentEntity? t = null) => new()
+            {
+                GuildId = (t ?? tournament).GuildId,
+                TournamentId = (t ?? tournament).Id,
+                ChannelId = (channel ?? CardChannel).Value,
+                MessageId = message,
+                CreatorUserId = 42,
+                CreatorName = "Gizli Yaratıcı",
+                Title = title,
+                Rules = "gizli kural",
+                LockAt = lockAt,
+                Status = status,
+                PublishKey = Guid.NewGuid().ToString("N"),
+                CreatedAt = T0.AddDays(-1),
+                EntryCount = 7,
+                StakeTotalMinor = 123_400,
+            };
+
+            var open = P("Derbi kim kazanır?", PredictionStatus.Open, T0.AddHours(3), 9301);
+            db.Set<PredictionEntity>().AddRange(
+                open,
+                P("Sezon sonu şampiyonu?", PredictionStatus.Open, null, 9302),
+                P("Kilitli soru", PredictionStatus.Locked, T0.AddHours(-1), 9303),
+                P("Süresi dolmuş açık soru", PredictionStatus.Open, T0.AddMinutes(-10), 9304),
+                P("Yarının sorusu", PredictionStatus.Open, T0.AddHours(26), 9305),
+                P("Kartı silinmiş soru", PredictionStatus.Locked, T0.AddHours(27), 9306),
+                P("Sonuçlanan soru", PredictionStatus.Settled, T0.AddHours(-2), 9307),
+                P("İptal edilen soru", PredictionStatus.Cancelled, T0.AddHours(2), 9308),
+                P("Yarım kalan soru", PredictionStatus.Abandoned, T0.AddHours(2), 9309),
+                P("Yayınlanıyor", PredictionStatus.Publishing, T0.AddHours(2), null),
+                P("Öbür gün", PredictionStatus.Open, T0.AddHours(50), 9310),
+                P("Elle kilitlenmiş saatsiz", PredictionStatus.Locked, null, 9311),
+                P("Gizli kanal sorusu", PredictionStatus.Open, T0.AddHours(4), 9312, HiddenChannel),
+                P("Başka sunucu sorusu", PredictionStatus.Open, T0.AddHours(4), 9313, t: foreign));
+            await db.SaveChangesAsync();
+            var missing = await db.Set<PredictionEntity>().SingleAsync(x => x.MessageId == 9306);
+            missing.CardMissing = true;
+            missing.LockReason = PredictionLockReason.CardMissing;
+            db.Set<PredictionOutcomeEntity>().AddRange(
+                new PredictionOutcomeEntity { PredictionId = open.Id, Position = 1, Label = "Galatasaray", OddsX100 = 180 },
+                new PredictionOutcomeEntity { PredictionId = open.Id, Position = 2, Label = "Fenerbahçe", OddsX100 = 210 });
+            await db.SaveChangesAsync();
+        });
+
+        string text;
+        using (var probe = WriteProbe.Start(_host))
+        {
+            var responder = await RunAsync(AgendaView.Digest);
+            responder.Cards.Single().Embed.Description.Should().Contain("📆 **Yarın**");
+            text = await AllPagesAsync(AgendaView.Digest);
+            probe.ShouldBeUnchanged("/gundem with predictions");
+        }
+
+        var today = DayText(text, "Bugün");
+        var tomorrow = DayText(text, "Yarın");
+        ItemLines(today, "Derbi kim kazanır?").Should().EndWith("🟢 Son tahmin saati · [Kartı aç](https://discord.com/channels/" + Guild.Value + "/555/9301)");
+        today.Should().Contain("🔮 Şu an açık öngörüler\n🔮 **Öngörü · Sezon sonu şampiyonu?**\n🟢 Tahminler açık · [Kartı aç]");
+        ItemLines(today, "Kilitli soru").Should().Contain("🔒 Tahminler kapandı · sonuç bekleniyor");
+        ItemLines(today, "Süresi dolmuş açık soru").Should().Contain("🔒 Tahminler kapandı · sonuç bekleniyor", "the closing time passed: no entries, swept or not");
+        ItemLines(tomorrow, "Yarının sorusu").Should().Contain("🟢 Son tahmin saati").And.Contain("/9305)");
+        ItemLines(tomorrow, "Kartı silinmiş soru").Should().EndWith("🔒 Tahminler kapandı · sonuç bekleniyor", "a card reported missing is not linked");
+        text.Should().NotContainAny("Sonuçlanan soru", "İptal edilen soru", "Yarım kalan soru", "Yayınlanıyor", "Öbür gün", "Elle kilitlenmiş saatsiz",
+            "Gizli kanal sorusu", "Başka sunucu sorusu");
+        text.Should().NotContainAny("Galatasaray", "Fenerbahçe", "Gizli Yaratıcı", "gizli kural", "1234", "Coin", "/9307)", "/9312)", "/9313)");
+        text.Should().Contain("🔮 Öngörü: bu sunucunun açık öngörüleri; sonuç gösterilmez");
+
+        (await AllPagesAsync(AgendaView.Agenda)).Should().NotContain("Öngörü", "/ajanda is the sports programme");
+        (await AllPagesAsync(AgendaView.Agenda, AgendaSport.All, AgendaPeriod.FourteenDays)).Should().NotContain("Derbi");
     }
 
     // ---------------------------------------------------------------- fakes

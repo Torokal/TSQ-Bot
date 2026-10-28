@@ -14,7 +14,7 @@ and gram gold buy/sell prices with `/dolar`, `/euro` and `/altın` ([docs/curren
 **TSQ Randomizer** rolls dice, picks a number, picks one of your options and flips a coin with `/zarat`, `/randomsayi`,
 `/sec` and `/yazitura` ([docs/randomizer/TSQ_RANDOMIZER.md](docs/randomizer/TSQ_RANDOMIZER.md)). **TSQ Profil Görseli**
 shows a member's profile picture or profile banner large with `/pfp` and `/banner` ([docs/pfp/TSQ_PFP.md](docs/pfp/TSQ_PFP.md)). **TSQ Ajanda**
-shows the upcoming F1, CS2 and volleyball programme with `/ajanda` and today's rest plus tomorrow (sports and LFG) with
+shows the upcoming F1, CS2 and volleyball programme with `/ajanda` and today's rest plus tomorrow (sports, LFG and predictions) with
 `/gundem`, without results ([docs/agenda/TSQ_AGENDA.md](docs/agenda/TSQ_AGENDA.md)). **TSQ Çekiliş** runs reaction
 giveaways: `/giveaway create` opens a form, members enter with 🎉, winners are drawn automatically
 ([docs/giveaway/TSQ_GIVEAWAY.md](docs/giveaway/TSQ_GIVEAWAY.md)). **TSQ Özet** summarizes the latest messages of a channel
@@ -73,7 +73,8 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   `RandomNumberGenerator` (never `System.Random`); option text is defused, nothing pings; stateless (nothing stored or logged).
 - **TSQ Ajanda** (separate module, off by default): `/ajanda [spor] [donem]` is the sports programme (F1 sessions, CS2
   matches through the server's own filters, the followed volleyball team; today, tomorrow, 7 or 14 local days) and
-  `/gundem` is today's rest and tomorrow with sports and LFG listings in one public card. A read-only view over what those
+  `/gundem` is today's rest and tomorrow with sports, LFG listings and open predictions (closing time and open/closed only,
+  never an outcome) in one public card. A read-only view over what those
   modules already hold: no provider call, no storage, no results or spoilers; days in the server's time zone, times as
   Discord timestamps; LFG listings from another channel only when that channel is open to everyone; paged in one message.
 - **TSQ Profil Görseli** (separate module, off by default): `/pfp [uye] [tur]` and `/banner [uye] [tur]` show a member's
@@ -270,7 +271,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Currency` | TSQ Döviz & Altın (`/dolar`, `/euro`, `/altın`: Altınkaynak / TCMB / Trunçgil parsers, dataset cache with single flight, last-known-good) |
 | `ToroSquad.Modules.Randomizer` | TSQ Randomizer (`/zarat`, `/randomsayi`, `/sec`, `/yazitura`: dice notation and option parsers, one secure random source) |
 | `ToroSquad.Modules.Pfp` | TSQ Profil Görseli (`/pfp`, `/banner`: picture selection over Get Guild Member / Get User, official CDN URLs with animated WebP, shared cooldown) |
-| `ToroSquad.Modules.Agenda` | TSQ Ajanda (`/ajanda`, `/gundem`: local-day calendar, one pipeline over the Core `IAgendaSource` adapters of F1/esports/volleyball/LFG, LFG audience rule, paged card) |
+| `ToroSquad.Modules.Agenda` | TSQ Ajanda (`/ajanda`, `/gundem`: local-day calendar, one pipeline over the Core `IAgendaSource` adapters of F1/esports/volleyball/LFG/predictions, LFG audience rule, paged card) |
 | `ToroSquad.Modules.Giveaway` | TSQ Çekiliş (`/giveaway`: form and duration parser, restart-safe draw worker, paged 🎉 reaction reading, unbiased winner draw, card sync, winner announcement via the outbox) |
 | `ToroSquad.Modules.Predictions` | TSQ Öngörü (`/ongoru`: form parser, fixed-odds integer coin math, atomic entries/settlement/refunds, tournaments, daily reward, leaderboards, card sync, lock worker) |
 | `ToroSquad.Ai` | Shared AI provider access (no TSQ dependency): chat request/answer contract, the one OpenCode Go transport, parsing and error classes |
