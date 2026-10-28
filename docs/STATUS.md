@@ -493,6 +493,24 @@ invite link and no global command registration. The source code is public under 
   needs the provider's written clarification or a suitable plan before live use — not only an owner decision. The Özet
   `401 authentication_error` entry below is a separate access issue.
 
+## TSQ Profil Görseli — /pfp, /banner (new, 2026-10-27)
+
+- Module `pfp`, commands `/pfp [uye] [tur]`, `/banner [uye] [tur]` (native USER option; `tur` Otomatik/Genel/Sunucu).
+  Stateless: no table, no migration, no worker, no configuration, no new package or intent, no image processing, no AI.
+  Off by default (`/modules enable pfp`). In the manifest (guild sync with scripts/Sync-Commands.ps1).
+- **IMPLEMENTED / TESTED_OFFLINE**: the six selection rules and the automatic order; no silent fallback for `Sunucu`;
+  picture fields as Present / None / NotReported (an optional field without a hash is "not reported", never a confirmed
+  absence: Discord.Net 3.20.1 drops the difference between null and omitted). V1 decision 2026-10-28: only `otomatik` goes
+  past a NotReported server picture to the global one, with the real source in the title and a visible note; `sunucu`
+  never falls back; read errors are never NotReported; not a member
+  (member 404 only) vs failed read (guild/user 404, timeout, 403, 429, 5xx, unexpected data); global banner only via
+  Get User; official CDN paths, static PNG / animated `webp?animated=true`, size 2048; SDK default avatar; one public card
+  (image field, one "Tam boy aç" link to the same URL, defused name, no pings); private refusals before the acknowledgement,
+  one public defer completed exactly once; shared 5 s cooldown keyed on guild + invoking user. Real Discord.Net with a
+  recorded HTTP layer: hash/null/omitted mapping and the requests per command (`DiscordPfpProfileContractTests`).
+- **NOT VERIFIED_LIVE**: everything in Discord — native picker, real member/user REST answers, animated WebP in the
+  clients, card rendering. Live checklist: [pfp/TSQ_PFP.md](pfp/TSQ_PFP.md).
+
 ## TSQ Öngörü (2026-09-29, PR #37 merged, deployed, `/ongoru` synced; module off until enabled)
 
 - Module `predictions`, command group `/ongoru` (no default member permissions; every subcommand authorizes itself):
@@ -594,6 +612,10 @@ invite link and no global command registration. The source code is public under 
   SixLabors.ImageSharp 3.1.12 (fixed only in 4.1.2, which needs a license key). TSQ Quote now decodes avatars with the PNG,
   JPEG, WebP and GIF decoders only, and exactly those five advisories are suppressed with their reasons (SECURITY.md); NuGet
   audit stays on. Owner decision.
+- Build fix (2026-10-28): GHSA-v76p-62qx-wwq2 (TIFF decoder, high) failed restore on main `35d5f56`
+  as well. The package version was kept: 3.2.0 fixes it but enforces a license key. This advisory alone is suppressed, only in
+  Quote, Bot and Tests, on the basis that TSQ Quote's only decoder configuration excludes TIFF (SECURITY.md, with test
+  references and re-evaluation triggers). Owner decision. Not a fix; NuGet audit stays on.
 - First automatic card (log, 2026-10-02 06:00Z = 09:00 TR): one paid odds call (`x-requests-remaining=499` after the
   monthly renewal), `auto_football_published` prediction #4 (Belgium – Türkiye, lock 21:43 TR). The card's content in
   Discord, entries on it and the manual settlement are **NOT VERIFIED_LIVE** (no owner observation yet).
@@ -713,6 +735,11 @@ invite link and no global command registration. The source code is public under 
 - Liquipedia enrichment is optional and disabled without an approved key.
 - No DM commands or DM notifications (by design).
 - Policies in [policies/](policies/) are drafts, not legal advice.
+- Shared reply helper (maintenance, not started): after a defer, `ToroInteractionModule.SendAsync` completes the original
+  response with `FollowupAsync`. Discord documents that the first followup after `DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE` edits
+  the loading message for backwards compatibility and marks that behaviour **deprecated**; the recommended route is Edit
+  Original Interaction Response. Moving the shared helper (all modules, Currency included) is a separate infrastructure task;
+  no module was changed for it.
 
 ## Not planned yet
 

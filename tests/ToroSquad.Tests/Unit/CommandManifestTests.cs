@@ -22,7 +22,7 @@ public sealed class CommandManifestTests
         var (manifest, admin) = await BuildAsync();
         CommandManifestValidator.Validate(manifest, admin).Should().BeEmpty();
         manifest.LoadErrors.Should().BeEmpty();
-        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "giveaway", "ozetle", "sor", "hafizam", "ongoru", "Quote", "tsq-admin");
+        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "pfp", "banner", "giveaway", "ozetle", "sor", "hafizam", "ongoru", "Quote", "tsq-admin");
 
         string[] Sub(string name) => manifest.Find(name)!.Options.Select(o => o.Name).ToArray();
         Sub("bot").Should().BeEquivalentTo("status", "about", "source");
@@ -44,7 +44,7 @@ public sealed class CommandManifestTests
         const string manageGuild = "32"; // 1 << 5
         foreach (var name in new[] { "setup", "modules", "tsq-admin", "giveaway" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().Be(manageGuild, $"/{name} is admin-only");
-        foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "ozetle", "sor", "hafizam", "ongoru", "Quote" })
+        foreach (var name in new[] { "help", "bot", "privacy", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "pfp", "banner", "ozetle", "sor", "hafizam", "ongoru", "Quote" })
             manifest.Find(name)!.DefaultMemberPermissions.Should().BeNull($"/{name} is for everyone");
     }
 

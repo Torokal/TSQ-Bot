@@ -215,6 +215,19 @@ kısaltmalar yalnızca bölgeyi seçer, o tarihteki offset'i `TimeZoneInfo` beli
 hiç yaşanmayan veya iki kez yaşanan saatler tahmin edilmez, kısa bir uyarıyla reddedilir. Geçersiz saat uyarısı
 yalnızca kullanana görünür (ephemeral); cevap ping atmaz. Bot izni gerekmez (yalnızca etkileşim cevabı). Veri saklanmaz.
 
+## TSQ Profil Görseli (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/pfp [uye:@üye] [tur:Otomatik\|Genel\|Sunucu]` | Herkes: üyenin (boşsa kendinin) profil fotoğrafını **herkese açık** kartta büyük gösterir. Otomatik: bu sunucunun avatarı → genel avatar → Discord'un varsayılan avatarı; Genel: genel avatar → varsayılan; Sunucu: yalnız bu sunucunun avatarı |
+| `/banner [uye:@üye] [tur:Otomatik\|Genel\|Sunucu]` | Herkes: profil banner'ı. Otomatik: bu sunucunun banner'ı → genel banner; Genel: yalnız genel banner; Sunucu: yalnız bu sunucunun banner'ı |
+
+`uye` Discord'un yerleşik kişi seçicisidir (USER seçeneği). Açık `Sunucu` seçiminde genel görsele geçilmez; Discord'un
+bildirmediği görsel, üyelik ve okuma hatası ayrı kısa notlarla bildirilir (Otomatik, bildirilmemiş bir sunucu görselinden
+genel görsele geçerse kartta bunu söyler). Geçersiz tür ve 5 saniyelik ortak cooldown uyarıları yalnızca kullanana
+görünür (ephemeral); cevap ping atmaz. Bot izni gerekmez (yalnızca etkileşim cevabı). Veri saklanmaz. Ayrıntı:
+[pfp/TSQ_PFP.md](pfp/TSQ_PFP.md).
+
 ## TSQ Çekiliş (modül açıkken; `/giveaway`, ManageGuild + sunucu tarafı `Authorize.Require`)
 
 | Komut | Ne yapar |

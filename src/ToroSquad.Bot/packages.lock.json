@@ -613,6 +613,13 @@
           "ToroSquad.Infrastructure": "[0.1.0-dev, )"
         }
       },
+      "torosquad.modules.pfp": {
+        "type": "Project",
+        "dependencies": {
+          "ToroSquad.Core": "[0.1.0-dev, )",
+          "ToroSquad.Discord": "[0.1.0-dev, )"
+        }
+      },
       "torosquad.modules.predictions": {
         "type": "Project",
         "dependencies": {
