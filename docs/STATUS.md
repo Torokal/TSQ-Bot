@@ -493,11 +493,11 @@ invite link and no global command registration. The source code is public under 
   needs the provider's written clarification or a suitable plan before live use — not only an owner decision. The Özet
   `401 authentication_error` entry below is a separate access issue.
 
-## TSQ Profil Görseli — /pfp, /banner (new, 2026-10-27, branch `feat/pfp-module`)
+## TSQ Profil Görseli — /pfp, /banner (new, 2026-10-27)
 
 - Module `pfp`, commands `/pfp [uye] [tur]`, `/banner [uye] [tur]` (native USER option; `tur` Otomatik/Genel/Sunucu).
   Stateless: no table, no migration, no worker, no configuration, no new package or intent, no image processing, no AI.
-  Off by default (`/modules enable pfp`). In the manifest; NOT synced.
+  Off by default (`/modules enable pfp`). In the manifest (guild sync with scripts/Sync-Commands.ps1).
 - **IMPLEMENTED / TESTED_OFFLINE**: the six selection rules and the automatic order; no silent fallback for `Sunucu`;
   picture fields as Present / None / NotReported (an optional field without a hash is "not reported", never a confirmed
   absence: Discord.Net 3.20.1 drops the difference between null and omitted). V1 decision 2026-10-28: only `otomatik` goes
@@ -612,7 +612,7 @@ invite link and no global command registration. The source code is public under 
   SixLabors.ImageSharp 3.1.12 (fixed only in 4.1.2, which needs a license key). TSQ Quote now decodes avatars with the PNG,
   JPEG, WebP and GIF decoders only, and exactly those five advisories are suppressed with their reasons (SECURITY.md); NuGet
   audit stays on. Owner decision.
-- Build fix (2026-10-28, local commit, not pushed or deployed): GHSA-v76p-62qx-wwq2 (TIFF decoder, high) failed restore on main `35d5f56`
+- Build fix (2026-10-28): GHSA-v76p-62qx-wwq2 (TIFF decoder, high) failed restore on main `35d5f56`
   as well. The package version was kept: 3.2.0 fixes it but enforces a license key. This advisory alone is suppressed, only in
   Quote, Bot and Tests, on the basis that TSQ Quote's only decoder configuration excludes TIFF (SECURITY.md, with test
   references and re-evaluation triggers). Owner decision. Not a fix; NuGet audit stays on.
