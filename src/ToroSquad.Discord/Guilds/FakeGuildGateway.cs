@@ -61,6 +61,19 @@ public sealed class FakeGuildGateway : IGuildGateway
 
     public void SetVoiceChannel(GuildId guild, ChannelId channel, VoiceChannelAccess access) => _voice[(guild.Value, channel.Value)] = access;
 
+    private readonly ConcurrentDictionary<(ulong Guild, ulong Channel), ChannelAudience> _audiences = new();
+
+    /// <summary>Who can read a channel (default: unknown, which counts as closed).</summary>
+    public void SetChannelAudience(GuildId guild, ChannelId channel, ChannelAudience audience) => _audiences[(guild.Value, channel.Value)] = audience;
+
+    public int AudienceLookups { get; private set; }
+
+    public Task<ChannelAudience> GetChannelAudienceAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken)
+    {
+        AudienceLookups++;
+        return Task.FromResult(_audiences.TryGetValue((guild.Value, channel.Value), out var a) ? a : ChannelAudience.Unknown);
+    }
+
     public void RemoveVoiceChannel(GuildId guild, ChannelId channel) => _voice.TryRemove((guild.Value, channel.Value), out _);
 
     public Task<VoiceChannelAccess> GetVoiceChannelAccessAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken) =>
