@@ -23,6 +23,7 @@ COPY src/ToroSquad.Modules.Currency/ToroSquad.Modules.Currency.csproj src/ToroSq
 COPY src/ToroSquad.Modules.Birthday/ToroSquad.Modules.Birthday.csproj src/ToroSquad.Modules.Birthday/packages.lock.json src/ToroSquad.Modules.Birthday/
 COPY src/ToroSquad.Modules.Randomizer/ToroSquad.Modules.Randomizer.csproj src/ToroSquad.Modules.Randomizer/packages.lock.json src/ToroSquad.Modules.Randomizer/
 COPY src/ToroSquad.Modules.Timezone/ToroSquad.Modules.Timezone.csproj src/ToroSquad.Modules.Timezone/packages.lock.json src/ToroSquad.Modules.Timezone/
+COPY src/ToroSquad.Modules.Pfp/ToroSquad.Modules.Pfp.csproj src/ToroSquad.Modules.Pfp/packages.lock.json src/ToroSquad.Modules.Pfp/
 COPY src/ToroSquad.Modules.Giveaway/ToroSquad.Modules.Giveaway.csproj src/ToroSquad.Modules.Giveaway/packages.lock.json src/ToroSquad.Modules.Giveaway/
 COPY src/ToroSquad.Modules.Summary/ToroSquad.Modules.Summary.csproj src/ToroSquad.Modules.Summary/packages.lock.json src/ToroSquad.Modules.Summary/
 COPY src/ToroSquad.Modules.Sor/ToroSquad.Modules.Sor.csproj src/ToroSquad.Modules.Sor/packages.lock.json src/ToroSquad.Modules.Sor/

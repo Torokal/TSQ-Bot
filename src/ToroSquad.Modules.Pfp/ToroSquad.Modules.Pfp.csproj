@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TSQ Profil Görseli: /pfp and /banner — a member's avatar or profile banner shown large, straight from Discord's CDN.
+       Stateless: no tables, no migration, no background jobs, no configuration, no image processing, no extra package; the
+       only I/O is Discord's own REST API through the bot's existing client (Commands only). Depends on the shared TSQ layers
+       only (never on another feature module). The Application namespace must not use the Discord SDK (architecture tests). -->
+  <ItemGroup>
+    <ProjectReference Include="..\ToroSquad.Core\ToroSquad.Core.csproj" />
+    <ProjectReference Include="..\ToroSquad.Discord\ToroSquad.Discord.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\*.json" LogicalName="ToroSquad.Modules.Pfp.Localization.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

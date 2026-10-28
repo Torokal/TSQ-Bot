@@ -21,6 +21,12 @@ izin verilen kısa notlarını, görünen adını ve — `kisi`/etiketle sorulan
 Sor kendi sınırlı verisini **saklar** (aşağıda); Özet'in saklamama sözleşmesi değişmez ve Özet çıktıları, kanal
 geçmişleri veya diğer modüllerin kayıtları Sor hafızasına kaynak olmaz ([sor/TSQ_SOR.md](sor/TSQ_SOR.md)).
 
+TSQ Profil Görseli (`/pfp`, `/banner`) istenen üyenin profilini komut anında Discord REST ile okur (Get Guild ve Get Guild
+Member; genel banner için Get User) ve görseli Discord CDN bağlantısıyla gösterir. Görsel indirilmez, işlenmez; profil, URL veya
+kullanım geçmişi veritabanına, diske, önbelleğe veya loglara yazılmaz (loglarda yalnızca kimlikler ve sonuç; cooldown için
+5 saniye boyunca bellekte sunucu + komutu kullanan üyenin ID'si). Kanala gönderilen kart normal bir Discord mesajıdır ve kanal geçmişinde kalır;
+Discord'un kendi CDN/önbellek davranışı ayrıca geçerlidir ([pfp/TSQ_PFP.md](pfp/TSQ_PFP.md)).
+
 ## Tutulan kayıtlar
 
 | Tablo | İçerik | Kimin | Silinme |
