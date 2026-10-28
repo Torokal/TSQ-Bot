@@ -91,9 +91,8 @@ public sealed class VolleyballAgendaSource(
     /// <summary>The latest reminder card, else the start card (neither carries a score).</summary>
     private static AgendaLink? Link(VbMatchView m, IReadOnlyList<SentCard> cards)
     {
-        var own = cards.Where(c => c.SourceKey == m.MatchKey).ToList();
-        var card = own.Where(c => c.Kind.StartsWith("reminder:", StringComparison.Ordinal)).OrderByDescending(c => c.SentAt).FirstOrDefault()
-                   ?? own.Where(c => c.Kind == "started").OrderByDescending(c => c.SentAt).FirstOrDefault();
+        var card = SentCards.Latest(cards, m.MatchKey, k => k.StartsWith("reminder:", StringComparison.Ordinal))
+                   ?? SentCards.Latest(cards, m.MatchKey, k => k == "started");
         return card is null ? null : AgendaLink.ToCard(card.Channel, card.Message);
     }
 }

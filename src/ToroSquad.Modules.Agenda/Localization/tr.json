@@ -60,6 +60,7 @@
   "agenda.status.partial": "veri {0} sonrasını kapsamıyor",
   "agenda.status.demo": "TEST/DEMO verisi",
   "agenda.status.undated": "tarihi açıklanmamış {0} kayıt listede yok",
+  "agenda.status.unchecked": "⚠️ bazı kayıtlar bu kartta doğrulanamadı; liste eksik olabilir",
   "agenda.status.unverifiable": "filtre verisi eksik olduğu için {0} maç gösterilmedi",
   "agenda.footer": "Sayfa {0}/{1} · Günler: {2} · Saatler sizin yerel saatinizde",
   "agenda.button.previous": "◀ Önceki",

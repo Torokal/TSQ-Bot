@@ -12,7 +12,8 @@ public sealed record AgendaCard(MessageEmbed Embed, IReadOnlyList<MessageButton>
 /// <summary>
 /// The card of /ajanda and /gundem: ONE embed, days as headings in the guild's time zone, times as Discord timestamps (each
 /// reader sees their own local time), a "data status" field, and page buttons when the list is long. Every item stays
-/// reachable through the pages (never a silent cut); a day continued on the next page repeats its heading. Programme only:
+/// reachable through the pages (never a silent cut); a day continued on the next page repeats its heading; /gundem's first
+/// page shows both days whenever at least one item of each fits. Programme only:
 /// no score, winner, classification or race-control text exists in the items, and nothing here invents one. All member- and
 /// provider-supplied text is defused (no mentions, markdown or links); links are built only from verified ids or URLs.
 /// </summary>
@@ -74,14 +75,83 @@ public sealed class AgendaRenderer(ILocalizer localizer)
         _ => day.Date.ToString("d MMMM", Culture(lang)),
     };
 
+    /// <summary>On /gundem's first page each day keeps at least this many of its items when both days do not fit together.</summary>
+    public const int FirstPageShare = 3;
+
+    /// <summary>A run of one day's items [From, To); <see cref="BreakAfter"/> ends the page after it.</summary>
+    private sealed record Chunk(AgendaDayGroup Group, string Heading, List<(string? Sub, string Text)> Blocks, int From, int To, bool BreakAfter = false);
+
     private List<Page> Paginate(AgendaSnapshot snapshot)
     {
         var lang = snapshot.Language;
+        var shown = DaysToShow(snapshot);
+        if (shown.Count == 0)
+            return [new Page([L(lang, Incomplete(snapshot) ? "agenda.empty_period_incomplete" : "agenda.empty_period")], [])];
+
+        var chunks = shown.Select(g =>
+        {
+            var blocks = g.Now.Select(i => ((string?)L(lang, "agenda.lfg.now_heading"), Item(i, snapshot)))
+                .Concat(g.Items.Select(i => ((string?)null, Item(i, snapshot))))
+                .ToList();
+            return new Chunk(g, DayHeading(g.Day, lang), blocks, 0, blocks.Count);
+        }).ToList();
+        var pages = Layout(snapshot, chunks);
+        if (pages.Count > 1 && snapshot.Request.View == AgendaView.Digest && chunks.Count == 2 && BothDaysFirst(snapshot, chunks[0], chunks[1]) is { } split)
+            return Layout(snapshot, split);
+        return pages;
+    }
+
+    /// <summary>
+    /// /gundem when today and tomorrow do not fit on one page: page 1 still shows both days — today's first items, then
+    /// tomorrow's first items (or its "nothing planned" line) — and each day's remaining items follow in order on the next
+    /// pages under "(devam)". Each day keeps up to <see cref="FirstPageShare"/> items on page 1 (more when the other day has
+    /// fewer), fewer only when the text would not fit. Null when today has nothing (it then already starts page 1 with its
+    /// own line) or when even one item of each day does not fit.
+    /// </summary>
+    private List<Chunk>? BothDaysFirst(AgendaSnapshot snapshot, Chunk today, Chunk tomorrow)
+    {
+        int t = today.Blocks.Count, m = tomorrow.Blocks.Count;
+        if (t == 0)
+            return null;
+        var b = Math.Min(m, Math.Max(MaxItemsPerPage - t, FirstPageShare));
+        var a = Math.Min(t, MaxItemsPerPage - b);
+        while (true)
+        {
+            var chunks = new List<Chunk> { today with { To = a }, tomorrow with { To = b, BreakAfter = true } };
+            if (Layout(snapshot, chunks).Count == 1)
+            {
+                if (a < t)
+                    chunks.Add(today with { From = a });
+                if (b < m)
+                    chunks.Add(tomorrow with { From = b });
+                return chunks;
+            }
+
+            if (a > 1 && (a >= b || b <= 1))
+                a--;
+            else if (b > 1)
+                b--;
+            else
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Lays the chunks out on pages: at most <see cref="MaxItemsPerPage"/> items and <see cref="DescriptionBudget"/> characters
+    /// a page, items never cut; a day's heading opens each page part of that day and says "(devam)" once the day was shown.
+    /// </summary>
+    private List<Page> Layout(AgendaSnapshot snapshot, IReadOnlyList<Chunk> chunks)
+    {
+        var lang = snapshot.Language;
+        var continued = L(lang, "agenda.continued");
         var pages = new List<Page>();
         var current = new List<string>();
         var counts = new Dictionary<DateOnly, int>();
         var length = 0;
         var itemsOnPage = 0;
+        DateOnly? dayOnPage = null;
+        string? subShown = null;
+        var started = new HashSet<DateOnly>();
 
         void Add(string line)
         {
@@ -96,59 +166,42 @@ public sealed class AgendaRenderer(ILocalizer localizer)
             counts = [];
             length = 0;
             itemsOnPage = 0;
+            dayOnPage = null;
+            subShown = null;
         }
 
-        var shown = DaysToShow(snapshot);
-        if (shown.Count == 0)
+        void Heading(Chunk chunk)
         {
-            Add(L(lang, Incomplete(snapshot) ? "agenda.empty_period_incomplete" : "agenda.empty_period"));
-            pages.Add(new Page(current, counts));
-            return pages;
+            if (current.Count > 0)
+                Add("");
+            var date = chunk.Group.Day.Date;
+            Add(started.Contains(date) ? chunk.Heading + " " + continued : chunk.Heading);
+            started.Add(date);
+            dayOnPage = date;
+            subShown = null;
         }
 
-        foreach (var group in shown)
+        foreach (var chunk in chunks)
         {
-            var heading = DayHeading(group.Day, lang);
-            var blocks = new List<(string? SubHeading, string Text)>();
-            foreach (var item in group.Now)
-                blocks.Add((L(lang, "agenda.lfg.now_heading"), Item(item, snapshot)));
-            foreach (var item in group.Items)
-                blocks.Add((null, Item(item, snapshot)));
-
-            if (blocks.Count == 0)
+            var date = chunk.Group.Day.Date;
+            if (chunk.Blocks.Count == 0)
             {
                 var empty = L(lang, Incomplete(snapshot) ? "agenda.empty_day_incomplete" : "agenda.empty_day");
-                if (current.Count > 0 && length + heading.Length + empty.Length + 4 > DescriptionBudget)
+                if (current.Count > 0 && length + chunk.Heading.Length + empty.Length + 4 > DescriptionBudget)
                     Break();
-                if (current.Count > 0)
-                    Add("");
-                Add(heading);
+                Heading(chunk);
                 Add(empty);
-                continue;
             }
 
-            var headingShown = false;
-            var dayStarted = false;
-            string? subShown = null;
-            foreach (var (sub, text) in blocks)
+            for (var i = chunk.From; i < chunk.To; i++)
             {
-                var need = text.Length + 1 + (headingShown ? 0 : heading.Length + 2) + (sub is not null && sub != subShown ? sub.Length + 1 : 0);
+                var (sub, text) = chunk.Blocks[i];
+                var need = text.Length + 1 + (dayOnPage != date ? chunk.Heading.Length + continued.Length + 3 : 0) +
+                           (sub is not null && sub != subShown ? sub.Length + 1 : 0);
                 if (current.Count > 0 && (itemsOnPage >= MaxItemsPerPage || length + need > DescriptionBudget))
-                {
                     Break();
-                    headingShown = false;
-                    subShown = null;
-                }
-
-                if (!headingShown)
-                {
-                    if (current.Count > 0)
-                        Add("");
-                    Add(dayStarted ? heading + " " + L(lang, "agenda.continued") : heading);
-                    headingShown = true;
-                    dayStarted = true;
-                }
-
+                if (dayOnPage != date)
+                    Heading(chunk);
                 if (sub is not null && sub != subShown)
                 {
                     Add(sub);
@@ -157,8 +210,11 @@ public sealed class AgendaRenderer(ILocalizer localizer)
 
                 Add(text);
                 itemsOnPage++;
-                counts[group.Day.Date] = counts.GetValueOrDefault(group.Day.Date) + 1;
+                counts[date] = counts.GetValueOrDefault(date) + 1;
             }
+
+            if (chunk.BreakAfter && current.Count > 0)
+                Break();
         }
 
         if (current.Count > 0)
@@ -174,7 +230,7 @@ public sealed class AgendaRenderer(ILocalizer localizer)
 
     /// <summary>Whether "nothing here" could be a gap in the data rather than a free day.</summary>
     private static bool Incomplete(AgendaSnapshot snapshot) =>
-        snapshot.Sources.Any(s => s.Partial || s.Result.State is AgendaSourceState.Failed or AgendaSourceState.NotConfigured or AgendaSourceState.Stale);
+        snapshot.Sources.Any(s => s.Partial || s.Unchecked || s.Result.State is AgendaSourceState.Failed or AgendaSourceState.NotConfigured or AgendaSourceState.Stale);
 
     // ---- pieces ----
 
@@ -289,6 +345,8 @@ public sealed class AgendaRenderer(ILocalizer localizer)
                 text += " · " + L(lang, "agenda.status.undated", r.Undated);
             if (r.Unverifiable > 0)
                 text += " · " + L(lang, "agenda.status.unverifiable", r.Unverifiable);
+            if (source.Unchecked)
+                text += " · " + L(lang, "agenda.status.unchecked"); // never a count: some of those may be private
             lines.Add(label + text);
         }
 

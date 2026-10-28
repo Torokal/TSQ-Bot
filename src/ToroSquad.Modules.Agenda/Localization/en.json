@@ -60,6 +60,7 @@
   "agenda.status.partial": "data does not reach beyond {0}",
   "agenda.status.demo": "TEST/DEMO data",
   "agenda.status.undated": "{0} without a date are not listed",
+  "agenda.status.unchecked": "⚠️ some records could not be checked for this card; the list may be incomplete",
   "agenda.status.unverifiable": "{0} matches left out because filter data is missing",
   "agenda.footer": "Page {0}/{1} · Days: {2} · Times in your local time",
   "agenda.button.previous": "◀ Previous",

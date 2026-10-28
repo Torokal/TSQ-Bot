@@ -289,7 +289,26 @@ public sealed class OutboxDeliveryTests : IAsyncLifetime
         row.EditPending.Should().BeFalse();
         row.LastError.Should().Be("edit_target_deleted");
         _host.Transport.SendCalls.Should().Be(1);
+        (await SentCardAsync(row)).Gone.Should().BeTrue("TSQ Ajanda never links a card the outbox found deleted");
     }
+
+    [Fact]
+    public async Task A_channel_found_gone_on_edit_marks_the_sent_card_gone()
+    {
+        await StageAsync(Request(GuildA, ChannelA));
+        await Processor.ProcessOnceAsync(CancellationToken.None);
+        (await SentCardAsync((await RowsAsync()).Single())).Gone.Should().BeFalse();
+        _host.Transport.ScriptEdit(() => new SendOutcome.Permanent(PermanentFailureKind.UnknownChannel, "Unknown Channel"));
+        await StageAsync(Request(GuildA, ChannelA, title: "changed"));
+        await Processor.ProcessOnceAsync(CancellationToken.None);
+
+        var row = (await RowsAsync()).Single();
+        row.Status.Should().Be(OutboxStatus.Sent);
+        (await SentCardAsync(row)).Gone.Should().BeTrue();
+    }
+
+    private Task<SentCard> SentCardAsync(OutboxMessageEntity row) => _host.InScopeAsync(async sp =>
+        (await SentCards.FindAsync(sp.GetRequiredService<ToroDbContext>(), new GuildId(row.GuildId), row.ModuleId, [row.SourceKey], CancellationToken.None)).Single());
 
     [Fact]
     public async Task Module_disabled_or_paused_right_before_sending_cancels_delivery()

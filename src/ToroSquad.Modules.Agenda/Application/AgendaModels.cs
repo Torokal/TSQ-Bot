@@ -118,8 +118,12 @@ public static class AgendaCalendar
     }
 }
 
-/// <summary>How one source answered, as the card reports it.</summary>
-public sealed record AgendaSourceView(AgendaKind Kind, AgendaSourceResult Result, bool Partial);
+/// <summary>
+/// How one source answered, as the card reports it. <paramref name="Partial"/>: its data ends inside the window;
+/// <paramref name="Unchecked"/>: some of its records could not be read or their channel could not be checked, so the list may
+/// be incomplete (never with a count).
+/// </summary>
+public sealed record AgendaSourceView(AgendaKind Kind, AgendaSourceResult Result, bool Partial, bool Unchecked = false);
 
 /// <summary>One day of the card: its items in time order, and (today only) the LFG listings looking for players now.</summary>
 public sealed record AgendaDayGroup(AgendaDay Day, IReadOnlyList<AgendaItem> Now, IReadOnlyList<AgendaItem> Items)

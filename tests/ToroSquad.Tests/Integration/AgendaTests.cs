@@ -1,9 +1,17 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using ToroSquad.Core;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Roles;
+using ToroSquad.Infrastructure.Delivery;
+using ToroSquad.Infrastructure.Hosting;
 using ToroSquad.Infrastructure.Persistence;
 using ToroSquad.Modules.Agenda.Application;
 using ToroSquad.Modules.Esports.Application;
@@ -28,13 +36,14 @@ namespace ToroSquad.Tests.Integration;
 /// the public card and its buttons — and that nothing calls a provider or writes anything. TestHost.T0 = Thursday
 /// 2026-09-24 12:00 UTC (15:00 in Istanbul); today ends 21:00 UTC, tomorrow 2026-09-25 21:00 UTC.
 /// </summary>
-public sealed class AgendaTests : IAsyncLifetime
+public sealed partial class AgendaTests : IAsyncLifetime
 {
     private static readonly GuildId Guild = new(1_200_000_000_000_000_001);
     private static readonly GuildId OtherGuild = new(1_200_000_000_000_000_002);
     private static readonly ChannelId Here = new(1_200_000_000_000_000_010);
     private static readonly ChannelId OpenChannel = new(1_200_000_000_000_000_011);
     private static readonly ChannelId HiddenChannel = new(1_200_000_000_000_000_012);
+    private static readonly ChannelId CardChannel = new(555); // where the sports cards were delivered (open to everyone)
     private static readonly UserId Owner = new(1_200_000_000_000_000_020);
     private static readonly DateTimeOffset T0 = TestHost.T0;
 
@@ -53,6 +62,8 @@ public sealed class AgendaTests : IAsyncLifetime
         foreach (var module in new[] { "agenda", "formula1", "esports", "volleyball", "lfg" })
             await SetModuleAsync(module, true);
         _host.Guilds.SetChannelAudience(Guild, OpenChannel, ChannelAudience.Open);
+        _host.Guilds.SetChannelAudience(Guild, CardChannel, ChannelAudience.Open);
+        _host.Guilds.SetChannelAudience(Guild, HiddenChannel, ChannelAudience.Open with { EveryoneCanView = false });
         SeedCaches();
         await SeedDatabaseAsync();
     }
@@ -109,24 +120,26 @@ public sealed class AgendaTests : IAsyncLifetime
         vb.SetMatches([Volley("fivb:1", T0.AddHours(27)), Volley("fivb:2", T0.AddHours(-5), VolleyballMatchStatus.Finished, true), Volley("fivb:3", null)]);
     }
 
-    private static OutboxMessageEntity Card(GuildId guild, string module, string sourceKey, string kind, ulong? message, OutboxStatus status = OutboxStatus.Sent, bool dry = false) => new()
-    {
-        LogicalKey = Guid.NewGuid().ToString("N"),
-        GuildId = guild.Value,
-        ModuleId = module,
-        ChannelId = 555,
-        Kind = kind,
-        SourceKey = sourceKey,
-        IsDryRun = dry,
-        PayloadJson = "{}",
-        PayloadHash = "h",
-        Status = status,
-        CreatedAt = T0.AddHours(-2),
-        UpdatedAt = T0.AddHours(-2),
-        ExpiresAt = T0.AddDays(2),
-        SentAt = status == OutboxStatus.Sent ? T0.AddHours(-2) : null,
-        DiscordMessageId = message,
-    };
+    private static OutboxMessageEntity Card(GuildId guild, string module, string sourceKey, string kind, ulong? message, OutboxStatus status = OutboxStatus.Sent, bool dry = false,
+        ulong channel = 555, DateTimeOffset? sentAt = null, string? lastError = null) => new()
+        {
+            LogicalKey = Guid.NewGuid().ToString("N"),
+            GuildId = guild.Value,
+            ModuleId = module,
+            ChannelId = channel,
+            Kind = kind,
+            SourceKey = sourceKey,
+            IsDryRun = dry,
+            PayloadJson = "{}",
+            PayloadHash = "h",
+            Status = status,
+            CreatedAt = T0.AddHours(-2),
+            UpdatedAt = T0.AddHours(-2),
+            ExpiresAt = T0.AddDays(2),
+            SentAt = status == OutboxStatus.Sent ? sentAt ?? T0.AddHours(-2) : null,
+            DiscordMessageId = message,
+            LastError = lastError,
+        };
 
 
     private Task SeedDatabaseAsync() => _host.InScopeAsync(async sp =>
@@ -221,6 +234,24 @@ public sealed class AgendaTests : IAsyncLifetime
 
     private static string Text(AgendaCard card) => card.Embed.Description + "\n" + string.Join("\n", card.Embed.Fields.Select(f => f.Value));
 
+    /// <summary>The lines under one day's headings, across all pages (a day may continue on the next page).</summary>
+    private static string DayText(string text, string day)
+    {
+        var lines = new List<string>();
+        var inDay = false;
+        foreach (var line in text.Split('\n'))
+        {
+            if (line.StartsWith("📆 **", StringComparison.Ordinal))
+                inDay = line.StartsWith("📆 **" + day + "**", StringComparison.Ordinal);
+            else if (line.StartsWith('➕') || line.StartsWith("🏎️ F1:", StringComparison.Ordinal))
+                inDay = false; // the "more" line and the data-status field
+            if (inDay)
+                lines.Add(line);
+        }
+
+        return string.Join("\n", lines);
+    }
+
     private Task<(int Outbox, int Listings, int Participants, int Open)> CountsAsync() => _host.InScopeAsync(async sp =>
     {
         var db = sp.GetRequiredService<ToroDbContext>();
@@ -242,8 +273,9 @@ public sealed class AgendaTests : IAsyncLifetime
         card.Pages.Should().Be(2, "16 items: one card, two pages of the same message");
         card.Embed.Description.Should().Contain("➕ Sonraki sayfalarda").And.Contain("Yarın", "page 1 says what is still to come tomorrow");
         var text = await AllPagesAsync(AgendaView.Digest);
-        var today = text[..text.IndexOf("**Yarın**", StringComparison.Ordinal)];
-        var tomorrow = text[text.IndexOf("**Yarın**", StringComparison.Ordinal)..];
+        var today = DayText(text, "Bugün");
+        var tomorrow = DayText(text, "Yarın");
+        card.Embed.Description.Should().Contain("📆 **Bugün**").And.Contain("📆 **Yarın**", "page 1 shows both days");
 
         // F1: sessions, not weekends; a red-flagged session is just "in progress"; finished and result-bearing data stay out.
         today.Should().Contain("Azerbaycan GP — 1. Antrenman").And.Contain("Azerbaycan GP — 2. Antrenman").And.Contain("Azerbaycan GP — Sprint Sıralaması");
@@ -367,6 +399,355 @@ public sealed class AgendaTests : IAsyncLifetime
         text.Should().Contain("📆 **Bugün** · 25 Eylül Cuma").And.Contain("📆 **Yarın** · 26 Eylül Cumartesi");
         text.Should().NotContain("Valheim", "yesterday's listing expired (expiry at T0 + 8 h)");
         (_f1.ScheduleCalls, _esports.Calls, _volleyball.Calls).Should().Be((0, 0, 0));
+    }
+
+    // ---------------------------------------------------------------- read-only proof
+
+    /// <summary>
+    /// Catches every database change during one phase of a test, whatever the path: (1) every SQL command EF Core sends to
+    /// THIS test's database file — SaveChanges, ExecuteUpdate/ExecuteDelete, raw SQL — seen through EF's diagnostic events
+    /// (this also sees a write that leaves every value as it was); (2) SQLite's own commit counter read from a separate
+    /// connection (<c>PRAGMA data_version</c> moves whenever another connection, through EF or not, commits a change to the
+    /// file); (3) the value of every column of every row of every table, before and after.
+    /// </summary>
+    private sealed class WriteProbe : IDisposable, IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>
+    {
+        private readonly string _path;
+        private readonly SqliteConnection _observer;
+        private readonly long _version;
+        private readonly SortedDictionary<string, List<string>> _before;
+        private readonly IDisposable _all;
+        private readonly List<IDisposable> _listeners = [];
+        private readonly ConcurrentQueue<string> _writes = new();
+        private int _reads;
+
+        private WriteProbe(string path)
+        {
+            _path = Path.GetFullPath(path);
+            _observer = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+            _observer.Open();
+            _version = DataVersion();
+            _before = Rows();
+            _all = DiagnosticListener.AllListeners.Subscribe(this);
+        }
+
+        public static WriteProbe Start(TestHost host) => new(host.Services.GetRequiredService<DatabaseLocation>().Path);
+
+        /// <summary>What changed since the start (empty = nothing).</summary>
+        public List<string> Changes()
+        {
+            var changes = _writes.Select(w => "sql: " + w).ToList();
+            if (DataVersion() != _version)
+                changes.Add("commit: data_version moved");
+            var after = Rows();
+            foreach (var table in _before.Keys.Union(after.Keys))
+            {
+                if (!_before.TryGetValue(table, out var old) || !after.TryGetValue(table, out var now) || !old.SequenceEqual(now))
+                    changes.Add("rows: " + table);
+            }
+
+            return changes;
+        }
+
+        public void ShouldBeUnchanged(string phase)
+        {
+            _reads.Should().BePositive($"{phase}: the probe sees this database's commands (otherwise the SQL check proves nothing)");
+            _before.Should().NotBeEmpty();
+            Changes().Should().BeEmpty($"{phase} must not change the database");
+        }
+
+        private long DataVersion()
+        {
+            using var command = _observer.CreateCommand();
+            command.CommandText = "PRAGMA data_version";
+            return (long)command.ExecuteScalar()!;
+        }
+
+        private SortedDictionary<string, List<string>> Rows()
+        {
+            var tables = new List<string>();
+            using (var command = _observer.CreateCommand())
+            {
+                command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'";
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                    tables.Add(reader.GetString(0));
+            }
+
+            var rows = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
+            foreach (var table in tables)
+            {
+                using var command = _observer.CreateCommand();
+                command.CommandText = "SELECT * FROM \"" + table.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
+                using var reader = command.ExecuteReader();
+                var list = new List<string>();
+                while (reader.Read())
+                {
+                    list.Add(string.Join("|", Enumerable.Range(0, reader.FieldCount).Select(i => reader.GetName(i) + "=" + (reader.IsDBNull(i) ? "<null>"
+                        : reader.GetValue(i) is byte[] bytes ? Convert.ToBase64String(bytes) : Convert.ToString(reader.GetValue(i), CultureInfo.InvariantCulture)))));
+                }
+
+                list.Sort(StringComparer.Ordinal);
+                rows[table] = list;
+            }
+
+            return rows;
+        }
+
+        public void OnNext(DiagnosticListener value)
+        {
+            if (value.Name == DbLoggerCategory.Name)
+            {
+                lock (_listeners)
+                    _listeners.Add(value.Subscribe(this));
+            }
+        }
+
+        public void OnNext(KeyValuePair<string, object?> value)
+        {
+            if (value.Key != RelationalEventId.CommandExecuting.Name || value.Value is not CommandEventData data ||
+                data.Command.Connection?.ConnectionString is not { Length: > 0 } connection ||
+                !string.Equals(Path.GetFullPath(new SqliteConnectionStringBuilder(connection).DataSource), _path, StringComparison.OrdinalIgnoreCase))
+                return;
+            var sql = data.Command.CommandText.TrimStart();
+            if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) && !WriteVerb().IsMatch(sql))
+                Interlocked.Increment(ref _reads);
+            else
+                _writes.Enqueue(sql.Length > 120 ? sql[..120] : sql);
+        }
+
+        public void OnCompleted()
+        {
+        }
+
+        public void OnError(Exception error)
+        {
+        }
+
+        public void Dispose()
+        {
+            _all.Dispose();
+            lock (_listeners)
+                _listeners.ForEach(l => l.Dispose());
+            _observer.Dispose();
+        }
+    }
+
+    [GeneratedRegex(@"\b(INSERT|UPDATE|DELETE|REPLACE|UPSERT|CREATE|DROP|ALTER|PRAGMA|VACUUM|ATTACH)\b")]
+    private static partial Regex WriteVerb();
+
+    [Fact]
+    public async Task First_cards_page_changes_and_refresh_change_nothing_in_the_database()
+    {
+        FakeResponder digest;
+        using (var probe = WriteProbe.Start(_host))
+        {
+            digest = await RunAsync(AgendaView.Digest);
+            await RunAsync(AgendaView.Agenda);
+            await RunAsync(AgendaView.Agenda, AgendaSport.Cs2, AgendaPeriod.FourteenDays);
+            probe.ShouldBeUnchanged("the first /gundem and /ajanda cards");
+        }
+
+        var card = digest.Cards.Single();
+        card.Pages.Should().Be(2);
+        using (var probe = WriteProbe.Start(_host))
+        {
+            var page = await ClickAsync(card.Buttons.Single(b => b.Label == "Sonraki ▶").CustomId, Owner, 10, T0);
+            page.Calls.Should().Equal("defer-update", "update");
+            page.Cards.Single().Page.Should().Be(1);
+            var back = await ClickAsync(page.Cards.Single().Buttons.Single(b => b.Label == "◀ Önceki").CustomId, Owner, 11, T0);
+            back.Cards.Single().Page.Should().Be(0);
+            probe.ShouldBeUnchanged("page changes");
+        }
+
+        using (var probe = WriteProbe.Start(_host))
+        {
+            var refresh = await ClickAsync(card.Buttons.Single(b => b.Label == "🔄 Yenile").CustomId, Owner, 12, T0);
+            refresh.Calls.Should().Equal("defer-update", "update");
+            (await ClickAsync(card.Buttons.Single(b => b.Label == "🔄 Yenile").CustomId, Owner, 12, T0)).Calls.Should().Equal(["private"], "the cooldown refusal");
+            (await ClickAsync(card.Buttons.Single(b => b.Label == "🔄 Yenile").CustomId, new UserId(77), 13, T0)).Calls.Should().Equal(["private"], "a stranger's click");
+            probe.ShouldBeUnchanged("refresh and refused clicks");
+        }
+
+        (_f1.ScheduleCalls, _f1.LifecycleCalls, _f1.ResultCalls, _f1.StandingsCalls, _esports.Calls, _volleyball.Calls).Should().Be((0, 0, 0, 0, 0, 0));
+    }
+
+    [Fact]
+    public async Task The_write_probe_catches_a_write_on_every_path_even_one_that_keeps_the_value()
+    {
+        using (var probe = WriteProbe.Start(_host))
+        {
+            await _host.InScopeAsync(async sp =>
+            {
+                var db = sp.GetRequiredService<ToroDbContext>();
+                var listing = await db.Set<LfgListingEntity>().FirstAsync(l => l.GameName == "Valheim");
+                listing.MaxPlayers = 7;
+                await db.SaveChangesAsync();
+            });
+            probe.Changes().Should().Contain(c => c.StartsWith("sql: UPDATE", StringComparison.Ordinal)).And.Contain("commit: data_version moved").And.Contain("rows: lfg_listing");
+        }
+
+        using (var probe = WriteProbe.Start(_host))
+        {
+            await _host.InScopeAsync(sp => sp.GetRequiredService<ToroDbContext>().Outbox.Where(o => o.DiscordMessageId == 5001)
+                .ExecuteUpdateAsync(s => s.SetProperty(o => o.LastError, "x")));
+            probe.Changes().Should().Contain(c => c.StartsWith("sql: UPDATE", StringComparison.Ordinal)).And.Contain("rows: outbox");
+        }
+
+        using (var probe = WriteProbe.Start(_host))
+        {
+            await _host.InScopeAsync(sp => sp.GetRequiredService<ToroDbContext>().Database.ExecuteSqlRawAsync("UPDATE \"guild_module_state\" SET \"Enabled\" = \"Enabled\""));
+            probe.Changes().Should().Equal(["sql: UPDATE \"guild_module_state\" SET \"Enabled\" = \"Enabled\""],
+                "a write that keeps every value leaves the file untouched (SQLite commits nothing) — the SQL check still sees the attempt");
+        }
+
+        using (var probe = WriteProbe.Start(_host))
+        {
+            var path = _host.Services.GetRequiredService<DatabaseLocation>().Path;
+            using (var raw = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString()))
+            {
+                raw.Open();
+                using var command = raw.CreateCommand();
+                command.CommandText = "UPDATE \"lfg_participant\" SET \"Response\" = \"Response\" + 100";
+                command.ExecuteNonQuery().Should().BePositive();
+            }
+
+            probe.Changes().Should().Equal(["commit: data_version moved", "rows: lfg_participant"], "a write outside EF is invisible to EF but not to SQLite");
+        }
+    }
+
+    // ---------------------------------------------------------------- LFG across many channels
+
+    [Fact]
+    public async Task Lfg_listings_in_many_channels_keep_private_ones_out_and_the_public_one_in_on_every_page_and_refresh()
+    {
+        // 12 more channels: the first 10 (earliest listings) private or role-restricted, then two open ones; channel 3 and
+        // channel 12 hold two listings each.
+        ChannelId Ch(int i) => new((ulong)(1_200_000_000_000_001_000 + i));
+        await _host.InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<ToroDbContext>();
+            for (var i = 1; i <= 12; i++)
+            {
+                _host.Guilds.SetChannelAudience(Guild, Ch(i), i <= 10 ? ChannelAudience.Open with { EveryoneCanView = i % 2 == 1, Narrowed = i % 2 == 1 } : ChannelAudience.Open);
+                db.Set<LfgListingEntity>().Add(Listing(Ch(i), (i <= 10 ? "Özel Oda " : "Herkese Açık ") + i, T0.AddMinutes(5 + i), 9100UL + (ulong)i));
+            }
+
+            db.Set<LfgListingEntity>().AddRange(Listing(Ch(3), "Özel Oda 3b", T0.AddMinutes(40), 9200), Listing(Ch(12), "Herkese Açık 12b", T0.AddMinutes(41), 9201));
+            await db.SaveChangesAsync();
+        });
+
+        var lookups = _host.Guilds.AudienceLookups;
+        var first = await RunAsync(AgendaView.Digest);
+        (_host.Guilds.AudienceLookups - lookups).Should().Be(15, "one check per distinct other channel: 12 new, the open and the hidden LFG channel, the card channel");
+
+        var card = first.Cards.Single();
+        var pages = new List<string> { Text(card) };
+        var next = card;
+        for (var p = 1; p < card.Pages; p++)
+        {
+            next = (await ClickAsync(next.Buttons.Single(b => b.Label == "Sonraki ▶").CustomId, Owner, 100UL + (ulong)p, T0)).Cards.Single();
+            _host.Clock.Advance(AgendaCooldown.Window); // a new card id per click anyway; keep "now" honest
+            pages.Add(Text(next));
+        }
+
+        var all = string.Join("\n", pages);
+        all.Should().Contain("Herkese Açık 11").And.Contain("Herkese Açık 12").And.Contain("Herkese Açık 12b").And.Contain("/9112)");
+        all.Should().NotContain("Özel Oda").And.NotContain("/9101)").And.NotContain("/9200)").And.NotContain("doğrulanamadı", "every channel was checked");
+        pages.Should().NotContain(t => t.Contains("etkinlik yok"));
+
+        // Permissions change between clicks: refresh and paging check again.
+        _host.Guilds.SetChannelAudience(Guild, Ch(11), ChannelAudience.Open with { Narrowed = true });
+        _host.Guilds.SetChannelAudience(Guild, Ch(2), ChannelAudience.Open);
+        var refreshed = (await ClickAsync(card.Buttons.Single(b => b.Label == "🔄 Yenile").CustomId, Owner, 200, _host.Clock.GetUtcNow())).Cards.Single();
+        var after = new List<string> { Text(refreshed) };
+        for (var p = 1; p < refreshed.Pages; p++)
+            after.Add(Text((await ClickAsync(AgendaCustomId.Format(AgendaCustomId.Navigate, new AgendaRequest(Guild, Here, Owner, AgendaView.Digest, AgendaSport.All, AgendaPeriod.SevenDays), p),
+                Owner, 300UL + (ulong)p, _host.Clock.GetUtcNow())).Cards.Single()));
+        var now = string.Join("\n", after);
+        now.Should().NotContain("Herkese Açık 11").And.Contain("Özel Oda 2").And.Contain("Herkese Açık 12b").And.NotContain("Özel Oda 3");
+
+        // A channel that cannot be checked (gone from the cache) hides its listing and says the list may be incomplete — no count.
+        _host.Guilds.SetChannelAudience(Guild, Ch(12), ChannelAudience.Unknown);
+        var unknown = await AllPagesAsync(AgendaView.Digest);
+        unknown.Should().NotContain("Herkese Açık 12").And.Contain("LFG: bu kanaldaki ve herkese açık kanallardaki ilanlar · ⚠️ bazı kayıtlar bu kartta doğrulanamadı; liste eksik olabilir");
+        Regex.Match(unknown, "LFG: [^\n]*").Value.Should().NotMatchRegex(@"\d");
+    }
+
+    private static LfgListingEntity Listing(ChannelId channel, string game, DateTimeOffset? eventAt, ulong? message) => new()
+    {
+        GuildId = Guild.Value,
+        ChannelId = channel.Value,
+        MessageId = message,
+        OwnerUserId = 42,
+        GameName = game,
+        Details = "gizli ayrıntı",
+        MaxPlayers = 4,
+        Status = LfgStatus.Open,
+        CreatedAt = T0.AddHours(-1),
+        EventAt = eventAt,
+        ExpiresAt = T0.AddHours(8),
+    };
+
+    // ---------------------------------------------------------------- card links
+
+    /// <summary>The item's lines ("**Kind · title**" and the line below it).</summary>
+    private static string ItemLines(string text, string title)
+    {
+        var at = text.IndexOf(" · " + title + "**", StringComparison.Ordinal);
+        at.Should().BeGreaterThan(-1, title + " is listed");
+        var start = text.LastIndexOf('\n', at) + 1;
+        var end = text.IndexOf('\n', text.IndexOf('\n', at) + 1);
+        return end < 0 ? text[start..] : text[start..end];
+    }
+
+    [Fact]
+    public async Task Card_links_use_the_newest_delivered_card_of_this_guild_only_while_it_is_known_to_exist_in_a_readable_channel()
+    {
+        ChannelId restricted = new(556), gone = new(557);
+        _host.Guilds.SetChannelAudience(Guild, restricted, ChannelAudience.Open with { Narrowed = true });
+        // 557: not in the gateway cache (deleted channel).
+        await _host.InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<ToroDbContext>();
+            // Aurora — Vitality: its reminder was deleted in Discord (the outbox recorded it on an edit).
+            var reminder = await db.Outbox.SingleAsync(o => o.DiscordMessageId == 6001);
+            reminder.LastError = SentCards.DeletedMarker;
+            // FaZe — NaVi: a start card whose channel was found gone on an edit, plus deliveries never confirmed.
+            db.Outbox.AddRange(
+                Card(Guild, "esports", "pandascore:2", "started", 6004, lastError: "edit_failed UnknownChannel: Unknown Channel"),
+                Card(Guild, "esports", "pandascore:2", "reminder", 6005, OutboxStatus.InFlight),
+                Card(Guild, "esports", "pandascore:2", "reminder", 6006, OutboxStatus.DeliveryUnknown),
+                // Spirit — Falcons: a reminder in a deleted channel.
+                Card(Guild, "esports", "pandascore:4", "reminder", 6007, channel: gone.Value),
+                // Türkiye — Polonya: a newer reminder (time changed) replaces the old one; later a final card (never linked).
+                Card(Guild, "volleyball", "fivb:1", "reminder:20260926", 7003, sentAt: T0.AddHours(-1)),
+                Card(Guild, "volleyball", "fivb:1", "final", 7004, sentAt: T0.AddMinutes(-1)),
+                Card(OtherGuild, "volleyball", "fivb:1", "reminder:20260927", 7999, sentAt: T0));
+            await db.SaveChangesAsync();
+        });
+
+        var text = await AllPagesAsync(AgendaView.Digest);
+
+        ItemLines(text, "Aurora — Vitality").Should().NotContain("/6001)").And.EndWith("`/esports matches`", "a known deleted card is not linked");
+        ItemLines(text, "FaZe — NaVi").Should().NotContainAny("/6003)", "/6004)", "/6005)", "/6006)").And.EndWith("`/esports matches`");
+        ItemLines(text, "Spirit — Falcons").Should().NotContain("/6007)").And.EndWith("`/esports matches`", "the card's channel no longer exists");
+        ItemLines(text, "Türkiye — Polonya").Should().Contain("[Kartı aç](https://discord.com/channels/" + Guild.Value + "/555/7003)", "the newest programme card");
+        text.Should().NotContainAny("/7001)", "/7002)", "/7004)", "/7999)");
+        ItemLines(text, "Azerbaycan GP — Yarış").Should().Contain("/555/5001)");
+
+        // The newest card's channel becomes role-restricted: no link to it — and not to the outdated older card either.
+        await _host.InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<ToroDbContext>();
+            (await db.Outbox.SingleAsync(o => o.DiscordMessageId == 7003)).ChannelId = restricted.Value;
+            await db.SaveChangesAsync();
+        });
+        ItemLines(await AllPagesAsync(AgendaView.Digest), "Türkiye — Polonya").Should().NotContainAny("/7003)", "/7001)").And.EndWith("`/volleyball schedule`");
+
+        // The weekend card's channel turns private: F1 items fall back to the command.
+        _host.Guilds.SetChannelAudience(Guild, CardChannel, ChannelAudience.Open with { EveryoneCanView = false });
+        ItemLines(await AllPagesAsync(AgendaView.Digest), "Azerbaycan GP — Yarış").Should().NotContain("/5001)").And.EndWith("`/f1 next`");
     }
 
     // ---------------------------------------------------------------- fakes

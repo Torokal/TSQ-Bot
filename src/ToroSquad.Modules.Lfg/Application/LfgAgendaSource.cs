@@ -30,9 +30,12 @@ public sealed class LfgAgendaSource(ToroDbContext db) : IAgendaSource
             .Where(l => l.GuildId == query.Guild.Value && (l.Status == LfgStatus.Open || l.Status == LfgStatus.Full) && l.ExpiresAt > now &&
                         (l.EventAt == null || l.EventAt < query.ToUtc))
             .OrderBy(l => l.Id)
-            .Take(MaxListings)
+            .Take(MaxListings + 1)
             .Select(l => new { l.Id, l.ChannelId, l.MessageId, l.GameName, l.MaxPlayers, l.Status, l.EventAt })
             .ToListAsync(cancellationToken);
+        var truncated = listings.Count > MaxListings;
+        if (truncated)
+            listings.RemoveAt(MaxListings);
         var ids = listings.Select(l => l.Id).ToList();
         var joined = await db.Set<LfgParticipantEntity>().AsNoTracking()
             .Where(p => ids.Contains(p.ListingId) && p.Response == LfgResponse.Joined)
@@ -56,6 +59,6 @@ public sealed class LfgAgendaSource(ToroDbContext db) : IAgendaSource
                 new AgendaSlots(count, l.MaxPlayers, l.Status == LfgStatus.Full || count >= l.MaxPlayers),
                 new ChannelId(l.ChannelId));
         }).ToList();
-        return new AgendaSourceResult(AgendaSourceState.Ready, items);
+        return new AgendaSourceResult(AgendaSourceState.Ready, items, Truncated: truncated);
     }
 }

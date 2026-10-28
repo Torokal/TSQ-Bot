@@ -89,7 +89,8 @@ public sealed class EsportsAgendaSource(
                 c.Date is null ? c.Match.ScheduledStartUtc : null,
                 c.Date,
                 Status(c.Match.Status),
-                Link(c.Match, cards)))
+                Link(c.Match, cards),
+                Fallback: Page(c.Match)))
             .ToList();
         return new AgendaSourceResult(stale ? AgendaSourceState.Stale : AgendaSourceState.Ready, items, fetchedAt,
             fetchedAt + TimeSpan.FromHours(options.Value.FutureWindowHours), mode.IsDemo, undated, unverifiable);
@@ -118,10 +119,9 @@ public sealed class EsportsAgendaSource(
     private AgendaLink? Link(EsportsMatch match, IReadOnlyList<SentCard> cards)
     {
         var key = match.Key.ToString();
-        var card = cards.Where(c => c.SourceKey == key && c.Kind == "reminder").OrderByDescending(c => c.SentAt).FirstOrDefault()
-                   ?? cards.Where(c => c.SourceKey == key && c.Kind == "started").OrderByDescending(c => c.SentAt).FirstOrDefault();
-        if (card is not null)
-            return AgendaLink.ToCard(card.Channel, card.Message);
-        return renderer.MatchPageFor(match) is { } page ? AgendaLink.ToPage(page.Url) : null;
+        var card = SentCards.Latest(cards, key, k => k == "reminder") ?? SentCards.Latest(cards, key, k => k == "started");
+        return card is not null ? AgendaLink.ToCard(card.Channel, card.Message) : Page(match);
     }
+
+    private AgendaLink? Page(EsportsMatch match) => renderer.MatchPageFor(match) is { } page ? AgendaLink.ToPage(page.Url) : null;
 }

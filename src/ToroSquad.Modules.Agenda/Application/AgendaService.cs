@@ -18,7 +18,8 @@ namespace ToroSquad.Modules.Agenda.Application;
 /// <item>items are placed on local days by their exact start, or by their known date when the time is unknown; an item
 /// without a date is never placed;</item>
 /// <item>an item tied to a channel's readers (LFG) is shown in another channel only when that channel is provably open to
-/// everyone — otherwise it is dropped without a trace (no title, link or count);</item>
+/// everyone — otherwise it is dropped without a trace (no title, link or count); the same rule decides whether a card
+/// link may be shown (else the item's official page, else the command hint);</item>
 /// <item>identity is source + event id (two sessions or two matches with similar titles stay two items).</item>
 /// </list>
 /// Read-only: no provider call, no write, no notification.
@@ -31,8 +32,14 @@ public sealed class AgendaService(
     TimeProvider clock,
     ILogger<AgendaService> logger)
 {
-    /// <summary>At most this many other channels are checked per card for LFG listings; listings beyond that are left out.</summary>
-    public const int MaxAudienceLookups = 10;
+    /// <summary>
+    /// Channel checks per card build (LFG listings and card links of other channels): one per distinct channel, the verdict
+    /// reused within the build and never across builds (every page or refresh checks again). A check reads the gateway's
+    /// channel cache — no REST call, no member list — so the bound sits well above what a guild produces (LFG reads at most
+    /// 200 listings) and only stops a pathological build. A listing whose channel cannot be checked (bound reached, channel
+    /// unknown, error) is left out like a private one and marks its source incomplete, without a count.
+    /// </summary>
+    public const int MaxAudienceLookups = 250;
 
     public async Task<AgendaSnapshot> BuildAsync(AgendaRequest request, CancellationToken ct)
     {
@@ -49,11 +56,12 @@ public sealed class AgendaService(
         foreach (var kind in AgendaOptions.Kinds(request.View, request.Sport))
         {
             var result = await ReadAsync(kind, query, ct);
-            views.Add(new AgendaSourceView(kind, result, result.CoversUntil is { } until && until < query.ToUtc));
+            views.Add(new AgendaSourceView(kind, result, result.CoversUntil is { } until && until < query.ToUtc, result.Truncated));
             items.AddRange(result.Items.Where(i => i.Kind == kind).Select(i => Normalize(i, result.State, now)));
         }
 
-        var visible = await VisibleAsync(items, request, ct);
+        var (visible, incomplete) = await VisibleAsync(items, request, ct);
+        views = views.Select(v => incomplete.Contains(v.Kind) ? v with { Unchecked = true } : v).ToList();
         return new AgendaSnapshot(request, guildSettings.Language, zoneId, now, Group(visible, days, now), views);
     }
 
@@ -85,42 +93,69 @@ public sealed class AgendaService(
         return status == item.Status ? item : item with { Status = status };
     }
 
-    /// <summary>LFG privacy: same channel, or a channel provably open to everyone; anything unproven is dropped silently.</summary>
-    private async Task<List<AgendaItem>> VisibleAsync(List<AgendaItem> items, AgendaRequest request, CancellationToken ct)
+    private enum Reach
     {
-        var verdicts = new Dictionary<ulong, bool>();
+        Open,
+        Closed,
+        Unchecked,
+    }
+
+    /// <summary>
+    /// Channel rules, for items and for links alike: the card's own channel always (whoever reads the card reads that
+    /// channel — the invoker proved it by using the command there), any other channel only when provably open to everyone.
+    /// An item tied to a channel that fails is dropped silently (a private one leaves no trace; an unchecked one only marks
+    /// its source incomplete); a card link that fails gives way to the item's official page, else the command hint.
+    /// </summary>
+    private async Task<(List<AgendaItem> Visible, HashSet<AgendaKind> Incomplete)> VisibleAsync(List<AgendaItem> items, AgendaRequest request, CancellationToken ct)
+    {
+        var verdicts = new Dictionary<ulong, Reach>();
+        var incomplete = new HashSet<AgendaKind>();
         var visible = new List<AgendaItem>(items.Count);
-        foreach (var item in items.DistinctBy(i => (i.Kind, i.SourceId)))
+
+        async Task<Reach> ReachAsync(ChannelId channel)
         {
-            if (item.AudienceChannel is not { } channel || channel == request.Channel)
+            if (channel == request.Channel)
+                return Reach.Open;
+            if (verdicts.TryGetValue(channel.Value, out var known))
+                return known;
+            var reach = Reach.Unchecked;
+            if (verdicts.Count < MaxAudienceLookups)
             {
-                visible.Add(item);
-                continue;
-            }
-
-            if (!verdicts.TryGetValue(channel.Value, out var open))
-            {
-                open = false;
-                if (verdicts.Count < MaxAudienceLookups)
+                try
                 {
-                    try
-                    {
-                        open = (await guilds.GetChannelAudienceAsync(request.Guild, channel, ct)).IsOpenToEveryone;
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        logger.LogWarning(ex, "agenda_audience_failed guild={Guild}", request.Guild); // closed on error
-                    }
+                    var audience = await guilds.GetChannelAudienceAsync(request.Guild, channel, ct);
+                    reach = !audience.Known ? Reach.Unchecked : audience.IsOpenToEveryone ? Reach.Open : Reach.Closed;
                 }
-
-                verdicts[channel.Value] = open;
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    logger.LogWarning(ex, "agenda_audience_failed guild={Guild}", request.Guild); // closed on error
+                }
             }
 
-            if (open)
+            verdicts[channel.Value] = reach;
+            return reach;
+        }
+
+        // Earliest first, so a pathological list spends the bound on what the card shows first.
+        foreach (var item in items.DistinctBy(i => (i.Kind, i.SourceId))
+                     .OrderBy(i => i.StartUtc ?? DateTimeOffset.MinValue).ThenBy(i => i.Kind).ThenBy(i => i.SourceId, StringComparer.Ordinal))
+        {
+            if (item.AudienceChannel is { } audience)
+            {
+                var reach = await ReachAsync(audience);
+                if (reach == Reach.Unchecked)
+                    incomplete.Add(item.Kind);
+                if (reach != Reach.Open)
+                    continue;
+            }
+
+            if (item.Link is { Channel: { } linked } && await ReachAsync(linked) != Reach.Open)
+                visible.Add(item with { Link = item.Fallback, Fallback = null });
+            else
                 visible.Add(item);
         }
 
-        return visible;
+        return (visible, incomplete);
     }
 
     /// <summary>

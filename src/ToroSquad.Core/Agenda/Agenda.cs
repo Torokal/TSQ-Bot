@@ -47,7 +47,9 @@ public enum AgendaLinkKind
 
 /// <summary>
 /// A link the source has verified. Discord cards carry only channel + message ids (the agenda builds the jump URL with the
-/// guild of the query — never a guild from elsewhere); an official page carries its validated URL.
+/// guild of the query — never a guild from elsewhere); an official page carries its validated URL. A card link is the LAST
+/// KNOWN delivery state (delivered and not known to be deleted), not a live check that the message still exists; the agenda
+/// also drops it when the card's channel is not provably readable by the agenda card's readers.
 /// </summary>
 public sealed record AgendaLink(AgendaLinkKind Kind, ChannelId? Channel = null, MessageId? Message = null, string? Url = null)
 {
@@ -63,7 +65,8 @@ public sealed record AgendaSlots(int Joined, int Capacity, bool Full);
 /// One programme entry, normalized and result-free. Time: <see cref="StartUtc"/> for a known instant; <see cref="Date"/> alone
 /// for a known day without a time (never an invented 00:00); neither only for <see cref="AgendaStatus.LookingNow"/>.
 /// <see cref="AudienceChannel"/>: the channel whose readers may see this item (LFG); the agenda shows it in another channel
-/// only when that channel is provably open to everyone.
+/// only when that channel is provably open to everyone. <see cref="Fallback"/>: the validated official page to show instead
+/// when the card <see cref="Link"/> cannot be used.
 /// </summary>
 public sealed record AgendaItem(
     AgendaKind Kind,
@@ -75,7 +78,8 @@ public sealed record AgendaItem(
     AgendaStatus Status,
     AgendaLink? Link = null,
     AgendaSlots? Slots = null,
-    ChannelId? AudienceChannel = null);
+    ChannelId? AudienceChannel = null,
+    AgendaLink? Fallback = null);
 
 /// <summary>
 /// One read: the guild, its language, ONE "now" for the whole read, and the window [FromUtc, ToUtc) — local calendar days
@@ -106,7 +110,8 @@ public enum AgendaSourceState
 /// A source's answer. <paramref name="FreshAt"/>: the source's real last successful fetch (never "now");
 /// <paramref name="CoversUntil"/>: how far its data reaches (null = the whole window); <paramref name="Undated"/>: items it
 /// knows but cannot place on a day; <paramref name="Unverifiable"/>: items a guild filter could not judge (e.g. missing VRS
-/// data) and that were therefore left out, never let through.
+/// data) and that were therefore left out, never let through; <paramref name="Truncated"/>: the source holds more matching
+/// records than it reads at once, so the list may be incomplete (no count — some of them may not be the reader's to see).
 /// </summary>
 public sealed record AgendaSourceResult(
     AgendaSourceState State,
@@ -115,7 +120,8 @@ public sealed record AgendaSourceResult(
     DateTimeOffset? CoversUntil = null,
     bool Demo = false,
     int Undated = 0,
-    int Unverifiable = 0)
+    int Unverifiable = 0,
+    bool Truncated = false)
 {
     public static AgendaSourceResult NotConfigured(DateTimeOffset? freshAt = null) => new(AgendaSourceState.NotConfigured, [], freshAt);
 

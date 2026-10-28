@@ -89,11 +89,8 @@ public sealed class Formula1AgendaSource(
     /// <summary>The race's reminder card, else the weekend-schedule card of its meeting — programme cards only (never a result card).</summary>
     private static AgendaLink? Link(F1SessionView s, IReadOnlyList<SentCard> cards)
     {
-        var card = (s.Session.Type == F1SessionType.Race ? Latest(cards, s.Session.Key, "race_reminder") : null)
-                   ?? Latest(cards, s.Session.MeetingKey, "weekend_schedule");
+        var card = (s.Session.Type == F1SessionType.Race ? SentCards.Latest(cards, s.Session.Key, k => k == "race_reminder") : null)
+                   ?? SentCards.Latest(cards, s.Session.MeetingKey, k => k == "weekend_schedule");
         return card is null ? null : AgendaLink.ToCard(card.Channel, card.Message);
     }
-
-    private static SentCard? Latest(IReadOnlyList<SentCard> cards, string sourceKey, string kind) =>
-        cards.Where(c => c.SourceKey == sourceKey && c.Kind == kind).OrderByDescending(c => c.SentAt).FirstOrDefault();
 }
