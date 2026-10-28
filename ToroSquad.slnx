@@ -16,6 +16,7 @@
     <Project Path="src/ToroSquad.Modules.Randomizer/ToroSquad.Modules.Randomizer.csproj" />
     <Project Path="src/ToroSquad.Modules.Timezone/ToroSquad.Modules.Timezone.csproj" />
     <Project Path="src/ToroSquad.Modules.Pfp/ToroSquad.Modules.Pfp.csproj" />
+    <Project Path="src/ToroSquad.Modules.Agenda/ToroSquad.Modules.Agenda.csproj" />
     <Project Path="src/ToroSquad.Modules.Giveaway/ToroSquad.Modules.Giveaway.csproj" />
     <Project Path="src/ToroSquad.Modules.Summary/ToroSquad.Modules.Summary.csproj" />
     <Project Path="src/ToroSquad.Modules.Sor/ToroSquad.Modules.Sor.csproj" />

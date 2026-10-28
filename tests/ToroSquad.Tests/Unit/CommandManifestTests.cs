@@ -22,7 +22,7 @@ public sealed class CommandManifestTests
         var (manifest, admin) = await BuildAsync();
         CommandManifestValidator.Validate(manifest, admin).Should().BeEmpty();
         manifest.LoadErrors.Should().BeEmpty();
-        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "pfp", "banner", "giveaway", "ozetle", "sor", "hafizam", "ongoru", "Quote", "tsq-admin");
+        manifest.Commands.Select(c => c.Name).Should().BeEquivalentTo("help", "bot", "privacy", "setup", "modules", "esports", "f1", "volleyball", "ekip", "quote", "birthday", "dolar", "euro", "altın", "çevir", "zarat", "randomsayi", "sec", "yazitura", "saat", "pfp", "banner", "giveaway", "ozetle", "sor", "hafizam", "ongoru", "ajanda", "gundem", "Quote", "tsq-admin");
 
         string[] Sub(string name) => manifest.Find(name)!.Options.Select(o => o.Name).ToArray();
         Sub("bot").Should().BeEquivalentTo("status", "about", "source");
