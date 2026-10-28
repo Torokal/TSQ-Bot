@@ -13,7 +13,9 @@ Günü** celebrates members' birthdays (day and month only) with one message and
 and gram gold buy/sell prices with `/dolar`, `/euro` and `/altın` ([docs/currency/TSQ_CURRENCY.md](docs/currency/TSQ_CURRENCY.md)).
 **TSQ Randomizer** rolls dice, picks a number, picks one of your options and flips a coin with `/zarat`, `/randomsayi`,
 `/sec` and `/yazitura` ([docs/randomizer/TSQ_RANDOMIZER.md](docs/randomizer/TSQ_RANDOMIZER.md)). **TSQ Profil Görseli**
-shows a member's profile picture or profile banner large with `/pfp` and `/banner` ([docs/pfp/TSQ_PFP.md](docs/pfp/TSQ_PFP.md)). **TSQ Çekiliş** runs reaction
+shows a member's profile picture or profile banner large with `/pfp` and `/banner` ([docs/pfp/TSQ_PFP.md](docs/pfp/TSQ_PFP.md)). **TSQ Ajanda**
+shows the upcoming F1, CS2 and volleyball programme with `/ajanda` and today's rest plus tomorrow (sports and LFG) with
+`/gundem`, without results ([docs/agenda/TSQ_AGENDA.md](docs/agenda/TSQ_AGENDA.md)). **TSQ Çekiliş** runs reaction
 giveaways: `/giveaway create` opens a form, members enter with 🎉, winners are drawn automatically
 ([docs/giveaway/TSQ_GIVEAWAY.md](docs/giveaway/TSQ_GIVEAWAY.md)). **TSQ Özet** summarizes the latest messages of a channel
 in Turkish with `/ozetle` ([docs/summary/TSQ_SUMMARY.md](docs/summary/TSQ_SUMMARY.md)). **TSQ Sor** answers questions on
@@ -69,6 +71,11 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   `/randomsayi maksimum:100 [minimum:1]` (inclusive, ±1,000,000,000), `/sec seçenekler:"CS2, Valheim, WoW"` (2–25 distinct
   options; `,` and `|` both separate, mixed too), `/yazitura`. Public result cards, private refusals for invalid input; every draw from
   `RandomNumberGenerator` (never `System.Random`); option text is defused, nothing pings; stateless (nothing stored or logged).
+- **TSQ Ajanda** (separate module, off by default): `/ajanda [spor] [donem]` is the sports programme (F1 sessions, CS2
+  matches through the server's own filters, the followed volleyball team; today, tomorrow, 7 or 14 local days) and
+  `/gundem` is today's rest and tomorrow with sports and LFG listings in one public card. A read-only view over what those
+  modules already hold: no provider call, no storage, no results or spoilers; days in the server's time zone, times as
+  Discord timestamps; LFG listings from another channel only when that channel is open to everyone; paged in one message.
 - **TSQ Profil Görseli** (separate module, off by default): `/pfp [uye] [tur]` and `/banner [uye] [tur]` show a member's
   avatar or profile banner large in one public card with a "Tam boy aç" link. `uye` is Discord's native member picker
   (default: you); `tur` is Otomatik (this server's picture first), Genel (global profile) or Sunucu (this server's member
@@ -146,6 +153,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Döviz & Altın | `/dolar`, `/euro`, `/altın` (no options), `/çevir miktar kaynak hedef` (TRY ↔ USD/EUR/gram gold); public answer, currency channel only | everyone (module on) |
 | TSQ Randomizer | `/zarat zar:…`, `/randomsayi maksimum:… [minimum:…]`, `/sec seçenekler:…`, `/yazitura` (public answer) | everyone (module on) |
 | TSQ Profil Görseli | `/pfp [uye:@member] [tur:Otomatik\|Genel\|Sunucu]`, `/banner [uye:@member] [tur:…]` (public card, large image, Tam boy aç link) | everyone (module on) |
+| TSQ Ajanda | `/ajanda [spor:Tüm sporlar\|Formula 1\|CS2\|Voleybol] [donem:Bugün\|Yarın\|7 gün\|14 gün]`, `/gundem` (public card, pages in the same message) | everyone (module on) |
 | TSQ Çekiliş | `/giveaway create` (form → card → 🎉 → automatic draw), `/giveaway end\|cancel\|reroll giveaway:<#number \| message link \| id>` | Manage Server (module on); entering: everyone, with 🎉 |
 | TSQ Özet | `/ozetle` (no options; public summary of this channel's latest messages) | members with any one of the configured roles (module on) |
 | TSQ Sor | `/sor soru:… [gizli:evet] [yeni:evet] [kisi:@member]` (answer card with Devam et / Yeni sohbet / Hafızam), `/hafizam` (own memory, private) | everyone (module on; optional channel/role limits) |
@@ -262,6 +270,7 @@ calls**. Test coverage by area: [docs/TESTING.md](docs/TESTING.md).
 | `ToroSquad.Modules.Currency` | TSQ Döviz & Altın (`/dolar`, `/euro`, `/altın`: Altınkaynak / TCMB / Trunçgil parsers, dataset cache with single flight, last-known-good) |
 | `ToroSquad.Modules.Randomizer` | TSQ Randomizer (`/zarat`, `/randomsayi`, `/sec`, `/yazitura`: dice notation and option parsers, one secure random source) |
 | `ToroSquad.Modules.Pfp` | TSQ Profil Görseli (`/pfp`, `/banner`: picture selection over Get Guild Member / Get User, official CDN URLs with animated WebP, shared cooldown) |
+| `ToroSquad.Modules.Agenda` | TSQ Ajanda (`/ajanda`, `/gundem`: local-day calendar, one pipeline over the Core `IAgendaSource` adapters of F1/esports/volleyball/LFG, LFG audience rule, paged card) |
 | `ToroSquad.Modules.Giveaway` | TSQ Çekiliş (`/giveaway`: form and duration parser, restart-safe draw worker, paged 🎉 reaction reading, unbiased winner draw, card sync, winner announcement via the outbox) |
 | `ToroSquad.Modules.Predictions` | TSQ Öngörü (`/ongoru`: form parser, fixed-odds integer coin math, atomic entries/settlement/refunds, tournaments, daily reward, leaderboards, card sync, lock worker) |
 | `ToroSquad.Ai` | Shared AI provider access (no TSQ dependency): chat request/answer contract, the one OpenCode Go transport, parsing and error classes |

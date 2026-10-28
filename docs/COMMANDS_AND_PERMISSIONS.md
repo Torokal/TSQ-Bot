@@ -215,6 +215,18 @@ kısaltmalar yalnızca bölgeyi seçer, o tarihteki offset'i `TimeZoneInfo` beli
 hiç yaşanmayan veya iki kez yaşanan saatler tahmin edilmez, kısa bir uyarıyla reddedilir. Geçersiz saat uyarısı
 yalnızca kullanana görünür (ephemeral); cevap ping atmaz. Bot izni gerekmez (yalnızca etkileşim cevabı). Veri saklanmaz.
 
+## TSQ Ajanda (modül açıkken)
+
+| Komut | Ne yapar |
+|---|---|
+| `/ajanda [spor:Tüm sporlar\|Formula 1\|CS2\|Voleybol] [donem:Bugün\|Yarın\|Önümüzdeki 7 gün\|Önümüzdeki 14 gün]` | Herkes: spor programı (varsayılan tüm sporlar, 7 gün), **herkese açık** tek kart. LFG içermez |
+| `/gundem` | Herkes: bugünün kalanı ve yarın — F1, CS2, voleybol ve uygun LFG ilanları, **herkese açık** tek kart |
+
+Sonuç/puan gösterilmez. Günler sunucunun saat dilimine, saatler okuyucunun yerel saatine göredir. Kaynak modül kapalıysa
+o kaynak okunmaz. Başka kanaldaki LFG ilanı yalnızca o kanal herkese açıksa gösterilir. Düğmeler (◀ ▶ 🔄) aynı mesajı
+düzenler ve yalnızca komutu kullanan üyeye aittir; uyarılar yalnızca kullanana görünür; cevap ping atmaz. Bot izni
+gerekmez (yalnızca etkileşim cevabı). Yönetici işlemi yok. Veri saklanmaz. Ayrıntı: [agenda/TSQ_AGENDA.md](agenda/TSQ_AGENDA.md).
+
 ## TSQ Profil Görseli (modül açıkken)
 
 | Komut | Ne yapar |
