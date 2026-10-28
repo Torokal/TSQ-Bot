@@ -45,6 +45,7 @@ public sealed partial class AgendaArchitectureTests
         Path.Combine("ToroSquad.Modules.Esports", "Application", "EsportsAgendaSource.cs"),
         Path.Combine("ToroSquad.Modules.Volleyball", "Application", "VolleyballAgendaSource.cs"),
         Path.Combine("ToroSquad.Modules.Lfg", "Application", "LfgAgendaSource.cs"),
+        Path.Combine("ToroSquad.Modules.Predictions", "Application", "PredictionsAgendaSource.cs"),
     ];
 
     private static void AssertNoViolations(IArchRule rule)
@@ -77,7 +78,8 @@ public sealed partial class AgendaArchitectureTests
         Agenda.GetTypes().Should().NotContain(t => typeof(Microsoft.Extensions.Hosting.IHostedService).IsAssignableFrom(t), "no polling, no scheduled post");
         new AgendaModule().ValidateConfiguration(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build()).Should().BeEmpty();
         foreach (var other in new[] { Core, DiscordLayer, typeof(ToroSquad.Modules.Formula1.Formula1Module).Assembly, typeof(ToroSquad.Modules.Esports.EsportsModule).Assembly,
-                     typeof(ToroSquad.Modules.Volleyball.VolleyballModule).Assembly, typeof(ToroSquad.Modules.Lfg.LfgModule).Assembly })
+                     typeof(ToroSquad.Modules.Volleyball.VolleyballModule).Assembly, typeof(ToroSquad.Modules.Lfg.LfgModule).Assembly,
+                     typeof(ToroSquad.Modules.Predictions.PredictionsModule).Assembly })
             References(other).Should().NotContain("ToroSquad.Modules.Agenda");
     }
 
@@ -102,6 +104,8 @@ public sealed partial class AgendaArchitectureTests
                 $"{adapter}: nothing is written");
             code.Should().NotMatchRegex(@"\.(Score|WinnerIndex|IsDraw|IsForfeit|Maps|HomeSets|AwaySets|Sets|CurrentSet\w*|Results|Standings\w*|Details|VoiceChannelId|OwnerUserId)\b|RaceControl|F1Incident",
                 $"{adapter}: programme only — no results, race control, members or listing details");
+            code.Should().NotMatchRegex(@"\b(WinningOutcome\w*|WinnerCount|Payout\w*|Refund\w*|EntryCount|StakeTotal\w*|CreatorName|CreatorUserId|CancelReason|Rules|PredictionEntryEntity|PredictionOutcomeEntity|PredictionWalletEntity|PredictionLedger\w*|PredictionStanding\w*)\b",
+                $"{adapter}: predictions as programme only — no outcome, entries, coins, rules or creator");
             code.Should().Contain(": IAgendaSource");
         }
     }
@@ -135,6 +139,7 @@ public sealed partial class AgendaArchitectureTests
             sources.Select(s => (s.Kind, s.Module.Value)).Should().BeEquivalentTo(new[]
             {
                 (AgendaKind.Formula1, "formula1"), (AgendaKind.Esports, "esports"), (AgendaKind.Volleyball, "volleyball"), (AgendaKind.Lfg, "lfg"),
+                (AgendaKind.Predictions, "predictions"),
             });
             sp.GetRequiredService<AgendaFlow>().Should().NotBeNull();
 

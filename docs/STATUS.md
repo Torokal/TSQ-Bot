@@ -493,14 +493,20 @@ invite link and no global command registration. The source code is public under 
   needs the provider's written clarification or a suitable plan before live use — not only an owner decision. The Özet
   `401 authentication_error` entry below is a separate access issue.
 
-## TSQ Ajanda — /ajanda, /gundem (new, 2026-10-28, branch `feat/agenda-gundem`)
+## TSQ Ajanda — /ajanda, /gundem (new, 2026-10-28)
 
 - Module `agenda`, two flat commands: `/ajanda [spor] [donem]` (F1, CS2, volleyball; today, tomorrow, 7 or 14 local days;
-  never LFG) and `/gundem` (today's rest + tomorrow: sports and LFG). Off by default (`/modules enable agenda`), no admin
+  never LFG) and `/gundem` (today's rest + tomorrow: sports, LFG and predictions). Off by default (`/modules enable agenda`), no admin
   operations. A view only: no table, migration, worker, configuration, package, provider call, outbox write or AI.
-  Sources implement the Core `IAgendaSource` contract in their own modules (F1, esports, volleyball, LFG); Core's
-  `IGuildGateway` gained `GetChannelAudienceAsync` (who can read a channel, from the gateway cache) for the LFG rule.
-  In the manifest (31 commands; guild sync needed).
+  Sources implement the Core `IAgendaSource` contract in their own modules (F1, esports, volleyball, LFG, predictions);
+  Core's `IGuildGateway` gained `GetChannelAudienceAsync` (who can read a channel, from the gateway cache) for the LFG rule.
+- Released: PR #75 merged `0b35935`, Railway deployment `a60a84de` 2026-10-28 13:32Z (clean startup), guild sync applied
+  (`/ajanda`, `/gundem` created, 29 unchanged, no prune; guild has 31 commands). Module still off until the owner enables it.
+- Predictions in `/gundem` (follow-up): `PredictionsAgendaSource` lists this guild's open, or closed but unsettled,
+  predictions whose closing time is today or tomorrow (open ones without a closing time under "Şu an açık öngörüler"):
+  title, closing time, open/closed and the card link only — never outcomes, winner, entries, coins, rules or creator; settled,
+  cancelled, abandoned and publishing ones are not listed; a missing or removed card is not linked. `/gundem` description
+  changed (sync: Update `/gundem`).
 - **IMPLEMENTED / TESTED_OFFLINE**: local days per IANA zone (DST, skipped midnights, month/year ends), one "now", the
   shared status rules (no live from old data or from a passed time), placement (date-only, undated, running since before
   midnight, LFG now/passed), module gates, isolated source failures, staleness/coverage/demo/undated/unverifiable lines,
@@ -513,8 +519,8 @@ invite link and no global command registration. The source code is public under 
   check per distinct channel (gateway cache, bound 250; an unchecked channel hides its listings and marks LFG incomplete
   without a count), owner-only stateless buttons with 30 min lifetime and
   a 3 s cooldown, refresh after midnight, zero provider calls and no database change on first cards, page changes or
-  refresh (EF command capture + SQLite data_version + every row and value compared) (`AgendaTests`, `AgendaUnitTests`,
-  `AgendaArchitectureTests`).
+  refresh (EF command capture + SQLite data_version + every row and value compared), predictions without outcomes
+  (`AgendaTests`, `AgendaUnitTests`, `AgendaArchitectureTests`).
 - **NOT VERIFIED_LIVE**: everything in Discord (card rendering on desktop and mobile, timestamps, buttons, real channel
   audiences, real card links). Live checklist: [agenda/TSQ_AGENDA.md](agenda/TSQ_AGENDA.md).
 

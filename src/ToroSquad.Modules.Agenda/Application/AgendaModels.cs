@@ -59,7 +59,7 @@ public static class AgendaOptions
 
     /// <summary>The sources a view reads, in display order. /ajanda never reads LFG.</summary>
     public static IReadOnlyList<AgendaKind> Kinds(AgendaView view, AgendaSport sport) => view == AgendaView.Digest
-        ? [AgendaKind.Formula1, AgendaKind.Esports, AgendaKind.Volleyball, AgendaKind.Lfg]
+        ? [AgendaKind.Formula1, AgendaKind.Esports, AgendaKind.Volleyball, AgendaKind.Lfg, AgendaKind.Predictions]
         : sport switch
         {
             AgendaSport.Formula1 => [AgendaKind.Formula1],

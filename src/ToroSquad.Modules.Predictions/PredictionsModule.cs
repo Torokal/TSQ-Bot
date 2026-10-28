@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ToroSquad.Core.Agenda;
 using ToroSquad.Core.Guilds;
 using ToroSquad.Core.Localization;
 using ToroSquad.Core.Modules;
@@ -67,6 +68,7 @@ public sealed class PredictionsModule : IToroModule
         services.AddScoped<PredictionEconomy>();
         services.AddScoped<PredictionDailyFlow>();
         services.AddScoped<IUserDataContributor, PredictionUserData>();
+        services.AddScoped<IAgendaSource, PredictionsAgendaSource>();
         services.AddScoped<IDeliveryPolicy, PredictionDeliveryPolicy>();
         services.AddSingleton<IModuleHealthCheck, PredictionHealthCheck>();
 

@@ -90,6 +90,8 @@ public sealed class AgendaService(
             status = AgendaStatus.StartPassed; // old data cannot say "running"
         if (status == AgendaStatus.Scheduled && item.StartUtc is { } start && start <= now)
             status = AgendaStatus.StartPassed; // the planned time passed — nothing more is known
+        if (status == AgendaStatus.EntriesOpen && item.StartUtc is { } close && close <= now)
+            status = AgendaStatus.EntriesClosed; // the module takes no entry after the closing time, swept or not
         return status == item.Status ? item : item with { Status = status };
     }
 
@@ -160,7 +162,8 @@ public sealed class AgendaService(
 
     /// <summary>
     /// Places items on the local days. Today also takes the LFG listings looking for players now, open listings whose start is
-    /// already behind us, and events the current data shows running although they began before midnight.
+    /// already behind us, predictions open without a closing time, and events the current data shows running although they
+    /// began before midnight.
     /// </summary>
     public static IReadOnlyList<AgendaDayGroup> Group(IReadOnlyList<AgendaItem> items, IReadOnlyList<AgendaDay> days, DateTimeOffset now)
     {
@@ -169,7 +172,8 @@ public sealed class AgendaService(
         var perDay = days.ToDictionary(d => d.Date, _ => new List<AgendaItem>());
         foreach (var item in items)
         {
-            if (item.Status == AgendaStatus.LookingNow || (item.Status == AgendaStatus.ListingStartPassed && today is not null && item.StartUtc < today.StartUtc))
+            if (item.Status == AgendaStatus.LookingNow || (item.Status == AgendaStatus.EntriesOpen && item.StartUtc is null) ||
+                (item.Status == AgendaStatus.ListingStartPassed && today is not null && item.StartUtc < today.StartUtc))
             {
                 if (today is not null)
                     nowGroup.Add(item);

@@ -90,7 +90,7 @@ public sealed class AgendaRenderer(ILocalizer localizer)
 
         var chunks = shown.Select(g =>
         {
-            var blocks = g.Now.Select(i => ((string?)L(lang, "agenda.lfg.now_heading"), Item(i, snapshot)))
+            var blocks = g.Now.Select(i => ((string?)L(lang, i.Kind == AgendaKind.Predictions ? "agenda.predictions.now_heading" : "agenda.lfg.now_heading"), Item(i, snapshot)))
                 .Concat(g.Items.Select(i => ((string?)null, Item(i, snapshot))))
                 .ToList();
             return new Chunk(g, DayHeading(g.Day, lang), blocks, 0, blocks.Count);
@@ -270,14 +270,16 @@ public sealed class AgendaRenderer(ILocalizer localizer)
             parts.Add(DiscordText.Untrusted(item.Context, ContextMax));
         if (item.Slots is { } slots)
             parts.Add(slots.Full ? L(lang, "agenda.lfg.full", slots.Joined, slots.Capacity) : L(lang, "agenda.lfg.slots", slots.Joined, slots.Capacity));
-        if (StatusText(item.Status, lang) is { } status)
+        if (StatusText(item, lang) is { } status)
             parts.Add(status);
         parts.Add(LinkText(item, snapshot));
         return head + "\n" + string.Join(" · ", parts.Where(p => p.Length > 0));
     }
 
-    private string? StatusText(AgendaStatus status, string lang) => status switch
+    private string? StatusText(AgendaItem item, string lang) => item.Status switch
     {
+        AgendaStatus.EntriesOpen => L(lang, item.StartUtc is null ? "agenda.state.entries_open" : "agenda.state.entries_open_until"),
+        AgendaStatus.EntriesClosed => L(lang, "agenda.state.entries_closed"),
         AgendaStatus.InProgress => L(lang, "agenda.state.in_progress"),
         AgendaStatus.StartPassed => L(lang, "agenda.state.start_passed"),
         AgendaStatus.Postponed => L(lang, "agenda.state.postponed"),
@@ -334,6 +336,7 @@ public sealed class AgendaRenderer(ILocalizer localizer)
                 AgendaSourceState.Stale when r.FreshAt is { } at => L(lang, "agenda.status.stale", DiscordText.Timestamp(at, 'R')),
                 AgendaSourceState.Stale => L(lang, "agenda.status.stale_unknown"),
                 _ when source.Kind == AgendaKind.Lfg => L(lang, "agenda.status.lfg"),
+                _ when source.Kind == AgendaKind.Predictions => L(lang, "agenda.status.predictions"),
                 _ when r.FreshAt is { } at => L(lang, "agenda.status.ready", DiscordText.Timestamp(at, 'R')),
                 _ => L(lang, "agenda.status.ready_unknown"),
             };
@@ -373,6 +376,7 @@ public sealed class AgendaRenderer(ILocalizer localizer)
         AgendaKind.Formula1 => "f1",
         AgendaKind.Esports => "cs2",
         AgendaKind.Volleyball => "volleyball",
+        AgendaKind.Predictions => "predictions",
         _ => "lfg",
     };
 
@@ -381,6 +385,7 @@ public sealed class AgendaRenderer(ILocalizer localizer)
         AgendaKind.Formula1 => "🏎️",
         AgendaKind.Esports => "🎮",
         AgendaKind.Volleyball => "🏐",
+        AgendaKind.Predictions => "🔮",
         _ => "👥",
     };
 

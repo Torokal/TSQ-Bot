@@ -10,6 +10,9 @@ public enum AgendaKind
     Esports = 2,
     Volleyball = 3,
     Lfg = 4,
+
+    /// <summary>TSQ Öngörü questions: closing time and open/closed — never an outcome.</summary>
+    Predictions = 5,
 }
 
 /// <summary>
@@ -30,6 +33,12 @@ public enum AgendaStatus
 
     /// <summary>An LFG listing whose planned time has passed but which is still open (nobody claims the game started).</summary>
     ListingStartPassed = 6,
+
+    /// <summary>A prediction still taking entries — until its <see cref="AgendaItem.StartUtc"/> (the closing time) when it has one.</summary>
+    EntriesOpen = 7,
+
+    /// <summary>A prediction no longer taking entries; its outcome is not known to the agenda (settled ones are never listed).</summary>
+    EntriesClosed = 8,
 }
 
 /// <summary>What a link points at; the agenda chooses the wording (a result-bearing target says so).</summary>

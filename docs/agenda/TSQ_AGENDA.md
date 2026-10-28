@@ -3,7 +3,7 @@
 Modül kimliği `agenda` (`ToroSquad.Modules.Agenda`). Varsayılan **kapalı**: `/modules enable agenda`. Açıldıktan sonra
 herkes kullanabilir; yönetici işlemi yoktur (`/modules enable|disable` yeterli, `/tsq-admin` altında işlem yok).
 
-TSQ Ajanda bir **görünümdür**: F1, CS2, voleybol ve LFG modüllerinin zaten tuttuğu veriyi okur. Yeni sağlayıcı, crawler,
+TSQ Ajanda bir **görünümdür**: F1, CS2, voleybol, LFG ve Öngörü modüllerinin zaten tuttuğu veriyi okur. Yeni sağlayıcı, crawler,
 canlı bağlantı, AI özeti, polling işi, tablo, migration veya yapılandırma yoktur. Komut çalışınca hiçbir sağlayıcıya istek
 gitmez, hiçbir kayıt yazılmaz, bildirim/öngörü/LFG ilanı oluşmaz, coin/takip/katılım işlemi yapılmaz. Otomatik günlük
 veya haftalık paylaşım yoktur.
@@ -13,7 +13,7 @@ veya haftalık paylaşım yoktur.
 | Komut | Ne gösterir |
 |---|---|
 | `/ajanda [spor] [donem]` | **Spor programı.** `spor`: Tüm sporlar (varsayılan), Formula 1, CS2, Voleybol. `donem`: Bugün, Yarın, Önümüzdeki 7 gün (varsayılan), Önümüzdeki 14 gün. LFG içermez. |
-| `/gundem` | **Bugünün kalanı ve yarın**: F1 seansları, CS2 ve voleybol maçları ve uygun LFG ilanları tek kartta. Seçeneği yoktur. |
+| `/gundem` | **Bugünün kalanı ve yarın**: F1 seansları, CS2 ve voleybol maçları, uygun LFG ilanları ve açık öngörüler tek kartta. Seçeneği yoktur. |
 
 İkisi de düz komuttur (alt komut/grup yok), herkesindir, yalnızca sunucuda çalışır. Başarılı cevap komutun kullanıldığı
 kanala **herkese açık** ve **ping'siz** tek bir karttır (önce herkese açık "düşünüyor…" onayı, sonra kart — özel bir onay
@@ -56,6 +56,7 @@ yoktur. Bitmiş etkinlik listeden çıkar; sonuç listesine dönüşmez.
 | CS2 (`esports`) | `EsportsCache` maçları | Sunucunun **sunucu filtreleri** bildirim planlayıcısıyla aynı kuralla (`MatchFilter`: boyut içinde VEYA, boyutlar arasında VE, filtre yoksa tüm maçlar). VRS verisi yoksa filtre karar veremez → maç **gösterilmez** ve sayılır. Teslim ayarları (kanal, ping rolü, hatırlatma, spoiler modu, pause) ve üyelerin kişisel takipleri etkisizdir. Bitmiş maç yok; skor/harita okunmaz. Kapsam: son veri + 48 saat. |
 | Voleybol (`volleyball`) | `VolleyballCache` maçları | Yalnızca modülün izlediği takım (Filenin Sultanları — Türkiye Kadın A Milli Takımı); yeni takım/lig eklenmez. Set/sayı okunmaz. Canlı yalnızca son 30 dakikadaki sağlayıcı gözlemiyle. Kapsam: son veri + 60 gün. |
 | LFG (`lfg`, yalnızca `/gundem`) | Aktif ilanlar | Aşağıdaki kurallar. |
+| Öngörü (`predictions`, yalnızca `/gundem`) | Bu sunucunun `prediction` kayıtları | Aşağıdaki kurallar. |
 
 ### LFG
 
@@ -66,6 +67,19 @@ yoktur. Bitmiş etkinlik listeden çıkar; sonuç listesine dönüşmez.
   iddia edilmez).
 - Kontenjan yalnızca **katılanlar**dır ("Belki" ve bekleme listesi sayılmaz): "3/6 kişi" veya "6/6 · Dolu / bekleme listesi".
 - Karta yalnızca oyun adı, saat, kontenjan ve ilan bağlantısı çıkar; katılımcı adı, ayrıntı metni, ses odası yoktur.
+
+### Öngörü
+
+- Yalnızca **açık** (tahmin alıyor) veya **kilitli ama sonuçlanmamış** öngörüler, son tahmin saati bugün veya yarınsa.
+  Son tahmin saati olmayan açık öngörü bugünün **"Şu an açık öngörüler"** bölümündedir. Saati olmayan kilitli öngörü,
+  sonuçlanmış, iptal edilmiş, yarım kalmış veya henüz yayınlanmakta olan öngörü listede **yoktur** (sonuç ima edilmez).
+- Satırda başlık, son tahmin saati ve durum: "🟢 Son tahmin saati", "🟢 Tahminler açık" veya "🔒 Tahminler kapandı ·
+  sonuç bekleniyor". Son tahmin saati geçtiyse modül tahmin almadığı için kilit işi henüz çalışmamış olsa da "kapandı" yazar.
+- **Gösterilmez:** seçenekler ve oranlar, kazanan seçenek, kazanan sayısı, katılım sayısı, coin tutarları, kimin ne
+  tahmin ettiği, cüzdanlar, sıralama, kurallar, oluşturan kişi.
+- Bağlantı öngörünün kendi kartıdır; kart Discord'da silinmiş (`CardMissing`) veya saklama süresi sonunda kaldırılmışsa
+  (`CardRemovedAt`) bağlantı verilmez. Öngörünün kanalı LFG ile aynı kanal kuralına tabidir. Tek seferde en fazla 100 öngörü
+  okunur; aşılırsa veri durumunda sayı vermeden "liste eksik olabilir" yazar.
 
 **Herkese açık hedef kuralı:** kart kanaldaki herkese açık olduğu için ilan yalnızca şu durumlarda gösterilir:
 

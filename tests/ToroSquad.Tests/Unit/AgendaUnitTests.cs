@@ -107,8 +107,8 @@ public sealed class AgendaUnitTests
         AgendaOptions.Period(null).Should().Be(AgendaPeriod.SevenDays);
         AgendaOptions.Period("14-gun").Should().Be(AgendaPeriod.FourteenDays);
         foreach (var sport in Enum.GetValues<AgendaSport>())
-            AgendaOptions.Kinds(AgendaView.Agenda, sport).Should().NotContain(AgendaKind.Lfg);
-        AgendaOptions.Kinds(AgendaView.Digest, AgendaSport.All).Should().Equal(AgendaKind.Formula1, AgendaKind.Esports, AgendaKind.Volleyball, AgendaKind.Lfg);
+            AgendaOptions.Kinds(AgendaView.Agenda, sport).Should().NotContain(AgendaKind.Lfg).And.NotContain(AgendaKind.Predictions);
+        AgendaOptions.Kinds(AgendaView.Digest, AgendaSport.All).Should().Equal(AgendaKind.Formula1, AgendaKind.Esports, AgendaKind.Volleyball, AgendaKind.Lfg, AgendaKind.Predictions);
         AgendaOptions.Kinds(AgendaView.Agenda, AgendaSport.Cs2).Should().Equal(AgendaKind.Esports);
     }
 
@@ -248,7 +248,7 @@ public sealed class AgendaUnitTests
         vb.Calls.Should().Be(0, "a module that is off in the guild is not read, whatever its cache holds");
         snapshot.Sources.Select(s => (s.Kind, s.Result.State)).Should().Equal(
             (AgendaKind.Formula1, AgendaSourceState.Failed), (AgendaKind.Esports, AgendaSourceState.Ready),
-            (AgendaKind.Volleyball, AgendaSourceState.Disabled), (AgendaKind.Lfg, AgendaSourceState.Ready));
+            (AgendaKind.Volleyball, AgendaSourceState.Disabled), (AgendaKind.Lfg, AgendaSourceState.Ready), (AgendaKind.Predictions, AgendaSourceState.Disabled));
         snapshot.Days.SelectMany(d => d.Items).Select(i => i.SourceId).Should().Equal("m1");
     }
 
@@ -668,6 +668,52 @@ public sealed class AgendaUnitTests
 
         ids[0].Should().HaveCount(10).And.OnlyContain(id => id.StartsWith("bugün ", StringComparison.Ordinal), "7/14 days are not squeezed onto page 1");
         pages[1].Should().Contain("**Yarın**");
+    }
+
+    // ---------------------------------------------------------------- predictions
+
+    [Fact]
+    public void A_prediction_closes_at_its_closing_time_and_one_without_a_closing_time_is_open_now()
+    {
+        var now = TestHost.T0;
+        AgendaService.Normalize(Item(AgendaKind.Predictions, "p", now.AddMinutes(-1), AgendaStatus.EntriesOpen), AgendaSourceState.Ready, now)
+            .Status.Should().Be(AgendaStatus.EntriesClosed, "no entry is taken after the closing time, whether the sweep ran or not");
+        AgendaService.Normalize(Item(AgendaKind.Predictions, "p", now.AddMinutes(1), AgendaStatus.EntriesOpen), AgendaSourceState.Stale, now)
+            .Status.Should().Be(AgendaStatus.EntriesOpen);
+
+        var days = AgendaCalendar.Days(now, Zone("Europe/Istanbul"), 0, 2);
+        var groups = AgendaService.Group(
+        [
+            Item(AgendaKind.Predictions, "no-deadline", null, AgendaStatus.EntriesOpen),
+            Item(AgendaKind.Lfg, "lfg-now", null, AgendaStatus.LookingNow),
+            Item(AgendaKind.Predictions, "closing-tomorrow", TomorrowStart.AddHours(5), AgendaStatus.EntriesOpen),
+            Item(AgendaKind.Predictions, "locked-no-time", null, AgendaStatus.EntriesClosed),
+        ], days, now);
+
+        groups[0].Now.Select(i => i.SourceId).Should().Equal("lfg-now", "no-deadline");
+        groups[1].Items.Select(i => i.SourceId).Should().Equal("closing-tomorrow");
+        groups.SelectMany(g => g.Now.Concat(g.Items)).Should().NotContain(i => i.SourceId == "locked-no-time", "a closed prediction without a time has no place");
+    }
+
+    [Fact]
+    public void Predictions_render_as_open_or_closed_with_their_own_heading_and_never_an_outcome()
+    {
+        var now = TestHost.T0;
+        var card = Renderer().Render(Snapshot(
+        [
+            Item(AgendaKind.Predictions, "a", null, AgendaStatus.EntriesOpen, title: "Derbi kim kazanır?", link: AgendaLink.ToCard(new ChannelId(5), new MessageId(61))),
+            Item(AgendaKind.Predictions, "b", now.AddHours(2), AgendaStatus.EntriesOpen, title: "İlk golü kim atar?"),
+            Item(AgendaKind.Predictions, "c", now.AddHours(-1), AgendaStatus.EntriesClosed, title: "Maçta kaç gol olur?"),
+            Item(AgendaKind.Lfg, "l", null, AgendaStatus.LookingNow, title: "Valheim"),
+        ], AgendaView.Digest, new AgendaSourceView(AgendaKind.Predictions, new AgendaSourceResult(AgendaSourceState.Ready, []), false)), 0);
+        var text = Text(card);
+
+        text.Should().Contain("👥 Şimdi ekip arayanlar\n👥 **LFG · Valheim**");
+        text.Should().Contain("🔮 Şu an açık öngörüler\n🔮 **Öngörü · Derbi kim kazanır?**\n🟢 Tahminler açık · [Kartı aç](https://discord.com/channels/900/5/61)");
+        text.Should().MatchRegex(@"🔮 \*\*Öngörü · İlk golü kim atar\?\*\*\n<t:\d+:f> · <t:\d+:R> · 🟢 Son tahmin saati");
+        text.Should().MatchRegex(@"🔮 \*\*Öngörü · Maçta kaç gol olur\?\*\*\n<t:\d+:f> · <t:\d+:R> · 🔒 Tahminler kapandı · sonuç bekleniyor");
+        text.Should().Contain("🔮 Öngörü: bu sunucunun açık öngörüleri; sonuç gösterilmez");
+        text.Should().NotContainAny("Coin", "kazandı", "/f1", "/esports", "/volleyball");
     }
 
     [Fact]
