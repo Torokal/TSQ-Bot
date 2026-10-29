@@ -29,7 +29,7 @@ Modüllerin yönetici işlemleri **alt komutu ve alt komut grubu olmayan** tek b
 
 | Seçenek | Tür | Ne işe yarar |
 |---|---|---|
-| `modul` | metin, zorunlu, autocomplete | `birthday`, `esports`, `f1`, `lfg`, `live`, `news`, `updates`, `volleyball` ("Haberler — news" gibi Türkçe etiketle önerilir) |
+| `modul` | metin, zorunlu, autocomplete | `birthday`, `esports`, `f1`, `letterboxd`, `lfg`, `live`, `news`, `updates`, `volleyball` ("Haberler — news" gibi Türkçe etiketle önerilir) |
 | `islem` | metin, zorunlu, autocomplete | Yalnızca seçili modülün, çağıranın yetkisinin yettiği işlemleri önerilir; modül seçilmeden öneri yoktur |
 | `kanal` | kanal seçici (metin/duyuru), isteğe bağlı | Kanal isteyen işlemler (`configure`, `channel`, `configure-channel`) |
 | `uye` | kullanıcı seçici, isteğe bağlı | `birthday set/show` |
@@ -321,6 +321,18 @@ Add Reactions ve Administrator gerekmez. Ayrıntı: [predictions/TSQ_PREDICTIONS
 
 Tüm cevaplar ephemeral. Komutlar modül kapalıyken de çalışır. Elle haber/bağlantı komutu yoktur. Ayrıntı:
 [news/TSQ_NEWS.md](news/TSQ_NEWS.md).
+
+## TSQ Letterboxd (`/tsq-admin modul:letterboxd`, ManageGuild + sunucu tarafı `Authorize.Require`)
+
+| Komut | Ne yapar |
+|---|---|
+| `/tsq-admin modul:letterboxd islem:configure kanal:` | Kart kanalı (View Channel + Send Messages + Embed Links; Read Message History isteğe bağlı); yalnızca bundan sonraki kayıtlar |
+| `/tsq-admin modul:letterboxd islem:pause` / `resume` | Gönderimi duraklatır / sürdürür (aradaki dönem telafi edilmez) |
+| `/tsq-admin modul:letterboxd islem:preview` | Kart alacak son gerçek kaydın veya açıkça sentetik örneğin kartını yalnızca yöneticiye gösterir |
+| `/tsq-admin modul:letterboxd islem:status` · `doctor` | Hesap, mod, modül, kanal/izinler, RSS sonucu ve sıradaki kontrol, baseline, kapsama boşluğu, yetenekler (bağımsız puan BLOCKED), kısmi kapsam |
+
+Tüm cevaplar ephemeral. Komutlar modül kapalıyken de çalışır. Elle kayıt paylaşma veya başka hesap izleme komutu yoktur.
+Ayrıntı: [letterboxd/TSQ_LETTERBOXD.md](letterboxd/TSQ_LETTERBOXD.md).
 
 ## TSQ Bot Updates — oyun güncellemeleri (`/tsq-admin modul:updates`, ManageGuild + sunucu tarafı `Authorize.Require`)
 

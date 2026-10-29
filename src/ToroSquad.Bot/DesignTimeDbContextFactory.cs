@@ -6,6 +6,7 @@ using ToroSquad.Modules.Birthday.Persistence;
 using ToroSquad.Modules.Esports.Persistence;
 using ToroSquad.Modules.Formula1.Persistence;
 using ToroSquad.Modules.Giveaway.Persistence;
+using ToroSquad.Modules.Letterboxd.Persistence;
 using ToroSquad.Modules.Lfg.Persistence;
 using ToroSquad.Modules.Live.Persistence;
 using ToroSquad.Modules.News.Persistence;
@@ -22,7 +23,7 @@ namespace ToroSquad.Bot;
 /// </summary>
 public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<ToroDbContext>
 {
-    public static IReadOnlyList<IModelContributor> AllContributors() => [new EsportsModelContributor(), new Formula1ModelContributor(), new VolleyballModelContributor(), new LiveModelContributor(), new LfgModelContributor(), new BirthdayModelContributor(), new GiveawayModelContributor(), new PredictionsModelContributor(), new NewsModelContributor(), new UpdatesModelContributor(), new SorModelContributor()];
+    public static IReadOnlyList<IModelContributor> AllContributors() => [new EsportsModelContributor(), new Formula1ModelContributor(), new VolleyballModelContributor(), new LiveModelContributor(), new LfgModelContributor(), new BirthdayModelContributor(), new GiveawayModelContributor(), new PredictionsModelContributor(), new NewsModelContributor(), new UpdatesModelContributor(), new SorModelContributor(), new LetterboxdModelContributor()];
 
     public ToroDbContext CreateDbContext(string[] args)
     {
