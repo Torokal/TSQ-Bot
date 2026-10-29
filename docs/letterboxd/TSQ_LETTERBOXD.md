@@ -15,7 +15,7 @@ Varsayılan: `Letterboxd:Mode=Off`, modül her sunucuda kapalı, kanal yok. Kana
 
 ## Kaynak doğrulaması (2026-10-29, yerel ağ, salt-okuma)
 
-Railway ağı **NOT_VERIFIED**. Yerelde birkaç salt-okuma isteği: RSS (curl + .NET istemcisi `letterboxd check`, 2 istek),
+Railway ağından erişim sonradan canlıda doğrulandı (aşağıda "Canlı durum"). Yerelde birkaç salt-okuma isteği: RSS (curl + .NET istemcisi `letterboxd check`, 2 istek),
 robots.txt, iki herkese açık kayıt sayfası (yalnız viewing id kanıtı için, bir kez), bir poster `HEAD`, resmî API erişim
 sayfası ve Kullanım Şartları (2026-10-29, ikinci kontrol). Erişim engeli olan sayfalar (aşağıda 403) zorlanmadı.
 
@@ -36,8 +36,8 @@ profili. Namespace'ler: `https://letterboxd.com`, `https://themoviedb.org`.
 
 **Kimlik:** guid'deki sayı **viewing id**'dir: inceleme sayfasında `viewing-1400163932`, rewatch sayfasında
 `viewing-1548125398` olarak görülür. Bu yüzden `watch-N` → `review-N` dönüşümü aynı kayıttır (önek kırpma değil, aynı
-sayının ikisinde de viewing id olduğu kanıtı). Dönüşümün kendisi canlı olarak **gözlenmedi** (NOT_VERIFIED); testler bu
-kurala göre yazıldı. Film kimliği (slug, TMDB id) kayıt kimliği değildir; başlık hiçbir zaman kimlik değildir.
+sayının ikisinde de viewing id olduğu kanıtı). Dönüşüm 2026-10-29'da canlıda da **gözlendi**: üyenin mevcut bir izleme
+kaydına eklediği inceleme aynı viewing id ile geldi, yeni kayıt açılmadı ve tek inceleme kartı gönderildi (aşağıda). Film kimliği (slug, TMDB id) kayıt kimliği değildir; başlık hiçbir zaman kimlik değildir.
 
 **Pencere:** 2026-10-29 kontrolünde bu hesabın akışı en yeni **50** öğeyi verdi (en eskisi 2025-09-26). Bu, o kontrolde
 **gözlenen** penceredir; Letterboxd'un tüm hesaplar ve gelecek için verdiği bir garanti değildir. Modül pencereyi her
@@ -57,8 +57,8 @@ challenge'ı (403 "Just a moment…") döndürdü; aşılmadı. `letterboxd.com/
 - Bu nedenle RSS ile otomatik paylaşım, Letterboxd'un **kendi belgelerinde tarif ettiği bir kullanımdır** — HLTV'deki
   "RSS'e dair hiçbir resmî ifade yok" durumuyla aynı değildir.
 - Sınırlar: bu **HTML sayfalarını tarama izni değildir** (Kullanım Şartları 6.11 otomatik toplamayı, açık izin olmadıkça
-  yasaklar); TSQ için **özel bir onay veya hukukî uygunluk garantisi değildir**; Railway erişimi ve gerçek Discord teslimi
-  hâlâ **NOT_VERIFIED**; günlükten bağımsız puanlama hâlâ **BLOCKED**. Canlıya almak sahibinin kararıdır.
+  yasaklar); TSQ için **özel bir onay veya hukukî uygunluk garantisi değildir**; günlükten bağımsız puanlama hâlâ **BLOCKED**.
+  Canlıya alma sahibinin kararıyla yapıldı (2026-10-29).
 - Yapılmayanlar: HTML sayfası, `/by/` sıralama yolları, film/liste/puan sayfaları, API, görsel indirme, challenge/çerez,
   tarayıcı taklidi, proxy, üçüncü taraf ayna.
 
@@ -175,20 +175,30 @@ Ayrı `/letterboxd-admin` kökü yoktur. Komut manifesti değişmez (yalnız `mo
 Discord senkronu gerekmez. CLI: `dotnet run --project src/ToroSquad.Bot -- letterboxd check` (salt-okuma; DB yok, gönderim yok,
 inceleme metni yazdırılmaz).
 
-## Canlıya alma (sahibinin onayıyla — bu görevde yapılmadı)
+## Canlı durum (2026-10-29, saatler İstanbul, UTC+3)
 
-1. Merge + deploy (migration `LetterboxdModule`: yalnız 4 yeni tablo + 1 indeks).
-2. `TOROSQUAD_Letterboxd__Mode=DryRun` (önce) → `/tsq-admin modul:letterboxd islem:configure kanal:<689861386108665941>` →
-   `/modules enable letterboxd` → `islem:doctor` (Railway→RSS sonucu, baseline).
-3. Kısmi kapsam kabul edilirse `Live`.
+Sahibinin onayıyla, kısmi kapsam bilinerek doğrudan `Live`'a alındı (DryRun ara adımı atlandı).
+
+| Saat | Olay | Kanıt | Durum |
+|---|---|---|---|
+| 14:35 | PR #77 merge (`6d6fce6`), Railway deploy `e0e833f2` | Başlangıç logu: migration uygulandı, manifest değişmedi (31 komut) | VERIFIED_LIVE |
+| 14:40 | `TOROSQUAD_Letterboxd__Mode=Live` → deploy `f06003d0`; mod etkinleşmesi 14:40:36 | Temiz başlangıç, "Letterboxd is off" satırı yok | VERIFIED_LIVE |
+| 14:52–14:53 | Sahibi `configure` (kanal `689861386108665941`) + `/modules enable letterboxd` | AdminRouter logu | VERIFIED_LIVE |
+| 14:57:07 | Railway'den ilk RSS okuması: baseline, 50 kayıt, kart yok | "letterboxd baseline with 50 feed entries" | VERIFIED_LIVE |
+| 15:12:07 | Sahibi mevcut Hope kaydına inceleme ekledi → aynı viewing id (`1559817559`), "0 new", `card=Review` | Planner logu | VERIFIED_LIVE |
+| 15:12:12 | Kart kanala teslim edildi; sahibi kanalda doğru göründüğünü onayladı | Outbox logu + sahibinin gözlemi | VERIFIED_LIVE |
+
+Henüz canlıda görülmeyenler: gönderilmiş bir kartın sonradan düzenlenmesi (aynı mesajın edit'i), puansız rewatch kartı,
+yalnız puanlı kayıt kartı, 429/403 gibi kaynak hataları, olası kapsama boşluğu uyarısı. Geri dönüş: Railway'de
+`TOROSQUAD_Letterboxd__Mode=Off` (kuyruktakiler iptal edilir) veya `/modules disable letterboxd`.
 
 ## Bilinen sınırlar
 
 - **Günlükten bağımsız puan ve değişimi: BLOCKED.** Snapshot yöntemi (profil film listesi) erişim dayanağı olmadığı için
   uygulanmadı; uygulansa bile iki kontrol arasında eski değere dönen hareketleri ve gerçek işlem zamanını veremezdi.
 - Akış penceresi (gözlenen: 50 öğe) aşılırsa aradakiler RSS ile geri getirilemez (olası boşluk raporlanır).
-- `watch-N → review-N` dönüşümü kimlik kanıtına dayanır (guid sayısı = sayfadaki `viewing-N`), canlı **gözlenmedi**;
-  testlerdeki dönüşüm sentetiktir. Hesapta test verisi oluşturulmadı.
+- `watch-N → review-N` dönüşümü bir kez canlıda gözlendi (yukarıda); bu tek bir gözlemdir, her durum için garanti
+  değildir. Diğer dönüşümler (ör. inceleme silinmesi) yalnız sentetik testlerle denenmiştir.
 - Bir modun ilk okumasında bilinen kayıttaki değişikliğin zamanı belirlenemez (yukarıda): yeni kart açmaz.
 - Pencereden çıkmış bir kayda yapılan düzenleme görülmez.
-- Railway ağından erişim ve ilk gerçek kart **NOT_VERIFIED**.
+- Gönderilmiş kartın canlıda düzenlenmesi henüz gözlenmedi (yalnız çevrimdışı test edildi).

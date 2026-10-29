@@ -663,7 +663,7 @@ invite link and no global command registration. The source code is public under 
 - **NOT_VERIFIED:** Railway-network access, an RSS-specific usage permission in HLTV's terms, HLTV team id 11861, a live card.
 - Off by default (`News:Mode=Off`); merge, deploy, command sync, channel and live posting await the owner's approval.
 
-## TSQ Letterboxd (new, 2026-10-29, branch `feat/letterboxd`, committed locally — not pushed, no PR, not deployed)
+## TSQ Letterboxd (new, 2026-10-29, PR #77 merged `6d6fce6`, LIVE since 2026-10-29)
 
 - **IMPLEMENTED / TESTED_OFFLINE:** member RSS reader (hardened XML, no redirects/cookies, bounded body, every failure class
   kept apart incl. 200 HTML challenge pages), entry identity = viewing id (watch → review keeps it), cards for reviews,
@@ -675,15 +675,22 @@ invite link and no global command registration. The source code is public under 
   watermark, `/tsq-admin modul:letterboxd`, `letterboxd check` CLI.
 - **Real source (local network, 2026-10-29):** feed read and parsed by the .NET client (50/50 entries; World War Z = unrated,
   unreviewed rewatch); the official API access page (read) points to the profile RSS of "diary entries, reviews and lists"
-  and grants no API access to personal projects. Railway network, a live card and the watch → review transition are
-  **NOT_VERIFIED**.
+  and grants no API access to personal projects.
+- **VERIFIED_LIVE (2026-10-29, Istanbul time):** deploy `e0e833f2` (migration applied, manifest unchanged, no sync) and
+  `f06003d0` with `TOROSQUAD_Letterboxd__Mode=Live` (mode active 14:40:36); owner configured channel
+  `689861386108665941` and enabled the module; first Railway→RSS read 14:57:07 = baseline of 50 entries, nothing posted;
+  15:12:07 the owner's review added to an existing entry kept the viewing id ("0 new", one review card) — the watch →
+  review transition observed live; delivered 15:12:12, the owner confirmed the card in the channel.
+- **NOT yet seen live:** an edit of a posted card, rewatch-only and rating-only cards, source errors (403/429), the
+  potential-gap warning.
 - **BLOCKED:** standalone ratings and their changes (not in the feed; API not available to personal projects; HTML
   pages not permitted by the Terms of Use). The requested scope is therefore **not complete**.
 - **Gate:** `scripts/Test.ps1 -Repeat 3` — 4187/4187 in all three runs, 0 warnings, format and manifest clean, on the
   working tree that held this module together with the Sor test fix `92ccc2e` (the two commits were not gated separately).
   An earlier run 3 had failed once on the probabilistic Sor session-id assertion that `92ccc2e` replaces.
 - RSS scope ready; the full requested scope is **PARTIAL** (standalone ratings blocked).
-- Off by default (`Letterboxd:Mode=Off`); push, PR, merge, deploy, channel setting and live posting await the owner's approval.
+- Code default stays `Letterboxd:Mode=Off`; production runs `Live` by owner decision (Railway variable). Rollback:
+  `TOROSQUAD_Letterboxd__Mode=Off` or `/modules disable letterboxd`.
 
 ## TSQ Bot Updates — game update notifications (new, 2026-10-05, branch `feat/updates-module`)
 
