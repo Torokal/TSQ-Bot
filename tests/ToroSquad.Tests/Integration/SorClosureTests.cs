@@ -69,7 +69,11 @@ public sealed class SorClosureTests
         first.Should().NotBeNull().And.MatchRegex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
         OpenCodeGo.IsValidSessionId(first).Should().BeTrue();
         kit.Ai.Requests[1].SessionId.Should().Be(first, "the same conversation");
-        first.Should().NotContain(A.ToString(System.Globalization.CultureInfo.InvariantCulture)).And.NotContain(SorKit.Guild.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        // The header is exactly SorSession.For(stored row id, stored random stamp); that helper takes no member or guild id.
+        // (The former substring check against the short test ids failed by chance whenever the hex digits contained "101".)
+        var conversation = await kit.InScopeAsync(sp => sp.GetRequiredService<ToroDbContext>().Set<SorConversationEntity>().AsNoTracking()
+            .SingleAsync(c => c.OwnerUserId == A && c.GuildId == SorKit.Guild.Value));
+        first.Should().Be(SorSession.For(conversation.Id, conversation.Stamp));
 
         await using (var restarted = await SorKit.CreateAsync(directory: kit.Host.Directory))
         {

@@ -663,6 +663,28 @@ invite link and no global command registration. The source code is public under 
 - **NOT_VERIFIED:** Railway-network access, an RSS-specific usage permission in HLTV's terms, HLTV team id 11861, a live card.
 - Off by default (`News:Mode=Off`); merge, deploy, command sync, channel and live posting await the owner's approval.
 
+## TSQ Letterboxd (new, 2026-10-29, branch `feat/letterboxd`, committed locally — not pushed, no PR, not deployed)
+
+- **IMPLEMENTED / TESTED_OFFLINE:** member RSS reader (hardened XML, no redirects/cookies, bounded body, every failure class
+  kept apart incl. 200 HTML challenge pages), entry identity = viewing id (watch → review keeps it), cards for reviews,
+  rated entries and rewatches (also unrated + unreviewed), no card for an unrated first watch, one card per entry,
+  silent edits for rating/rewatch/review changes, first card when a card-less entry gains a review/rating/rewatch,
+  member-action vs metadata changes, baseline, mode activation persisted before the first request (entries dated after
+  it are never swallowed by a late first read), identity-conflict rejection, stale-source vs potential-gap warnings,
+  pause/resume, channel and account checks at delivery, atomic rounds, retention with
+  watermark, `/tsq-admin modul:letterboxd`, `letterboxd check` CLI.
+- **Real source (local network, 2026-10-29):** feed read and parsed by the .NET client (50/50 entries; World War Z = unrated,
+  unreviewed rewatch); the official API access page (read) points to the profile RSS of "diary entries, reviews and lists"
+  and grants no API access to personal projects. Railway network, a live card and the watch → review transition are
+  **NOT_VERIFIED**.
+- **BLOCKED:** standalone ratings and their changes (not in the feed; API not available to personal projects; HTML
+  pages not permitted by the Terms of Use). The requested scope is therefore **not complete**.
+- **Gate:** `scripts/Test.ps1 -Repeat 3` — 4187/4187 in all three runs, 0 warnings, format and manifest clean, on the
+  working tree that held this module together with the Sor test fix `92ccc2e` (the two commits were not gated separately).
+  An earlier run 3 had failed once on the probabilistic Sor session-id assertion that `92ccc2e` replaces.
+- RSS scope ready; the full requested scope is **PARTIAL** (standalone ratings blocked).
+- Off by default (`Letterboxd:Mode=Off`); push, PR, merge, deploy, channel setting and live posting await the owner's approval.
+
 ## TSQ Bot Updates — game update notifications (new, 2026-10-05, branch `feat/updates-module`)
 
 - **IMPLEMENTED / TESTED_OFFLINE:** generic game-update module (game definition + provider + classifier), Steam news

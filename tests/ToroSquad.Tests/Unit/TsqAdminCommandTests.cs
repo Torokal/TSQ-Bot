@@ -105,7 +105,7 @@ public sealed class TsqAdminCommandTests
     ];
 
     /// <summary>Admin modules that were added to <c>/tsq-admin</c> directly (never an old "-admin" root).</summary>
-    private static readonly string[] AddedLater = ["updates", "sor"];
+    private static readonly string[] AddedLater = ["updates", "sor", "letterboxd"];
 
     // ================================================================== A. command shape
 
@@ -215,7 +215,7 @@ public sealed class TsqAdminCommandTests
         await using var host = await TestHost.CreateAsync();
         var service = await ServiceAsync(host);
         (await SuggestAsync(host, service, "modul", "", null, CorePermission.ManageGuild)).Select(r => r.Value).Should()
-            .Equal("birthday", "esports", "f1", "lfg", "live", "news", "sor", "updates", "volleyball");
+            .Equal("birthday", "esports", "f1", "letterboxd", "lfg", "live", "news", "sor", "updates", "volleyball");
         (await SuggestAsync(host, service, "modul", "güncelleme", null, CorePermission.ManageGuild)).Should().ContainSingle().Which.Name.Should().Be("Oyun güncellemeleri — updates");
         var news = await SuggestAsync(host, service, "modul", "haber", null, CorePermission.ManageGuild);
         news.Should().ContainSingle().Which.Name.Should().Be("Haberler — news");

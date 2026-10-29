@@ -1259,6 +1259,252 @@ namespace ToroSquad.Bot.Migrations
                     b.ToTable("giveaway_winner", (string)null);
                 });
 
+            modelBuilder.Entity("ToroSquad.Modules.Letterboxd.Persistence.LetterboxdDeliveryEntity", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Account")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ViewingId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("DryRun")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("StagedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("GuildId", "Account", "ViewingId", "DryRun");
+
+                    b.ToTable("letterboxd_delivery", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Letterboxd.Persistence.LetterboxdEntryEntity", b =>
+                {
+                    b.Property<string>("Account")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ViewingId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Baseline")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ContentChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("EligibleAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FilmSlug")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FilmTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("FilmYear")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FirstSeenAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GuidKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("HadReview")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("LastSeenAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MemberHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PosterUrl")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("PublishedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("RatingHalves")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ReviewExcerpt")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ReviewTruncated")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("Rewatch")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("Spoilers")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("TmdbMovieId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("TmdbTvId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("WatchedDate")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Account", "ViewingId");
+
+                    b.HasIndex("LastSeenAt");
+
+                    b.ToTable("letterboxd_entry", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Letterboxd.Persistence.LetterboxdGuildConfigEntity", b =>
+                {
+                    b.Property<long>("GuildId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Account")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChannelProblem")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ChannelProblemAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DryRunSince")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LiveSince")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Paused")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("GuildId");
+
+                    b.ToTable("letterboxd_guild_config", (string)null);
+                });
+
+            modelBuilder.Entity("ToroSquad.Modules.Letterboxd.Persistence.LetterboxdSourceStateEntity", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("BaselineAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("CoverageGapAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ETag")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastAttemptAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LastConflictCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastDeliveryStagedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastDetail")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("LastHttpStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LastItemCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("LastMode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastModified")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("LastNewCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LastOutcome")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LastSkippedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastSuccessAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxItemCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ModeSince")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("NextPollAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("OldestItemPublishedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PrunedBelowViewingId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("TtlMinutes")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("letterboxd_source_state", (string)null);
+                });
+
             modelBuilder.Entity("ToroSquad.Modules.Lfg.Persistence.LfgGuildConfigEntity", b =>
                 {
                     b.Property<long>("GuildId")

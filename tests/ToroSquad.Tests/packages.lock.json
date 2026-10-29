@@ -530,6 +530,7 @@
           "ToroSquad.Modules.Example": "[0.1.0-dev, )",
           "ToroSquad.Modules.Formula1": "[0.1.0-dev, )",
           "ToroSquad.Modules.Giveaway": "[0.1.0-dev, )",
+          "ToroSquad.Modules.Letterboxd": "[0.1.0-dev, )",
           "ToroSquad.Modules.Lfg": "[0.1.0-dev, )",
           "ToroSquad.Modules.Live": "[0.1.0-dev, )",
           "ToroSquad.Modules.News": "[0.1.0-dev, )",
@@ -625,6 +626,16 @@
       "torosquad.modules.giveaway": {
         "type": "Project",
         "dependencies": {
+          "ToroSquad.Core": "[0.1.0-dev, )",
+          "ToroSquad.Discord": "[0.1.0-dev, )",
+          "ToroSquad.Infrastructure": "[0.1.0-dev, )"
+        }
+      },
+      "torosquad.modules.letterboxd": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Http": "[10.0.12, )",
+          "Microsoft.Extensions.Options.ConfigurationExtensions": "[10.0.12, )",
           "ToroSquad.Core": "[0.1.0-dev, )",
           "ToroSquad.Discord": "[0.1.0-dev, )",
           "ToroSquad.Infrastructure": "[0.1.0-dev, )"

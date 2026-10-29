@@ -115,6 +115,11 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   team from the official HLTV RSS feed only — headline, link and publication time, once per article, to one configured
   channel; matching by team name and current players in the RSS headline/description (the full article is never read);
   baseline on first activation, corrections edit the same card, no pings. See [docs/news/TSQ_NEWS.md](docs/news/TSQ_NEWS.md).
+- **TSQ Letterboxd** (separate module, off by default and `Letterboxd:Mode=Off`): one followed Letterboxd member's new
+  reviews, rated diary entries and rewatches (also unrated, unreviewed ones) from the member's official RSS feed — one card
+  per entry, later changes edit the same card, review text always behind a spoiler, no pings. Coverage is **partial**:
+  star ratings given without a diary entry are not in the feed and no permitted source exists. See
+  [docs/letterboxd/TSQ_LETTERBOXD.md](docs/letterboxd/TSQ_LETTERBOXD.md).
 - **TSQ Bot Updates — game update notifications** (separate module, off by default and `Updates:Mode=Off`): one card
   when a followed game publishes an official update / patch notes post — original title, link to the notes and publication
   time, once per update, to one configured channel, no pings. Generic by design (a game is a registered definition with a
@@ -161,6 +166,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
 | TSQ Öngörü | predictions channel: `/ongoru yarat` + card buttons (🎯 Tahmin Yap, 🔒 Kilitle, ✅ Sonuçlandır, ↩️ İptal / İade); commands channel: `/ongoru cuzdan\|gunluk\|tahminlerim\|liderlik`, `/ongoru turnuva durum\|bitir` | create: the creator role; card management buttons: its creator (with the role) or Administrator/owner; end tournament: Administrator/owner; the rest: everyone (module on) |
 | TSQ Doğum Günü admin | `/tsq-admin modul:birthday islem:configure\|status\|doctor`; `/tsq-admin modul:birthday islem:set\|show uye:@member [tarih:14.03]` | Manage Server; `set`/`show`: Administrator or server owner |
 | TSQ Haber admin | `/tsq-admin modul:news islem:configure\|pause\|resume\|preview\|status\|doctor` | Manage Server |
+| TSQ Letterboxd admin | `/tsq-admin modul:letterboxd islem:configure\|pause\|resume\|preview\|status\|doctor` | Manage Server |
 | TSQ Bot Updates admin | `/tsq-admin modul:updates islem:configure\|games\|game-enable\|game-disable\|game-channel\|pause\|resume\|preview\|status\|doctor` | Manage Server |
 
 Every module's admin operations share ONE flat command without subcommands:

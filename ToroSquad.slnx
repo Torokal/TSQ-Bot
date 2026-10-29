@@ -21,6 +21,7 @@
     <Project Path="src/ToroSquad.Modules.Summary/ToroSquad.Modules.Summary.csproj" />
     <Project Path="src/ToroSquad.Modules.Sor/ToroSquad.Modules.Sor.csproj" />
     <Project Path="src/ToroSquad.Modules.Predictions/ToroSquad.Modules.Predictions.csproj" />
+    <Project Path="src/ToroSquad.Modules.Letterboxd/ToroSquad.Modules.Letterboxd.csproj" />
     <Project Path="src/ToroSquad.Modules.News/ToroSquad.Modules.News.csproj" />
     <Project Path="src/ToroSquad.Modules.Updates/ToroSquad.Modules.Updates.csproj" />
     <Project Path="src/ToroSquad.Bot/ToroSquad.Bot.csproj" />

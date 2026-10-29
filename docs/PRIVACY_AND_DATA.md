@@ -112,6 +112,13 @@ TSQ Haber kişisel veri tutmaz: `news_guild_config` (sunucu, kanal, duraklatma, 
 veya görsel yok), `news_delivery` (sunucu + haber + kanal, 365 gün) ve `news_feed_state` (akış durumu ve oyuncu adlarından
 oluşan güncel kadro). `/privacy export/delete` kapsamında kaydı yoktur.
 
+TSQ Letterboxd Discord kullanıcı verisi tutmaz; yapılandırmada adı geçen tek bir herkese açık Letterboxd hesabını izler:
+`letterboxd_guild_config` (sunucu, hesap, kanal, duraklatma, pencere zamanları — kullanıcı ID'si yok), `letterboxd_entry`
+(viewing id, film adı/yılı ve slug/TMDB id, bu kaydın puanı, rewatch, izleme/yayın zamanı, en çok 800 karakterlik inceleme
+alıntısı — akışta son görülmesinden 30 gün sonra silinir —, spoiler işareti, bağlantı, poster adresi; ham XML/HTML, tam
+inceleme veya geçmişi yok), `letterboxd_delivery` (sunucu + kayıt + kanal, 365 gün) ve `letterboxd_source_state` (akış
+durumu). İnceleme metni loglanmaz. `/privacy export/delete` kapsamında kaydı yoktur.
+
 TSQ Bot Updates kişisel veri tutmaz: `updates_guild_config` (sunucu, kanal, duraklatma, pencere zamanları, son planlanan mod
 — kullanıcı ID'si yok), `updates_subscription` (sunucu + oyun, açık/kapalı), `updates_item` (sağlayıcının duyuru kimliği,
 bağlantı, başlık ve varsa sınırlı kart alıntısı — ikisi de 90 gün sonra silinir —, yayın zamanı, sınıflandırma kararı;

@@ -17,6 +17,7 @@ namespace ToroSquad.Tests.Integration;
 public sealed class SorMigrationTests
 {
     public const string BaseMigration = "20261010194800_LiveSessionGames";
+    public const string SorMigration = "20261026160046_SorModule";
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -42,9 +43,8 @@ public sealed class SorMigrationTests
             await db.Database.ExecuteSqlRawAsync(
                 "INSERT INTO guild_settings (GuildId, Language, TimeZoneId, SetupCompleted, UpdatedAt, UpdatedBy) VALUES (4242, 'tr', 'Europe/Istanbul', 1, 0, 1);", Ct);
 
-            await db.Database.MigrateAsync(Ct);
-            (await db.Database.GetPendingMigrationsAsync(Ct)).Should().BeEmpty();
-            db.Database.HasPendingModelChanges().Should().BeFalse();
+            // Up to THIS migration only: later migrations of other modules add their own tables.
+            await migrator.MigrateAsync(SorMigration, Ct);
             var after = await SchemaAsync(db);
             after.Where(o => !o.Name.StartsWith("sor_", StringComparison.Ordinal) && !o.Name.StartsWith("IX_sor_", StringComparison.Ordinal))
                 .Should().Equal(before, "no existing table or index changes");
@@ -54,8 +54,12 @@ public sealed class SorMigrationTests
             after.Single(o => o.Name == "sor_memory").Sql.Should().NotContain("REFERENCES", "a note has no foreign key to a turn or conversation (no cascade)");
             (await db.Database.SqlQueryRaw<long>("SELECT GuildId AS Value FROM guild_settings").ToListAsync(Ct)).Should().Equal(4242L);
 
+            await db.Database.MigrateAsync(Ct);
+            (await db.Database.GetPendingMigrationsAsync(Ct)).Should().BeEmpty();
+            db.Database.HasPendingModelChanges().Should().BeFalse();
+
             await migrator.MigrateAsync(BaseMigration, Ct);
-            (await SchemaAsync(db)).Should().Equal(before, "rolling back removes exactly the Sor tables");
+            (await SchemaAsync(db)).Should().Equal(before, "rolling back removes exactly the Sor tables (and every later migration)");
         }
         finally
         {
