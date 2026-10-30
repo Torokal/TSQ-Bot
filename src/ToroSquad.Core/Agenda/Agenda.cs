@@ -52,6 +52,12 @@ public enum AgendaLinkKind
 
     /// <summary>An official event page outside Discord, already validated by the source module: it may show results.</summary>
     OfficialPage = 3,
+
+    /// <summary>
+    /// A prediction's own card, always in the channel the bot's configuration names for predictions. Linked without a channel
+    /// check: the item itself is shown regardless, and a member who cannot read that channel simply cannot open the link.
+    /// </summary>
+    Prediction = 4,
 }
 
 /// <summary>

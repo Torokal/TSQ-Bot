@@ -513,6 +513,11 @@ invite link and no global command registration. The source code is public under 
   hidden even when the card's channel had the same one. Replaced by containment: shown when every reader of the card's
   channel can read the source channel (Discord's View Channel rule over all role combinations; exact against an exhaustive
   cross-check). Hidden items are logged as `agenda_hidden kind reason count` (no titles or channels).
+- Fix 2 (2026-10-30): live log after the fix above: `agenda_hidden kind=Predictions reason=Closed count=1`, so the
+  predictions channel still counted as narrower than #bot. Predictions no longer use the channel rule at all: they are
+  published only in the configured predictions channel and the game is open to the whole guild. Title and closing time may
+  therefore appear on a card read by a member who cannot read that channel (owner decision); that member cannot open the
+  link. LFG listings and sports card links keep the rule.
 - **IMPLEMENTED / TESTED_OFFLINE**: local days per IANA zone (DST, skipped midnights, month/year ends), one "now", the
   shared status rules (no live from old data or from a passed time), placement (date-only, undated, running since before
   midnight, LFG now/passed), module gates, isolated source failures, staleness/coverage/demo/undated/unverifiable lines,
