@@ -17,9 +17,10 @@ namespace ToroSquad.Modules.Agenda.Application;
 /// "start passed, state not verified" — never a guessed live or finished state;</item>
 /// <item>items are placed on local days by their exact start, or by their known date when the time is unknown; an item
 /// without a date is never placed;</item>
-/// <item>an item tied to a channel's readers (LFG) is shown in another channel only when that channel is provably open to
-/// everyone — otherwise it is dropped without a trace (no title, link or count); the same rule decides whether a card
-/// link may be shown (else the item's official page, else the command hint);</item>
+/// <item>an item tied to a channel's readers (LFG, predictions) is shown in another channel only when everyone who can read
+/// the card's channel can provably read that channel too — otherwise it is dropped without a trace on the card (no title,
+/// link or count); the same rule decides whether a card link may be shown (else the item's official page, else the command
+/// hint);</item>
 /// <item>identity is source + event id (two sessions or two matches with similar titles stay two items).</item>
 /// </list>
 /// Read-only: no provider call, no write, no notification.
@@ -104,7 +105,8 @@ public sealed class AgendaService(
 
     /// <summary>
     /// Channel rules, for items and for links alike: the card's own channel always (whoever reads the card reads that
-    /// channel — the invoker proved it by using the command there), any other channel only when provably open to everyone.
+    /// channel — the invoker proved it by using the command there), any other channel only when everyone who can read the
+    /// card's channel can provably read it too (<see cref="IGuildGateway.GetChannelReachAsync"/>).
     /// An item tied to a channel that fails is dropped silently (a private one leaves no trace; an unchecked one only marks
     /// its source incomplete); a card link that fails gives way to the item's official page, else the command hint.
     /// </summary>
@@ -125,8 +127,12 @@ public sealed class AgendaService(
             {
                 try
                 {
-                    var audience = await guilds.GetChannelAudienceAsync(request.Guild, channel, ct);
-                    reach = !audience.Known ? Reach.Unchecked : audience.IsOpenToEveryone ? Reach.Open : Reach.Closed;
+                    reach = await guilds.GetChannelReachAsync(request.Guild, request.Channel, channel, ct) switch
+                    {
+                        ChannelReach.Contained => Reach.Open,
+                        ChannelReach.NotContained => Reach.Closed,
+                        _ => Reach.Unchecked,
+                    };
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -138,6 +144,8 @@ public sealed class AgendaService(
             return reach;
         }
 
+        var hidden = new Dictionary<(AgendaKind, Reach), int>();
+
         // Earliest first, so a pathological list spends the bound on what the card shows first.
         foreach (var item in items.DistinctBy(i => (i.Kind, i.SourceId))
                      .OrderBy(i => i.StartUtc ?? DateTimeOffset.MinValue).ThenBy(i => i.Kind).ThenBy(i => i.SourceId, StringComparer.Ordinal))
@@ -148,7 +156,10 @@ public sealed class AgendaService(
                 if (reach == Reach.Unchecked)
                     incomplete.Add(item.Kind);
                 if (reach != Reach.Open)
+                {
+                    hidden[(item.Kind, reach)] = hidden.GetValueOrDefault((item.Kind, reach)) + 1;
                     continue;
+                }
             }
 
             if (item.Link is { Channel: { } linked } && await ReachAsync(linked) != Reach.Open)
@@ -157,6 +168,9 @@ public sealed class AgendaService(
                 visible.Add(item);
         }
 
+        // Kind, reason and count only: never a title, a channel or a member.
+        foreach (var ((kind, reach), count) in hidden)
+            logger.LogInformation("agenda_hidden guild={Guild} kind={Kind} reason={Reason} count={Count}", request.Guild, kind, reach, count);
         return (visible, incomplete);
     }
 
