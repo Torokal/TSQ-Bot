@@ -128,24 +128,12 @@ public interface IGuildGateway
     Task<VoiceMoveOutcome> MoveMemberToVoiceAsync(GuildId guild, UserId user, ChannelId channel, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Who can read <paramref name="channel"/>, as far as the gateway cache proves it (no member list is downloaded). Used
-    /// before content of one channel is shown publicly in another: only <see cref="ChannelAudience.IsOpenToEveryone"/> counts.
+    /// Whether everyone who can read <paramref name="reader"/> can also read <paramref name="source"/>, from the gateway
+    /// cache's roles and channel overwrites (no member list, no REST call; <see cref="ChannelReachRules"/>). Used before content
+    /// of one channel is shown publicly in another. A thread reader counts as its parent channel (its readers are a subset);
+    /// a thread source is never proven (private threads). Anything not in the cache is <see cref="ChannelReach.Unknown"/>.
     /// </summary>
-    Task<ChannelAudience> GetChannelAudienceAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken);
-}
-
-/// <summary>
-/// A channel's readership. <see cref="IsOpenToEveryone"/> only when the channel is known, @everyone may view it, no role or
-/// member overwrite takes View Channel away from anyone, it is not a thread (private threads and inherited thread access are
-/// not provable here) and it is not age-restricted. Anything unknown counts as closed.
-/// </summary>
-public sealed record ChannelAudience(bool Known, bool EveryoneCanView, bool Narrowed, bool IsThread, bool IsAgeRestricted)
-{
-    public static ChannelAudience Unknown { get; } = new(false, false, false, false, false);
-
-    public static ChannelAudience Open { get; } = new(true, true, false, false, false);
-
-    public bool IsOpenToEveryone => Known && EveryoneCanView && !Narrowed && !IsThread && !IsAgeRestricted;
+    Task<ChannelReach> GetChannelReachAsync(GuildId guild, ChannelId reader, ChannelId source, CancellationToken cancellationToken);
 }
 
 public enum MemberLookupOutcome

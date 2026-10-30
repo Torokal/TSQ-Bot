@@ -81,23 +81,31 @@ yoktur. Bitmiş etkinlik listeden çıkar; sonuç listesine dönüşmez.
   (`CardRemovedAt`) bağlantı verilmez. Öngörünün kanalı LFG ile aynı kanal kuralına tabidir. Tek seferde en fazla 100 öngörü
   okunur; aşılırsa veri durumunda sayı vermeden "liste eksik olabilir" yazar.
 
-**Herkese açık hedef kuralı:** kart kanaldaki herkese açık olduğu için ilan yalnızca şu durumlarda gösterilir:
+**Kanal kuralı (LFG ve öngörüler):** kart kanaldaki herkese açık olduğu için başka bir kanalın kaydı yalnızca şu
+durumlarda gösterilir:
 
-1. İlan **aynı kanaldadır**, ya da
-2. İlanın kanalı **herkese açık olduğu kanıtlanan** bir kanaldır: @everyone kanalı görebilir, hiçbir rol veya üye
-   izni görmeyi kaldırmaz, kanal bir thread değildir ve yaş sınırlı (NSFW) değildir (`IGuildGateway.GetChannelAudienceAsync`,
-   gateway önbelleğinden; üye listesi indirilmez).
+1. Kayıt **aynı kanaldadır**, ya da
+2. **Kartın kanalını okuyabilen herkes kaydın kanalını da okuyabilir** (`IGuildGateway.GetChannelReachAsync`,
+   `ChannelReachRules`). Gateway önbelleğindeki rol izinleri ve kanalların "Kanalı Görüntüle" ayarlarından Discord'un
+   kuralıyla hesaplanır (üye listesi indirilmez, REST çağrısı yok). Rol kombinasyonlarından biri kartın kanalını okuyup
+   kaydın kanalını okuyamıyorsa kayıt gösterilmez. Üyeye özel bir izin farkı, yaş sınırlı (NSFW) bir kaynak kanal
+   (normal bir kanaldan bakılıyorsa) ve thread kaynakları da gösterilmez. Kartın kanalı bir thread ise üst kanalı esas alınır.
 
-Kanıtlanamayan her ilan (bilinmeyen kanal, gizli kanal, rol/üye kısıtlaması, thread, NSFW, kontrol hatası) kartta **hiç**
+Örnek: Cezalı rolünün göremediği bir öngörü kanalı, Cezalı rolünün de göremediği #bot'tan gösterilir. #bot'u görebilen
+bir rol öngörü kanalını göremiyorsa gösterilmez. Eski kural yalnızca "herkese açık" (hiçbir rol için görme yasağı yok)
+kanalları kabul ediyordu; bu, yasağı olan her kanalı — kartın kanalında aynı yasak olsa bile — gizliyordu.
+
+Kanıtlanamayan her kayıt (bilinmeyen kanal, daha dar okur kitlesi, thread, NSFW, kontrol hatası) kartta **hiç**
 görünmez: başlığı, oyunu, sahibi, bağlantısı ve sayısı dahil. Yönetici olmak bu kuralı aşmaz. Başka sunucunun kaydı
-hiçbir durumda okunmaz.
+hiçbir durumda okunmaz. Bot loguna yalnızca tür, neden ve sayı yazılır (`agenda_hidden kind=… reason=… count=…`);
+başlık veya kanal yazılmaz.
 
 - **Aynı kanal istisnası:** komutun kullanıldığı kanaldaki ilan, o kanal özel olsa bile gösterilir — kartı okuyan herkes
   zaten o kanalı okuyor; komutu kullanan üye kanala erişimini komutu orada kullanarak kanıtlamıştır. Kontrol yapılmaz.
 - **Kontrol bütçesi:** kart başına her farklı kanal **bir kez** kontrol edilir (aynı kanaldaki ikinci ilan veya ilanın
   kendi bağlantısı aynı kararı kullanır). Kontrol gateway önbelleğinden okunur (REST çağrısı yok), bu yüzden sınır 250
   kanaldır — LFG kaynağı tek seferde en fazla 200 ilan okur; sınır yalnızca olağan dışı bir kartı durdurur. Kontroller en
-  erken etkinlikten başlar. Özel kanallar sırada önce gelse de sonraki herkese açık ilan gösterilir.
+  erken etkinlikten başlar. Özel kanallar sırada önce gelse de sonraki uygun ilan gösterilir.
 - **Eksik kapsam:** bir kanal kontrol edilemediyse (önbellekte yok, hata, sınır) veya LFG kaynağı 200 ilan sınırına
   ulaştıysa ilan gösterilmez ve veri durumunda "⚠️ bazı kayıtlar bu kartta doğrulanamadı; liste eksik olabilir" yazar —
   **sayı verilmez** (bazıları özel olabilir); boş gün de "etkinlik yok" yerine "bazı veriler eksik" der. Gizli olduğu
@@ -119,8 +127,9 @@ hiçbir durumda okunmaz.
 - **Eski ve yeni kart:** aynı etkinlik ve aynı kart türü için en yeni gönderim seçilir. En yeni kart silinmiş veya
   kullanılamıyorsa daha eski kart (eski programı gösterebilir) kullanılmaz; sıradaki kart türüne (CS2/voleybol:
   hatırlatma → başlangıç; F1: yarış hatırlatması → hafta sonu programı), sonra resmî sayfaya veya komuta geçilir.
-- **Kanal kuralı:** kart bu kartın kanalında değilse, kartın kanalı LFG ile aynı kurala göre herkese açık olmalıdır. Gizli,
-  rol kısıtlı, thread, NSFW veya artık var olmayan kanaldaki karta bağlanılmaz; yerine resmî sayfa, o da yoksa komut.
+- **Kanal kuralı:** kart bu kartın kanalında değilse, kartın kanalı yukarıdaki kanal kuralını sağlamalıdır (bu kartı
+  okuyan herkes o kanalı da okuyabilmeli). Daha dar okur kitlesi olan, thread, NSFW veya artık var olmayan kanaldaki karta
+  bağlanılmaz; yerine resmî sayfa, o da yoksa komut.
 - **Son bilinen durum:** bağlantı "teslim edilmiş ve silindiği bilinmiyor" demektir, mesajın şu an var olduğunun canlı
   kanıtı değildir. Düzenlenmeden silinen bir mesaj outbox'ta görünmez; böyle bir bağlantı Discord'da "bilinmeyen mesaj"
   açabilir.

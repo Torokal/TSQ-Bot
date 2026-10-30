@@ -62,16 +62,23 @@ public sealed class FakeGuildGateway : IGuildGateway
     public void SetVoiceChannel(GuildId guild, ChannelId channel, VoiceChannelAccess access) => _voice[(guild.Value, channel.Value)] = access;
 
     private readonly ConcurrentDictionary<(ulong Guild, ulong Channel), ChannelAudience> _audiences = new();
+    private readonly ConcurrentDictionary<(ulong Guild, ulong Reader, ulong Source), ChannelReach> _reach = new();
 
-    /// <summary>Who can read a channel (default: unknown, which counts as closed).</summary>
+    /// <summary>Who can read a channel (default: unknown). An open channel is reachable from any reader, a known other one is not.</summary>
     public void SetChannelAudience(GuildId guild, ChannelId channel, ChannelAudience audience) => _audiences[(guild.Value, channel.Value)] = audience;
+
+    /// <summary>The reach between two given channels, overriding what their audiences imply.</summary>
+    public void SetChannelReach(GuildId guild, ChannelId reader, ChannelId source, ChannelReach reach) => _reach[(guild.Value, reader.Value, source.Value)] = reach;
 
     public int AudienceLookups { get; private set; }
 
-    public Task<ChannelAudience> GetChannelAudienceAsync(GuildId guild, ChannelId channel, CancellationToken cancellationToken)
+    public Task<ChannelReach> GetChannelReachAsync(GuildId guild, ChannelId reader, ChannelId source, CancellationToken cancellationToken)
     {
         AudienceLookups++;
-        return Task.FromResult(_audiences.TryGetValue((guild.Value, channel.Value), out var a) ? a : ChannelAudience.Unknown);
+        if (_reach.TryGetValue((guild.Value, reader.Value, source.Value), out var reach))
+            return Task.FromResult(reach);
+        var audience = _audiences.TryGetValue((guild.Value, source.Value), out var a) ? a : ChannelAudience.Unknown;
+        return Task.FromResult(!audience.Known ? ChannelReach.Unknown : audience.IsOpenToEveryone ? ChannelReach.Contained : ChannelReach.NotContained);
     }
 
     public void RemoveVoiceChannel(GuildId guild, ChannelId channel) => _voice.TryRemove((guild.Value, channel.Value), out _);
@@ -120,4 +127,17 @@ public sealed class FakeGuildGateway : IGuildGateway
         return new GuildRoleSnapshot(guild, [everyone, bot, .. extraRoles], 10,
             everyone.Permissions | bot.Permissions, []);
     }
+}
+
+/// <summary>
+/// A simplified description of a channel's readers for <see cref="FakeGuildGateway"/>: <see cref="IsOpenToEveryone"/> when
+/// known, @everyone may view it, nobody is shut out by an overwrite, not a thread and not age-restricted.
+/// </summary>
+public sealed record ChannelAudience(bool Known, bool EveryoneCanView, bool Narrowed, bool IsThread, bool IsAgeRestricted)
+{
+    public static ChannelAudience Unknown { get; } = new(false, false, false, false, false);
+
+    public static ChannelAudience Open { get; } = new(true, true, false, false, false);
+
+    public bool IsOpenToEveryone => Known && EveryoneCanView && !Narrowed && !IsThread && !IsAgeRestricted;
 }

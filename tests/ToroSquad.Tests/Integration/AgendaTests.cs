@@ -10,6 +10,7 @@ using ToroSquad.Core;
 using ToroSquad.Core.Modules;
 using ToroSquad.Core.Notifications;
 using ToroSquad.Core.Roles;
+using ToroSquad.Discord.Guilds;
 using ToroSquad.Infrastructure.Delivery;
 using ToroSquad.Infrastructure.Hosting;
 using ToroSquad.Infrastructure.Persistence;
@@ -761,6 +762,12 @@ public sealed partial class AgendaTests : IAsyncLifetime
         off.Should().Contain("🔮 Öngörü: modül bu sunucuda kapalı").And.NotContain("Öngörü ·");
 
         await SetModuleAsync("predictions", true);
+        // The live layout: a predictions channel that is not open to literally everyone (e.g. a muted role is shut out), but
+        // every reader of this card's channel can read it; and one that some readers of this channel cannot read.
+        ChannelId membersChannel = new(1_200_000_000_000_000_013), staffChannel = new(1_200_000_000_000_000_014);
+        _host.Guilds.SetChannelAudience(Guild, membersChannel, ChannelAudience.Open with { Narrowed = true });
+        _host.Guilds.SetChannelReach(Guild, Here, membersChannel, ChannelReach.Contained);
+        _host.Guilds.SetChannelAudience(Guild, staffChannel, ChannelAudience.Open with { EveryoneCanView = false });
         await _host.InScopeAsync(async sp =>
         {
             var db = sp.GetRequiredService<ToroDbContext>();
@@ -802,6 +809,8 @@ public sealed partial class AgendaTests : IAsyncLifetime
                 P("Öbür gün", PredictionStatus.Open, T0.AddHours(50), 9310),
                 P("Elle kilitlenmiş saatsiz", PredictionStatus.Locked, null, 9311),
                 P("Gizli kanal sorusu", PredictionStatus.Open, T0.AddHours(4), 9312, HiddenChannel),
+                P("Üye kanalı sorusu", PredictionStatus.Open, T0.AddHours(5), 9314, membersChannel),
+                P("Yönetim kanalı sorusu", PredictionStatus.Open, T0.AddHours(5), 9315, staffChannel),
                 P("Başka sunucu sorusu", PredictionStatus.Open, T0.AddHours(4), 9313, t: foreign));
             await db.SaveChangesAsync();
             var missing = await db.Set<PredictionEntity>().SingleAsync(x => x.MessageId == 9306);
@@ -830,8 +839,9 @@ public sealed partial class AgendaTests : IAsyncLifetime
         ItemLines(today, "Süresi dolmuş açık soru").Should().Contain("🔒 Tahminler kapandı · sonuç bekleniyor", "the closing time passed: no entries, swept or not");
         ItemLines(tomorrow, "Yarının sorusu").Should().Contain("🟢 Son tahmin saati").And.Contain("/9305)");
         ItemLines(tomorrow, "Kartı silinmiş soru").Should().EndWith("🔒 Tahminler kapandı · sonuç bekleniyor", "a card reported missing is not linked");
+        ItemLines(today, "Üye kanalı sorusu").Should().Contain("/" + membersChannel.Value + "/9314)", "readers of this channel can all read that channel");
         text.Should().NotContainAny("Sonuçlanan soru", "İptal edilen soru", "Yarım kalan soru", "Yayınlanıyor", "Öbür gün", "Elle kilitlenmiş saatsiz",
-            "Gizli kanal sorusu", "Başka sunucu sorusu");
+            "Gizli kanal sorusu", "Yönetim kanalı sorusu", "Başka sunucu sorusu");
         text.Should().NotContainAny("Galatasaray", "Fenerbahçe", "Gizli Yaratıcı", "gizli kural", "1234", "Coin", "/9307)", "/9312)", "/9313)");
         text.Should().Contain("🔮 Öngörü: bu sunucunun açık öngörüleri; sonuç gösterilmez");
 

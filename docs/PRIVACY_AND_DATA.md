@@ -29,8 +29,9 @@ Discord'un kendi CDN/önbellek davranışı ayrıca geçerlidir ([pfp/TSQ_PFP.md
 
 TSQ Ajanda (`/ajanda`, `/gundem`) yeni veri tutmaz: F1, CS2, voleybol, LFG ve Öngörü modüllerinin zaten tuttuğu kayıtları komut
 anında okur ve tek bir kartta gösterir (tablo, dosya, önbellek, sorgu geçmişi yok; bellekte yalnızca kart başına son
-tıklama anı, 3 saniye). LFG ilanı başka bir kanalda yalnızca ilanın kanalı herkese açık olduğu kanıtlanırsa gösterilir;
-gizli, rol kısıtlı, thread veya yaş sınırlı kanaldaki ilan hiçbir iz bırakmadan dışarıda kalır. Öngörülerden yalnızca
+tıklama anı, 3 saniye). LFG ilanı veya öngörü başka bir kanalda yalnızca kartın kanalını okuyabilen herkesin kaydın
+kanalını da okuyabildiği kanıtlanırsa gösterilir; daha dar okur kitlesi olan, thread veya yaş sınırlı kanaldaki kayıt
+hiçbir iz bırakmadan dışarıda kalır. Öngörülerden yalnızca
 başlık, son tahmin saati ve açık/kapalı durumu çıkar; kimin ne tahmin ettiği, coin ve sonuç çıkmaz. Karta katılımcı adı,
 ilan ayrıntısı veya ses odası çıkmaz ([agenda/TSQ_AGENDA.md](agenda/TSQ_AGENDA.md)).
 

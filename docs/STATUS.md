@@ -499,7 +499,8 @@ invite link and no global command registration. The source code is public under 
   never LFG) and `/gundem` (today's rest + tomorrow: sports, LFG and predictions). Off by default (`/modules enable agenda`), no admin
   operations. A view only: no table, migration, worker, configuration, package, provider call, outbox write or AI.
   Sources implement the Core `IAgendaSource` contract in their own modules (F1, esports, volleyball, LFG, predictions);
-  Core's `IGuildGateway` gained `GetChannelAudienceAsync` (who can read a channel, from the gateway cache) for the LFG rule.
+  Core's `IGuildGateway` gained `GetChannelReachAsync` (can everyone who reads the card's channel also read the source
+  channel; `ChannelReachRules` over the gateway cache's roles and overwrites).
 - Released: PR #75 merged `0b35935`, Railway deployment `a60a84de` 2026-10-28 13:32Z (clean startup), guild sync applied
   (`/ajanda`, `/gundem` created, 29 unchanged, no prune; guild has 31 commands). Module still off until the owner enables it.
 - Predictions in `/gundem` (follow-up): `PredictionsAgendaSource` lists this guild's open, or closed but unsettled,
@@ -507,14 +508,20 @@ invite link and no global command registration. The source code is public under 
   title, closing time, open/closed and the card link only — never outcomes, winner, entries, coins, rules or creator; settled,
   cancelled, abandoned and publishing ones are not listed; a missing or removed card is not linked. `/gundem` description
   changed (sync: Update `/gundem`).
+- Fix (2026-10-30): predictions were never shown live. The first channel rule accepted another channel only when it was
+  open to literally everyone (no role or member denied View Channel), so a predictions channel with any such overwrite was
+  hidden even when the card's channel had the same one. Replaced by containment: shown when every reader of the card's
+  channel can read the source channel (Discord's View Channel rule over all role combinations; exact against an exhaustive
+  cross-check). Hidden items are logged as `agenda_hidden kind reason count` (no titles or channels).
 - **IMPLEMENTED / TESTED_OFFLINE**: local days per IANA zone (DST, skipped midnights, month/year ends), one "now", the
   shared status rules (no live from old data or from a passed time), placement (date-only, undated, running since before
   midnight, LFG now/passed), module gates, isolated source failures, staleness/coverage/demo/undated/unverifiable lines,
   esports server filters with fail-closed VRS, the followed volleyball team only, F1 sessions without results or race
   control, links only to Sent non-dry-run cards of this guild and module (programme cards only; newest card of a kind;
-  not when the outbox recorded the message or its channel gone; only in this card's channel or a provably public one,
+  not when the outbox recorded the message or its channel gone; only in this card's channel or one every reader of it can read,
   else the official page or command — the last known delivery state, not a live check), LFG active/full/joined
-  counting and the public-audience rule (same channel or provably open; nothing of a hidden listing leaks), one paged
+  counting and the channel rule (same channel, or every reader of the card's channel can read it; nothing of a hidden
+  listing leaks), one paged
   card within Discord limits with "(devam)" and "➕ N more" lines, /gundem's first page showing both days, one audience
   check per distinct channel (gateway cache, bound 250; an unchecked channel hides its listings and marks LFG incomplete
   without a count), owner-only stateless buttons with 30 min lifetime and
