@@ -78,11 +78,14 @@ yoktur. Bitmiş etkinlik listeden çıkar; sonuç listesine dönüşmez.
 - **Gösterilmez:** seçenekler ve oranlar, kazanan seçenek, kazanan sayısı, katılım sayısı, coin tutarları, kimin ne
   tahmin ettiği, cüzdanlar, sıralama, kurallar, oluşturan kişi.
 - Bağlantı öngörünün kendi kartıdır; kart Discord'da silinmiş (`CardMissing`) veya saklama süresi sonunda kaldırılmışsa
-  (`CardRemovedAt`) bağlantı verilmez. Öngörünün kanalı LFG ile aynı kanal kuralına tabidir. Tek seferde en fazla 100 öngörü
+  (`CardRemovedAt`) bağlantı verilmez.
+- **Kanal kuralı uygulanmaz:** öngörüler üyenin seçtiği bir kanalda değil, yapılandırmanın tek öngörü kanalında
+  (`Predictions:ChannelId`) yayınlanır ve oyun bütün sunucuya açıktır. Bu yüzden başlık ve son tahmin saati, o kanalı
+  göremeyen bir üyenin okuduğu kanaldaki kartta da görünebilir; o üye bağlantıyı açamaz. Tek seferde en fazla 100 öngörü
   okunur; aşılırsa veri durumunda sayı vermeden "liste eksik olabilir" yazar.
 
-**Kanal kuralı (LFG ve öngörüler):** kart kanaldaki herkese açık olduğu için başka bir kanalın kaydı yalnızca şu
-durumlarda gösterilir:
+**Kanal kuralı (LFG ilanları ve spor kartı bağlantıları):** kart kanaldaki herkese açık olduğu için başka bir kanalın kaydı
+yalnızca şu durumlarda gösterilir:
 
 1. Kayıt **aynı kanaldadır**, ya da
 2. **Kartın kanalını okuyabilen herkes kaydın kanalını da okuyabilir** (`IGuildGateway.GetChannelReachAsync`,
@@ -91,8 +94,8 @@ durumlarda gösterilir:
    kaydın kanalını okuyamıyorsa kayıt gösterilmez. Üyeye özel bir izin farkı, yaş sınırlı (NSFW) bir kaynak kanal
    (normal bir kanaldan bakılıyorsa) ve thread kaynakları da gösterilmez. Kartın kanalı bir thread ise üst kanalı esas alınır.
 
-Örnek: Cezalı rolünün göremediği bir öngörü kanalı, Cezalı rolünün de göremediği #bot'tan gösterilir. #bot'u görebilen
-bir rol öngörü kanalını göremiyorsa gösterilmez. Eski kural yalnızca "herkese açık" (hiçbir rol için görme yasağı yok)
+Örnek: Cezalı rolünün göremediği bir LFG kanalındaki ilan, Cezalı rolünün de göremediği #bot'tan gösterilir. #bot'u
+görebilen bir rol o kanalı göremiyorsa gösterilmez. Eski kural yalnızca "herkese açık" (hiçbir rol için görme yasağı yok)
 kanalları kabul ediyordu; bu, yasağı olan her kanalı — kartın kanalında aynı yasak olsa bile — gizliyordu.
 
 Kanıtlanamayan her kayıt (bilinmeyen kanal, daha dar okur kitlesi, thread, NSFW, kontrol hatası) kartta **hiç**

@@ -17,7 +17,7 @@ namespace ToroSquad.Modules.Agenda.Application;
 /// "start passed, state not verified" — never a guessed live or finished state;</item>
 /// <item>items are placed on local days by their exact start, or by their known date when the time is unknown; an item
 /// without a date is never placed;</item>
-/// <item>an item tied to a channel's readers (LFG, predictions) is shown in another channel only when everyone who can read
+/// <item>an item tied to a channel's readers (LFG) is shown in another channel only when everyone who can read
 /// the card's channel can provably read that channel too — otherwise it is dropped without a trace on the card (no title,
 /// link or count); the same rule decides whether a card link may be shown (else the item's official page, else the command
 /// hint);</item>
@@ -162,7 +162,7 @@ public sealed class AgendaService(
                 }
             }
 
-            if (item.Link is { Channel: { } linked } && await ReachAsync(linked) != Reach.Open)
+            if (item.Link is { Kind: not AgendaLinkKind.Prediction, Channel: { } linked } && await ReachAsync(linked) != Reach.Open)
                 visible.Add(item with { Link = item.Fallback, Fallback = null });
             else
                 visible.Add(item);

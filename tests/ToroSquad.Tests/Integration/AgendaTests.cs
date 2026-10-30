@@ -762,8 +762,9 @@ public sealed partial class AgendaTests : IAsyncLifetime
         off.Should().Contain("🔮 Öngörü: modül bu sunucuda kapalı").And.NotContain("Öngörü ·");
 
         await SetModuleAsync("predictions", true);
-        // The live layout: a predictions channel that is not open to literally everyone (e.g. a muted role is shut out), but
-        // every reader of this card's channel can read it; and one that some readers of this channel cannot read.
+        // Listings keep the channel rule: one channel every reader of this card's channel can read although it is not open
+        // to literally everyone (e.g. a muted role is shut out in both), and one some of them cannot read. Predictions do not
+        // use it: they are published only in the channel the configuration names, whatever its overwrites.
         ChannelId membersChannel = new(1_200_000_000_000_000_013), staffChannel = new(1_200_000_000_000_000_014);
         _host.Guilds.SetChannelAudience(Guild, membersChannel, ChannelAudience.Open with { Narrowed = true });
         _host.Guilds.SetChannelReach(Guild, Here, membersChannel, ChannelReach.Contained);
@@ -809,9 +810,11 @@ public sealed partial class AgendaTests : IAsyncLifetime
                 P("Öbür gün", PredictionStatus.Open, T0.AddHours(50), 9310),
                 P("Elle kilitlenmiş saatsiz", PredictionStatus.Locked, null, 9311),
                 P("Gizli kanal sorusu", PredictionStatus.Open, T0.AddHours(4), 9312, HiddenChannel),
-                P("Üye kanalı sorusu", PredictionStatus.Open, T0.AddHours(5), 9314, membersChannel),
-                P("Yönetim kanalı sorusu", PredictionStatus.Open, T0.AddHours(5), 9315, staffChannel),
+                P("Dar kanal sorusu", PredictionStatus.Open, T0.AddHours(5), 9315, staffChannel),
                 P("Başka sunucu sorusu", PredictionStatus.Open, T0.AddHours(4), 9313, t: foreign));
+            db.Set<LfgListingEntity>().AddRange(
+                Listing(membersChannel, "Üye Kanalı Oyunu", T0.AddHours(5), 9401),
+                Listing(staffChannel, "Yönetim Kanalı Oyunu", T0.AddHours(5), 9402));
             await db.SaveChangesAsync();
             var missing = await db.Set<PredictionEntity>().SingleAsync(x => x.MessageId == 9306);
             missing.CardMissing = true;
@@ -839,10 +842,12 @@ public sealed partial class AgendaTests : IAsyncLifetime
         ItemLines(today, "Süresi dolmuş açık soru").Should().Contain("🔒 Tahminler kapandı · sonuç bekleniyor", "the closing time passed: no entries, swept or not");
         ItemLines(tomorrow, "Yarının sorusu").Should().Contain("🟢 Son tahmin saati").And.Contain("/9305)");
         ItemLines(tomorrow, "Kartı silinmiş soru").Should().EndWith("🔒 Tahminler kapandı · sonuç bekleniyor", "a card reported missing is not linked");
-        ItemLines(today, "Üye kanalı sorusu").Should().Contain("/" + membersChannel.Value + "/9314)", "readers of this channel can all read that channel");
-        text.Should().NotContainAny("Sonuçlanan soru", "İptal edilen soru", "Yarım kalan soru", "Yayınlanıyor", "Öbür gün", "Elle kilitlenmiş saatsiz",
-            "Gizli kanal sorusu", "Yönetim kanalı sorusu", "Başka sunucu sorusu");
-        text.Should().NotContainAny("Galatasaray", "Fenerbahçe", "Gizli Yaratıcı", "gizli kural", "1234", "Coin", "/9307)", "/9312)", "/9313)");
+        ItemLines(today, "Dar kanal sorusu").Should().Contain("🟢 Son tahmin saati").And.Contain("/" + staffChannel.Value + "/9315)", "the channel rule does not apply to predictions");
+        ItemLines(today, "Gizli kanal sorusu").Should().Contain("/9312)");
+        ItemLines(today, "Üye Kanalı Oyunu").Should().Contain("/" + membersChannel.Value + "/9401)", "every reader of this channel can read that channel");
+        text.Should().NotContain("Yönetim Kanalı Oyunu").And.NotContain("/9402)", "a listing from a narrower channel stays hidden");
+        text.Should().NotContainAny("Sonuçlanan soru", "İptal edilen soru", "Yarım kalan soru", "Yayınlanıyor", "Öbür gün", "Elle kilitlenmiş saatsiz", "Başka sunucu sorusu");
+        text.Should().NotContainAny("Galatasaray", "Fenerbahçe", "Gizli Yaratıcı", "gizli kural", "1234", "Coin", "/9307)", "/9313)");
         text.Should().Contain("🔮 Öngörü: bu sunucunun açık öngörüleri; sonuç gösterilmez");
 
         (await AllPagesAsync(AgendaView.Agenda)).Should().NotContain("Öngörü", "/ajanda is the sports programme");

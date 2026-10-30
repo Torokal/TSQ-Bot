@@ -76,7 +76,7 @@ global commands yet. See [docs/STATUS.md](docs/STATUS.md).
   `/gundem` is today's rest and tomorrow with sports, LFG listings and open predictions (closing time and open/closed only,
   never an outcome) in one public card. A read-only view over what those
   modules already hold: no provider call, no storage, no results or spoilers; days in the server's time zone, times as
-  Discord timestamps; LFG listings and predictions from another channel only when everyone who can read the card's channel
+  Discord timestamps; LFG listings from another channel only when everyone who can read the card's channel
   can read that channel too; paged in one message.
 - **TSQ Profil Görseli** (separate module, off by default): `/pfp [uye] [tur]` and `/banner [uye] [tur]` show a member's
   avatar or profile banner large in one public card with a "Tam boy aç" link. `uye` is Discord's native member picker

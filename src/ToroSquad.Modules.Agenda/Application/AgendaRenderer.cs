@@ -294,7 +294,7 @@ public sealed class AgendaRenderer(ILocalizer localizer)
         var lang = snapshot.Language;
         if (item.Link is { } link)
         {
-            if (link.Kind is AgendaLinkKind.Card or AgendaLinkKind.Listing && link.Channel is { } channel && link.Message is { } message)
+            if (link.Kind is AgendaLinkKind.Card or AgendaLinkKind.Listing or AgendaLinkKind.Prediction && link.Channel is { } channel && link.Message is { } message)
                 return "[" + L(lang, link.Kind == AgendaLinkKind.Listing ? "agenda.link.listing" : "agenda.link.card") + "](" + JumpUrl(snapshot.Request.Guild, channel, message) + ")";
             if (link.Kind == AgendaLinkKind.OfficialPage && SafeUrl(link.Url) is { } url)
                 return "[" + L(lang, "agenda.link.page") + "](" + url + ")";

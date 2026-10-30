@@ -696,12 +696,29 @@ public sealed class AgendaUnitTests
     }
 
     [Fact]
+    public async Task A_prediction_and_its_card_link_are_kept_whatever_the_channels_overwrites_say()
+    {
+        var now = TestHost.T0;
+        var guilds = new FakeGuildGateway();
+        var channel = new ChannelId(70);
+        guilds.SetChannelReach(Guild, Here, channel, ChannelReach.NotContained);
+        var source = new FakeSource(AgendaKind.Predictions, new ModuleId("predictions"), _ => new AgendaSourceResult(AgendaSourceState.Ready,
+            [Item(AgendaKind.Predictions, "p", now.AddHours(1), AgendaStatus.EntriesOpen, link: AgendaLink.ToCard(channel, new MessageId(71), AgendaLinkKind.Prediction))]));
+
+        var snapshot = await Service([source], guilds: guilds).BuildAsync(Digest(), CancellationToken.None);
+
+        snapshot.Days[0].Items.Single().Link!.Message.Should().Be(new MessageId(71));
+        guilds.AudienceLookups.Should().Be(0, "no channel check for a prediction");
+        snapshot.Sources.Single(s => s.Kind == AgendaKind.Predictions).Unchecked.Should().BeFalse();
+    }
+
+    [Fact]
     public void Predictions_render_as_open_or_closed_with_their_own_heading_and_never_an_outcome()
     {
         var now = TestHost.T0;
         var card = Renderer().Render(Snapshot(
         [
-            Item(AgendaKind.Predictions, "a", null, AgendaStatus.EntriesOpen, title: "Derbi kim kazanır?", link: AgendaLink.ToCard(new ChannelId(5), new MessageId(61))),
+            Item(AgendaKind.Predictions, "a", null, AgendaStatus.EntriesOpen, title: "Derbi kim kazanır?", link: AgendaLink.ToCard(new ChannelId(5), new MessageId(61), AgendaLinkKind.Prediction)),
             Item(AgendaKind.Predictions, "b", now.AddHours(2), AgendaStatus.EntriesOpen, title: "İlk golü kim atar?"),
             Item(AgendaKind.Predictions, "c", now.AddHours(-1), AgendaStatus.EntriesClosed, title: "Maçta kaç gol olur?"),
             Item(AgendaKind.Lfg, "l", null, AgendaStatus.LookingNow, title: "Valheim"),

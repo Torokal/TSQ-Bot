@@ -223,8 +223,8 @@ yalnızca kullanana görünür (ephemeral); cevap ping atmaz. Bot izni gerekmez 
 | `/gundem` | Herkes: bugünün kalanı ve yarın — F1, CS2, voleybol, uygun LFG ilanları ve açık öngörüler (sonuç yok), **herkese açık** tek kart |
 
 Sonuç/puan gösterilmez. Günler sunucunun saat dilimine, saatler okuyucunun yerel saatine göredir. Kaynak modül kapalıysa
-o kaynak okunmaz. Başka kanaldaki LFG ilanı veya öngörü yalnızca bu kanalı okuyabilen herkes o kanalı da okuyabiliyorsa
-gösterilir. Düğmeler (◀ ▶ 🔄) aynı mesajı
+o kaynak okunmaz. Başka kanaldaki LFG ilanı yalnızca bu kanalı okuyabilen herkes o kanalı da okuyabiliyorsa gösterilir;
+öngörüler yapılandırmadaki öngörü kanalından gelir ve bu kurala tabi değildir. Düğmeler (◀ ▶ 🔄) aynı mesajı
 düzenler ve yalnızca komutu kullanan üyeye aittir; uyarılar yalnızca kullanana görünür; cevap ping atmaz. Bot izni
 gerekmez (yalnızca etkileşim cevabı). Yönetici işlemi yok. Veri saklanmaz. Ayrıntı: [agenda/TSQ_AGENDA.md](agenda/TSQ_AGENDA.md).
 
