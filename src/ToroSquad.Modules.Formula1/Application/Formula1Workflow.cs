@@ -145,6 +145,15 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
                     row.ResultsProviderRef = p.Ref;
                 }
 
+                // A re-keyed provider id belongs to this session now; a stale holder must not keep receiving its messages.
+                foreach (var stale in rows.Where(r => r.SessionKey != row.SessionKey))
+                {
+                    if (lifecycle && stale.LifecycleProvider == providerId && stale.LifecycleProviderRef == p.Ref)
+                        stale.LifecycleProviderRef = null;
+                    else if (!lifecycle && stale.ResultsProvider == providerId && stale.ResultsProviderRef == p.Ref)
+                        stale.ResultsProviderRef = null;
+                }
+
                 mapped++;
             }
 
@@ -192,6 +201,13 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
 
             foreach (var e in group.OrderBy(e => e.OccurredAt))
             {
+                if (e.Signal != F1LifecycleSignal.Cancelled && IsTooEarly(row, e.OccurredAt))
+                {
+                    logger.LogWarning("F1 lifecycle: {Signal} for {Session} ignored: provider time {At:u} is too long before the scheduled start {Start:u}",
+                        e.Signal, row.SessionKey, e.OccurredAt, row.ScheduledStartUtc);
+                    continue;
+                }
+
                 if (row.LastLifecycleEventAt is { } last && e.OccurredAt <= last)
                 {
                     logger.LogDebug("F1 lifecycle: duplicate/out-of-order {Signal} for {Session} suppressed", e.Signal, row.SessionKey);
@@ -241,6 +257,53 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
         return applied;
     }
 
+    private bool IsTooEarly(F1SessionSnapshotEntity row, DateTimeOffset occurredAt) =>
+        occurredAt < row.ScheduledStartUtc - TimeSpan.FromMinutes(options.Value.LifecycleEarlyToleranceMinutes);
+
+    /// <summary>
+    /// Self-repair for sessions that were moved by messages of another session (dated long before their own scheduled start):
+    /// they go back to Scheduled and lose those messages, so the listener and reconciliation can track the real session.
+    /// A session with a final classification is left alone.
+    /// </summary>
+    public async Task<int> RepairImplausibleLifecycleAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var from = now - TimeSpan.FromDays(2);
+        var to = now + TimeSpan.FromDays(7);
+        var states = new[] { (int)F1SessionState.Started, (int)F1SessionState.Suspended, (int)F1SessionState.FinishedPendingResults };
+        var rows = (await Sessions.Where(s => states.Contains(s.State) && s.ScheduledStartUtc >= from && s.ScheduledStartUtc <= to).ToListAsync(ct))
+            .Where(r => (r.StartedObservedAt is { } started && IsTooEarly(r, started)) || (r.FinishedObservedAt is { } finished && IsTooEarly(r, finished)))
+            .ToList();
+        if (rows.Count == 0)
+            return 0;
+
+        var keys = rows.Select(r => r.SessionKey).ToList();
+        var incidents = db.Set<F1RaceControlEventEntity>();
+        var history = await incidents.Where(e => keys.Contains(e.SessionKey)).ToListAsync(ct);
+        foreach (var row in rows)
+        {
+            logger.LogWarning("F1 lifecycle: {Session} was {State} from messages dated before its scheduled start {Start:u}; back to Scheduled",
+                row.SessionKey, (F1SessionState)row.State, row.ScheduledStartUtc);
+            row.State = (int)F1SessionState.Scheduled;
+            row.StartedObservedAt = null;
+            row.StartedRecordedAt = null;
+            row.SuspendedObservedAt = null;
+            row.FinishedObservedAt = null;
+            row.LastLifecycleEventAt = null;
+            row.ResumeCount = 0;
+            row.ResultNextAttemptAt = null;
+            row.ResultAttempts = 0;
+            row.UpdatedAt = now;
+            incidents.RemoveRange(history.Where(e => e.SessionKey == row.SessionKey && IsTooEarly(row, e.OccurredAt)));
+        }
+
+        await db.SaveChangesAsync(ct);
+        return rows.Count;
+    }
+
+    public Task<F1SessionSnapshotEntity?> FindSessionAsync(string sessionKey, CancellationToken ct) =>
+        Sessions.AsNoTracking().FirstOrDefaultAsync(s => s.SessionKey == sessionKey, ct);
+
     // ---------------------------------------------------------------- race-control incidents (low-spam V2)
 
     /// <summary>
@@ -254,7 +317,8 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
             return 0;
         var refs = incidents.Select(i => i.ProviderSessionRef).Distinct().ToList();
         var sessions = await Sessions.AsNoTracking().Where(s => s.LifecycleProvider == providerId && refs.Contains(s.LifecycleProviderRef!))
-            .Select(s => new { s.SessionKey, s.LifecycleProviderRef }).ToListAsync(ct);
+            .Select(s => new { s.SessionKey, s.LifecycleProviderRef, s.ScheduledStartUtc }).ToListAsync(ct);
+        var earliest = TimeSpan.FromMinutes(options.Value.LifecycleEarlyToleranceMinutes);
         var keys = sessions.Select(s => s.SessionKey).ToList();
         var set = db.Set<F1RaceControlEventEntity>();
         var known = (await set.AsNoTracking().Where(e => keys.Contains(e.SessionKey)).Select(e => e.SessionKey + "#" + e.Fingerprint).ToListAsync(ct))
@@ -264,7 +328,7 @@ public sealed class Formula1Workflow(ToroDbContext db, IOptions<Formula1Options>
         foreach (var i in incidents)
         {
             var session = sessions.FirstOrDefault(s => s.LifecycleProviderRef == i.ProviderSessionRef);
-            if (session is null || !known.Add(session.SessionKey + "#" + i.Fingerprint))
+            if (session is null || i.OccurredAt < session.ScheduledStartUtc - earliest || !known.Add(session.SessionKey + "#" + i.Fingerprint))
                 continue;
             set.Add(new F1RaceControlEventEntity
             {

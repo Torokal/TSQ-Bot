@@ -68,6 +68,26 @@ public sealed class Formula1Options
     /// <summary>Max provider start-time difference for mapping a provider session onto the schedule (fail closed beyond).</summary>
     public int SessionMatchToleranceHours { get; set; } = 6;
 
+    /// <summary>
+    /// A lifecycle event or incident dated earlier than this before the session's scheduled start belongs to something else
+    /// (OpenF1 has published another session's messages under a future session's key) and is ignored, so it can neither
+    /// start nor finish that session. The schedule refreshes well within this margin when a session really moves.
+    /// </summary>
+    public int LifecycleEarlyToleranceMinutes { get; set; } = 60;
+
+    /// <summary>
+    /// One-off recovery after a missed session: while <see cref="IncidentBackfillUntilUtc"/> has not passed, the red-flag
+    /// history of this session (e.g. "2026-19-race") is read from the provider and its red-flag cards ignore the freshness
+    /// window. Every card is still sent once per phase through the outbox and its gates. Unset in normal operation.
+    /// </summary>
+    public string? IncidentBackfillSessionKey { get; set; }
+
+    public DateTimeOffset? IncidentBackfillUntilUtc { get; set; }
+
+    /// <summary>The session under red-flag backfill at <paramref name="now"/>, or null.</summary>
+    public string? ActiveIncidentBackfill(DateTimeOffset now) =>
+        !string.IsNullOrWhiteSpace(IncidentBackfillSessionKey) && IncidentBackfillUntilUtc is { } until && now < until ? IncidentBackfillSessionKey : null;
+
     /// <summary>Rows shown in the standings section of a result card (full tables: /f1 standings).</summary>
     public int CardStandingsRows { get; set; } = 10;
 
@@ -148,6 +168,9 @@ public sealed class Formula1Options
         Range(nameof(MinResultEntries), MinResultEntries, 1, 30);
         Range(nameof(StandingsSettleWindowMinutes), StandingsSettleWindowMinutes, 5, 1440);
         Range(nameof(SessionMatchToleranceHours), SessionMatchToleranceHours, 1, 24);
+        Range(nameof(LifecycleEarlyToleranceMinutes), LifecycleEarlyToleranceMinutes, 5, 720);
+        if (string.IsNullOrWhiteSpace(IncidentBackfillSessionKey) != IncidentBackfillUntilUtc is null)
+            errors.Add("Formula1:IncidentBackfillSessionKey and Formula1:IncidentBackfillUntilUtc must be set together");
         Range(nameof(CardStandingsRows), CardStandingsRows, 3, 22);
         Range(nameof(WeekendScheduleFromHourUtc), WeekendScheduleFromHourUtc, 0, 23);
         Range(nameof(WeekendScheduleUntilHourUtc), WeekendScheduleUntilHourUtc, 1, 24);
