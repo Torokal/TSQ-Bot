@@ -48,6 +48,7 @@ public sealed class Formula1Poller(
     private DateTimeOffset _nextLifecycleMapping = DateTimeOffset.MinValue;
     private DateTimeOffset _nextResultsMapping = DateTimeOffset.MinValue;
     private DateTimeOffset _nextPlan = DateTimeOffset.MinValue;
+    private DateTimeOffset _nextBackfill = DateTimeOffset.MinValue;
     private int _scheduleFailures;
     private int _standingsFailures;
 
@@ -139,6 +140,7 @@ public sealed class Formula1Poller(
         if (now >= _nextSchedule)
             changed |= await Step("schedule", () => RefreshScheduleAsync(sp, ct));
         changed |= await Step("lifecycle", () => LifecycleAsync(sp, ct));
+        changed |= await Step("incident backfill", () => IncidentBackfillAsync(sp, ct));
         changed |= await Step("results", () => ResultsAsync(sp, ct));
         if (now >= _nextStandings || await workflow.StandingsCheckDueAsync(ct))
             changed |= await Step("standings", () => RefreshStandingsAsync(sp, ct));
@@ -264,8 +266,8 @@ public sealed class Formula1Poller(
     public async Task<bool> LifecycleAsync(IServiceProvider sp, CancellationToken ct)
     {
         var workflow = sp.GetRequiredService<Formula1Workflow>();
+        var changed = await workflow.RepairImplausibleLifecycleAsync(ct) > 0;
         var active = await workflow.ActiveLifecycleSessionsAsync(ct);
-        var changed = false;
         if (active.Count == 0)
         {
             if (listener.IsRunning)
@@ -282,7 +284,8 @@ public sealed class Formula1Poller(
         }
 
         var now = clock.GetUtcNow();
-        if (active.Any(a => a.LifecycleProvider != lifecycle.Id || a.LifecycleProviderRef is null) && now >= _nextLifecycleMapping)
+        // Also for sessions that are already mapped: the provider may re-key a session after we first saw it.
+        if (now >= _nextLifecycleMapping)
         {
             foreach (var season in active.Select(a => a.Season).Distinct())
             {
@@ -331,6 +334,49 @@ public sealed class Formula1Poller(
         return changed;
     }
 
+    /// <summary>
+    /// One-off recovery (<see cref="Formula1Options.IncidentBackfillSessionKey"/>): reads a past session's race-control
+    /// history, whatever its state, so the planner can stage its missed red-flag cards.
+    /// </summary>
+    public async Task<bool> IncidentBackfillAsync(IServiceProvider sp, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        if (options.Value.ActiveIncidentBackfill(now) is not { } key || now < _nextBackfill || !lifecycle.IsConfigured || lifecycle is not IF1RaceControlSource raceControl)
+            return false;
+        _nextBackfill = now + TimeSpan.FromMinutes(5);
+
+        var workflow = sp.GetRequiredService<Formula1Workflow>();
+        if (await workflow.FindSessionAsync(key, ct) is not { } session)
+        {
+            logger.LogWarning("F1 incident backfill: unknown session {Session}", key);
+            return false;
+        }
+
+        var sessions = await SafeAsync(() => lifecycle.GetSessionsAsync(session.Season, ct), now);
+        if (sessions.HasData)
+        {
+            await workflow.MapProviderSessionsAsync(lifecycle.Id, sessions.Value!, lifecycle: true, ct);
+            session = await workflow.FindSessionAsync(key, ct) ?? session;
+        }
+
+        if (session.LifecycleProvider != lifecycle.Id || session.LifecycleProviderRef is not { } reference)
+        {
+            logger.LogWarning("F1 incident backfill: {Session} has no {Provider} session", key, lifecycle.Id);
+            return false;
+        }
+
+        var incidents = await SafeAsync(() => raceControl.GetIncidentsAsync(reference, ct), now);
+        if (!incidents.HasData)
+        {
+            logger.LogWarning("F1 incident backfill {Session}: {Outcome} {Detail}", key, incidents.Outcome, incidents.Detail);
+            return false;
+        }
+
+        var added = await workflow.ApplyIncidentsAsync(lifecycle.Id, incidents.Value!, ct);
+        logger.LogInformation("F1 incident backfill {Session}: {Total} incidents from the provider, {Added} new", key, incidents.Value!.Count, added);
+        return true;
+    }
+
     /// <summary>Applies queued live events (listener) to persisted state.</summary>
     public async Task<bool> ProcessLiveEventsAsync(IServiceProvider sp, CancellationToken ct)
     {
@@ -361,7 +407,7 @@ public sealed class Formula1Poller(
         if (due.Count == 0)
             return false;
         var now = clock.GetUtcNow();
-        if (due.Any(d => d.ResultsProvider != results.Id || d.ResultsProviderRef is null) && now >= _nextResultsMapping)
+        if (now >= _nextResultsMapping)
         {
             foreach (var season in due.Select(d => d.Season).Distinct())
             {

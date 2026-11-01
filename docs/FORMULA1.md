@@ -319,6 +319,16 @@ Sağlayıcı semantiği (gerçek OpenF1 verisinden, 2024–2026; fixture: `tests
   Yarış sonrası karar sınıflandırma düzeltmesi olarak gelir ve yeni diskalifiye edilen araç için bir kart üretir. Gerekçe alanı
   sağlayıcıda yok; kartta sürücü numarası/adı ve zaman gösterilir.
 
+**Erken tarihli mesajlar:** Bir oturumun planlanan başlangıcından **60 dakikadan** daha önce tarihli yaşam döngüsü mesajları ve
+olayları o oturuma işlenmez (`Formula1:LifecycleEarlyToleranceMinutes`; iptal sinyali hariç). Sebep: 2026 Mexico City GP'de
+cumartesi antrenmanının mesajları pazarki yarışın anahtarıyla geldi, yarış bir gün önceden "bitti" sayıldı ve gerçek yarış için
+canlı bağlantı açılmadı. Bu şekilde bozulmuş, henüz son sınıflandırması olmayan bir oturum kendiliğinden `Scheduled` durumuna döner.
+
+**Kaçan kırmızı bayrak kartları (tek seferlik kurtarma):** `Formula1:IncidentBackfillSessionKey` (ör. `2026-19-race`) ve
+`Formula1:IncidentBackfillUntilUtc` birlikte verilirse, o zamana kadar seansın olay geçmişi sağlayıcıdan okunur ve kırmızı bayrak
+kartları tazelik penceresine takılmaz. Kartlar yine outbox'tan, faz başına bir kez ve tüm kapılardan geçerek gider; Safety Car ve
+diğer kartlar kurtarılmaz. İş bitince iki değişken de kaldırılır.
+
 **Canlı olay spoiler gecikmesi:** Safety Car ve kırmızı bayrak kartları, TV/yayın canlı veriden geride kalabildiği için
 Discord'a en erken **sağlayıcının olay zamanı + 70 sn** sonra gider (`Formula1:LiveIncidentSpoilerDelaySeconds`, varsayılan 70 —
 2026-10-26'dan önce 30; 0 = kapalı; alındığı andan değil olay zamanından sayılır, olay bize zaten daha geç ulaştıysa ek bekleme yok).

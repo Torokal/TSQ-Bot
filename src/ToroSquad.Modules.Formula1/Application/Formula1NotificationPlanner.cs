@@ -108,6 +108,8 @@ public sealed class Formula1NotificationPlanner(
         var incidentFrom = now - TimeSpan.FromHours(Math.Max(o.DisqualificationFreshHours, 1));
         var incidentKeys = await db.Set<F1RaceControlEventEntity>().AsNoTracking().Where(e => e.OccurredAt >= incidentFrom)
             .Select(e => e.SessionKey).Distinct().ToListAsync(ct);
+        if (o.ActiveIncidentBackfill(now) is { } backfill && !incidentKeys.Contains(backfill))
+            incidentKeys.Add(backfill);
         List<F1SessionSnapshotEntity> incidentSessions = incidentKeys.Count == 0
             ? []
             : await db.Set<F1SessionSnapshotEntity>().AsNoTracking().Where(s => incidentKeys.Contains(s.SessionKey) && !s.IsBaseline).ToListAsync(ct);
@@ -292,7 +294,9 @@ public sealed class Formula1NotificationPlanner(
 
             if (config.NotifyRedFlag)
             {
-                staged.AddRange(F1IncidentPhases.RedFlagStarts(history).Select(start => (RedFlagPrefix + Ticks(start), start, fresh, spoilerHold,
+                var backfill = session.SessionKey == o.ActiveIncidentBackfill(p.Now);
+                staged.AddRange(F1IncidentPhases.RedFlagStarts(history).Select(start => (RedFlagPrefix + Ticks(start), start,
+                    backfill ? o.IncidentBackfillUntilUtc!.Value - start.OccurredAt : fresh, spoilerHold,
                     renderer.RedFlag(view, start, p.Language, lifecycle.AttributionKey))));
             }
 
