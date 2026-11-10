@@ -10,16 +10,28 @@ namespace ToroSquad.Bot;
 public static partial class Cli
 {
     /// <summary>
-    /// updates check [--game KEY]: READ-ONLY. One request per registered game (or only the named one) to its provider, then
+    /// updates check [--game KEY]: READ-ONLY. One round per registered game (or only the named one) at its provider, then
     /// every post's id, publication time, classification and reason, and title. No post text is printed. Nothing is stored,
     /// staged or sent: a throw-away data directory, fake Discord transport, dry-run delivery, the bot database is never
-    /// opened, and no API key is used.
+    /// opened, and no API key is used. The configuration is bound exactly as the bot binds it (same host builder), so the
+    /// source shown here (id, watched threads) is the one the bot reads. <c>--threads</c> names up to five more threads of a
+    /// provider that follows threads; they are read exactly as the bot reads a followed thread (a thread of a post a recovery
+    /// names is read the same way), so an older announcement can be checked without waiting for it in the newest threads.
     /// </summary>
     private static async Task<int> UpdatesAsync(string[] args)
     {
         if (args.Length == 0 || args[0] != "check")
             return PrintUsage();
         var options = ParseOptions(args.Skip(1).ToArray());
+        var threads = options.TryGetValue("threads", out var listed)
+            ? listed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
+            : [];
+        if (threads.Count > 5 || threads.Any(t => !long.TryParse(t, NumberStyles.None, CultureInfo.InvariantCulture, out var id) || id <= 0))
+        {
+            await Console.Error.WriteLineAsync("--threads takes at most 5 positive thread ids, comma separated");
+            return Usage;
+        }
+
         var temp = Path.Combine(Path.GetTempPath(), "tsq-updates-check-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(temp);
         Environment.SetEnvironmentVariable("TOROSQUAD_Bot__DataDirectory", temp);
@@ -49,10 +61,14 @@ public static partial class Cli
                 var provider = catalog.ProviderOf(game);
                 Console.WriteLine();
                 Console.WriteLine($"Game: {game.DisplayName} ({game.Key}) — provider {provider.DisplayName}, id {game.ProviderGameId}");
-                var result = await provider.FetchAsync(game, CancellationToken.None);
+                var result = threads.Count > 0 && provider.ThreadFollow is not null
+                    ? await provider.FetchAsync(game, new UpdateFetchContext(threads), CancellationToken.None)
+                    : await provider.FetchAsync(game, CancellationToken.None);
                 Console.WriteLine($"Result: {result.Outcome} HTTP {result.HttpStatus?.ToString(CultureInfo.InvariantCulture) ?? "-"}{(result.Detail is null ? "" : " — " + result.Detail)}");
                 if (game.WatchedThreadIds.Count > 0)
                     Console.WriteLine($"Watched threads: {string.Join(", ", game.WatchedThreadIds)}");
+                if (game.OutboxScope is { } scope)
+                    Console.WriteLine($"Card identity: {game.Provider}:{scope}:<post> (stays the same when the source moves)");
                 if (!result.Succeeded)
                 {
                     failed = true;

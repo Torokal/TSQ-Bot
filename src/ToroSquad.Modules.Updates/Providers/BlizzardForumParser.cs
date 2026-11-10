@@ -49,7 +49,8 @@ public static partial class BlizzardForumUrl
 }
 
 /// <summary>One thread of the category list. <see cref="FirstTrackedPost"/> is the forum's own marker of the first Blizzard post in it.</summary>
-public sealed record ForumThreadRef(long Id, string Title, int CategoryId, DateTimeOffset? CreatedAt, int? FirstTrackedPost, string Excerpt);
+/// <param name="Pinned">Pinned to the top of the list (in the category or everywhere): it stands there whatever its age.</param>
+public sealed record ForumThreadRef(long Id, string Title, int CategoryId, DateTimeOffset? CreatedAt, int? FirstTrackedPost, string Excerpt, bool Pinned = false);
 
 public sealed record ForumThreadList(IReadOnlyList<ForumThreadRef> Threads, int Skipped);
 
@@ -69,7 +70,7 @@ public sealed record ForumParse<T>(UpdateFetchOutcome Outcome, T? Value, string?
 /// <summary>
 /// Reads the two forum answers the provider uses, as observed on 2026-10-05: the category list
 /// (<c>topic_list.topics[]</c>: <c>id, title, category_id, created_at, first_tracked_post{post_number}, excerpt, archetype,
-/// visible</c>) and a thread (<c>id, title, category_id, tracked_posts[]{post_number}, post_stream.posts[]</c>:
+/// visible, pinned, pinned_globally</c>) and a thread (<c>id, title, category_id, tracked_posts[]{post_number}, post_stream.posts[]</c>:
 /// <c>post_number, cooked, created_at, post_type, hidden, deleted_at</c>). Unknown fields are ignored; a missing optional
 /// field has a safe meaning (no Blizzard marker, no excerpt); an entry without its required fields is skipped and counted;
 /// an answer without the expected frame is refused as a whole.
@@ -140,7 +141,9 @@ public static class BlizzardForumParser
         if (topic.TryGetProperty("first_tracked_post", out var mark) && mark.ValueKind == JsonValueKind.Object &&
             Number(mark, "post_number") is > 0 and <= int.MaxValue and var number)
             firstTracked = (int)number;
-        return new ForumThreadRef(id, title, (int)category, Time(topic, "created_at"), firstTracked, Text(topic, "excerpt") ?? "");
+        var pinned = topic.TryGetProperty("pinned", out var p) && p.ValueKind == JsonValueKind.True ||
+                     topic.TryGetProperty("pinned_globally", out var g) && g.ValueKind == JsonValueKind.True;
+        return new ForumThreadRef(id, title, (int)category, Time(topic, "created_at"), firstTracked, Text(topic, "excerpt") ?? "", pinned);
     }
 
     private static ForumPost? Post(JsonElement post)

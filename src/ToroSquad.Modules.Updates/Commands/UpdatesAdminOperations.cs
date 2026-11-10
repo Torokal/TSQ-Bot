@@ -216,8 +216,15 @@ public sealed class UpdatesAdminOperations(UpdatesConfigService config) : IAdmin
                 : call.T("updates.status.discovered_none");
             var card = game.LastCardAt is { } at ? DiscordText.Timestamp(at, 'R') : "—";
             var where = game.ChannelId is { } own ? call.T("updates.status.game_channel", AdminForms.Mention(own)) + "\n" : "";
+            var scope = call.T("updates.status.scope_value", game.Game.ProviderGameId, game.Game.WatchedThreadIds.Count == 0 ? "—" : string.Join(", ", game.Game.WatchedThreadIds));
             fields.Add(new(call.T("updates.status.game", game.Game.DisplayName, game.ProviderName),
-                Clip(where + poll + "\n" + discovered + "\n" + call.T("updates.status.card_value", card), DiscordLimits.EmbedFieldValueMax), false));
+                Clip(where + scope + "\n" + poll + "\n" + discovered + "\n" + call.T("updates.status.card_value", card), DiscordLimits.EmbedFieldValueMax), false));
+        }
+
+        if (status.Recovery is { } plan && fields.Count < DiscordLimits.EmbedFieldsMax)
+        {
+            var check = UpdatesConfigService.RecoveryCheck(plan);
+            fields.Add(new(call.T("updates.doctor.recovery"), Clip(call.T(check.DetailKey, [.. check.Args]), DiscordLimits.EmbedFieldValueMax), false));
         }
 
         await call.ReplyEmbedAsync(new MessageEmbed(call.T("updates.status.title"), null, null, fields, null, null, ToroInteractionModule.NeutralColor));
