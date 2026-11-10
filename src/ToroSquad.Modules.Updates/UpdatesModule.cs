@@ -50,6 +50,7 @@ public sealed class UpdatesModule : IToroModule
     {
         services.AddAdminOperations(UpdatesAdminOperations.Definition);
         services.AddOptions<UpdatesOptions>().Bind(configuration.GetSection(UpdatesOptions.Section));
+        services.AddOptions<UpdatesRecoveryOptions>().Bind(configuration.GetSection(UpdatesRecoveryOptions.Section));
         services.AddSingleton(new LocalizationSource(typeof(UpdatesModule).Assembly, "ToroSquad.Modules.Updates.Localization"));
         services.AddSingleton<IModelContributor, UpdatesModelContributor>();
 
@@ -70,6 +71,7 @@ public sealed class UpdatesModule : IToroModule
 
         services.AddSingleton<UpdateCardRenderer>();
         services.AddSingleton<UpdatesPoller>();
+        services.AddScoped<UpdatesRecovery>();
         services.AddScoped<UpdatesPlanner>();
         services.AddScoped<UpdatesConfigService>();
         services.AddScoped<IDeliveryPolicy, UpdatesDeliveryPolicy>();
@@ -87,5 +89,6 @@ public sealed class UpdatesModule : IToroModule
         .. (configuration.GetSection(UpdatesOptions.Section).Get<UpdatesOptions>() ?? new UpdatesOptions()).Validate(),
         .. (configuration.GetSection(WowForeverSettings.Section).Get<WowForeverSettings>() ?? new WowForeverSettings()).Validate(),
         .. (configuration.GetSection(BlizzardForumOptions.Section).Get<BlizzardForumOptions>() ?? new BlizzardForumOptions()).Validate(),
+        .. (configuration.GetSection(UpdatesRecoveryOptions.Section).Get<UpdatesRecoveryOptions>() ?? new UpdatesRecoveryOptions()).Validate(),
     ];
 }

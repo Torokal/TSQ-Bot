@@ -62,6 +62,8 @@ public static class UpdatesWindow
 /// <item>A changed title, link or time of an update the guild has in its current channel re-stages the same logical key
 /// in that round: the outbox edits the same message silently (identical payload = no edit). A correction never creates a
 /// card. A post that stops being an update is recorded, never deleted.</item>
+/// <item>An explicitly configured recovery (<see cref="UpdatesRecoveryOptions"/>, apply switched on) stages the posts its
+/// plan says are ready, after the normal cards and with the same delivery records — so nothing is ever posted twice.</item>
 /// </list>
 /// The only class of this module that writes to the outbox.
 /// </summary>
@@ -74,6 +76,7 @@ public sealed class UpdatesPlanner(
     UpdateCardRenderer renderer,
     IOptions<UpdatesOptions> options,
     IOptions<DeliveryOptions> delivery,
+    UpdatesRecovery recovery,
     TimeProvider clock,
     ILogger<UpdatesPlanner> logger)
 {
@@ -101,8 +104,11 @@ public sealed class UpdatesPlanner(
         return true;
     }
 
-    /// <summary>The outbox source key of a post, e.g. <c>steam:730:1845383656387875</c>.</summary>
-    public static string SourceKey(GameUpdateDefinition game, string externalId) => game.Provider + ":" + game.ProviderGameId + ":" + externalId;
+    /// <summary>
+    /// The outbox source key of a post, e.g. <c>steam:730:1845383656387875</c> (a game with an <see cref="GameUpdateDefinition.OutboxScope"/>
+    /// uses it in place of its provider game id).
+    /// </summary>
+    public static string SourceKey(GameUpdateDefinition game, string externalId) => game.Provider + ":" + (game.OutboxScope ?? game.ProviderGameId) + ":" + externalId;
 
     /// <summary>Updates:Mode, with Live reduced to DryRun while the host's Delivery:Mode does not send.</summary>
     public UpdatesMode EffectiveMode => UpdatesModes.Effective(options.Value, delivery.Value);
@@ -189,6 +195,8 @@ public sealed class UpdatesPlanner(
         var provider = catalog.ProviderOf(game);
         if (provider.ThreadFollow is { MaxThreads: > 0 } rule && rule.Window > TimeSpan.Zero)
         {
+            // Threads of posts a configured recovery names but the source has not shown yet come first, in the same places.
+            var unseen = await recovery.UnseenThreadsAsync(game, ct);
             var cutoff = now - rule.Window;
             const int update = (int)UpdateClassification.Update;
             var recent = await db.Set<UpdatesItemEntity>().AsNoTracking()
@@ -197,7 +205,7 @@ public sealed class UpdatesPlanner(
                 .Select(a => a.ExternalId)
                 .Take(MaxFollowScan)
                 .ToListAsync(ct);
-            threads = recent.Select(provider.ThreadIdOf).OfType<string>().Distinct(StringComparer.Ordinal)
+            threads = unseen.Concat(recent.Select(provider.ThreadIdOf).OfType<string>()).Distinct(StringComparer.Ordinal)
                 .Where(thread => !game.WatchedThreadIds.Contains(thread, StringComparer.Ordinal))
                 .Take(rule.MaxThreads).ToList();
         }
@@ -377,6 +385,8 @@ public sealed class UpdatesPlanner(
         state.SourceCacheSeconds = result.CacheLifetime is { } lifetime ? (int)Math.Min(lifetime.TotalSeconds, int.MaxValue) : null;
 
         var (staged, edits) = state.BaselineAt is null ? (0, 0) : await PlanDeliveriesAsync(game, state, changed, now, ct);
+        if (state.BaselineAt is not null && recovery.AppliesTo(game) && recovery.Options is { Apply: true, Items.Length: > 0 } && EffectiveMode != UpdatesMode.Off)
+            staged += await RecoverAsync(game, state, now, ct);
         await PruneAsync(game, state, now, ct);
         await db.SaveChangesAsync(ct);
         return new UpdatesRoundSummary(outcome == UpdateFetchOutcome.Ok ? items.Count : 0, newItems, state.LastUpdateCount, staged, edits, baselineNow);
@@ -489,6 +499,56 @@ public sealed class UpdatesPlanner(
         }
 
         return (staged, edits);
+    }
+
+    /// <summary>
+    /// Stages what the configured recovery's plan says is ready (<see cref="UpdatesRecovery"/>): the same card, source key,
+    /// kind and delivery record as a normal card, to the channel a normal card would go to. Ready posts are never delivered
+    /// yet, so a repeated apply — or a normal round — finds them delivered and posts nothing again.
+    /// </summary>
+    private async Task<int> RecoverAsync(GameUpdateDefinition game, UpdatesSourceStateEntity state, DateTimeOffset now, CancellationToken ct)
+    {
+        // Only an explicit list is ever applied (startup validation refuses Apply without one; this is the second lock).
+        if (await recovery.PlanAsync(null, ct) is not { Proposed: false } plan)
+            return 0;
+        var provider = catalog.ProviderOf(game);
+        var dryRun = plan.DryRun;
+        var kind = Kind(game.Key, dryRun);
+        var expiresAt = now + TimeSpan.FromHours(options.Value.CatchUpHours);
+        var itemSet = db.Set<UpdatesItemEntity>();
+        var staged = 0;
+        foreach (var guildPlan in plan.Guilds)
+        {
+            var guild = new GuildId(guildPlan.GuildId);
+            var language = (await guildSettings.GetAsync(guild, ct)).Language;
+            foreach (var ready in guildPlan.Items.Where(i => i.State == RecoveryItemState.Ready))
+            {
+                var item = itemSet.Local.FirstOrDefault(a => a.Provider == game.Provider && a.GameKey == game.Key && a.ExternalId == ready.ExternalId)
+                           ?? await itemSet.AsNoTracking().FirstOrDefaultAsync(a => a.Provider == game.Provider && a.GameKey == game.Key && a.ExternalId == ready.ExternalId, ct);
+                if (item?.Title is null)
+                    continue;
+                var channel = new ChannelId(guildPlan.ChannelId);
+                var message = renderer.Render(game, provider, item.Url, item.Title, item.PublishedAt, language, UpdateHighlightsJson.Parse(item.Highlights));
+                var result = await outbox.StageAsync(new NotificationRequest(guild, UpdatesModule.ModuleIdTyped, SourceKey(game, item.ExternalId), channel, kind,
+                    message, expiresAt, dryRun), ct);
+                db.Set<UpdatesDeliveryEntity>().Add(new UpdatesDeliveryEntity
+                {
+                    GuildId = guildPlan.GuildId,
+                    Provider = game.Provider,
+                    GameKey = game.Key,
+                    ExternalId = item.ExternalId,
+                    Kind = kind,
+                    ChannelId = channel.Value,
+                    StagedAt = now,
+                });
+                staged++;
+                state.LastDeliveryStagedAt = now;
+                logger.LogInformation("{Game} recovery card staged guild={Guild} post={Post} channel={Channel} dryRun={DryRun} outcome={Outcome}",
+                    game.Key, guildPlan.GuildId, item.ExternalId, channel.Value, dryRun, result);
+            }
+        }
+
+        return staged;
     }
 
     /// <summary>

@@ -98,7 +98,7 @@ public sealed class UpdatesWowForeverTests
         embed.Timestamp.Should().Be(published);
         embed.ThumbnailUrl.Should().BeNull();
         var row = (await rig.OutboxAsync()).Should().ContainSingle().Subject;
-        (row.SourceKey, row.Kind).Should().Be(("blizzard:349:2360696:5", "update:wow-forever"));
+        (row.SourceKey, row.Kind).Should().Be(("blizzard:wow-forever:2360696:5", "update:wow-forever"), "the card's identity names the game, not the category it lives in");
         var item = (await rig.ItemsAsync()).Single(i => i.ExternalId == "2360696:5");
         ((UpdateClassification)item.Classification, item.ClassificationReason, item.Baseline).Should().Be((UpdateClassification.Update, "development_notes", false));
 
@@ -183,11 +183,11 @@ public sealed class UpdatesWowForeverTests
             "player threads, a Blizzard reply in a player thread and other categories are not even stored");
         foreach (var id in new[] { "701:1", "702:1", "703:1", "704:1", "705:1" })
             items[id].Should().Be((UpdateClassification.NotUpdate, "excluded_topic"));
-        items["706:1"].Should().Be((UpdateClassification.NotUpdate, "untyped_title"));
+        items["706:1"].Should().Be((UpdateClassification.NotUpdate, "untyped_title"), "read in full, and Blizzard says nothing was applied");
         items["707:1"].Should().Be((UpdateClassification.Ambiguous, "no_change_list"));
         items["712:1"].Should().Be((UpdateClassification.Ambiguous, "other_version_title"));
-        rig.Forum.RequestPaths.Where(p => p.Contains("/t/7")).Distinct().Should().BeEquivalentTo(["/en/wow/t/707.json", "/en/wow/t/712.json"],
-            "only threads whose title could be an update are ever opened");
+        rig.Forum.RequestPaths.Where(p => p.Contains("/t/7")).Distinct().Should().BeEquivalentTo(["/en/wow/t/706.json", "/en/wow/t/707.json", "/en/wow/t/712.json"],
+            "only threads whose title could be an update are ever opened (known issues, maintenance, podcasts and previews never are)");
     }
 
     // ---------- verified update threads are followed ----------
@@ -239,7 +239,7 @@ public sealed class UpdatesWowForeverTests
         stored.Select(i => i.ExternalId).Should().BeEquivalentTo(["720:1", "720:26"], "player replies — also one that looks like patch notes — are not posts at all");
         stored.Should().OnlyContain(i => i.Classification == (int)UpdateClassification.Update && i.ClassificationReason == "client_update");
         stored.Single(i => i.ExternalId == "720:1").ContentChangedAt.Should().BeNull("following a thread does not change its first post");
-        (await rig.OutboxAsync()).Select(o => o.SourceKey).Should().BeEquivalentTo(["blizzard:349:720:1", "blizzard:349:720:26"]);
+        (await rig.OutboxAsync()).Select(o => o.SourceKey).Should().BeEquivalentTo(["blizzard:wow-forever:720:1", "blizzard:wow-forever:720:26"]);
         (await rig.StateAsync(Wow))!.LastDetail.Should().EndWith("1 watched, 2 followed", "this thread and the client update thread of the first run");
 
         await rig.PollAsync();
@@ -903,7 +903,7 @@ public sealed class UpdatesWowForeverTests
 
     // ---------- settings, state, preview ----------
 
-    private static readonly Dictionary<string, string?> NewCategory = new() { ["Updates:WowForever:ForumCategoryId"] = "400", ["Updates:WowForever:WatchedTopicIds:0"] = "5000" };
+    private static readonly Dictionary<string, string?> NewCategory = new() { ["Updates:WowForever:ForumCategoryIds:0"] = "400", ["Updates:WowForever:WatchedTopicIds:0"] = "5000" };
 
     [Fact]
     public async Task A_plain_restart_changes_nothing_about_the_source()

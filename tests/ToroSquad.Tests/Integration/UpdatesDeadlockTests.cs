@@ -322,7 +322,7 @@ public sealed class UpdatesDeadlockTests
         cs2.Description.Should().Be("**Counter\\-Strike 2 Update**\n\nYeni Counter-Strike 2 güncellemesi yayınlandı.\n\n" +
                                     "[Steam'de Güncelleme Notlarını Gör](" + Link(202) + ")", "the Counter-Strike 2 card is byte for byte what it was");
         (await rig.ItemsAsync()).Where(i => i.GameKey == "cs2").Should().OnlyContain(i => i.Highlights == null);
-        (await rig.OutboxAsync()).Select(o => o.SourceKey).Should().BeEquivalentTo(["steam:730:202", "steam:1422450:210", "blizzard:349:2360696:2"]);
+        (await rig.OutboxAsync()).Select(o => o.SourceKey).Should().BeEquivalentTo(["steam:730:202", "steam:1422450:210", "blizzard:wow-forever:2360696:2"]);
 
         // One game's source failing leaves the two others working; the two Steam games are asked separately.
         rig.Steam.Respond = request => SteamNewsServer.AppIdOf(request) == DeadlockNews.AppId

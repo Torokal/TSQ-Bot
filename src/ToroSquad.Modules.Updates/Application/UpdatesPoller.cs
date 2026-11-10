@@ -32,6 +32,7 @@ public sealed class UpdatesPoller(
     private readonly SemaphoreSlim _round = new(1, 1);
     private readonly ConcurrentDictionary<string, DateTimeOffset> _requestedAt = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _failuresLogged = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, bool> _recoveryLogged = new(StringComparer.Ordinal);
     private bool _modeEntered;
     private bool _modeFailureLogged;
 
@@ -194,7 +195,27 @@ public sealed class UpdatesPoller(
         var next = NextPoll(result, failuresBefore + (result.Succeeded ? 0 : 1), provider.MinimumPollInterval);
         var summary = await planner.ApplyAsync(game, result, next, ct);
         Log(game, result, summary, failuresBefore, next);
+        await LogRecoveryAsync(game, scope.ServiceProvider.GetRequiredService<UpdatesRecovery>(), ct);
         return true;
+    }
+
+    /// <summary>
+    /// A configured recovery is shown once per process, after the game's first round: which posts, how many cards, which
+    /// channel — whether it only previews or applies. (Status and doctor show the same plan on demand.)
+    /// </summary>
+    private async Task LogRecoveryAsync(GameUpdateDefinition game, UpdatesRecovery recovery, CancellationToken ct)
+    {
+        if (!recovery.AppliesTo(game) || !_recoveryLogged.TryAdd(game.Key, true) || await recovery.PlanAsync(null, ct) is not { } plan)
+            return;
+        if (plan.Guilds.Count == 0)
+            logger.LogInformation("{Game} recovery {Mode}: no guild follows the game now, nothing to recover", game.Key, plan.Apply ? "apply" : "preview");
+        foreach (var guild in plan.Guilds)
+        {
+            logger.LogInformation("{Game} recovery {Mode}{Proposed} guild={Guild} channel={Channel} window={Window:u} delivered={Delivered} cards={Cards}: {Items}",
+                game.Key, plan.Apply ? "apply" : "preview", plan.Proposed ? " (proposal: newest update of a watched thread)" : "", guild.GuildId,
+                guild.ChannelId, guild.WindowStart, guild.DeliveredCount, guild.Cards,
+                guild.Items.Count == 0 ? "none" : string.Join(", ", guild.Items.Select(i => i.ExternalId + " " + i.State)));
+        }
     }
 
     /// <summary>

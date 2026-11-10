@@ -188,6 +188,13 @@ public sealed record GameUpdateDefinition(string Key, string DisplayName, string
     /// </summary>
     public IGameUpdateHighlighter? Highlighter { get; init; }
 
+    /// <summary>
+    /// The part of a card's outbox source key that names where its post comes from (<c>steam:730:&lt;post&gt;</c>). Unset: the
+    /// <see cref="ProviderGameId"/>. A game whose place at the provider can change (a forum category list) names something that
+    /// does not, so a card keeps its identity — and can still be corrected — after the game moved.
+    /// </summary>
+    public string? OutboxScope { get; init; }
+
     public static bool IsValidKey(string? key) =>
         key is { Length: > 0 and <= KeyMax } && key.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-');
 }

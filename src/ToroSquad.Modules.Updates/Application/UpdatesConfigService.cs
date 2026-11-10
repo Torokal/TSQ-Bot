@@ -41,6 +41,7 @@ public sealed record UpdatesGameStatus(
     string? ChannelProblem = null);
 
 /// <summary>What /tsq-admin modul:updates islem:status shows (no secrets, no user data).</summary>
+/// <param name="Recovery">A configured recovery (Updates:Recovery), planned for this guild only; null when none is configured.</param>
 public sealed record UpdatesStatus(
     UpdatesMode Mode,
     UpdatesMode EffectiveMode,
@@ -48,7 +49,8 @@ public sealed record UpdatesStatus(
     ulong? ChannelId,
     bool Paused,
     string? ChannelProblem,
-    IReadOnlyList<UpdatesGameStatus> Games);
+    IReadOnlyList<UpdatesGameStatus> Games,
+    RecoveryPlan? Recovery = null);
 
 /// <summary>A card for the admin preview: the latest real update of the game, or an explicitly synthetic sample.</summary>
 public sealed record UpdatesPreview(OutgoingMessage Message, bool Synthetic);
@@ -64,6 +66,7 @@ public sealed class UpdatesConfigService(
     IModuleGate gate,
     GameUpdateCatalog catalog,
     UpdatesPlanner planner,
+    UpdatesRecovery recovery,
     UpdateCardRenderer renderer,
     IOptions<UpdatesOptions> options,
     TimeProvider clock)
@@ -240,7 +243,7 @@ public sealed class UpdatesConfigService(
         }
 
         return (OperationResult.Ok("updates.status.title"), new UpdatesStatus(options.Value.Mode, planner.EffectiveMode, enabled, config?.ChannelId,
-            config?.Paused == true, config?.ChannelProblem, games));
+            config?.Paused == true, config?.ChannelProblem, games, await recovery.PlanAsync(actor.GuildId.Value, ct)));
     }
 
     public async Task<(OperationResult Auth, UpdatesPreview? Preview)> PreviewAsync(ActorContext actor, string? gameKey, string language, CancellationToken ct)
@@ -329,6 +332,9 @@ public sealed class UpdatesConfigService(
                     checks.Add(new("updates.doctor.game_channel", UpdatesCheckState.Problem, "updates.doctor.game_channel_problem", [name, problem]));
             }
 
+            // Where the game is read, as this host is configured (the same configuration the CLI check uses).
+            checks.Add(new("updates.doctor.scope", UpdatesCheckState.Info, "updates.doctor.scope_value",
+                [name, game.ProviderName, game.Game.ProviderGameId, game.Game.WatchedThreadIds.Count == 0 ? "—" : string.Join(", ", game.Game.WatchedThreadIds)]));
             if (source?.LastAttemptAt is not { } attempt)
             {
                 checks.Add(new("updates.doctor.source", UpdatesCheckState.Info, "updates.doctor.source_never", [name, game.ProviderName]));
@@ -360,7 +366,23 @@ public sealed class UpdatesConfigService(
                 withdrawn > 0 ? [name, stored, cards.Count, withdrawn] : [name, stored, cards.Count]));
         }
 
+        if (status.Recovery is { } plan)
+            checks.Add(RecoveryCheck(plan));
         return (auth, checks);
+    }
+
+    /// <summary>A configured recovery for this guild: preview or apply, how many cards, which channel, which posts.</summary>
+    public static UpdatesCheck RecoveryCheck(RecoveryPlan plan)
+    {
+        if (plan.Guilds.Count == 0 || plan.Guilds[0] is not { } guild)
+            return new("updates.doctor.recovery", UpdatesCheckState.Info, "updates.doctor.recovery_none", [plan.Game.DisplayName]);
+        var items = guild.Items.Count == 0
+            ? "—"
+            : string.Join("; ", guild.Items.Select(i => i.ExternalId + " " + i.State + (i.Title is { } title ? " · " + DiscordText.UntrustedPlain(title, 80) : "") +
+                                                       (i.PublishedAt is { } at ? " · " + DiscordText.Timestamp(at, 'f') : "")));
+        return new("updates.doctor.recovery", plan.Apply ? UpdatesCheckState.Warning : UpdatesCheckState.Info,
+            plan.Apply ? "updates.doctor.recovery_apply" : plan.Proposed ? "updates.doctor.recovery_proposal" : "updates.doctor.recovery_preview",
+            [plan.Game.DisplayName, guild.Cards, "<#" + guild.ChannelId.ToString(CultureInfo.InvariantCulture) + ">", items]);
     }
 
     /// <summary>

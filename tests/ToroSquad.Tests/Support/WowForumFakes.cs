@@ -3,6 +3,7 @@ using System.Net;
 using System.Security;
 using System.Text;
 using System.Text.Json.Nodes;
+using ToroSquad.Modules.Updates.Domain.Games;
 
 namespace ToroSquad.Tests.Support;
 
@@ -14,7 +15,7 @@ public sealed record ForumPostSpec(int Number, string Cooked, DateTimeOffset Cre
 /// <see cref="Posts"/> the thread has one first post built from <see cref="Cooked"/>.
 /// </summary>
 public sealed record ForumThreadSpec(long Id, string Title, DateTimeOffset Created, bool ByBlizzard = false, int Category = WowForum.Category, string? Cooked = null,
-    string Excerpt = "", IReadOnlyList<ForumPostSpec>? Posts = null)
+    string Excerpt = "", IReadOnlyList<ForumPostSpec>? Posts = null, bool Pinned = false)
 {
     public IReadOnlyList<ForumPostSpec> AllPosts => Posts ?? [new ForumPostSpec(1, Cooked ?? "<p>Synthetic post.</p>", Created, ByBlizzard)];
 }
@@ -59,6 +60,31 @@ public static class ForumHtmlSamples
         return sb.ToString();
     }
 
+    /// <summary>
+    /// One day of Blizzard's running hotfix thread, as its replies write it (checked 2026-11-10): a rule, the date as a bold
+    /// paragraph, then bold group titles each followed by a list.
+    /// </summary>
+    public static string HotfixDay(string date, params (string Heading, string[] Items)[] sections)
+    {
+        var sb = new StringBuilder("<hr>\n<p><strong>").Append(Escape(date)).Append("</strong></p>\n");
+        foreach (var (heading, items) in sections)
+        {
+            sb.Append("<p><strong>").Append(Escape(heading)).Append("</strong></p>\n<ul>\n");
+            foreach (var item in items)
+                sb.Append("<li>").Append(Escape(item)).Append("</li>\n");
+            sb.Append("</ul>\n");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>The opening post of the running hotfix thread: a "Hotfixes" heading, then every day so far, newest first.</summary>
+    public static string HotfixOpening(params string[] daysNewestFirst) =>
+        "<h2><a name=\"p-1-hotfixes-1\" class=\"anchor\" href=\"#p-1-hotfixes-1\" aria-label=\"Heading link\"></a><strong>Hotfixes</strong></h2>\n" + string.Concat(daysNewestFirst);
+
+    /// <summary>Plain paragraphs (an announcement in prose).</summary>
+    public static string Paragraphs(params string[] paragraphs) => string.Concat(paragraphs.Select(p => "<p>" + Escape(p) + "</p>\n"));
+
     /// <summary>A short client update: a build line and a plain list.</summary>
     public static string ClientUpdate(string buildLine, params string[] items) =>
         "<p>A few moments ago, we made a new client build available.<br>\n" + Escape(buildLine) + "</p>\n<ul>\n" +
@@ -74,8 +100,28 @@ public static class ForumHtmlSamples
 /// </summary>
 public sealed class WowForum : HttpMessageHandler
 {
+    /// <summary>The beta's category ("WoW: Forever Beta Discussion"); the beta profile's only category.</summary>
     public const int Category = 349;
     public const long DevNotesThread = 2360696;
+
+    /// <summary>The released game's categories and running hotfix thread (the code's own defaults).</summary>
+    public const int BugReport = WowForeverSettings.BugReportCategoryId;
+    public const int GeneralDiscussion = WowForeverSettings.GeneralDiscussionCategoryId;
+    public const int ForeverParent = 346;
+    public const long HotfixThread = WowForeverSettings.HotfixesTopicId;
+
+    /// <summary>A parent category lists its subcategories' threads too (346 "WoW Forever" → 347, 352).</summary>
+    public Dictionary<int, int[]> Subcategories { get; } = new() { [ForeverParent] = [GeneralDiscussion, BugReport] };
+
+    /// <summary>The beta profile: category 349, the Development Notes thread watched.</summary>
+    public static WowForeverSettings BetaSettings => new() { ForumCategoryIds = [Category], WatchedTopicIds = [(int)DevNotesThread] };
+
+    /// <summary>The beta profile as configuration (what most WoW tests run with).</summary>
+    public static Dictionary<string, string?> BetaConfig => new()
+    {
+        ["Updates:WowForever:ForumCategoryIds:0"] = Category.ToString(CultureInfo.InvariantCulture),
+        ["Updates:WowForever:WatchedTopicIds:0"] = DevNotesThread.ToString(CultureInfo.InvariantCulture),
+    };
     public const int PageSize = 30;
     public const int ChunkSize = 20;
     private const string Root = "/en/wow";
@@ -120,7 +166,11 @@ public sealed class WowForum : HttpMessageHandler
         {
             var category = int.Parse(query["category"] ?? "0", CultureInfo.InvariantCulture);
             var page = int.Parse(query["page"] ?? "0", CultureInfo.InvariantCulture);
-            var topics = Threads.Where(t => t.Category == category).OrderByDescending(t => t.Created).ThenByDescending(t => t.Id).Skip(page * PageSize).Take(PageSize);
+            var listed = Subcategories.GetValueOrDefault(category, []).Append(category).ToHashSet();
+            var inCategory = Threads.Where(t => listed.Contains(t.Category)).ToList();
+            // Like the forum: pinned threads first (on the first page only), then the others newest first.
+            var pinned = page == 0 ? inCategory.Where(t => t.Pinned).OrderByDescending(t => t.Created).ToList() : [];
+            var topics = pinned.Concat(inCategory.Where(t => !t.Pinned).OrderByDescending(t => t.Created).ThenByDescending(t => t.Id).Skip(page * PageSize).Take(PageSize));
             return Json(ListJson(topics));
         }
 
@@ -159,7 +209,7 @@ public sealed class WowForum : HttpMessageHandler
                 ["archetype"] = "regular",
                 ["visible"] = true,
                 ["closed"] = false,
-                ["pinned"] = false,
+                ["pinned"] = t.Pinned,
                 ["excerpt"] = t.Excerpt,
                 ["category_id"] = t.Category,
                 ["first_tracked_post"] = t.AllPosts.Where(p => p.Tracked).Select(p => (int?)p.Number).Min() is { } first
