@@ -739,6 +739,41 @@ invite link and no global command registration. The source code is public under 
   Additive migration `UpdatesGameChannel` (three nullable columns on `updates_subscription`). The slash command
   manifest is unchanged (operations are suggested, not registered).
 
+## TSQ Bot Updates — World of Warcraft: Forever after release (2026-11-10, local branch)
+
+- **Root cause (proven from logs and the forum):** after WoW: Forever left beta the bot still read the beta category 349 and
+  the beta Development Notes thread 2360696 (shipped `appsettings.json`; no Railway override). Blizzard now posts its
+  hotfixes in thread 2403040 (category 352, one reply per day) and its own announcements in category 347. The last WoW card
+  was 2360696:10 on 2026-11-04; later rounds produced no new notification candidate (no new thread in 349, no new Blizzard
+  post in 2360696). Even with the right source, untyped titles
+  ("Dungeon Enemy XP Increased") were ruled out before their text was read, and hotfix replies outside a watched thread
+  stayed ambiguous.
+- **IMPLEMENTED / TESTED_OFFLINE (not deployed):** the WoW source is now a small category allowlist (`ForumCategoryIds`,
+  default 352 + 347, canonical order) with the hotfix thread watched; a thread counts only in its own category (a parent
+  such as 346 does not stand for its subcategories); pinned threads never end a list early; per-category page bound and
+  reach in the round detail; "no watched thread usable" is partial, not healthy; a request budget counted while the round
+  runs. Running hotfix thread: the opening post stands for the day it was published with (its oldest day, only while that
+  is provable — otherwise it is left out, never re-dated), each reply for its day, the day is part of the title, the time
+  is the forum's `created_at`; a day only in the opening post is reported, not posted. Classifier:
+  "Incoming/Upcoming/Planned" titles are planned changes; an untyped Blizzard title is read in full and is an update only
+  when Blizzard says a change was applied ("we deployed a hotfix that …", "we've adjusted …"). Card outbox key is
+  `blizzard:wow-forever:<post>` (stable across category changes; beta cards keyed `blizzard:349:…` freeze). The release
+  move is a source transition at startup (nothing old is posted, nothing new is lost). New explicit `Updates:Recovery`
+  (preview by default, a proposal is only ever previewed; apply needs a fixed `Items` list of at most `MaxCards` and stages
+  exactly those posts once with the normal delivery records). Status/doctor show the effective source scope and the recovery plan; `updates check
+  --threads` reads named threads like followed ones. No migration; command manifest unchanged.
+- **Real source (local network, 2026-11-10, read-only):** `updates check --game wow-forever` finds 2403040:1/4/5 as hotfix
+  updates with their days; with `--threads 2406595,2408781,2404092` the Dungeon XP and PvP posts are `applied_change`
+  updates and Class Tuning is `planned_change`. **Locally, with a production-like state** (reconstructed from the logs in
+  a local test database, run against the real forum — not the production database): the move posts nothing old; the
+  recovery proposal is 2403040:5 (November 9, 2026) to the game's channel, one card; the preview writes nothing.
+- **Not verified with the real production records:** subscription window, effective channel, mode/pause/module and the
+  delivery/outbox state of the five recovery candidates (2403040:1, :4, :5, 2406595:1, 2408781:1) were not read — no
+  approved read-only path. This blocks the recovery apply decision (preview in production first), not the commit.
+- **Not performed:** commit, push, PR, merge, deploy, Railway variable change, Discord sync, production DB write, real
+  Discord send, recovery apply. The live problem persists until this is deployed (rollout plan in the session report and
+  docs/updates/TSQ_UPDATES.md "Kurtarma").
+
 ## TSQ Bot Updates — World of Warcraft: Forever source (new, 2026-10-05)
 
 - **IMPLEMENTED / TESTED_OFFLINE:** second game of the Updates module through the unchanged pipeline — Blizzard forum

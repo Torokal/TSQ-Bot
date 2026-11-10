@@ -13,7 +13,7 @@ Varsayılan **kapalıdır**: `Updates:Mode=Off` (kaynak isteği yok), her sunucu
 |---|---|---|---|---|
 | Counter-Strike 2 | `cs2` | Steam (`steam`) | AppID `730` | `Cs2UpdateClassifier` |
 | Deadlock | `deadlock` | Steam (`steam`) | AppID `1422450` | `DeadlockUpdateClassifier` |
-| World of Warcraft: Forever | `wow-forever` | Blizzard forumu (`blizzard`) | forum kategorisi `349` (ayar) | `WowForeverUpdateClassifier` |
+| World of Warcraft: Forever | `wow-forever` | Blizzard forumu (`blizzard`) | forum kategorileri `347,352` (ayar) | `WowForeverUpdateClassifier` |
 
 Yalnızca gerçekten uygulanan oyunlar listelenir; arayüzde yer tutucu oyun yoktur. Her oyun sunucuda ayrı açılır.
 
@@ -235,7 +235,7 @@ içerikleri kart **üretmez**. Yapay zekâ kullanılmaz; her karar ve her özet 
 | | |
 |---|---|
 | Taban adres | `https://us.forums.blizzard.com/en/wow` (sabit; Discourse JSON, anahtar ve giriş yok) |
-| Yeni konular | `GET /latest.json?category=<kategori>&order=created[&page=N]` — kategorinin konuları, en yeni önce, sayfa başına 30 |
+| Yeni konular | `GET /latest.json?category=<kategori>&order=created[&page=N]` — her kategorinin konuları, en yeni önce, sayfa başına 30 |
 | Konu | `GET /t/<konu>.json` (ilk gönderiler) ve gerekirse `GET /t/<konu>/<gönderi no>.json` (o gönderinin çevresi) |
 | Kart bağlantısı | `https://us.forums.blizzard.com/en/wow/t/<konu>/<gönderi no>` — forumun başlıksız biçimi; konuya yönlenir, konu yeniden adlandırılsa da değişmez |
 | Kullanılmayan | `/groups/blizzard-tracker/posts.json` (aşağıya bakın), arama, RSS, HTML sayfaları, Battle.net sürüm uç noktası, Blizzard News, üçüncü taraf siteler |
@@ -248,15 +248,22 @@ gönderi yalnızca bu işaretlerle "Blizzard'ın" sayılır.
 
 ### Üç giriş yolu, tek liste
 
-1. **İzlenen konular** (`Updates:WowForever:WatchedTopicIds`, varsayılan `2360696` — "WoW Forever Beta Development
-   Notes"): Blizzard yeni build'leri yeni konu açmadan bu konuya **yanıt olarak** ekliyor (#1, #4, …) ve konu başlığını her
-   seferinde "– Updated <tarih>" diye değiştiriyor. Konunun işaretli her Blizzard gönderisi her turda tam metniyle okunur.
-   Gönderi başlığı olarak konunun "– Updated …" eki atılmış hâli kullanılır; böylece konu yeniden adlandırıldığında önceki
-   build'lerin kartları değişmez (kartın tarihi gönderinin kendi zamanıdır).
-2. **Yeni konular:** kategorinin en yeni konuları (`Updates:WowForever:ForumCategoryId`, varsayılan `349` — "WoW: Forever
-   Beta Discussion"). **İlk gönderisi** Blizzard işaretli olan konu adaydır (ör. "Beta Client Update - September 22").
-   Başlığı sınıflandırıcıya göre güncelleme olamayacak konular (Known Issues, bakım, …) **indirilmez**; yalnızca görüldü
-   olarak kaydedilir. Oyuncu konuları ve oyuncu konusundaki Blizzard yanıtları aday bile olmaz.
+1. **İzlenen konular** (`Updates:WowForever:WatchedTopicIds`, varsayılan `2403040` — "WoW: Forever Hotfixes", kategori
+   352): Blizzard her hotfix gününü yeni konu açmadan bu konuya **yanıt olarak** ekliyor (#4, #5, …), aynı günü açılış
+   gönderisinin (#1) en üstüne de yazıyor ve konu başlığının tarihini değiştiriyor. Konunun işaretli her Blizzard gönderisi
+   her turda tam metniyle okunur. Gönderi başlığı olarak konunun tarih eki ("– Updated …", " - November 9, 2026") atılmış
+   hâli kullanılır; böylece konu yeniden adlandırıldığında önceki kartlar değişmez (kartın zamanı gönderinin kendi
+   zamanıdır). Ayrıntı: aşağıda "Çalışan hotfix konusu".
+2. **Yeni konular:** yapılandırılmış kategorilerin her birinin en yeni konuları (`Updates:WowForever:ForumCategoryIds`,
+   varsayılan `352` "WoW Forever Bug Report" ve `347` "World of Warcraft: Forever General Discussion"). **İlk gönderisi**
+   Blizzard işaretli olan konu adaydır (ör. "Dungeon Enemy XP Increased - November 8"). Başlığı sınıflandırıcıya göre
+   güncelleme olamayacak konular (Known Issues, bakım, "Incoming", başka WoW sürümü, …) **indirilmez**; yalnızca görüldü
+   olarak kaydedilir. Başlığında tür adı olmayan Blizzard konusu artık **indirilir**: kararı metni verir. Oyuncu konuları
+   ve oyuncu konusundaki Blizzard yanıtları aday bile olmaz. Sabitlenmiş (pinned) konular yaşlarından bağımsız listenin
+   başında durduğu için listeyi erken bitirmez. Bir konu yalnızca **kendi** kategorisi listedeyse kapsamdadır: forum üst
+   kategoride (346 "WoW Forever") alt kategorilerin konularını da listeler, ama 346'yı yazmak 347/352'yi kapsamaz — alt
+   kategoriler tek tek yazılır; başka kategorideki listelenmiş konular ayrıntıda "N in other categories ignored" diye
+   sayılır.
 
 3. **Takip edilen konular:** içinde bir gönderi `Update` olarak **doğrulanmış** konular (ör. ayrı açılmış bir Client
    Update veya Hotfix konusu). Böyle bir konu, son doğrulanmış güncellemesinden sonra `FollowThreadDays` (7 gün) boyunca
@@ -267,8 +274,38 @@ gönderi yalnızca bu işaretlerle "Blizzard'ın" sayılır.
    sınıflandırıcıdan geçer (oyuncu yanıtı aday bile olmaz, Blizzard'ın tek satırlık notu `Ambiguous` kalır). Konunun ilk
    gönderisi yeni-konu yolundakiyle birebir aynı üretilir; takip, daha önce gönderilmiş kartı değiştirmez.
 
-Üç yol aynı kimliği üretir (`<konu>:<gönderi no>`, outbox anahtarı `blizzard:<kategori>:<konu>:<gönderi no>`): aynı
-gönderi birden fazla yoldan bulunsa da **tek** gönderidir.
+Üç yol aynı kimliği üretir (`<konu>:<gönderi no>`, outbox anahtarı `blizzard:wow-forever:<konu>:<gönderi no>`): aynı
+gönderi birden fazla yoldan bulunsa da **tek** gönderidir. Outbox anahtarı kategori listesini değil oyunu adlandırır
+(`GameUpdateDefinition.OutboxScope`), böylece oyunun yeri sonradan değişse de kart kimliği ve düzeltmeler korunur. (Beta
+döneminde anahtar `blizzard:349:…` idi; aşağıda "Kaynak geçişi".)
+
+### Çalışan hotfix konusu (2026-11-10'da gözlenen biçim)
+
+Açılış gönderisi (#1) bir "Hotfixes" başlığı ve altında **her gün** ("November 9, 2026", "November 6, 2026", "November 5,
+2026" — en yeni üstte) toplar; her gün ayrıca kendi yanıtıyla da yayımlanır (#4 = November 6, #5 = November 9). #2 ve #3
+moderatör işlem notudur (`post_type 3`, metinsiz) ve gönderi sayılmaz.
+
+- Gönderi yalnızca tarih satırlarından oluşuyorsa (ilk tarih satırından önce yalnızca başlık varsa) "tarihli bölüm"
+  biçimindedir; tarih satırı kalın paragraf veya başlıktır ve tam tarihtir ("November 9, 2026"; yıl şart). Bir duyurunun
+  ortasındaki tarih bölüm sayılmaz.
+- **Açılış gönderisi yalnızca kendi gününü temsil eder** — konu açıldığında yayımlandığı gün. Sonradan üste eklenen
+  günler yanıtlarındır. Böylece "#1'e eklenen bölüm + aynı günün yanıtı" iki kart olmaz: yanıt yeni karttır, #1'in kartı
+  (ve içerik özeti) değişmez. Kendi günü, #1'in en eski günüdür — ama yalnızca **kanıtlanabildiği sürece**: hiçbir yanıt
+  aynı günü taşımamalı ve gün, gönderinin kendi yayın tarihinden (ABD günü; temkinli olarak UTC−8) sonra olmamalı. Blizzard
+  ilk günü silerse, bir tarih okunamaz hâle gelirse ya da günler başka biçime girerse #1 o tur **dışarıda bırakılır**: kartı
+  başka bir günün içeriğiyle düzenlenmez, yeniden tarihlenmez, yanıt kartıyla yinelenmez; ayrıntı `partial: 1 hotfix
+  opening post left out (own day not provable)` der. Sıralama değişikliği bir şey değiştirmez; kendi gününün metni
+  düzeltilirse aynı kart düzenlenir (yayın zamanı yine #1'in `created_at`'i).
+- **Her yanıt kendi günüdür;** kart başlığı konunun sabit adı + gün: "WoW: Forever Hotfixes – November 9, 2026". Gün
+  gönderinin içeriğinden gelir; kartın zamanı forumun `created_at` değeridir (ör. November 9 günü 10 Kasım 04:23 UTC'de
+  yayımlandı). "November 9" için uydurma 00:00 üretilmez; `updated_at` eski günlerin yeni yayın zamanı sayılmaz.
+- Konu başlığının tarihi değişmesi hiçbir kartı değiştirmez; aynı yanıtın düzeltilmesi aynı kartı düzenler.
+- "Notlar güncellendi" gibi değişiklik listesi olmayan bir yanıt `Ambiguous` kalır, kart olmaz.
+- **Yalnızca #1'e eklenen gün:** #1'de olup hiçbir yanıtta olmayan yeni bir gün kart **olmaz** (güvenilir bir gönderi
+  kimliği yoktur) ve turun ayrıntısında `partial: hotfix day only in the opening post: November 12, 2026` diye gösterilir
+  (`status`: `SuccessPartial`). Yanıtların hepsi okunamadıysa bu karşılaştırma yapılmaz.
+- Aynı gün yayımlandı diye iki ayrı gönderi birleştirilmez; birleştirme yalnızca açılış gönderisinin kendi günü dışındaki
+  bölümleri içindir.
 
 ### Hangi hata turu düşürür, hangisi düşürmez
 
@@ -278,6 +315,8 @@ gönderi birden fazla yoldan bulunsa da **tek** gönderidir.
 | **Takip edilen** bir konu (zaman aşımı, 5xx, JSON değil, konu şeklinde değil, çok büyük, yönlendirme) | Yalnızca o konu bu tur atlanır; izlenen konu, diğer takip edilen konular ve liste okunur. Tur **başarılıdır**, yetişme noktası ilerler. Sonraki turda yeniden denenir. |
 | Listeden açılan **yeni** bir konu (aynı hata türleri) | Yalnızca o konu atlanır, diğer yeni konular okunur ve gönderilir. Tur başarılıdır ama **eksiktir**: yetişme noktası ilerlemez, böylece okunamayan konu sonraki turun baktığı pencereden düşemez. |
 | Herhangi bir istekte **HTTP 429** | Forum ara istiyor: tur orada `RateLimited` olarak biter, o turda başka istek yapılmaz, `Retry-After` uygulanır. |
+| Yapılandırılmış izlenen konuların **hiçbiri** kullanılamıyor (yok, kapsam dışı kategoride, Blizzard işareti yok) | Cevap var ama oyunun kurulduğu kaynak değil: tur `partial: no watched thread usable` der (`SuccessPartial`), HTTP 200 "tam sağlıklı" gösterilmez. Bir süre güncelleme gelmemesi tek başına arıza sayılmaz. |
+| Turun istek tavanı (50) doldu | Tur o noktada sormayı bırakır; ayrıntı `request bound of 50 reached` der ve tur **eksiktir** (yetişme noktası ilerlemez). Doğrulanmış ayarlarla ulaşılamaz; çalışma anında da sayılır. |
 
 Atlanan her şey sayılır ve turun ayrıntısının **başına** yazılır (`partial: 1 followed thread unreadable; …`); `status`
 böyle bir turu `SuccessPartial` olarak adlandırır, `doctor` ayrıntıyı gösterir. Başarılı turlar için ek log yoktur (konu
@@ -295,10 +334,16 @@ Liste olağan turda `DiscoveryLookbackHours` (6 saat) geriye okunur. Son **eksik
 | 10 saat önce | 10 saat |
 | 30 saat önce | 24 saat |
 
-`MaxListPages` (3 sayfa = 90 konu) her durumda kesin sınırdır. Kategori o kadar hareketliyse ki üç sayfa yetişme noktasına
-ulaşmıyor, tur yine başarılıdır ve ayrıntısı `partial: list page bound reached before the catch-up point` der (daha fazla
-sayfa hiçbir turda okunmayacağı için yetişme noktası bekletilmez). Başarısız bir tur (429 dahil) yetişme noktasını
-ilerletmez; nokta veritabanındadır, restart'ta korunur.
+`MaxListPages` (kategori başına 3 sayfa = 90 konu) her durumda kesin sınırdır. Bir kategori o kadar hareketliyse ki üç
+sayfa yetişme noktasına ulaşmıyor, tur yine başarılıdır ve ayrıntısı `partial: list page bound reached before the catch-up
+point (347)` der (daha fazla sayfa hiçbir turda okunmayacağı için yetişme noktası bekletilmez). Birden fazla kategori varsa
+ayrıntının sonu her listenin ne kadar geriye ulaştığını gösterir: `lists 347 4.5h, 352 6h+` ("+": geriye bakış penceresine
+ulaştı). Ölçüm (2026-11-10): General Discussion'da (347) 30 konu ≈ 1,5 saat, 3 sayfa ≈ 4,5 saat; 15 dakikalık turlarla bu
+yeter (her tur bir önceki eksiksiz turdan beri olanı görür), uzun bir kesintiden sonra yetmeyebilir — o zaman ayrıntı bunu
+söyler. Yani 24 saatlik yetişme penceresi bir **üst sınırdır**, ayrı duyuruların keşfi için garanti değildir: sayfa
+sınırı ondan önce gelebilir. Aktif hotfix konusu (izlenen konu) ise kategori listesinden bağımsız her turda baştan sona
+okunur; günlük hotfix yanıtları bu sınırdan etkilenmez. Başarısız bir tur (429 dahil)
+yetişme noktasını ilerletmez; nokta veritabanındadır, restart'ta korunur.
 
 ### Uzun konularda Blizzard gönderileri
 
@@ -324,6 +369,19 @@ ve N'den itibaren 15 gönderiyi veriyor.
   de `Update (development_notes)`.
 - Railway ağından erişim ve Blizzard'ın forum koşullarının bu kullanım için açık izni: **NOT_VERIFIED**.
 
+**Çıkıştan sonra (2026-11-10, yerel ağ, botun User-Agent'ı, salt-okuma):**
+
+- Beta yerleri sessiz: 349'un en yeni konusu 2026-11-04 23:05Z, 2360696'nın son Blizzard gönderisi #10 (2026-11-04).
+- `2403040` kategori 352'de; `tracked_posts` #1, #4, #5 (`community-manager` grubu). `first_tracked_post` liste ve konu
+  JSON'unda var. #1 birikimli (November 9 / 6 / 5), #4 = November 6 (2026-11-07 01:07Z), #5 = November 9 (2026-11-10
+  04:23Z); #2/#3 `post_type 3` (pinned/closed notu).
+- `2406595` (Dungeon Enemy XP Increased), `2408781` (PvP Faction Balance Updates), `2404092` (Class Tuning Incoming)
+  kategori 347'de, ilk gönderileri Blizzard işaretli; 2408781'de #158 ayrıca bir Blizzard yanıtı (oyuncuya cevap).
+- `latest.json?category=346` 347, 352 ve 348 konularını karışık listeliyor (üst kategori).
+- `updates check --game wow-forever --threads 2406595,2408781,2404092`: 2403040:1/4/5 `Update (hotfix)` (doğru günlerle),
+  2406595:1 ve 2408781:1 `Update (applied_change)`, 2404092:1 `NotUpdate (planned_change)`, 2408781:158
+  `NotUpdate (untyped_title)`.
+
 ### Yoklama
 
 Forum kendi önbellek ömrünü bildirmediği için sağlayıcının kendi alt sınırı geçerlidir:
@@ -334,15 +392,15 @@ okunur; tur başına en çok `MaxThreadRequests` (6) aday konu açılır, kalan�
 Takip edilen konular (`MaxFollowedThreads` = 5) izlenen konulara **ek**tir; izlenen konu takip yeri harcamaz. Bunlar
 proje tercihidir.
 
-| Tur | İstek sayısı (varsayılan ayarlar, bir izlenen konu) |
+| Tur | İstek sayısı (varsayılan ayarlar, bir izlenen konu, iki kategori) |
 |---|---|
-| Sakin tur | 2 — izlenen konu + liste (izlenen konu 20 gönderiyi aşınca 3, yaklaşık 35'i aşınca 4) |
-| Olağan tur | 2 + takip edilen konu sayısı (son 7 günde doğrulanmış güncelleme konuları; genelde 0–2) |
-| Kesinti sonrası yetişme turu | olağan tur + 1–2 liste sayfası |
-| En kötü durum (yetişme dahil) | **27** = izlenen konu 3 + takip edilen 5 × 3 + liste 3 sayfa + yeni konu 6 |
-| Geçerli herhangi bir ayarla | **en çok 50** (doğrulama reddeder: `3 × (5 izlenen + MaxFollowedThreads) + MaxListPages + MaxThreadRequests ≤ 50`) |
+| Sakin tur | 3 — izlenen konu + kategori başına bir liste sayfası (izlenen konu 20 gönderiyi aşınca +1, yaklaşık 35'i aşınca +2) |
+| Olağan tur | 3 + takip edilen konu sayısı + yeni Blizzard konusu sayısı (genelde 0–3) |
+| Kesinti sonrası yetişme turu | olağan tur + kategori başına 1–2 liste sayfası |
+| En kötü durum (yetişme dahil) | **30** = izlenen konu 3 + takip edilen 5 × 3 + liste 2 × 3 sayfa + yeni konu 6 |
+| Geçerli herhangi bir ayarla | **en çok 50** (doğrulama reddeder: `3 × (5 izlenen + MaxFollowedThreads) + MaxListPages × 3 kategori + MaxThreadRequests ≤ 50`; varsayılanlarla 45) ve tur içinde de sayılır |
 
-15 dakikalık aralıkla en kötü durum saatte 108 istektir; olağan durumda saatte 8–16. İstekler arasında bekleme yoktur;
+15 dakikalık aralıkla en kötü durum saatte 120 istektir; olağan durumda saatte 12–24. İstekler arasında bekleme yoktur;
 50'lik tavan, Discourse'un varsayılan IP sınırının (10 saniyede 50 istek) altında kalmak için konmuştur — Blizzard'ın kendi
 sınırı belgelenmemiştir ve **NOT_VERIFIED**.
 
@@ -362,18 +420,87 @@ Karttaki **özet** sınırlıdır ve gönderinin tamamı değildir (aşağıda "
 Kapsamı sağlayıcı kurar (Blizzard işaretli gönderi + oyunun kategorisi); sınıflandırıcı gönderinin türünü birden fazla
 sinyalle belirler:
 
-1. **Başlık bir güncelleme türü adlandırmalı:** Development Notes → `development_notes`, Client Update →
-   `client_update`, Patch/Update/Release Notes → `patch_notes`, Hotfix(es) → `hotfix`. Başka bir şeyi adlandıran başlık
-   (known issues, maintenance, restart, downtime, service issue, feedback, bug report, podcast, deep dive, preview,
-   interview, weekly, account actions, …) veya hiçbir tür adlandırmayan başlık `NotUpdate`'tir. Bu adım metne bakmaz.
-2. Başlık başka bir WoW sürümünü de anıyorsa (Midnight, Cataclysm, Mists of Pandaria, Season of Discovery, Classic Era,
-   Hardcore, Retail, …) `Ambiguous`.
+1. **Başka bir şeyi adlandıran başlık** (known issues, maintenance, restart, downtime, service issue, feedback, bug
+   report, podcast, deep dive, preview, interview, weekly, account actions, new realm, queue, …) `NotUpdate`
+   (`excluded_topic`); **sonrası için duyuru** ("Incoming", "Upcoming", "Planned", "Coming Soon") `NotUpdate`
+   (`planned_change`) — tarihi gelse de uygulanmış güncelleme sayılmaz (ayrı bir "planlanan değişiklik" özelliği yok). Bu
+   adımlar metne bakmaz; böyle konular indirilmez.
+2. Başlık başka bir WoW sürümünü anıyorsa (Midnight, Cataclysm, Mists of Pandaria, Season of Discovery, Classic Era,
+   Hardcore, Retail, …): tür adı da varsa `Ambiguous`, yoksa `NotUpdate` (`other_version_title`).
 3. Gönderi konusunu açan gönderi olmalı **ya da** gönderi gönderi okunan bir konuda (izlenen veya takip edilen) olmalı;
-   başka yerdeki Blizzard yanıtı `Ambiguous`.
-4. Metin başlığı desteklemeli: build numarası **veya** en az 2 maddelik değişiklik listesi. "Notlar yayımlandı" gibi bir
-   işaret gönderisi `Ambiguous` kalır.
+   başka yerdeki Blizzard yanıtı `Ambiguous`. Yalnızca özeti bilinen gönderi `Ambiguous` (`content_not_loaded`) — sağlayıcı
+   bunu indirir.
+4. **Başlık bir güncelleme türü adlandırıyorsa** (Development Notes → `development_notes`, Client Update →
+   `client_update`, Patch/Update/Release Notes → `patch_notes`, Hotfix(es) → `hotfix`) metin desteklemeli: build numarası,
+   en az 2 maddelik değişiklik listesi **veya** uygulanmış değişiklik beyanı (aşağıda). "Notlar yayımlandı / güncellendi"
+   gibi bir işaret `Ambiguous` kalır.
+5. **Başlıkta tür yoksa** ("Dungeon Enemy XP Increased", "PvP Faction Balance Updates") Blizzard'ın kendi sözüyle
+   **uygulanmış** bir değişiklik söylemesi gerekir → `Update` (`applied_change`). Kural cümle cümle ve kelime kelimedir:
+   "we" / "we've" / "we have" (+ en çok bir zarf: "we just …") ardından uygulama fiili (deployed, applied, adjusted,
+   increased, reduced, lowered, raised, implemented, released, enabled, disabled, removed, added, fixed, changed,
+   corrected, resolved, reverted, restored, rebalanced, tuned) veya edilgen "has been / have been / was / were" + aynı
+   fiil. Geleceği anlatan cümle ("will", "plan", "intend", "going", "upcoming", "soon", "next", "investigating", …) asla
+   uygulanmış sayılmaz; konuşan "we" ise plan sayılır → `NotUpdate` (`planned_change`). Hiçbiri yoksa `NotUpdate`
+   (`untyped_title`). Tek başına "update", "fixed" veya "hotfix" kelimesi yetmez; "updated" bir uygulama fiili değildir
+   ("we've updated the post above" notlarla ilgili bir açıklamadır). Alıntılar (oyuncu metni) okuyucu tarafından atılır.
+   Yazar adı veya belirli başlıklar kodlanmamıştır.
 
 Karar yine `Update` / `NotUpdate` / `Ambiguous`'tur ve yalnızca `Update` gönderilir; güncellemenin gerekçe kodu türüdür.
+Kalan risk: türsüz başlıklı bir Blizzard duyurusu "we added new realms" gibi oyunla ilgisiz bir uygulama da söylerse
+`Update` olur (yeni realm/kuyruk başlıkları hariç tutulur); uygulanmış değişikliği "we" ya da edilgen yapı olmadan anlatan
+bir duyuru ("Dungeon experience is now 50% higher") `untyped_title` kalır ve gönderilmez.
+
+### Kaynak geçişi: beta → çıkış (2026-11-10 olayı)
+
+**Ne oldu:** WoW: Forever çıktıktan sonra Blizzard güncellemelerini 352'deki hotfix konusuna ve 347'deki kendi
+duyurularına yazdı; bot hâlâ 349 + 2360696'yı (beta) okuyordu. Son kart 2026-11-04 19:41Z'deki 2360696:10'dur; sonraki
+turlarda yeni bildirim adayı üretilmedi (logda "discovered" satırı yok; 349'da o tarihten sonra konu ve 2360696'da yeni
+Blizzard gönderisi yok — forum 2026-11-10'da okundu). Aradaki tek tük 503/zaman aşımı bir sonraki turda düzeldi. Kaynak doğru olsaydı bile türsüz başlıklar (Dungeon XP, PvP) indirilmeden elenir, hotfix yanıtları izlenen
+konu dışında `Ambiguous` kalırdı. Bu sürüm üçünü de düzeltir.
+
+**Geçiş nasıl işler:** `ForumCategoryIds` değişip bot yeniden başlatılınca (ayar ancak restart ile değişir) bu **açık bir
+kaynak geçişidir** ve başlangıçta, hiçbir istek yapılmadan önce kaydedilir: `ProviderGameId` "349" → "347,352",
+geçmiş/yeni çizgisi (`PrunedThroughPublishedAt`) geçiş anı, eski geri çekilme sıfırlanır, yeni kaynak hemen sorulur.
+O ana kadar yayımlanmış her şey (11-06…11-10 hotfix günleri dahil) **geçmiştir ve kendiliğinden gönderilmez** — kaçan
+günler için aşağıdaki "Kurtarma" vardır. Geçişten sonra yayımlanan gerçek güncelleme, ilk başarılı cevap gecikse ya da
+bot arada yeniden başlasa da gönderilir. İlk kurulum yine baseline'dır (spam yok). Aynı ayarla restart geçiş değildir;
+kategori veya izlenen konu listesinin **sırası** geçiş değildir (kategoriler sıralanır; izlenen konular kimliğe girmez).
+Abonelikler, oyunun kendi kanalı (`islem:game-channel`) ve gönderim kayıtları korunur; eski kayıtlar silinmez. Beta
+kartlarının outbox anahtarı `blizzard:349:…` idi; yeni sürüm `blizzard:wow-forever:…` kullandığından ve 2360696 artık
+okunmadığından beta kartları **donar** (düzenlenmez, yeniden gönderilmez). 2360696 son doğrulanmış güncellemesinden 7 gün
+sonrasına kadar (2026-11-11) takip listesinde kalır; kategorisi kapsam dışı olduğu için her tur 1 istekle atlanır.
+
+### Kurtarma (`Updates:Recovery`) — tek seferlik, açık, önizlemeli
+
+Varsayılan olarak ayarlı değildir ve hiçbir örnek ayar `Apply`'ı açmaz. Ayarlanınca planlayıcı, oyunu **şu an** takip
+eden her sunucu için (modül açık, kanal var, duraklatılmamış, oyun açık) bir plan çıkarır: hangi gönderiler, kaç kart,
+hangi kanal — normal kartın gideceği kanal (oyunun kendi kanalı, yoksa sunucunun Updates kanalı). Sunucu, kanal ve oyun
+koda yazılmaz; o anki abonelik ve kanal ayarından okunur. Plan baseline işaretini, ilk-görülme kuralını ve
+`CatchUpHours`'u **bilerek** yok sayar; ama sunucunun zaten sahip olduğu kartı (aynı gönderim kayıtları), oyunu açmadan
+önce yayımlanmış gönderiyi, `Update` olmayanı asla göndermez. Mod (Off'ta tur yok), duraklatma, modül, abonelik ve
+gönderimdeki teslim politikası normal kartla aynıdır.
+
+| Ayar | Anlamı |
+|---|---|
+| `Updates:Recovery:Game` | Oyun anahtarı (`wow-forever`); yoksa kurtarma yok |
+| `Updates:Recovery:Items:0…` | Gönderilecek gönderi kimlikleri — **sabit liste**, en çok `MaxCards` tane. Yoksa yalnızca **önizleme önerisi:** izlenen konulardaki en yeni güncelleme (en yeni hotfix günü); arşiv asla önerilmez |
+| `Updates:Recovery:MaxCards` | Sunucu başına toplam kart sınırı (varsayılan 1, en çok 3). `Items` bundan uzunsa başlangıç **reddedilir** (kesilmez, kaydırılmaz) |
+| `Updates:Recovery:Apply` | `false` (varsayılan): yalnızca önizleme, hiçbir şey yazılmaz. `true`: **yalnızca `Items`'taki** hazır gönderiler normal kartla aynı kaynak anahtarı, tür ve gönderim kaydıyla bir kez kuyruğa alınır. `Items` olmadan `Apply=true` başlangıçta reddedilir; öneri asla uygulanmaz |
+
+- **Önizleme** başlangıçtan sonraki ilk turda bir kez loglanır (`wow-forever recovery preview … cards=N: 2403040:5 Ready`)
+  ve `islem:status` / `islem:doctor`'da "Kurtarma" satırı olarak görünür. Önizleme veritabanına yazmaz.
+- **Seçim sabittir:** uygulanan küme `Items` listesinin kendisidir. Teslim durumu, yeni bir forum yanıtı, restart, günün
+  değişmesi ya da herhangi bir sıralama onu değiştirmez; `Apply=true` her turda ve her restart'ta yeniden çalışsa da
+  hiçbir şey iki kez gönderilmez ve listeden fazlası gönderilmez. Normal tur ile kurtarma aynı gönderiyi aynı turda
+  görürse tek gönderim kaydı ve tek outbox satırı olur. Henüz teslim edilmemiş (outbox'ta bekleyen) bir kurtarma kartı
+  restart'ta yeniden kuyruğa alınmaz; belirsiz bir Discord gönderimi outbox'ın kendi uzlaştırmasıyla çözülür, yeni bir
+  kurtarma kartıyla değil.
+- Kaynakta henüz görülmemiş bir adlandırılmış gönderinin konusu (ör. 3 sayfanın dışında kalan bir 347 duyurusu) sonraki
+  turda takip edilen konu gibi okunur (takip yerlerini paylaşır).
+- Bittikten sonra `Updates:Recovery` bölümü kaldırılır.
+
+Durumlar: `Ready` (gönderilecek), `Delivered` (sunucuda zaten var), `NotSeen` (kaynak henüz göstermedi), `NotAnUpdate`,
+`BeforeWindow` (oyun açılmadan önce yayımlanmış), `Unusable` (başlık/zaman/bağlantı yok).
 
 ### Ürün kodu ve CDN build izleyicisi
 
@@ -582,6 +709,29 @@ görülen güncellemeleri göndermez (`UpdatesModeTransitionTests`).
 
 Geri alma: `/tsq-admin modul:updates islem:pause`, `/modules disable updates` veya `TOROSQUAD_Updates__Mode=Off`.
 
+**WoW Forever kaynak onarımı (2026-11-10) — PLAN, uygulanmadı; her adım ayrı onay ister:**
+
+1. Yedek ve sürüm: `/data/backups`'taki son günlük yedeğin tarihi; çalışan commit'in beklenen olduğu (başlangıç logu).
+2. Kaynak onarımını `Updates:Recovery` **ayarsız** (Apply=false) deploy et. Ortak `Updates:Mode`'a dokunma (Off/DryRun'a
+   almak diğer oyunların pencerelerini yeniden başlatır).
+3. Kabul (normal tur):
+   - Başlangıç logunda `wow-forever update source moved at its provider (349 -> 347,352)`.
+   - `islem:doctor`: kapsam `347,352 · 2403040`, oyunun kanalı mevcut WoW kanalı, açıklanmamış hata yok.
+   - Kurtarma kapalıyken geçişten önce yayımlanmış geçmiş otomatik gönderilmez.
+   - Geçişten sonra yayımlanan yeni geçerli bir güncelleme, ilk başarılı cevaptan önce yayımlanmış olsa bile gönderilir —
+     ilk turda gerçek bir kart çıkması hata değildir; aynı kayıt bir kez gönderilir ve mevcut WoW kanalına gider.
+   - Beklenen kısmi/kapsam uyarıları açıkça görünür (ör. ilk turda `list page bound … (347)`, 2026-11-11'e kadar beta
+     konusunun atlanması), açıklanmamış hata veya kapsam kaybı yoktur.
+4. Gerçek production durumuyla önizleme: `TOROSQUAD_Updates__Recovery__Game=wow-forever` (+ istenirse `Items__0…` ve
+   `MaxCards`), Apply yok → restart → log satırı ve `islem:doctor` "Kurtarma": hangi gönderiler, `Ready`/`Delivered`,
+   hangi kanal.
+5. Ayrı açık onayla: sabit seçili kimlik(ler) ve `TOROSQUAD_Updates__Recovery__Apply=true` → restart.
+6. Teslim doğrulaması (kartlar WoW kanalında, tek sefer), sonra `TOROSQUAD_Updates__Recovery__*` değişkenlerinin hepsi
+   birlikte silinir.
+
+Geri alma: merge commit'i geri al ve deploy et; kaynak 349'a geri taşınır (yeni bir geçiş, spam yok), kurtarma
+değişkenleri silinir.
+
 **Sonradan bir oyun eklemek (ör. World of Warcraft: Forever):** yeni sürüm dağıtıldığında oyun kayıtlıdır ama hiçbir
 sunucuda açık değildir; açılana kadar o oyunun kaynağına istek de yapılmaz ve mevcut oyunlar etkilenmez. Sıra: yedek →
 merge/deploy (`UpdatesItemHighlights` migration'ı tek nullable kolon ekler; komut sync gerekmez) →
@@ -607,8 +757,16 @@ yine `pause` → aç → `doctor` ile baseline'ı gör → `resume`'dur (durakla
 - **WoW Forever:** yalnızca ABD/İngilizce forum okunur. Ayrı açılmış bir güncelleme konusu, son doğrulanmış
   güncellemesinden sonra 7 gün takip edilir; daha sonra eklenen bir Blizzard yanıtı veya düzeltme görülmez (izlenen
   konuda süre sınırı yoktur). Aynı anda en çok 5 konu takip edilir. Güncelleme olarak doğrulanmamış bir konudaki
-  (ör. `Ambiguous` kalan) Blizzard yanıtları takip edilmez. Alışılmadık başlıklı bir güncelleme (`untyped_title`)
-  gönderilmez.
+  (ör. `Ambiguous` kalan) Blizzard yanıtları takip edilmez. Türsüz başlıklı bir duyuru ancak Blizzard uygulanmış bir
+  değişikliği "we …" ya da edilgen yapıyla söylerse gönderilir.
+- **WoW Forever — hotfix konusu:** yalnızca açılış gönderisine eklenen (yanıtı olmayan) bir gün gönderilmez, ayrıntıda
+  gösterilir. Tarih satırı tam tarih olmalı ("November 9, 2026"); Blizzard biçimi değiştirirse (yılsız tarih, başka dil)
+  açılış gönderisi bütün hâliyle tek gönderi gibi davranır ve her yeni gün onun kartını düzenler — günlük yanıtlar yine
+  ayrı kartlardır. Blizzard yeni ay için yeni bir hotfix konusu açarsa o konu yeni konu olarak bulunur ve 7 gün takip
+  edilir; kalıcı izleme için `WatchedTopicIds` güncellenmelidir.
+- **WoW Forever — keşif penceresi:** General Discussion çok hareketli (3 sayfa ≈ 4,5 saat); 15 dakikalık turlarla yeter,
+  4,5 saati aşan bir kesintiden sonra arada açılmış bir Blizzard duyurusu görülmeyebilir (ayrıntı `partial: list page
+  bound …` der; gerekirse kurtarmayla adlandırılarak alınır).
 - **Deadlock — forumdaki düzeltmeler görülmez:** Valve'ın resmî Changelog forumuna yalnızca yanıt olarak eklediği küçük
   düzeltmeler (Steam duyurusu olmayanlar) bildirilmez; forum otomatik istemcilere tarayıcı doğrulaması döndürdüğü için
   okunmuyor. Valve Steam duyurusunu düzenleyip değişikliği oraya eklerse mevcut kart düzenlenir.
@@ -620,28 +778,32 @@ yine `pause` → aç → `doctor` ile baseline'ı gör → `resume`'dur (durakla
   tanıtımı (gerçek akışta örnekleri yok). Tek kahraman tanıtımları Steam'de de "güncelleme" olarak dosyalanıyor; TSQ
   bunları bilerek göndermez.
 - **Sınıflandırıcı bilerek temkinli (bilinen risk):** hariç tutulan bir kelime türden önce gelir — "Hotfixes and
-  Maintenance", "Weekly Hotfixes", "Patch Notes Preview" gibi karışık başlıklar `NotUpdate` olur ve uyarı üretmez; tür
-  adı geçmeyen bir Blizzard başlığı hiç indirilmez; build'siz tek maddelik bir hotfix `no_change_list` (Ambiguous) kalır.
-  Bunlar kaçan gerçek güncelleme olabilir; politika değişikliği ayrı bir karardır.
+  Maintenance", "Weekly Hotfixes", "Patch Notes Preview", "Hotfixes Incoming" gibi karışık başlıklar `NotUpdate` olur ve
+  uyarı üretmez; build'siz, listesiz ve "we …" diye uygulama söylemeyen tek satırlık bir hotfix `no_change_list`
+  (Ambiguous) kalır. Bunlar kaçan gerçek güncelleme olabilir; politika değişikliği ayrı bir karardır.
 - **Kategori geçişinden sonra eski konular (bilinen risk):** eski kategorinin son 7 günde doğrulanmış güncelleme konuları
   takip listesinde kalır; her tur en çok 5 boşa istek harcar ve "atlandı" olarak sayılır (başka kategoride oldukları için
-  okunmazlar), 7 gün dolunca kendiliğinden çıkarlar. Outbox anahtarı kategoriyi içerdiğinden
-  (`blizzard:<kategori>:<konu>:<gönderi>`) geçişten **önce** gönderilmiş kartlar sonraki düzeltmelerle artık
-  düzenlenmez. Yinelenen kart oluşmaz (gönderim kaydı kategoriden bağımsızdır). Beta → canlı geçişinde ayrıca ele
-  alınacak.
+  okunmazlar), 7 gün dolunca kendiliğinden çıkarlar. Bu sürümden önce gönderilmiş WoW kartlarının outbox anahtarı
+  `blizzard:349:…` idi; yeni anahtar `blizzard:wow-forever:…` olduğundan o kartlar düzenlenmez (beta konusu zaten
+  okunmuyor). Yinelenen kart oluşmaz (gönderim kaydı anahtardan bağımsızdır). Bundan sonraki kategori değişiklikleri kart
+  kimliğini değiştirmez.
 - İzlenen (ana) konunun kendisi veya kategori listesi okunamazsa tur bilerek başarısız olur: ana kaynağın kalıcı hatası
   "kısmi başarı" olarak gizlenmez. Bu sürede yeni konular da keşfedilmez; kaynak düzelince yetişme penceresi
   (`CatchUpHours`) içindekiler bulunur.
 - Okunamayan **yeni** bir konu, yetişme noktasını en çok `CatchUpHours` kadar bekletir; bu sürede `status`'taki "son
   başarı" ilerlemez (tur sonucu `SuccessPartial`'dır). Konu `CatchUpHours`'tan eskiyince beklemeyi bırakır.
-- **Kategori değişikliği (ör. beta → canlı):** `Updates:WowForever:ForumCategoryId` (ve izlenen konu) güncellenip bot
+- **Kategori değişikliği:** `Updates:WowForever:ForumCategoryIds` (ve izlenen konu) güncellenip bot
   yeniden başlatıldığında bu **açık bir kaynak geçişidir** ve başlangıçta, hiçbir istek yapılmadan önce kaydedilir. Yeni
   kategoride ikinci bir "ilk cevap baseline'ı" alınmaz; çizgi geçiş anıdır: o ana kadar yayımlanmış her şey geçmiştir ve
   gönderilmez, o andan sonra yayımlanan gerçek güncelleme — ilk başarılı cevaptan önce yayımlanmış olsa bile —
   gönderilir. Eski kategorinin kayıtları ve baseline'ı korunur; eski kaynağın geri çekilmesi sıfırlanır ve yeni kategori
   hemen sorulur. Bu yüzden ayarı, yeni kategoride ilk güncelleme yayımlanmadan **önce** değiştirin: geçişten önce
-  yayımlanmış olan gönderilmez. (Henüz hiç cevap almamış bir oyun taşınırsa olağan ilk baseline alınır.)
-- Ayar notu: `WatchedTopicIds` verilirse varsayılanın yerine geçer; verilmezse Development Notes konusu izlenir.
+  yayımlanmış olan gönderilmez (gerekirse `Updates:Recovery`). (Henüz hiç cevap almamış bir oyun taşınırsa olağan ilk
+  baseline alınır.)
+- Ayar notu: listeler (`ForumCategoryIds`, `WatchedTopicIds`) verilirse varsayılanın yerine geçer; verilmezse 352 + 347 ve
+  hotfix konusu 2403040. Sınıfta liste varsayılanı yoktur (yapılandırma bağlama bir diziye ekler, ezmez). Eski tek
+  kategori anahtarı `ForumCategoryId` artık **reddedilir** (başlangıç doğrulaması), sessizce yok sayılmaz. Etkin kapsam
+  `islem:status` / `islem:doctor`'da ve `updates check`'te görünür; CLI ile bot aynı yapılandırma bağlamasını kullanır.
 
 ## Doğrulama durumu
 
@@ -670,8 +832,30 @@ yine `pause` → aç → `doctor` ile baseline'ı gör → `resume`'dur (durakla
   sayfa sınırı, başarısız turlar yetişme noktasını ilerletmez; uzun konuda birbirinden uzak iki Blizzard yanıtı tek turda;
   en kötü tur 27 istek, geçerli hiçbir ayar 50'yi aşamaz; kaydedilemeyen tur oyunun kendi aralığından önce yinelenmez)
   (`UpdatesForumContentTests`, `UpdatesWowForeverClassifierTests`, `UpdatesBlizzardForumProviderTests`,
-  `UpdatesWowForeverTests`). Gerçek kaynak (yerel ağ, 2026-10-05): `updates check --game wow-forever` başarılı. Canlıda
-  **doğrulanmadı**: oyun bir sunucuda açılana kadar (`islem:game-enable`) foruma istek yapılmaz; canlı kart yok.
+  `UpdatesWowForeverTests`). Gerçek kaynak (yerel ağ, 2026-10-05): `updates check --game wow-forever` başarılı.
+- **WoW Forever çıkış kaynağı (2026-11-10) — TESTED_OFFLINE:** beta profili canlı gönderileri kaçırır / canlı profil
+  bulur; 352 ↔ üst 346 ayrımı; Dungeon XP ve PvP düzyazı → `applied_change`; Class Tuning → `planned_change`; oyuncu /
+  alıntı / başka sürüm / Known Issues / bakım / podcast yanlış pozitif yok; günlük yanıt tek kart, tekrar tur ve restart
+  yinelemez; #1 + aynı günün yanıtı tek kart; konu adı değişince kart değişmez; yanıt düzeltmesi aynı kartı düzenler;
+  gün içerikten, zaman `created_at`'ten; ilk kurulum spam yok, kurulu abonelikte geçiş eski içeriği göndermez; geçiş
+  sonrası ilk istek hatası + restart veri kaybetmez; kurtarma önizlemesi yazmaz, öneri asla uygulanmaz, uygulama yalnızca
+  sabit `Items` listesini bir kez gönderir (yeni yanıt, restart, gün değişimi seçimi değiştirmez; normal turla aynı turda
+  tek kayıt; outbox'ta bekleyen kart restart'ta yinelenmez), başka oyuna/sunucuya ve duraklatılmış sunucuya dokunmaz;
+  açılış gönderisinin ilk günü silinince/yeniden sıralanınca/tarihi okunamayınca kart başka güne dönmez; oyunun kanalı
+  korunur; liste sırası geçiş değildir; 429 /
+  bozuk / büyük cevap, okunamayan Blizzard gönderisi sayılır, kategori başına sayfa sınırı, sabitlenmiş konu listeyi erken
+  bitirmez; gerçek HTTP sayacıyla tur başına en çok 50 istek (`UpdatesWowForeverLiveSourceTests`,
+  `UpdatesWowForeverLiveTests`).
+- **WoW Forever çıkış kaynağı — gerçek resmî kaynak, yerel (2026-11-10, salt-okuma):** `updates check` (yukarıda).
+- **Yerel, production benzeri durumla doğrulandı (production DB değil):** loglardan çıkarılan durum (oyun 2026-10-05'te
+  açık, kendi kanalı, son beta kartı 2360696:10) yerel bir test veritabanında kuruldu ve gerçek foruma karşı çalıştırıldı:
+  geçiş eski hiçbir şeyi göndermedi, 2403040'ın üç günü doğru başlık/zamanla baseline oldu; kurtarma önerisi
+  `2403040:5` (November 9, 2026) → oyunun kanalı, 1 kart; önizleme hiçbir şey yazmadı.
+- **Gerçek production teslim kayıtlarıyla doğrulanmadı:** production'daki abonelik penceresi, etkin kanal, mod/duraklatma
+  ve teslim/outbox kayıtları okunmadı (onaylı bir salt-okuma yolu yok). Teslim geçmişiyle karşılaştırılacak beş kurtarma
+  adayı: 2403040:1 (November 5), 2403040:4 (November 6), 2406595:1 (Dungeon XP), 2403040:5 (November 9), 2408781:1 (PvP).
+  Bu, kurtarma **uygulamasını** bloke eder (önce production'da önizleme); kaynak onarımının commit'ini değil.
+  **Production'a alınmadı:** canlı sorun bu sürüm dağıtılana kadar sürer.
 - **Deadlock — TESTED_OFFLINE:** sınıflandırıcı (küçük yama, oynanış/başlıklı güncelleme, adlandırılmış büyük
   güncelleme, yeni sistemlerle gelen kahraman dağıtımı, kadroya toplu ekleme, tek kahraman tanıtımları, adlandırılmış ama
   değişiklik içermeyen tanıtım, tek işaretli belirsizler, sahte site bağlantıları, bozuk/kesik metin, sınırlı kopya), yama notu
