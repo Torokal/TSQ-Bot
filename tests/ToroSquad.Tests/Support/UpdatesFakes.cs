@@ -219,6 +219,9 @@ public sealed class UpdatesRig : IAsyncDisposable
     /// <summary>The scripted Blizzard forum (World of Warcraft: Forever).</summary>
     public WowForum Forum { get; }
 
+    /// <summary>World of Warcraft: Forever runs in its beta profile (see <see cref="CreateAsync"/>).</summary>
+    public bool WowBeta { get; private init; }
+
     /// <summary>Where the database lives: this host's own folder, or the first rig's when the database is shared.</summary>
     public string DataDirectory { get; }
 
@@ -230,13 +233,26 @@ public sealed class UpdatesRig : IAsyncDisposable
 
     public DateTimeOffset Now => Host.Clock.GetUtcNow();
 
+    /// <param name="wowBeta">
+    /// World of Warcraft: Forever in its beta profile (category 349, the Development Notes thread) — what most tests were
+    /// written against; false: the code's own defaults (the released game's categories and hotfix thread). A restart
+    /// (<paramref name="shareWith"/>) keeps the profile of the rig it reopens unless <paramref name="extra"/> names one.
+    /// </param>
     public static async Task<UpdatesRig> CreateAsync(string mode = "Live", Dictionary<string, string?>? extra = null, bool configure = true, bool fakeGame = false,
-        UpdatesRig? shareWith = null, Action<IServiceCollection>? replace = null, bool enterMode = true)
+        UpdatesRig? shareWith = null, Action<IServiceCollection>? replace = null, bool enterMode = true, bool? wowBeta = null)
     {
         var steam = new SteamNewsServer();
         var forum = new WowForum();
         var fake = fakeGame ? new FakeUpdateProvider() : null;
         var overrides = new Dictionary<string, string?> { ["Updates:Mode"] = mode };
+        var beta = wowBeta ?? shareWith?.WowBeta ?? true;
+        var wowConfigured = (extra ?? []).Keys.Any(k => k.StartsWith("Updates:WowForever:", StringComparison.Ordinal));
+        if (beta && !wowConfigured)
+        {
+            foreach (var (k, v) in WowForum.BetaConfig)
+                overrides[k] = v;
+        }
+
         foreach (var (k, v) in extra ?? [])
             overrides[k] = v;
         if (shareWith is not null)
@@ -254,7 +270,7 @@ public sealed class UpdatesRig : IAsyncDisposable
 
             replace?.Invoke(services);
         });
-        var rig = new UpdatesRig(host, steam, forum, fake, shareWith?.DataDirectory ?? host.Directory);
+        var rig = new UpdatesRig(host, steam, forum, fake, shareWith?.DataDirectory ?? host.Directory) { WowBeta = beta && !wowConfigured };
         rig.AllowChannel(Guild, Channel);
         if (enterMode)
             await rig.Poller.EnterModeAsync(Ct);

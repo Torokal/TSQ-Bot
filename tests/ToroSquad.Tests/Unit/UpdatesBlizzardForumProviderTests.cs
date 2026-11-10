@@ -21,7 +21,7 @@ namespace ToroSquad.Tests.Unit;
 public sealed class UpdatesBlizzardForumProviderTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 8, 12, 0, 0, TimeSpan.Zero);
-    private static readonly GameUpdateDefinition Game = WowForeverGame.Create(new WowForeverSettings());
+    private static readonly GameUpdateDefinition Game = WowForeverGame.Create(WowForum.BetaSettings);
     private static readonly string Notes = ForumHtmlSamples.BoldParagraphSections("Today we updated the beta.", ("Bug Fixes", ["Fixed one thing.", "Fixed another thing."]));
 
     private static (BlizzardForumUpdateProvider Provider, WowForum Forum) Create(BlizzardForumOptions? options = null, UpdatesOptions? module = null)
@@ -183,7 +183,8 @@ public sealed class UpdatesBlizzardForumProviderTests
         forum.Threads.Add(Blizzard(705, "World of Warcraft: Midnight Hotfixes - October 8", TimeSpan.FromMinutes(10), category: 171));
         var result = await provider.FetchAsync(Game, CancellationToken.None);
 
-        forum.RequestPaths.Where(p => p.Contains("/t/")).Should().Equal(["/en/wow/t/2360696.json", "/en/wow/t/700.json"], "only the thread whose title can be an update is opened");
+        forum.RequestPaths.Where(p => p.Contains("/t/")).Should().Equal(["/en/wow/t/2360696.json", "/en/wow/t/700.json", "/en/wow/t/703.json"],
+            "a thread whose title can be an update is opened — one with an update kind, or one without any kind whose text decides; known issues and maintenance are not");
         result.Items.Select(i => i.ExternalId).Should().BeEquivalentTo(["2360696:1", "2360696:4", "700:1", "701:1", "702:1", "703:1"],
             "Blizzard's other threads are kept as seen; the player thread and the other category are not posts at all");
 
@@ -199,7 +200,8 @@ public sealed class UpdatesBlizzardForumProviderTests
         knownIssues.Highlights.Should().BeNull();
         knownIssues.Body.Should().Be("A short synthetic excerpt.");
         result.Items.Where(i => i.ExternalId is "701:1" or "702:1" or "703:1").Should().OnlyContain(i => Game.Classifier.Classify(i).Classification == UpdateClassification.NotUpdate);
-        result.Detail.Should().Be("6 threads listed, 4 opened by Blizzard, 1 read in full, 1 watched");
+        result.Items.Single(i => i.ExternalId == "703:1").Labels.Should().Equal([UpdateLabels.FirstPost], "read in full: its text, not its title, decides");
+        result.Detail.Should().Be("6 threads listed, 4 opened by Blizzard, 2 read in full, 1 watched");
     }
 
     [Fact]
@@ -604,7 +606,7 @@ public sealed class UpdatesBlizzardForumProviderTests
         forum.Requests.Should().HaveCount(27, "3 (watched) + 15 (followed) + 3 (list pages) + 6 (new threads) — a catch-up round costs no more than that");
         result.Detail.Should().Be(
             "partial: list page bound reached before the catch-up point; 90 threads listed, 8 opened by Blizzard, 6 read in full, 1 watched, 5 followed, 2 left for the next round");
-        new BlizzardForumOptions().WorstCaseRequestsPerRound.Should().Be(39, "the same sum with the five watched threads a game may name: 3 x (5 + 5) + 3 + 6");
+        new BlizzardForumOptions().WorstCaseRequestsPerRound.Should().Be(45, "the same sum with the five watched threads and three categories a game may name: 3 x (5 + 5) + 3 x 3 + 6");
     }
 
     [Fact]
@@ -792,14 +794,14 @@ public sealed class UpdatesBlizzardForumProviderTests
     public void No_valid_combination_of_settings_allows_more_than_fifty_requests_in_a_round()
     {
         BlizzardForumOptions.MaxRequestsPerRound.Should().Be(50);
-        // Every setting at its own maximum would be 3 x (5 + 10) + 5 + 20 = 70: refused as a whole.
+        // Every setting at its own maximum would be 3 x (5 + 10) + 5 x 3 + 20 = 80: refused as a whole.
         var all = new BlizzardForumOptions { MaxFollowedThreads = 10, MaxListPages = 5, MaxThreadRequests = 20 };
-        all.WorstCaseRequestsPerRound.Should().Be(70);
+        all.WorstCaseRequestsPerRound.Should().Be(80);
         all.Validate().Should().ContainSingle().Which.Should().Contain("at most 50");
-        new BlizzardForumOptions { MaxFollowedThreads = 10 }.Validate().Should().ContainSingle("54 requests");
-        new BlizzardForumOptions { MaxFollowedThreads = 10, MaxListPages = 1, MaxThreadRequests = 4 }.Validate().Should().BeEmpty("exactly 50");
-        new BlizzardForumOptions { MaxThreadRequests = 17 }.Validate().Should().BeEmpty("exactly 50");
-        new BlizzardForumOptions { MaxThreadRequests = 18 }.Validate().Should().ContainSingle();
+        new BlizzardForumOptions { MaxFollowedThreads = 10 }.Validate().Should().ContainSingle("60 requests");
+        new BlizzardForumOptions { MaxFollowedThreads = 10, MaxListPages = 1, MaxThreadRequests = 2 }.Validate().Should().BeEmpty("exactly 50");
+        new BlizzardForumOptions { MaxThreadRequests = 11 }.Validate().Should().BeEmpty("exactly 50");
+        new BlizzardForumOptions { MaxThreadRequests = 12 }.Validate().Should().ContainSingle();
 
         // Whatever passes validation stays at or under the bound.
         for (var followed = 0; followed <= 10; followed++)

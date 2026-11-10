@@ -92,29 +92,45 @@ public sealed class UpdatesWowForeverClassifierTests
     [InlineData("Gnomeregan, Who broke it?!")]
     [InlineData("Warrior Updates in Today's Beta Build")]
     [InlineData("Legacy Points for Beta Testing")]
-    [InlineData("Auto-shoot Bug and Fix Incoming")]
     [InlineData("Dialog Bug for Australian Testers -- fixed")]
     [InlineData("Updated client notes")]
-    public void A_title_that_names_no_update_kind_is_not_an_update_whatever_the_text_says(string title)
+    public void A_title_that_names_no_update_kind_needs_blizzard_to_say_a_change_was_applied(string title)
     {
+        // A change list alone, or no text, is not enough without an update kind in the title: Blizzard has to say it applied a change.
         foreach (var cooked in new[] { Notes, null })
             FirstPost(title, cooked).Should().Be(new UpdateClassificationResult(UpdateClassification.NotUpdate, "untyped_title"), title);
+        FirstPost(title, "<p>At about 11:05 PST today, we deployed a hotfix that fixed this for everyone.</p>")
+            .Should().Be(new UpdateClassificationResult(UpdateClassification.Update, "applied_change"), title);
+    }
+
+    [Theory]
+    [InlineData("Auto-shoot Bug and Fix Incoming")]
+    [InlineData("Class Tuning Incoming - November 10")]
+    [InlineData("Upcoming Hotfixes")]
+    [InlineData("Planned changes to dungeon experience")]
+    public void A_title_that_announces_a_change_for_later_is_not_an_applied_update_whatever_the_text_says(string title)
+    {
+        foreach (var cooked in new[] { Notes, "<p>We deployed a hotfix that increased experience.</p>", null })
+            FirstPost(title, cooked).Should().Be(new UpdateClassificationResult(UpdateClassification.NotUpdate, "planned_change"), title);
     }
 
     [Fact]
-    public void A_not_update_decision_never_depends_on_the_text_so_such_posts_need_not_be_downloaded()
+    public void A_not_update_decision_on_the_excerpt_never_depends_on_the_text_so_such_posts_need_not_be_downloaded()
     {
         string[] titles =
         [
             "WoW Forever Beta Development Notes", "Beta Client Update - October 9", "WoW Forever Beta Known Issues - October 8", "Hunter damage is terrible",
-            "Beta is Up - Development Notes Posted", "Midnight Hotfixes - October 9", "Beta Update Maintenance - October 1", "",
+            "Beta is Up - Development Notes Posted", "Midnight Hotfixes - October 9", "Beta Update Maintenance - October 1", "", "Class Tuning Incoming",
+            "Dungeon Enemy XP Increased - November 8", "Season of Discovery Phase 7",
         ];
+        string[] texts = [Notes, "<p>We deployed a hotfix that increased experience by 50%.</p>", "<p>We will adjust their stats on Tuesday.</p>", ""];
         foreach (var title in titles)
         {
             var byExcerpt = Classifier.Classify(Post(title, null, UpdateLabels.FirstPost, UpdateLabels.ExcerptOnly)).Classification;
-            var inFull = FirstPost(title, Notes).Classification;
-            (byExcerpt == UpdateClassification.NotUpdate).Should().Be(inFull == UpdateClassification.NotUpdate, title);
             byExcerpt.Should().NotBe(UpdateClassification.Update, "an excerpt is never enough for an update");
+            // What the title rules out stays ruled out with any text, so the provider may skip the download.
+            if (byExcerpt == UpdateClassification.NotUpdate)
+                texts.Should().OnlyContain(text => FirstPost(title, text).Classification == UpdateClassification.NotUpdate, title);
         }
     }
 
@@ -176,19 +192,27 @@ public sealed class UpdatesWowForeverClassifierTests
     [Fact]
     public void The_game_is_defined_by_settings_not_by_code()
     {
+        // Unset: the released game — the Bug Report category with the running hotfix thread, and General Discussion.
         var game = WowForeverGame.Create(new WowForeverSettings());
-        (game.Key, game.DisplayName, game.ShortName, game.Provider, game.ProviderGameId).Should().Be(("wow-forever", "World of Warcraft: Forever", "WoW: Forever", "blizzard", "349"));
-        game.WatchedThreadIds.Should().Equal("2360696");
+        (game.Key, game.DisplayName, game.ShortName, game.Provider, game.ProviderGameId).Should().Be(("wow-forever", "World of Warcraft: Forever", "WoW: Forever", "blizzard", "347,352"));
+        game.WatchedThreadIds.Should().Equal("2403040");
+        game.OutboxScope.Should().Be("wow-forever", "a card's identity does not name the categories, which change with the game's life");
         game.Classifier.Should().BeOfType<WowForeverUpdateClassifier>();
         GameUpdateDefinition.IsValidKey(game.Key).Should().BeTrue();
         Cs2Game.Definition.WatchedThreadIds.Should().BeEmpty("Counter-Strike 2 is unchanged");
+        Cs2Game.Definition.OutboxScope.Should().BeNull("Counter-Strike 2 keeps steam:730:<post>");
 
-        var moved = WowForeverGame.Create(new WowForeverSettings { ForumCategoryId = 400, WatchedTopicIds = [11, 22] });
+        var moved = WowForeverGame.Create(new WowForeverSettings { ForumCategoryIds = [400], WatchedTopicIds = [11, 22] });
         (moved.ProviderGameId, string.Join(",", moved.WatchedThreadIds)).Should().Be(("400", "11,22"));
         WowForeverGame.Create(new WowForeverSettings { WatchedTopicIds = [] }).WatchedThreadIds.Should().BeEmpty();
+        WowForeverGame.Create(WowForum.BetaSettings).ProviderGameId.Should().Be("349");
 
         new WowForeverSettings().Validate().Should().BeEmpty();
-        new WowForeverSettings { ForumCategoryId = 0 }.Validate().Should().ContainSingle();
+        new WowForeverSettings { ForumCategoryIds = [0] }.Validate().Should().ContainSingle();
+        new WowForeverSettings { ForumCategoryIds = [] }.Validate().Should().ContainSingle();
+        new WowForeverSettings { ForumCategoryIds = [347, 347] }.Validate().Should().ContainSingle();
+        new WowForeverSettings { ForumCategoryIds = [1, 2, 3, 4] }.Validate().Should().ContainSingle();
+        new WowForeverSettings { ForumCategoryId = 349 }.Validate().Should().ContainSingle("the beta's single-category key is refused, never silently ignored");
         new WowForeverSettings { WatchedTopicIds = [5, 5] }.Validate().Should().ContainSingle();
         new WowForeverSettings { WatchedTopicIds = [1, 2, 3, 4, 5, 6] }.Validate().Should().ContainSingle();
         new WowForeverSettings { WatchedTopicIds = [-1] }.Validate().Should().ContainSingle();
